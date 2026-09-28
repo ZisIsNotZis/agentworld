@@ -1,6 +1,6 @@
 # P0 implementation plan
 
-Status: S0–S4 implemented in the working branch; review and integration of S4 pending
+Status: S0–S4 integrated; S5 implemented on feature branch, review pending
 
 This plan sequences the executable work described by [P0-SPEC](P0-SPEC.md) and preserves the unified component boundary accepted in [ADR 0005](adr/0005-unified-hybrid-components.md). Go is provisional while P0 measures correctness and cost.
 
@@ -33,10 +33,10 @@ This plan sequences the executable work described by [P0-SPEC](P0-SPEC.md) and p
 
 - S3 adds kernel-held patch planning and commit authority, authoritative events, atomicity, and deterministic in-process replay. Cross-schema migration and durable storage remain later work.
 - S4 adds dormant actor fibers, indexed wake conditions, timed activities, deterministic ordered worker batches, and in-memory scheduler snapshots validated against a matching kernel head. It does not add disk durability or strategy semantics.
+- S5 adds an actor-specific observation and one public-cache withdrawal intention, checked against the common kernel snapshot. A single-winner cache field collision links accepted actions to deterministic energy/stock events; a separate in-memory journal retains rejected outcomes without state mutation. It does not provide a strategy VM, crash-atomic attempt storage, or replay of rejections.
 
 ## Next slices
 
-1. S5 adds observation, intention validation, conflict resolution, and commit flow.
-2. Later slices add bounded strategies, survival behavior, durable checkpoints, branching, long-run validation, and performance-driven optimization.
+Later slices add bounded strategies, survival behavior, durable checkpoints, branching, long-run validation, and performance-driven optimization.
 
 The S0–S4 tests do not establish durable persistence, migration, or full P0 promotion equivalence. Performance results are baselines, not pass/fail thresholds.

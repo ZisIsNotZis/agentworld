@@ -9,6 +9,10 @@ const (
 	FatigueTypeID      sim.ComponentTypeID = 0x80000001
 	FatigueLevelField  sim.FieldID         = 1
 	FatigueProjection  sim.ProjectionID    = 1
+	CacheStockTypeID   sim.ComponentTypeID = 0x80000002
+	CacheStockField    sim.FieldID         = 1
+	CacheProjection    sim.ProjectionID    = 1
+	WithdrawRuleID     sim.RuleID          = 2
 )
 
 type StorageClass uint8
@@ -122,7 +126,7 @@ func EnergyDescriptor() ComponentDescriptor {
 			Bounds: Bounds{HasMinimum: true, Minimum: 0}, PermittedStates: allStates(), Uncertainty: UncertaintyPermitted,
 		}},
 		AccessPolicy:    AccessAuthorizedReadProject,
-		TransitionRules: []TransitionRuleDescriptor{{ID: 1, Version: 1, Name: "energy-transition-v1"}},
+		TransitionRules: []TransitionRuleDescriptor{{ID: 1, Version: 1, Name: "energy-transition-v1"}, {ID: WithdrawRuleID, Version: 1, Name: "withdraw-energy-v1"}},
 		Projections: []ProjectionDescriptor{{
 			ID: EnergyProjection, Version: 1, Name: "energy-reserve", SourceFields: []sim.FieldID{EnergyReserveField},
 			Coefficients: []float64{1}, Unit: "joules", Bounds: Bounds{HasMinimum: true, Minimum: 0}, MissingBehavior: PreserveSourceState,
@@ -143,6 +147,25 @@ func FatigueDescriptor() ComponentDescriptor {
 		Projections: []ProjectionDescriptor{{
 			ID: FatigueProjection, Version: 1, Name: "fatigue-level", SourceFields: []sim.FieldID{FatigueLevelField},
 			Coefficients: []float64{1}, Unit: "ratio", Bounds: Bounds{HasMinimum: true, Minimum: 0, HasMaximum: true, Maximum: 1}, MissingBehavior: PreserveSourceState,
+		}},
+		MigrationPolicy: MigrationRejectUnlisted, StorageClass: DynamicStorage, ComplexityCost: 1,
+	}
+}
+
+// CacheStockDescriptor is dynamic; the one-unit withdrawal rule also appears
+// on EnergyDescriptor so both fields can be committed in one kernel event.
+func CacheStockDescriptor() ComponentDescriptor {
+	return ComponentDescriptor{
+		TypeID: CacheStockTypeID, SchemaVersion: 1, Name: "cache-stock",
+		Fields: []FieldDescriptor{{
+			ID: CacheStockField, Name: "stock", Type: ValueType{Kind: sim.ScalarKind}, Unit: "joules",
+			Bounds: Bounds{HasMinimum: true, Minimum: 0}, PermittedStates: allStates(), Uncertainty: UncertaintyPermitted,
+		}},
+		AccessPolicy:    AccessAuthorizedReadProject,
+		TransitionRules: []TransitionRuleDescriptor{{ID: WithdrawRuleID, Version: 1, Name: "withdraw-energy-v1"}},
+		Projections: []ProjectionDescriptor{{
+			ID: CacheProjection, Version: 1, Name: "cache-stock", SourceFields: []sim.FieldID{CacheStockField},
+			Coefficients: []float64{1}, Unit: "joules", Bounds: Bounds{HasMinimum: true, Minimum: 0}, MissingBehavior: PreserveSourceState,
 		}},
 		MigrationPolicy: MigrationRejectUnlisted, StorageClass: DynamicStorage, ComplexityCost: 1,
 	}
