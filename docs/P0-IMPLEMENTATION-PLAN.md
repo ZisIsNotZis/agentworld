@@ -1,6 +1,6 @@
 # P0 implementation plan
 
-Status: S0–S6 bounded survival demo implemented; single-machine checkpoint awaiting integration review; full P0 remains open
+Status: S0–S6 bounded architecture smoke and S7a single-machine checkpoint implemented; full P0 remains open
 
 This plan sequences the executable work described by [P0-SPEC](P0-SPEC.md) and preserves the unified component boundary accepted in [ADR 0005](adr/0005-unified-hybrid-components.md). Go is provisional while P0 measures correctness and cost.
 
@@ -50,6 +50,6 @@ This plan sequences the executable work described by [P0-SPEC](P0-SPEC.md) and p
 
 ## Next slices
 
-Later slices add long-run validation, fuller perception evidence, and performance-driven optimization.
+S6 is an architecture smoke, not an endurance or causal-validity demonstration: the seed-7 maximum-bound probe (256 actors, requested 240 hours) ends with all actors stopped at hour 29. The four finite caches have no replenishment and become inedible by hour 21. One-winner-per-cache-hour contention and ordered actor keys visibly bias access and constrain hourly throughput; their separate contribution to extinction timing has not been isolated by an intervention. The P0 gap remains a renewable survival ecology with time-based needs and capacity-valid allocation, plus the specified birth, aging, death, health, location, weather, movement, social actions, longer horizons, fuller perception evidence, and measured scaling toward approximately 1,000 actors over decades. A separate bounded pilot should test the next causal mechanism before raising actor or horizon limits; the probe's trajectory and costs belong in `.scratch/09-p0-scale-and-validity/spec.md`, not a claim of P0 completion.
 
 The S0–S5 tests do not establish durable persistence, migration, or full P0 promotion equivalence. Performance results are baselines, not pass/fail thresholds.
