@@ -82,22 +82,23 @@ type FoodFlowCheckpoint struct {
 // the in-memory batches are attempt/activity evidence, not another state store.
 // Kernel and SchedulerSnapshot are the persistence lane's quiescent handoff.
 type FoodFlow struct {
-	mu          sync.Mutex
-	k           *kernel.Kernel
-	sched       *scheduler.Scheduler
-	registry    component.Registry
-	seeds       []component.ComponentSeed
-	bound       [FoodFlowActorCount]*strategy.FoodFlowBound
-	ref         strategy.FoodFlowRef
-	seed        uint64
-	yield       int64
-	current     map[sim.EntityID]strategy.FoodFlowAction
-	choices     map[sim.EntityID]strategy.FoodFlowChoice
-	admissions  map[sim.EntityID]FoodFlowGatherAdmission
-	pending     *foodFlowPending
-	journal     []FoodFlowBatch
-	checkpoints []FoodFlowCheckpoint
-	steps       int
+	mu             sync.Mutex
+	k              *kernel.Kernel
+	sched          *scheduler.Scheduler
+	registry       component.Registry
+	seeds          []component.ComponentSeed
+	bound          [FoodFlowActorCount]*strategy.FoodFlowBound
+	ref            strategy.FoodFlowRef
+	seed           uint64
+	yield          int64
+	current        map[sim.EntityID]strategy.FoodFlowAction
+	choices        map[sim.EntityID]strategy.FoodFlowChoice
+	admissions     map[sim.EntityID]FoodFlowGatherAdmission
+	pulseLifecycle [FoodFlowActorCount]scheduler.Lifecycle
+	pending        *foodFlowPending
+	journal        []FoodFlowBatch
+	checkpoints    []FoodFlowCheckpoint
+	steps          int
 }
 type foodFlowPending struct {
 	mu        sync.Mutex
@@ -269,8 +270,12 @@ func (f *FoodFlow) pulse(ready scheduler.ReadyFiber, view scheduler.SnapshotView
 	}
 	var result scheduler.Evaluation
 	for i, a := range actors {
-		if h == 0 {
-			break
+		lifecycle := f.pulseLifecycle[i]
+		if lifecycle != scheduler.Alive && lifecycle != scheduler.Stopped || (lifecycle == scheduler.Alive) != (a.Energy > 0) {
+			return result, ErrFoodFlowRunner
+		}
+		if lifecycle == scheduler.Stopped || h == 0 {
+			continue
 		}
 		next, _, e := FoodFlowBasal(a, 1)
 		if e != nil {
@@ -281,7 +286,7 @@ func (f *FoodFlow) pulse(ready scheduler.ReadyFiber, view scheduler.SnapshotView
 		proposal := foodFlowProposal("basal", at, id, FoodFlowBasalRule, ps)
 		proposal.Cause = kernel.Cause{World: true} // elapsed need is a world pulse, not an actor action
 		result.Proposals = append(result.Proposals, proposal)
-		if next.Energy == 0 && a.Energy > 0 {
+		if next.Energy == 0 {
 			result.Effects = append(result.Effects, scheduler.Effect{Kind: scheduler.EffectStop, Actor: id})
 		}
 		actors[i] = next
@@ -524,6 +529,18 @@ func (f *FoodFlow) Step(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 	at := snap.Wakes[0].At
+	if at%sim.SimTime(FoodFlowHour) == 0 {
+		if len(snap.Fibers) != FoodFlowActorCount+1 {
+			return false, ErrFoodFlowRunner
+		}
+		for i := range f.pulseLifecycle {
+			fiber := snap.Fibers[i]
+			if fiber.Actor != sim.EntityID(i+1) || fiber.Activity != nil {
+				return false, ErrFoodFlowRunner
+			}
+			f.pulseLifecycle[i] = fiber.Lifecycle
+		}
+	}
 	if err := f.allocate(at); err != nil {
 		return false, err
 	}

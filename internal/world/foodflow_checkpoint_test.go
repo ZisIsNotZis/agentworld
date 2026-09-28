@@ -2,6 +2,7 @@ package world
 
 import (
 	"agentworld/internal/checkpoint"
+	"agentworld/internal/scheduler"
 	"agentworld/internal/strategy"
 	"bytes"
 	"context"
@@ -33,6 +34,103 @@ func foodFlowSaveAt(t *testing.T, q int64, steps int) (*FoodFlow, string, [32]by
 		t.Fatal(err)
 	}
 	return f, path, digest
+}
+
+// Stop after the h18 pulse: ten actors died at h17 and six must still
+// receive claim wakes. This is a mixed alive/stopped checkpoint, not a final
+// state or an in-flight claim.
+func foodFlowSaveScarceAfterDeaths(t *testing.T) (*FoodFlow, string, [32]byte) {
+	t.Helper()
+	f, err := NewFoodFlow(FoodFlowOptions{Yield: 3, Seed: 7, Workers: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	at, _ := FoodFlowHourTime(18)
+	for f.sched.Time() < at || len(f.checkpoints) < 19 {
+		processed, err := f.Step(context.Background())
+		if err != nil || !processed {
+			t.Fatalf("failed to close h18 pulse: processed=%t err=%v", processed, err)
+		}
+	}
+	if f.sched.Time() != at || f.checkpoints[18].Hour != 18 || f.checkpoints[16].Alive != FoodFlowActorCount || f.checkpoints[17].Alive != 6 || f.checkpoints[18].Alive != 6 {
+		t.Fatalf("not an h17 transition to mixed h18 pulse: time=%d h16=%+v h17=%+v h18=%+v", f.sched.Time(), f.checkpoints[16], f.checkpoints[17], f.checkpoints[18])
+	}
+	snap := f.sched.Snapshot()
+	stopped := 0
+	for i, actor := range f.checkpoints[17].Actors {
+		if actor.Energy != 0 {
+			continue
+		}
+		stopped++
+		if snap.Fibers[i].Lifecycle != scheduler.Stopped || f.checkpoints[18].Actors[i] != actor {
+			t.Fatalf("actor %d not frozen after h17: h17=%+v h18=%+v fiber=%+v", i+1, actor, f.checkpoints[18].Actors[i], snap.Fibers[i])
+		}
+	}
+	if stopped != 10 || len(snap.Wakes) != 7 || snap.Wakes[0].At != at+1 {
+		t.Fatalf("h18 topology: stopped=%d wakes=%v", stopped, snap.Wakes)
+	}
+	path := filepath.Join(t.TempDir(), "scarce-h18.bundle")
+	digest, err := f.SaveCheckpoint(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return f, path, digest
+}
+
+func assertFoodFlowScarceDeathsFrozen(t *testing.T, checks []FoodFlowCheckpoint) {
+	t.Helper()
+	if len(checks) != FoodFlowHorizonHours+1 {
+		t.Fatalf("incomplete scarce projection: checkpoints=%d", len(checks))
+	}
+	if checks[168].Alive != 6 {
+		t.Fatalf("h168 scarce survivors=%d", checks[168].Alive)
+	}
+	for i, actor := range checks[17].Actors {
+		if actor.Energy != 0 {
+			continue
+		}
+		for hour := 18; hour <= FoodFlowHorizonHours; hour++ {
+			if checks[hour].Actors[i] != actor {
+				t.Fatalf("actor %d changed after h17: h17=%+v h%d=%+v", i+1, actor, hour, checks[hour].Actors[i])
+			}
+		}
+	}
+}
+
+func TestFoodFlowCheckpointScarceAfterDeathsShortContinuation(t *testing.T) {
+	original, path, digest := foodFlowSaveScarceAfterDeaths(t)
+	restored, got, err := RestoreFoodFlowCheckpoint(path, FoodFlowOptions{Yield: 3, Seed: 7, Workers: 1})
+	if err != nil || got != digest {
+		t.Fatalf("mixed h18 restore: digest=%x want=%x err=%v", got, digest, err)
+	}
+	again := filepath.Join(t.TempDir(), "restored-h18.bundle")
+	if resaved, err := restored.SaveCheckpoint(again); err != nil || resaved != digest {
+		t.Fatalf("h18 re-save digest=%x want=%x err=%v", resaved, digest, err)
+	}
+	for range 4 {
+		one, err := original.Step(context.Background())
+		if err != nil || !one {
+			t.Fatalf("original step: %v", err)
+		}
+		two, err := restored.Step(context.Background())
+		if err != nil || !two {
+			t.Fatalf("restored step: %v", err)
+		}
+	}
+	before, err := original.Handoff()
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := restored.Handoff()
+	if err != nil || !reflect.DeepEqual(before, after) || !reflect.DeepEqual(foodFlowEventBytes(t, original), foodFlowEventBytes(t, restored)) {
+		t.Fatalf("mixed h18 continuation diverged: %v", err)
+	}
+	for i, actor := range original.checkpoints[17].Actors {
+		if actor.Energy == 0 && (original.checkpoints[18].Actors[i] != actor || restored.checkpoints[18].Actors[i] != actor) {
+			t.Fatalf("actor %d changed after h17", i+1)
+		}
+	}
+	t.Logf("q3 h18 restored: %d stopped, %d alive, %d accepted events", FoodFlowActorCount-original.checkpoints[18].Alive, original.checkpoints[18].Alive, len(original.k.Events()))
 }
 
 func TestFoodFlowCheckpointActiveAndRejectedOnlyContinuation(t *testing.T) {

@@ -46,6 +46,10 @@ Automated checks should cover:
 - valid strategy and rule versions at every event;
 - checkpoint and event-log consistency.
 
+## Bounded renewable-food pilot evidence
+
+The synthetic food-flow v1 reporter (for example, `go run ./cmd/foodflow -q=8 -seed=0 -workers=1 -hours=168`; also test q=3/0, seeds 0/7 and workers 1/4) checks hourly produced = consumed + held + stock and initial energy + consumed = remaining energy + basal spent + cap loss. It samples fixed early/middle/late hours, population-change transitions, 1/8/16 actor states, linked accepted-event counts and unlinked rejection counts, including rejected Gather action totals as well as distinct denial reasons; stopped actors' hunger must remain fixed; immutable checkpoint and accepted history/journal byte sizes are measured separately. Frozen gates distinguish abundant viability, scarce equal first-eight-hour access with subsequent decline, and zero-flow extinction. See [the scoped run record](../.scratch/10-food-flow-pilot/spec.md) for commands and values. This checks internal consistency and conditional fixture behavior only: selected 16-actor seeds, no social dynamics, no human calibration, no scale extrapolation. Peak Go heap is sampled after scheduler steps rather than continuously; Linux `ru_maxrss` is the process high-water RSS.
+
 ## Cognitive-allocation experiments
 
 Given the same initial checkpoint, random streams, compute budget, and model access, compare allocation policies such as:

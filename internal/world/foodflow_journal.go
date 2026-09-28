@@ -517,7 +517,13 @@ func verifyFoodFlowJournal(batches []FoodFlowBatch, events []kernel.Event, head 
 	var lastVersion sim.WorldVersion
 	var lastToken uint64
 	var open [FoodFlowActorCount + 1]*FoodFlowActivity
-	var live [FoodFlowActorCount + 1]bool
+	// Only an accepted basal event can reduce energy to zero. Accepted Eat
+	// deltas update the same ledger before the next hourly pulse; dead actors
+	// cannot be resurrected by an unlinked journal choice.
+	var energy [FoodFlowActorCount + 1]int64
+	for actor := 1; actor <= FoodFlowActorCount; actor++ {
+		energy[actor] = FoodFlowInitialEnergy
+	}
 	var expectedPhase byte
 	for bi, b := range batches {
 		phase := foodFlowPhase(b.Time)
@@ -553,10 +559,17 @@ func verifyFoodFlowJournal(batches []FoodFlowBatch, events []kernel.Event, head 
 		// World events precede the accepted actor proposals at this timestamp.
 		if phase == 0 {
 			h := int(b.Time / sim.SimTime(FoodFlowHour))
-			wanted := 0
+			// The scheduler pulses only actors alive immediately before this
+			// integer hour, in actor order. Production remains independent.
+			var basalActors []sim.EntityID
 			if h > 0 {
-				wanted += FoodFlowActorCount
+				for actor := 1; actor <= FoodFlowActorCount; actor++ {
+					if energy[actor] > 0 {
+						basalActors = append(basalActors, sim.EntityID(actor))
+					}
+				}
 			}
+			wanted := len(basalActors)
 			if h < FoodFlowHorizonHours {
 				wanted += FoodFlowPatchCount
 			}
@@ -566,11 +579,11 @@ func verifyFoodFlowJournal(batches []FoodFlowBatch, events []kernel.Event, head 
 				}
 				ev := events[index]
 				kind, actor, rule := "produce-0", sim.EntityID(0), FoodFlowProduceRule
-				if h > 0 && n < FoodFlowActorCount {
+				if n < len(basalActors) {
 					kind = "basal"
-					actor = sim.EntityID(n + 1)
+					actor = basalActors[n]
 					rule = FoodFlowBasalRule
-				} else if n == wanted-1 {
+				} else if n == len(basalActors)+1 {
 					kind = "produce-1"
 				}
 				if ev.Time != b.Time || ev.Key != foodFlowKey(kind, b.Time, actor) || ev.Rule != rule || ev.RuleVersion != FoodFlowRuleVersion || ev.Kind != "component-patch" || !ev.Cause.World || ev.Cause.Actor != 0 {
@@ -588,11 +601,12 @@ func verifyFoodFlowJournal(batches []FoodFlowBatch, events []kernel.Event, head 
 						}
 						fields[d.Field] = true
 						if d.Field == FoodFlowBodyEnergyField {
-							energy, err := d.After.Integer()
-							if err != nil {
+							before, beforeErr := d.Before.Integer()
+							after, afterErr := d.After.Integer()
+							if beforeErr != nil || afterErr != nil || before != energy[actor] || before <= 0 || after != before-1 {
 								return fail()
 							}
-							live[actor] = energy > 0
+							energy[actor] = after
 						}
 					}
 					for _, used := range fields {
@@ -631,11 +645,6 @@ func verifyFoodFlowJournal(batches []FoodFlowBatch, events []kernel.Event, head 
 					}
 				}
 				index++
-			}
-			if h == 0 {
-				for actor := 1; actor <= FoodFlowActorCount; actor++ {
-					live[actor] = true
-				}
 			}
 		}
 		records[bi] = make([]foodFlowJournalAttempt, len(b.Attempts))
@@ -686,7 +695,7 @@ func verifyFoodFlowJournal(batches []FoodFlowBatch, events []kernel.Event, head 
 					}
 				}
 			}
-			if phase == 1 && (!live[a.Actor] || c.ObservedVersion != lastVersion) {
+			if phase == 1 && (energy[a.Actor] <= 0 || c.ObservedVersion != lastVersion) {
 				return fail()
 			}
 			if a.Key != foodFlowKey(kind, b.Time, a.Actor) || len(a.Key) > 128 {
@@ -718,8 +727,20 @@ func verifyFoodFlowJournal(batches []FoodFlowBatch, events []kernel.Event, head 
 					}
 				}
 			}
-			if !foodFlowJournalEventSource(ev, a.Choice.Kind, a.Actor, a.Choice.TargetPatch, rec.Slot) {
+			if !foodFlowJournalEventSource(ev, a.Choice.Kind, a.Actor, a.Choice.TargetPatch, rec.Slot) || energy[a.Actor] <= 0 {
 				return fail()
+			}
+			if a.Choice.Kind == strategy.FoodFlowEat {
+				for _, d := range ev.Deltas {
+					if d.Component == FoodFlowBodyTypeID && d.Field == FoodFlowBodyEnergyField {
+						before, beforeErr := d.Before.Integer()
+						after, afterErr := d.After.Integer()
+						if beforeErr != nil || afterErr != nil || before != energy[a.Actor] || after < before || after > FoodFlowEnergyCapacity {
+							return fail()
+						}
+						energy[a.Actor] = after
+					}
+				}
 			}
 			index++
 			lastHash = ev.Hash
@@ -819,7 +840,7 @@ func verifyFoodFlowJournal(batches []FoodFlowBatch, events []kernel.Event, head 
 			expectedPhase = 0
 			if b.Time < sim.SimTime(FoodFlowHorizonHours)*sim.SimTime(FoodFlowHour) {
 				for actor := 1; actor <= FoodFlowActorCount; actor++ {
-					if live[actor] {
+					if energy[actor] > 0 {
 						expectedPhase = 1
 						break
 					}
@@ -827,7 +848,7 @@ func verifyFoodFlowJournal(batches []FoodFlowBatch, events []kernel.Event, head 
 			}
 		case 1:
 			for actor := 1; actor <= FoodFlowActorCount; actor++ {
-				if live[actor] != (seen[actor] || open[actor] != nil) || seen[actor] && open[actor] != nil {
+				if (energy[actor] > 0) != (seen[actor] || open[actor] != nil) || seen[actor] && open[actor] != nil {
 					return fail()
 				}
 			}

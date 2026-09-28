@@ -22,7 +22,7 @@ func TestFoodFlowCheckpointSubprocess(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		f, _, err := RestoreFoodFlowCheckpoint(path, FoodFlowOptions{Yield: q, Seed: 7, Workers: 1})
+		f, restoredDigest, err := RestoreFoodFlowCheckpoint(path, FoodFlowOptions{Yield: q, Seed: 7, Workers: 1})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -30,6 +30,13 @@ func TestFoodFlowCheckpointSubprocess(t *testing.T) {
 			t.Fatal(err)
 		}
 		h, err := f.Handoff()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if os.Getenv("FOODFLOW_ASSERT_SCARCE_FROZEN") == "1" {
+			assertFoodFlowScarceDeathsFrozen(t, h.Checkpoints)
+		}
+		finalDigest, err := f.SaveCheckpoint(os.Getenv("FOODFLOW_FINAL_CHECKPOINT"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -53,14 +60,36 @@ func TestFoodFlowCheckpointSubprocess(t *testing.T) {
 		if _, err = fmt.Fprintf(out, "%#v", h.Checkpoints); err != nil {
 			t.Fatal(err)
 		}
+		if _, err = out.Write(restoredDigest[:]); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = out.Write(finalDigest[:]); err != nil {
+			t.Fatal(err)
+		}
 		return
 	}
-	for _, q := range []int64{8, 3, 0} {
-		t.Run(strconv.FormatInt(q, 10), func(t *testing.T) {
-			original, path, _ := foodFlowSaveAt(t, q, 2)
+	for _, tc := range []struct {
+		name        string
+		q           int64
+		afterDeaths bool
+	}{{"q8-active", 8, false}, {"q3-active", 3, false}, {"q0-rejected", 0, false}, {"q3-h18-mixed", 3, true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			var original *FoodFlow
+			var path string
+			var savedDigest [32]byte
+			if tc.afterDeaths {
+				original, path, savedDigest = foodFlowSaveScarceAfterDeaths(t)
+			} else {
+				original, path, savedDigest = foodFlowSaveAt(t, tc.q, 2)
+			}
 			out := filepath.Join(t.TempDir(), "child.out")
+			childFinal := filepath.Join(t.TempDir(), "child-final.bundle")
 			cmd := exec.Command(os.Args[0], "-test.run=^TestFoodFlowCheckpointSubprocess$")
-			cmd.Env = append(os.Environ(), "FOODFLOW_RESTORE_CHILD="+path, "FOODFLOW_Q="+strconv.FormatInt(q, 10), "FOODFLOW_OUTPUT="+out)
+			frozen := "0"
+			if tc.afterDeaths {
+				frozen = "1"
+			}
+			cmd.Env = append(os.Environ(), "FOODFLOW_RESTORE_CHILD="+path, "FOODFLOW_Q="+strconv.FormatInt(tc.q, 10), "FOODFLOW_OUTPUT="+out, "FOODFLOW_FINAL_CHECKPOINT="+childFinal, "FOODFLOW_ASSERT_SCARCE_FROZEN="+frozen)
 			if result, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("child: %v %s", err, result)
 			}
@@ -71,7 +100,14 @@ func TestFoodFlowCheckpointSubprocess(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if tc.afterDeaths {
+				assertFoodFlowScarceDeathsFrozen(t, h.Checkpoints)
+			}
 			journal, err := original.ExportJournal()
+			if err != nil {
+				t.Fatal(err)
+			}
+			finalDigest, err := original.SaveCheckpoint(filepath.Join(t.TempDir(), "uninterrupted-final.bundle"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -81,11 +117,16 @@ func TestFoodFlowCheckpointSubprocess(t *testing.T) {
 			}
 			want := append(append(append([]byte(nil), h.History...), h.SchedulerBytes...), journal...)
 			want = append(want, fmt.Sprintf("%#v", h.Checkpoints)...)
-			if h.Checkpoints[168].Alive != map[int64]int{8: 16, 3: 6, 0: 0}[q] {
-				t.Fatalf("q%d unexpected horizon alive=%d", q, h.Checkpoints[168].Alive)
+			want = append(want, savedDigest[:]...)
+			want = append(want, finalDigest[:]...)
+			if h.Checkpoints[168].Alive != map[int64]int{8: 16, 3: 6, 0: 0}[tc.q] {
+				t.Fatalf("q%d unexpected horizon alive=%d", tc.q, h.Checkpoints[168].Alive)
 			}
 			if !bytes.Equal(actual, want) {
 				t.Fatalf("subprocess continuation bytes differ: got %x want %x", sha256.Sum256(actual), sha256.Sum256(want))
+			}
+			if tc.afterDeaths {
+				t.Logf("q3 restored after h17 deaths: h18 alive=%d h168 alive=%d accepted events=%d final digest=%x", h.Checkpoints[18].Alive, h.Checkpoints[168].Alive, len(original.k.Events()), finalDigest)
 			}
 		})
 	}
