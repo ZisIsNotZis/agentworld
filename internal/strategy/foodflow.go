@@ -64,11 +64,15 @@ func validFoodFlowRef(ref FoodFlowRef) bool {
 	return ref.ID != "" && len(ref.ID) <= MaxRefIDBytes && ref.Version != 0
 }
 
+func validFoodFlowPolicy(policy FoodFlowPolicy) bool {
+	return policy.FormatVersion == FoodFlowPolicyFormatV1 && validFoodFlowRef(policy.Ref) &&
+		policy.Budget.Candidates >= 1 && policy.Budget.Candidates <= FoodFlowMaxCandidates &&
+		policy.Budget.Evaluations >= 1 && policy.Budget.Evaluations <= FoodFlowMaxCandidates &&
+		policy.RestDuration == FoodFlowRestDuration
+}
+
 func (r *FoodFlowRegistry) Register(policy FoodFlowPolicy) error {
-	if r == nil || policy.FormatVersion != FoodFlowPolicyFormatV1 || !validFoodFlowRef(policy.Ref) ||
-		policy.Budget.Candidates < 1 || policy.Budget.Candidates > FoodFlowMaxCandidates ||
-		policy.Budget.Evaluations < 1 || policy.Budget.Evaluations > FoodFlowMaxCandidates ||
-		policy.RestDuration != FoodFlowRestDuration {
+	if r == nil || !validFoodFlowPolicy(policy) {
 		return ErrInvalidFoodFlowPolicy
 	}
 	r.mu.Lock()
