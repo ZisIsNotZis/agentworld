@@ -33,13 +33,16 @@ type Plan struct {
 var nextKernelOrigin atomic.Uint64
 
 type Kernel struct {
-	mu        sync.Mutex
-	origin    uint64
-	registry  component.Registry
-	reader    component.Reader
-	authority component.Authority
-	version   sim.WorldVersion
-	events    []Event
+	mu             sync.Mutex
+	origin         uint64
+	registry       component.Registry
+	reader         component.Reader
+	authority      component.Authority
+	version        sim.WorldVersion
+	genesisVersion sim.WorldVersion
+	genesis        []byte // canonical snapshot owns the seed values, not caller slices
+	events         []Event
+	acceptedKeys   map[string]struct{} // published winners only, protected by mu
 }
 
 func New(registry component.Registry, version sim.WorldVersion, seeds []component.ComponentSeed) (*Kernel, error) {
@@ -47,7 +50,11 @@ func New(registry component.Registry, version sim.WorldVersion, seeds []componen
 	if err != nil {
 		return nil, err
 	}
-	return &Kernel{registry: registry, reader: reader, authority: authority, version: version, origin: nextKernelOrigin.Add(1)}, nil
+	genesis, err := component.EncodeSnapshot(registry, reader, authority, version)
+	if err != nil {
+		return nil, err
+	}
+	return &Kernel{registry: registry, reader: reader, authority: authority, version: version, genesisVersion: version, genesis: genesis, acceptedKeys: make(map[string]struct{}), origin: nextKernelOrigin.Add(1)}, nil
 }
 
 // Head binds one immutable reader to its event-log tip under the kernel lock.
@@ -171,15 +178,11 @@ func (k *Kernel) commitBatch(plans []Plan) ([]Event, error) {
 	}
 	ordered := append([]Plan(nil), plans...)
 	sort.Slice(ordered, func(i, j int) bool { return ordered[i].proposal.Key < ordered[j].proposal.Key })
-	usedKeys := make(map[string]struct{}, len(k.events))
-	for _, event := range k.events {
-		usedKeys[event.Key] = struct{}{}
-	}
 	for i, plan := range ordered {
 		if plan.owner != k || plan.snapshot != k.reader {
 			return nil, ErrStalePlan
 		}
-		if _, exists := usedKeys[plan.proposal.Key]; exists {
+		if _, exists := k.acceptedKeys[plan.proposal.Key]; exists {
 			return nil, ErrDuplicateKey
 		}
 		if i > 0 && plan.proposal.Key == ordered[i-1].proposal.Key {
@@ -238,6 +241,9 @@ func (k *Kernel) commitBatch(plans []Plan) ([]Event, error) {
 	}
 	k.reader, k.authority, k.version = reader, authority, version
 	k.events = append(k.events, events...)
+	for _, event := range events {
+		k.acceptedKeys[event.Key] = struct{}{}
+	}
 	out := make([]Event, len(events))
 	for i, e := range events {
 		out[i] = cloneEvent(e)
