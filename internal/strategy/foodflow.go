@@ -15,6 +15,7 @@ const (
 	FoodFlowMaxPatches                    = 2
 	FoodFlowMaxSlotsPerPatch              = 8
 	FoodFlowMaxCandidates                 = FoodFlowMaxPatches * FoodFlowMaxSlotsPerPatch
+	FoodFlowRestDuration     sim.Duration = 600 * 1e6 // 10 minutes in microseconds
 	foodFlowHour             sim.Duration = 3_600_000_000
 	foodFlowHorizonHours                  = 168
 )
@@ -67,7 +68,7 @@ func (r *FoodFlowRegistry) Register(policy FoodFlowPolicy) error {
 	if r == nil || policy.FormatVersion != FoodFlowPolicyFormatV1 || !validFoodFlowRef(policy.Ref) ||
 		policy.Budget.Candidates < 1 || policy.Budget.Candidates > FoodFlowMaxCandidates ||
 		policy.Budget.Evaluations < 1 || policy.Budget.Evaluations > FoodFlowMaxCandidates ||
-		policy.RestDuration != foodFlowHour {
+		policy.RestDuration != FoodFlowRestDuration {
 		return ErrInvalidFoodFlowPolicy
 	}
 	r.mu.Lock()

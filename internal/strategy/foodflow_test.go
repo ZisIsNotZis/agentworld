@@ -16,7 +16,7 @@ func foodFlowFixture(t *testing.T) (*strategy.FoodFlowRegistry, strategy.FoodFlo
 	ref := strategy.FoodFlowRef{ID: "pilot", Version: 1}
 	if err := r.Register(strategy.FoodFlowPolicy{FormatVersion: strategy.FoodFlowPolicyFormatV1, Ref: ref,
 		Budget:       strategy.FoodFlowBudget{Candidates: strategy.FoodFlowMaxCandidates, Evaluations: strategy.FoodFlowMaxCandidates},
-		RestDuration: world.FoodFlowHour}); err != nil {
+		RestDuration: strategy.FoodFlowRestDuration}); err != nil {
 		t.Fatal(err)
 	}
 	return r, ref
@@ -62,9 +62,10 @@ func TestFoodFlowHeldEatEmptyGatherDeniedRest(t *testing.T) {
 	obs = foodFlowObservation(1)
 	obs.LastDenial = strategy.FoodFlowGatherDenied
 	choice, err = b.Evaluate(obs)
-	if err != nil || choice != (strategy.FoodFlowChoice{Kind: strategy.FoodFlowRest, RestDuration: world.FoodFlowHour,
+	if strategy.FoodFlowRestDuration != sim.Duration(600*1e6) ||
+		err != nil || choice != (strategy.FoodFlowChoice{Kind: strategy.FoodFlowRest, RestDuration: sim.Duration(600 * 1e6),
 		ObservedVersion: 3, Ref: ref, Evaluated: 1}) {
-		t.Fatalf("denied gather must rest for one hour: %+v %v", choice, err)
+		t.Fatalf("denied gather must rest for ten minutes: %+v %v", choice, err)
 	}
 	obs.Energy = sim.IntegerValue(0)
 	choice, err = b.Evaluate(obs)
@@ -167,15 +168,16 @@ func TestFoodFlowPinnedPolicyAndBudget(t *testing.T) {
 	r, ref := foodFlowFixture(t)
 	b := foodFlowBound(t, r, ref, 1)
 	for _, invalid := range []strategy.FoodFlowPolicy{
-		{FormatVersion: 2, Ref: strategy.FoodFlowRef{ID: "wrong", Version: 1}, Budget: strategy.FoodFlowBudget{1, 1}, RestDuration: world.FoodFlowHour},
-		{FormatVersion: 1, Ref: strategy.FoodFlowRef{ID: "bad", Version: 1}, Budget: strategy.FoodFlowBudget{0, 1}, RestDuration: world.FoodFlowHour},
+		{FormatVersion: 2, Ref: strategy.FoodFlowRef{ID: "wrong", Version: 1}, Budget: strategy.FoodFlowBudget{1, 1}, RestDuration: strategy.FoodFlowRestDuration},
+		{FormatVersion: 1, Ref: strategy.FoodFlowRef{ID: "bad", Version: 1}, Budget: strategy.FoodFlowBudget{0, 1}, RestDuration: strategy.FoodFlowRestDuration},
 		{FormatVersion: 1, Ref: strategy.FoodFlowRef{ID: "bad", Version: 1}, Budget: strategy.FoodFlowBudget{1, 1}, RestDuration: 0},
+		{FormatVersion: 1, Ref: strategy.FoodFlowRef{ID: "bad", Version: 1}, Budget: strategy.FoodFlowBudget{1, 1}, RestDuration: world.FoodFlowHour},
 	} {
 		if err := r.Register(invalid); !errors.Is(err, strategy.ErrInvalidFoodFlowPolicy) {
 			t.Fatalf("bad policy accepted: %v", err)
 		}
 	}
-	if err := r.Register(strategy.FoodFlowPolicy{FormatVersion: 1, Ref: ref, Budget: strategy.FoodFlowBudget{1, 1}, RestDuration: world.FoodFlowHour}); !errors.Is(err, strategy.ErrInvalidFoodFlowPolicy) {
+	if err := r.Register(strategy.FoodFlowPolicy{FormatVersion: 1, Ref: ref, Budget: strategy.FoodFlowBudget{1, 1}, RestDuration: strategy.FoodFlowRestDuration}); !errors.Is(err, strategy.ErrInvalidFoodFlowPolicy) {
 		t.Fatalf("duplicate version: %v", err)
 	}
 	if _, err := r.Bind(strategy.FoodFlowBinding{Actor: 1, Ref: strategy.FoodFlowRef{ID: ref.ID, Version: 2}}); !errors.Is(err, strategy.ErrUnknownFoodFlowPolicy) {
@@ -186,7 +188,7 @@ func TestFoodFlowPinnedPolicyAndBudget(t *testing.T) {
 	}
 	limited := strategy.NewFoodFlowRegistry()
 	limitedRef := strategy.FoodFlowRef{ID: "limited", Version: 1}
-	if err := limited.Register(strategy.FoodFlowPolicy{FormatVersion: 1, Ref: limitedRef, Budget: strategy.FoodFlowBudget{Candidates: 1, Evaluations: 1}, RestDuration: world.FoodFlowHour}); err != nil {
+	if err := limited.Register(strategy.FoodFlowPolicy{FormatVersion: 1, Ref: limitedRef, Budget: strategy.FoodFlowBudget{Candidates: 1, Evaluations: 1}, RestDuration: strategy.FoodFlowRestDuration}); err != nil {
 		t.Fatal(err)
 	}
 	choice, err := foodFlowBound(t, limited, limitedRef, 1).Evaluate(foodFlowObservation(1))
