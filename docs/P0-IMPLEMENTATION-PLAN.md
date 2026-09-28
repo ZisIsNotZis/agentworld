@@ -1,6 +1,6 @@
 # P0 implementation plan
 
-Status: S0–S4 integrated; S5 implemented on feature branch, review pending
+Status: S0–S5 integrated; bounded strategy and survival behavior are next
 
 This plan sequences the executable work described by [P0-SPEC](P0-SPEC.md) and preserves the unified component boundary accepted in [ADR 0005](adr/0005-unified-hybrid-components.md). Go is provisional while P0 measures correctness and cost.
 
@@ -39,4 +39,4 @@ This plan sequences the executable work described by [P0-SPEC](P0-SPEC.md) and p
 
 Later slices add bounded strategies, survival behavior, durable checkpoints, branching, long-run validation, and performance-driven optimization.
 
-The S0–S4 tests do not establish durable persistence, migration, or full P0 promotion equivalence. Performance results are baselines, not pass/fail thresholds.
+The S0–S5 tests do not establish durable persistence, migration, or full P0 promotion equivalence. Performance results are baselines, not pass/fail thresholds.
