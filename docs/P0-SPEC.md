@@ -140,6 +140,8 @@ Observation
 
 A rejected intention produces diagnostic evidence but no component mutation.
 
+For S3, the kernel plans existing-component field replacements against one snapshot and its read authority. Each proposal has a stable key unique among accepted events and within its batch, non-negative time, actor or authorized-world cause, registered rule ID/version, and schema-versioned patches. The kernel revalidates every plan before commit; any malformed, stale, cross-snapshot, or unauthorized plan aborts the entire batch. Each simulated timestamp is committed in one complete batch: a later batch at the same or earlier time is rejected. The kernel sorts by key and drops a whole later proposal when a field collides with an earlier winner. Each winner advances world version once and emits one typed event; an in-process commit publishes the new snapshot and its append-only hash chain together. Strategies receive readers only, never the kernel commit handle. S3's actor cause checks only seeded entity identity, and a world cause requires the kernel handle plus snapshot authority; registered metadata does not define per-source write policies or executable domain-intention validation, which belong to S5. S3 rejects cross-schema transitions even if migration paths are listed; executable migration is a later bounded slice.
+
 All decisions at one simulation timestamp read a consistent world version. Worker completion order cannot determine conflict outcomes.
 
 ## 9. Fiber scheduling
@@ -193,11 +195,11 @@ Every arrow must be testable without reading narrative prose.
 
 ## 13. Event and checkpoint contracts
 
-An event records ID, simulated time, before and after world versions, kind, cause, actor or authorized world source, rule version, typed payload, visibility, component deltas, and metric deltas.
+An event records ID, simulated time, before and after world versions, kind, cause, actor or authorized world source, rule version, typed payload, visibility, component deltas, and metric deltas. For S3 `component-patch` events, the typed field deltas are the complete typed payload; visibility is deliberately deferred to the perception slice and must not be inferred from an absent visibility field.
 
 A checkpoint records format version, simulation time, world version, entity and component state, pending activities, wake queue, strategy and rule versions, projection versions, random-stream positions, event-log references, branch ancestry, compatibility class, and integrity hashes.
 
-Recovery validates references, queue times, versions, hashes, random streams, and invariants before continuation.
+Recovery validates references, queue times, versions, hashes, random streams, and invariants before continuation. S3 replay starts from the same seed and registry, groups accepted events by timestamp into complete batches, and checks canonical bounded event encoding, contiguous IDs and versions, chain hashes, key ordering, schema/rule/projection references, before-values, and recomputed deltas. It cannot recover rejected or collision-losing proposals from accepted-only events; S5 will supply that intention-level evidence. S3's log is in-process only: crash durability, disk segments, and fsync are later gates. Its hash chain detects accidental or partial alteration but does not authenticate against an adversary who can rewrite the entire chain without a trusted external tip.
 
 ## 14. Implementation slices
 
