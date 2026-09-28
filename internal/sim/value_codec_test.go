@@ -34,6 +34,9 @@ func TestValueCodecRoundTrip(t *testing.T) {
 		if err != nil {
 			t.Fatalf("encode kind %d: %v", v.Kind(), err)
 		}
+		if nodes, err := CountValueNodes(data, 1<<16); err != nil || nodes == 0 {
+			t.Fatalf("scan kind %d: %d nodes, %v", v.Kind(), nodes, err)
+		}
 		decoded, err := DecodeValue(data)
 		if err != nil || !reflect.DeepEqual(v, decoded) {
 			t.Fatalf("round trip kind %d: %v", v.Kind(), err)
@@ -44,6 +47,40 @@ func TestValueCodecRoundTrip(t *testing.T) {
 		}
 	}
 }
+func TestCountValueNodesWithoutMaterialization(t *testing.T) {
+	inner, _ := ListValue([]Value{BoolValue(true), BoolValue(false)})
+	outer, _ := OptionalValue(inner)
+	data, _ := EncodeValue(outer)
+	if nodes, err := CountValueNodes(data, 4); err != nil || nodes != 4 {
+		t.Fatalf("scan = %d nodes, %v", nodes, err)
+	}
+	if _, err := CountValueNodes(data, 3); !errors.Is(err, ErrValueEncoding) {
+		t.Fatalf("accepted under-budget nested value: %v", err)
+	}
+	for _, malformed := range [][]byte{
+		data[:len(data)-1], append(bytes.Clone(data), 0),
+		{byte(ListKind), byte(Present), 0, 0, 0, 1},
+		{byte(VectorKind), byte(Present), 0, 0, 0, 1},
+		{byte(RecordKind), byte(Present), 0, 0, 0, 1, 0, 0, 0, 1},
+		{byte(DistributionKind), byte(Present), 0, 0, 0, 1, byte(BoolKind), byte(Present), 1},
+		{byte(SparseMapKind), byte(Present), 0, 0, 0, 1, byte(BoolKind), byte(Present), 1},
+		{byte(SetKind), byte(Present), 0, 0, 0, 1, byte(BoolKind), byte(Present)},
+		{byte(OptionalKind), byte(Present)},
+		{0xff, byte(Present)},
+	} {
+		if _, err := CountValueNodes(malformed, 1<<16); !errors.Is(err, ErrValueEncoding) {
+			t.Fatalf("accepted malformed wire %x: %v", malformed, err)
+		}
+	}
+	deep := []byte{byte(BoolKind), byte(Present), 1}
+	for i := 0; i < maxValueDepth; i++ {
+		deep = append([]byte{byte(OptionalKind), byte(Present)}, deep...)
+	}
+	if _, err := CountValueNodes(deep, 1<<16); !errors.Is(err, ErrValueEncoding) {
+		t.Fatalf("accepted too-deep wire: %v", err)
+	}
+}
+
 func TestValueCodecRejectsMalformedOrDeepInput(t *testing.T) {
 	malformed := [][]byte{{}, {0}, {255, 0}, {1, 255}, {1, 0, 2}, {2, 0, 1}, {3, 0, 0xff, 0xf0, 0, 0, 0, 0, 0, 0}, {3, 0, 0x80, 0, 0, 0, 0, 0, 0, 0}, {13, 0}, append([]byte{1, 1}, 0), bytes.Repeat([]byte{1}, MaxValueBytes+1)}
 	for i, data := range malformed {

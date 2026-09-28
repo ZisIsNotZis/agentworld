@@ -6,15 +6,19 @@ import (
 )
 
 func validateSeed(descriptor ComponentDescriptor, fields []FieldSeed) error {
+	fieldByID := make(map[sim.FieldID]FieldDescriptor, len(descriptor.Fields))
+	for _, field := range descriptor.Fields {
+		fieldByID[field.ID] = field
+	}
 	seen := make(map[sim.FieldID]struct{}, len(fields))
 	for _, seeded := range fields {
 		if _, ok := seen[seeded.Field]; ok {
 			return ErrInvalidRequest
 		}
 		seen[seeded.Field] = struct{}{}
-		field, err := findField(descriptor, seeded.Field)
-		if err != nil {
-			return err
+		field, ok := fieldByID[seeded.Field]
+		if !ok {
+			return ErrUnknownField
 		}
 		if err := validateValue(field, seeded.Value); err != nil {
 			return err

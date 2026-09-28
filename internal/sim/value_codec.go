@@ -122,6 +122,126 @@ func encodeValue(b *bytes.Buffer, v Value, depth int) error {
 	return nil
 }
 
+// CountValueNodes scans the bounded value wire grammar without constructing
+// Values. It includes the root and all nested values, fails once maxNodes is
+// exceeded, and checks framing/depth; DecodeValue still verifies canonical
+// ordering, scalar validity, and the remaining semantic constraints.
+func CountValueNodes(data []byte, maxNodes uint64) (uint64, error) {
+	if len(data) > MaxValueBytes || maxNodes == 0 {
+		return 0, ErrValueEncoding
+	}
+	s := valueNodeScanner{data: data, remaining: maxNodes}
+	if err := s.scan(0); err != nil || s.offset != len(data) {
+		return 0, ErrValueEncoding
+	}
+	return maxNodes - s.remaining, nil
+}
+
+type valueNodeScanner struct {
+	data      []byte
+	offset    int
+	remaining uint64
+}
+
+func (s *valueNodeScanner) skip(n int) error {
+	if n > len(s.data)-s.offset {
+		return ErrValueEncoding
+	}
+	s.offset += n
+	return nil
+}
+
+func (s *valueNodeScanner) count() (int, error) {
+	if err := s.skip(4); err != nil {
+		return 0, err
+	}
+	n := binary.BigEndian.Uint32(s.data[s.offset-4 : s.offset])
+	if n > maxValueItems {
+		return 0, ErrValueEncoding
+	}
+	return int(n), nil
+}
+
+func (s *valueNodeScanner) scan(depth int) error {
+	if depth >= maxValueDepth || s.remaining == 0 || s.skip(2) != nil {
+		return ErrValueEncoding
+	}
+	s.remaining--
+	kind, state := Kind(s.data[s.offset-2]), ValueState(s.data[s.offset-1])
+	if !validKind(kind) || state > Inapplicable {
+		return ErrValueEncoding
+	}
+	if state != Present {
+		return nil
+	}
+	switch kind {
+	case BoolKind:
+		return s.skip(1)
+	case IntegerKind, ScalarKind, ProbabilityKind, EnumKind, TimeKind, DurationKind, EntityRefKind, EventRefKind:
+		return s.skip(8)
+	case VectorKind:
+		n, err := s.count()
+		if err != nil {
+			return err
+		}
+		return s.skip(n * 8)
+	case DistributionKind:
+		n, err := s.count()
+		if err != nil {
+			return err
+		}
+		for i := 0; i < n; i++ {
+			if err := s.scan(depth + 1); err != nil {
+				return err
+			}
+			if err := s.skip(8); err != nil {
+				return err
+			}
+		}
+	case RecordKind:
+		n, err := s.count()
+		if err != nil {
+			return err
+		}
+		for i := 0; i < n; i++ {
+			if err := s.skip(4); err != nil {
+				return err
+			}
+			if err := s.scan(depth + 1); err != nil {
+				return err
+			}
+		}
+	case OptionalKind:
+		return s.scan(depth + 1)
+	case ListKind, SetKind:
+		n, err := s.count()
+		if err != nil {
+			return err
+		}
+		for i := 0; i < n; i++ {
+			if err := s.scan(depth + 1); err != nil {
+				return err
+			}
+		}
+	case SparseMapKind:
+		n, err := s.count()
+		if err != nil {
+			return err
+		}
+		for i := 0; i < n; i++ {
+			if err := s.scan(depth + 1); err != nil {
+				return err
+			}
+			if err := s.scan(depth + 1); err != nil {
+				return err
+			}
+		}
+	default:
+		return ErrValueEncoding
+	}
+	return nil
+}
+
 func DecodeValue(data []byte) (Value, error) {
 	if len(data) > MaxValueBytes {
 		return Value{}, ErrValueEncoding
