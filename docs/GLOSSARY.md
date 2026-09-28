@@ -1,0 +1,23 @@
+# Glossary
+
+- **Actor:** A persistent simulated person or other decision-making entity with bounded knowledge and authority.
+- **Actor fiber:** The logical state machine representing an actor, including persistent state, strategy, current activity, and wake condition. It does not imply one resident thread or goroutine.
+- **Adjudicator:** A constrained role that evaluates a specific unresolved question without directly authoring arbitrary world outcomes.
+- **Branch:** A run descended from a checkpoint with an explicit intervention, strategy, rule, or random-stream difference.
+- **Checkpoint:** A versioned state snapshot plus references to immutable history, pending work, rule versions, strategy versions, and random-stream positions.
+- **Cognitive budget:** The bounded compute, language-model tokens, time, or search effort available for expensive reasoning.
+- **Cognitive scheduler:** The component that chooses where expensive reasoning is expected to provide the highest value under budget.
+- **Civilization-level fidelity:** Accuracy of causal effects relevant to population, resources, power, institutions, technology, culture, conflict, and other declared macro outcomes.
+- **Event:** An authorized, timestamped record of an attempted or committed change with causal provenance.
+- **Institution macro:** A versioned efficient representation of a stable social mechanism that remains auditable against its underlying actor interactions.
+- **Intention:** A requested action submitted by an actor; it is not a guaranteed outcome or direct state mutation.
+- **Manager:** A language-model role that inspects one or more isolated actor cases and proposes intentions, strategy patches, evidence requests, or refinement proposals.
+- **Metric projection:** A versioned transformation from structured or semantic state into numerical features with declared uncertainty and information loss.
+- **Model refinement:** A more explicit or accurate representation of behavior already assumed to exist in the world, not the creation of a new natural law.
+- **Primitive:** A small typed operation or concept exposed by the world or strategy runtime.
+- **Run:** One execution lineage identified by its seed, versions, configuration, history, and branch ancestry.
+- **Strategy:** A versioned executable data program that maps actor-visible state into private updates, escalation requests, or intentions.
+- **Trajectory:** The inspectable history of perceptions, relevant private-state changes, strategy decisions, intentions, outcomes, and causal events for an actor or system component.
+- **Wake:** Activation of a dormant actor fiber or invocation of expensive cognition because a declared condition occurred.
+- **World distance:** A versioned metric vector comparing two world states or histories; it is not assumed to reduce safely to one scalar.
+- **World kernel:** The authoritative engine for validation, scheduling, conflict resolution, state transition, perception, and event commitment.

@@ -1,0 +1,225 @@
+# P0 executable specification
+
+Budget: 240 lines — the end-to-end P0 contract keeps module boundaries, interfaces, lifecycle, delivery slices, and acceptance gates together for one-pass implementation review.
+
+Status: design draft
+
+## 1. Purpose
+
+P0 tests whether an event-driven world with explicit actor fibers, evolvable typed state, numerical projections, append-only evidence, checkpoints, and deterministic replay can run a small survival society for decades on one machine.
+
+P0 is a vertical architecture experiment, not a complete model of humanity.
+
+## 2. Scope
+
+Target approximately 1,000 people in one bounded region over several simulated decades.
+
+Include:
+
+- birth, aging, death, kinship, health, energy, hunger, location, weather, resources, movement, gathering, eating, simple exchange, injury, and conflict;
+- explicit actor fibers represented as state plus wake conditions;
+- built-in and runtime-defined components behind one interface;
+- deterministic rules, strategies with bounded search, events, projections, checkpoints, branches, and replay;
+- escalation requests recorded for later analysis.
+
+Exclude language-model calls, general institution emergence, distributed execution, molecular physics, natural-language dialogue, and claims about real policy.
+
+## 3. Runtime modules
+
+```text
+ExperimentRunner
+  ├── WorldKernel
+  ├── FiberScheduler
+  ├── StrategyRuntime
+  ├── ComponentSystem
+  │     ├── SchemaRegistry
+  │     ├── BuiltinStore
+  │     └── DynamicStore
+  ├── ProjectionSystem
+  ├── EventStore
+  ├── CheckpointStore
+  └── ValidationSystem
+```
+
+The kernel is the only authority that commits world state. Strategies and components do not append authoritative events directly. Stores do not make domain decisions.
+
+## 4. Stable engine records
+
+The actor core is deliberately small:
+
+```text
+ActorCore {
+  actor_id
+  revision
+  lifecycle
+  component_set_ref
+  policy_set_ref
+  current_activity_ref?
+  next_wake
+}
+```
+
+These fields support identity, concurrency, scheduling, and lookup. They do not define what a human contains.
+
+Other entities such as locations, resources, items, and groups use the same entity identity and component model where practical.
+
+## 5. Unified component protocol
+
+Every component has a logical descriptor:
+
+```text
+ComponentDescriptor {
+  component_type_id
+  schema_version
+  fields
+  access_policy
+  transition_rules
+  projections
+  dependencies
+  migration_paths
+  storage_class
+}
+```
+
+Consumers use the same operations regardless of storage class:
+
+```text
+Describe(type) -> descriptor
+Has(entity, type, world_version, authority) -> bool
+Read(entity, selector, world_version, authority) -> typed view
+PlanPatch(entity, patch, world_version, authority) -> accepted | rejected
+CommitPatch(validated_patch, commit_context) -> component delta
+Scan(type, selector, world_version, authority) -> typed batch
+Project(entity_or_batch, projection, world_version) -> metric result
+```
+
+`Read` returns immutable snapshot views. Only the kernel may commit a previously validated patch. Missing, zero, unknown, and inapplicable are distinct states.
+
+## 6. Physical component implementations
+
+### Built-in hot components
+
+Use compiled schemas, typed columnar storage, batch operations, and specialized transition code for stable high-frequency concepts such as location, lifecycle, energy, hunger, and wake state.
+
+### Dynamic components
+
+Use registry-defined schemas and sparse typed storage. Runtime registration requires types, bounds, access, update rules, projections, migration behavior, and complexity cost.
+
+### Promotion
+
+A dynamic component may be promoted to an optimized implementation while retaining its type ID and logical schema. A conformance suite must demonstrate equivalent reads, validation, commits, serialization, and projections.
+
+No consumer may branch on whether a component is built-in or dynamic. Optimization is internal to the component system.
+
+## 7. Typed value system
+
+P0 supports a bounded set of value kinds:
+
+```text
+bool, integer, scalar, probability, enum, time, duration,
+entity_ref, event_ref, vector, distribution,
+record, optional, list, set, sparse_map
+```
+
+Each field declares bounds or units, missing-value behavior, and whether uncertainty is permitted. Names resolve to stable numeric IDs before hot-loop execution. Arbitrary untyped maps are not authoritative state.
+
+## 8. State change protocol
+
+```text
+Observation
+  → Strategy decision
+  → Intention or EscalationRequest
+  → deterministic validation
+  → validated intention
+  → simultaneous conflict resolution
+  → component patch plan
+  → atomic commit
+  → events and metric deltas
+  → future wakes
+```
+
+A rejected intention produces diagnostic evidence but no component mutation.
+
+All decisions at one simulation timestamp read a consistent world version. Worker completion order cannot determine conflict outcomes.
+
+## 9. Fiber scheduling
+
+An actor fiber is persistent logical state, not a retained host-language stack. It is dormant unless a wake condition becomes true.
+
+Wake causes include activity completion, relevant perceived event, need threshold, interruption, birth, scheduled commitment, strategy invalidation, and explicit audit.
+
+The scheduler exposes ordered ready batches. A bounded worker pool evaluates strategies. Deterministic ordering and conflict rules turn results into commits.
+
+## 10. Strategy boundary
+
+P0 strategies can:
+
+- read authorized component views and projections;
+- generate candidate intentions;
+- evaluate typed utility terms;
+- perform bounded search;
+- update permitted private strategy state through planned patches;
+- request escalation.
+
+Strategies cannot inspect storage implementations, access hidden components, register schemas, commit state, or append authoritative events.
+
+The exact strategy representation remains an implementation experiment. Candidate representations must implement the same decision contract.
+
+## 11. Initial numerical projections
+
+P0 registers at least:
+
+- individual energy reserve, hunger pressure, health risk, injury burden, travel cost, resource expectation, action risk, relationship affinity, trust evidence, and decision uncertainty;
+- population size and structure, mortality, morbidity, food stock, production, resource depletion, conflict incidence, strategy failure rate, behavioral diversity, and compute cost.
+
+Each result contains value, uncertainty, projection version, and provenance. World comparison uses a metric vector. No permanent universal goodness score exists in P0.
+
+## 12. Initial survival loop
+
+```text
+hunger threshold wakes actor
+→ actor observes body, known food, location, weather, and permitted social facts
+→ strategy generates eat / gather / request / exchange / steal / wait candidates
+→ bounded evaluation selects an intention
+→ kernel validates knowledge, access, distance, ability, and resources
+→ simultaneous claims on the same resource are resolved deterministically
+→ travel or gathering activity is scheduled
+→ completion or interruption wakes the actor
+→ committed consumption changes food, energy, health, and future wake time
+→ events and projections record the causal chain
+```
+
+Every arrow must be testable without reading narrative prose.
+
+## 13. Event and checkpoint contracts
+
+An event records ID, simulated time, before and after world versions, kind, cause, actor or authorized world source, rule version, typed payload, visibility, component deltas, and metric deltas.
+
+A checkpoint records format version, simulation time, world version, entity and component state, pending activities, wake queue, strategy and rule versions, projection versions, random-stream positions, event-log references, branch ancestry, compatibility class, and integrity hashes.
+
+Recovery validates references, queue times, versions, hashes, random streams, and invariants before continuation.
+
+## 14. Implementation slices
+
+1. Entity IDs, simulation time, world versions, random streams, and typed values.
+2. Schema registry plus one built-in and one dynamic component with conformance tests.
+3. Event store, component patch transaction, and deterministic replay.
+4. Scheduler, dormant fibers, activities, wakes, and worker batches.
+5. Observation, intention, validation, conflict resolution, and commit.
+6. Minimal bounded strategy runtime and the survival loop.
+7. Projections, invariants, checkpoint recovery, branching, and long seeded runs.
+8. Profiling and optimization without changing logical contracts.
+
+## 15. Acceptance gates
+
+P0 is complete when:
+
+- built-in and dynamic implementations pass the same component conformance suite;
+- a seeded survival world replays to identical authoritative state and metrics;
+- rejected actions never mutate state;
+- worker scheduling does not change outcomes;
+- checkpoint recovery continues the same causal sequence;
+- every compared semantic property has a versioned numerical projection;
+- long runs preserve declared invariants;
+- bytes per actor-year, events per second, checkpoint throughput, and replay throughput are measured;
+- observed limitations and escalation requests determine the next design revision.
