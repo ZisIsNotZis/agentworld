@@ -1,6 +1,6 @@
 # P0 implementation plan
 
-Status: S0–S5 integrated; bounded strategy and survival behavior are next
+Status: S0–S5 integrated; S6 bounded survival demo implemented; full P0 remains open
 
 This plan sequences the executable work described by [P0-SPEC](P0-SPEC.md) and preserves the unified component boundary accepted in [ADR 0005](adr/0005-unified-hybrid-components.md). Go is provisional while P0 measures correctness and cost.
 
@@ -35,8 +35,15 @@ This plan sequences the executable work described by [P0-SPEC](P0-SPEC.md) and p
 - S4 adds dormant actor fibers, indexed wake conditions, timed activities, deterministic ordered worker batches, and in-memory scheduler snapshots validated against a matching kernel head. It does not add disk durability or strategy semantics.
 - S5 adds an actor-specific observation and one public-cache withdrawal intention, checked against the common kernel snapshot. A single-winner cache field collision links accepted actions to deterministic energy/stock events; a separate in-memory journal retains rejected outcomes without state mutation. It does not provide a strategy VM, crash-atomic attempt storage, or replay of rejections.
 
+### S6 — Bounded strategy and survival demo
+
+- Format-v1 strategy data pins an exact policy version with a fixed candidate/evaluation budget; actor bindings override parameter values without copying action specifications. A value-only observation limits strategy access to own energy/hunger and configured public food views.
+- A separate survival adapter revalidates choices against the common scheduler snapshot; hourly wakes, one-winner cache contention, finite food and energy, complement hunger, and zero-energy stopping provide a bounded causal loop. It does not modify the S5 runner or its observation contract.
+- `go run ./cmd/survival -actors=48 -seed=7 -hours=12 -workers=4 -eat-cost=1` prints JSON including accounting, rejected reasons, CPU/wall durations in nanoseconds (`cpu_time_ns`, `wall_time_ns`) and accepted-state replay. Changing `-eat-cost=0` with the same seed tests policy sensitivity; altering `-seed` tests resource sensitivity.
+- The typed attempt journal includes the pinned reference and rejected attempts only in-process. Accepted-event replay verifies the same seed/registry, canonical event bytes, tip, scanned components and projections, but cannot reconstruct wakes or authenticate policy provenance by itself.
+
 ## Next slices
 
-Later slices add bounded strategies, survival behavior, durable checkpoints, branching, long-run validation, and performance-driven optimization.
+Later slices add durable checkpoints, branching, long-run validation, and performance-driven optimization.
 
 The S0–S5 tests do not establish durable persistence, migration, or full P0 promotion equivalence. Performance results are baselines, not pass/fail thresholds.

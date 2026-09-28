@@ -8,7 +8,7 @@ The project does not aim to replay recorded history exactly. It aims to produce 
 
 ## Status
 
-The project is in its P0 foundation phase. Go is the provisional implementation language; slices S0–S2 provide stable simulation primitives and an immutable component read protocol, not a runnable simulation engine. The scheduler, world kernel, state commits, persistence, language-model integration, and survival behavior remain future work.
+The project is in its P0 experimental phase. Go is the provisional implementation language. S0–S5 provide simulation primitives, immutable components, a kernel, scheduling and an actor-safe intention boundary. S6 adds a bounded autonomous survival demo; durable persistence, full P0 survival, and language-model integration remain future work.
 
 ## Development
 
@@ -24,6 +24,14 @@ make bench
 ```
 
 `make check` runs all gates except benchmarks. The module currently uses only the Go standard library.
+
+Run the reproducible bounded demo:
+
+```sh
+go run ./cmd/survival -actors=48 -seed=7 -hours=12 -workers=4 -eat-cost=1
+```
+
+The JSON report records initial/final energy, food and hunger distribution, accepted actions and rejected reasons, one-unit-per-action dissipation, simulated hours, process CPU and wall durations in `cpu_time_ns` and `wall_time_ns` (nanoseconds), zero token cost, and accepted-state replay. Compare with `-eat-cost=0` or a different `-seed` to test sensitivity. Replay reconstructs accepted component state, not rejected attempts, scheduler wakes, policy authentication, or a durable checkpoint.
 
 ## Start here
 

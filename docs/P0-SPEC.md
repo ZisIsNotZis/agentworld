@@ -171,7 +171,7 @@ P0 strategies can:
 
 Strategies cannot inspect storage implementations, access hidden components, register schemas, commit state, or append authoritative events.
 
-The exact strategy representation remains an implementation experiment. Candidate representations must implement the same decision contract.
+The S6 survival experiment uses a pinned format-v1 policy (`Ref{ID, Version}`), complete typed Eat/Rest action specifications, actor-specific parameter overrides, and bounded one-step exhaustive utility evaluation. The value-only observation contains own energy/hunger and configured visible cache stocks; the choice is an intention, not patch authority. Candidate and view caps, stable tie ordering, and typed Wait fallback limit evaluation. This experiment does not settle a final strategy ontology or implement multistep planning.
 
 ## 11. Initial numerical projections
 
@@ -199,13 +199,15 @@ hunger threshold wakes actor
 
 Every arrow must be testable without reading narrative prose.
 
+The bounded S6 demo implements only the eat/rest subset: a trusted survival adapter constructs actor-specific observations from a common scheduler snapshot and independently validates pinned choices. Four finite food-energy caches are visible in restricted pairs; each hourly Eat consumes two stock units, restores one actor energy unit and decreases hunger by one; Rest consumes one actor energy unit and increases hunger by one. Hunger is a dynamic component with a versioned projection and remains the complement of energy to capacity eight. Every accepted action dissipates exactly one unit of total energy plus food. One shared cache field admits one Eat winner per timestamp; losers' attempts do not mutate state and can retry at their next wake. Zero-energy fibers stop; a Rest that reaches zero stops its actor only if that proposal wins, in the same timestamp even at the configured horizon. The finite horizon and bounded population are not claims about full P0 survival.
+
 ## 13. Event and checkpoint contracts
 
 An event records ID, simulated time, before and after world versions, kind, cause, actor or authorized world source, rule version, typed payload, visibility, component deltas, and metric deltas. For S3 `component-patch` events, the typed field deltas are the complete typed payload; visibility is deliberately deferred to the perception slice and must not be inferred from an absent visibility field.
 
 A checkpoint records format version, simulation time, world version, entity and component state, pending activities, wake queue, strategy and rule versions, projection versions, random-stream positions, event-log references, branch ancestry, compatibility class, and integrity hashes.
 
-Recovery validates references, queue times, versions, hashes, random streams, and invariants before continuation. S3 replay starts from the same seed and registry, groups accepted events by timestamp into complete batches, and checks canonical bounded event encoding, contiguous IDs and versions, chain hashes, key ordering, schema/rule/projection references, before-values, and recomputed deltas. It cannot recover rejected or collision-losing proposals from accepted-only events; S5 keeps that intention-level evidence only in the separate in-process attempt journal. S3's log is in-process only: crash durability, disk segments, and fsync are later gates. Its hash chain detects accidental or partial alteration but does not authenticate against an adversary who can rewrite the entire chain without a trusted external tip.
+Recovery validates references, queue times, versions, hashes, random streams, and invariants before continuation. S3 replay starts from the same seed and registry, groups accepted events by timestamp into complete batches, and checks canonical bounded event encoding, contiguous IDs and versions, chain hashes, key ordering, schema/rule/projection references, before-values, and recomputed deltas. It cannot recover rejected or collision-losing proposals from accepted-only events; S5 keeps that intention-level evidence only in the separate in-process attempt journal. S6 similarly records the pinned strategy reference in a typed in-memory attempt journal and deterministic, bounded world-generated event key; the adapter checks both against its immutable run manifest. Accepted-event replay does not authenticate the policy reference or recover rejected attempts, wakes, or a scheduler snapshot. S3's log is in-process only: crash durability, disk segments, and fsync are later gates. Its hash chain detects accidental or partial alteration but does not authenticate against an adversary who can rewrite the entire chain without a trusted external tip.
 
 ## 14. Implementation slices
 
