@@ -161,8 +161,9 @@ func (r *Registry) Register(p Policy) error {
 // Bound holds a private policy snapshot and resolved parameters. It remains
 // stable if the source policy or binding is subsequently mutated.
 type Bound struct {
-	policy Policy
-	params map[ParamID]float64
+	policy    Policy
+	params    map[ParamID]float64
+	overrides map[ParamID]float64
 }
 
 func (r *Registry) Bind(binding Binding) (*Bound, error) {
@@ -179,13 +180,28 @@ func (r *Registry) Bind(binding Binding) (*Bound, error) {
 	for id, value := range policy.Defaults {
 		params[id] = value
 	}
+	overrides := make(map[ParamID]float64, len(binding.Overrides))
 	for id, value := range binding.Overrides {
 		if _, ok := params[id]; !ok || math.IsNaN(value) || math.IsInf(value, 0) {
 			return nil, ErrInvalidBinding
 		}
 		params[id] = value
+		overrides[id] = value
 	}
-	return &Bound{policy: policy, params: params}, nil
+	return &Bound{policy: policy, params: params, overrides: overrides}, nil
+}
+
+// Binding returns the explicit overrides, including values equal to defaults.
+// The returned map is private to the caller and cannot change this Bound.
+func (b *Bound) Binding() Binding {
+	if b == nil {
+		return Binding{}
+	}
+	copy := Binding{Ref: b.policy.Ref, Overrides: make(map[ParamID]float64, len(b.overrides))}
+	for id, value := range b.overrides {
+		copy.Overrides[id] = value
+	}
+	return copy
 }
 
 func (b *Bound) Ref() Ref {
