@@ -7,6 +7,7 @@ import (
 	"math"
 	"sort"
 	"sync"
+	"sync/atomic"
 )
 
 var ErrInvalidProposal = errors.New("invalid transition proposal")
@@ -29,8 +30,11 @@ type Plan struct {
 	proposal  Proposal
 }
 
+var nextKernelOrigin atomic.Uint64
+
 type Kernel struct {
 	mu        sync.Mutex
+	origin    uint64
 	registry  component.Registry
 	reader    component.Reader
 	authority component.Authority
@@ -43,8 +47,41 @@ func New(registry component.Registry, version sim.WorldVersion, seeds []componen
 	if err != nil {
 		return nil, err
 	}
-	return &Kernel{registry: registry, reader: reader, authority: authority, version: version}, nil
+	return &Kernel{registry: registry, reader: reader, authority: authority, version: version, origin: nextKernelOrigin.Add(1)}, nil
 }
+
+// Head binds one immutable reader to its event-log tip under the kernel lock.
+type Head struct {
+	Reader    component.Reader
+	Authority component.Authority
+	Version   sim.WorldVersion
+	OriginID  uint64 // process-local kernel identity for in-memory scheduler restoration
+	TipID     sim.EventID
+	TipTime   sim.SimTime
+	TipHash   [32]byte
+}
+
+// Same compares the snapshot authority (which binds the reader) and event tip.
+func (h Head) Same(other Head) bool {
+	return h.Authority == other.Authority && h.Version == other.Version && h.OriginID == other.OriginID &&
+		h.TipID == other.TipID && h.TipTime == other.TipTime && h.TipHash == other.TipHash
+}
+
+func (k *Kernel) head() Head {
+	h := Head{Reader: k.reader, Authority: k.authority, Version: k.version, OriginID: k.origin}
+	if len(k.events) != 0 {
+		e := k.events[len(k.events)-1]
+		h.TipID, h.TipTime, h.TipHash = e.ID, e.Time, e.Hash
+	}
+	return h
+}
+
+func (k *Kernel) SnapshotHead() Head {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return k.head()
+}
+
 func (k *Kernel) Snapshot() (component.Reader, component.Authority, sim.WorldVersion) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
@@ -109,6 +146,26 @@ type fieldKey struct {
 func (k *Kernel) CommitBatch(plans []Plan) ([]Event, error) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
+	return k.commitBatch(plans)
+}
+
+// CommitBatchAtHead checks even empty batches and returns the exact post-commit
+// head while holding the kernel lock. An external writer cannot enter between
+// committing and capturing this head.
+func (k *Kernel) CommitBatchAtHead(expected Head, plans []Plan) ([]Event, Head, error) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	if !k.head().Same(expected) {
+		return nil, Head{}, ErrStalePlan
+	}
+	events, err := k.commitBatch(plans)
+	if err != nil {
+		return nil, Head{}, err
+	}
+	return events, k.head(), nil
+}
+
+func (k *Kernel) commitBatch(plans []Plan) ([]Event, error) {
 	if len(plans) == 0 {
 		return []Event{}, nil
 	}

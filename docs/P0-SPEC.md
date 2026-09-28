@@ -150,7 +150,9 @@ An actor fiber is persistent logical state, not a retained host-language stack. 
 
 Wake causes include activity completion, relevant perceived event, need threshold, interruption, birth, scheduled commitment, strategy invalidation, and explicit audit.
 
-The scheduler exposes ordered ready batches. A bounded worker pool evaluates strategies. Deterministic ordering and conflict rules turn results into commits.
+In S4, the scheduler keeps one in-memory fiber per actor, with an indexed, cancellable wake heap and checked positive-duration activity tokens. Duplicate causes at one time coalesce into a single actor-ready entry; a token-bound pending interruption keeps its activity live until the interruption wake, even when other wakes occur earlier, and wins an equal-time completion tie. Cancellation removes the pending interruption without a wake. A perceived event alone never interrupts an activity. The next due time is processed as one ordered batch: bounded workers see one immutable kernel reader and authority, and the coordinator collects all results before planning and committing once. Scheduler effects are staged before commit and published only on success; effects conditional on a proposal apply only to a collision winner. Every processed timestamp closes to future wakes at that same time, including empty component batches; post-commit event-derived wakes must target a strictly later microsecond. No permanent actor goroutines, domain intention validator, or strategy representation are introduced in S4.
+
+The S4 scheduler snapshot is an in-memory quiescent-boundary copy of fibers, activities, pending wakes, clock, and token counter. Restore rebuilds and validates the heap against the matching process-local kernel origin, version, and event tip obtained atomically with the kernel reader; a different kernel at the same empty event tip is not a valid in-memory restore target. The scheduler remains the sole intended kernel writer while active; S3 replay alone cannot recover scheduler-only changes, and S4 makes no disk-durability claim.
 
 ## 10. Strategy boundary
 

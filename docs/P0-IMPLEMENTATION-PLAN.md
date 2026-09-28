@@ -1,6 +1,6 @@
 # P0 implementation plan
 
-Status: S0–S2 implemented; later slices not started
+Status: S0–S4 implemented in the working branch; review and integration of S4 pending
 
 This plan sequences the executable work described by [P0-SPEC](P0-SPEC.md) and preserves the unified component boundary accepted in [ADR 0005](adr/0005-unified-hybrid-components.md). Go is provisional while P0 measures correctness and cost.
 
@@ -29,11 +29,14 @@ This plan sequences the executable work described by [P0-SPEC](P0-SPEC.md) and p
 - Affine projections include typed value state, uncertainty, projection and schema versions, unit, source fields, entity identity, and world-version provenance.
 - One read-protocol conformance suite covers both storage classes; a separate same-schema energy test checks logical read/scan/project equivalence.
 
+## Transition and scheduling slices
+
+- S3 adds kernel-held patch planning and commit authority, authoritative events, atomicity, and deterministic in-process replay. Cross-schema migration and durable storage remain later work.
+- S4 adds dormant actor fibers, indexed wake conditions, timed activities, deterministic ordered worker batches, and in-memory scheduler snapshots validated against a matching kernel head. It does not add disk durability or strategy semantics.
+
 ## Next slices
 
-1. S3 adds kernel-held patch planning and commit authority, authoritative events, atomicity, serialization, migrations, and deterministic replay.
-2. S4 adds the scheduler, dormant fiber state, activities, wake conditions, and deterministic worker-batch ordering.
-3. S5 adds observation, intention validation, conflict resolution, and commit flow.
-4. Later slices add bounded strategies, survival behavior, checkpoints, branching, long-run validation, and performance-driven optimization.
+1. S5 adds observation, intention validation, conflict resolution, and commit flow.
+2. Later slices add bounded strategies, survival behavior, durable checkpoints, branching, long-run validation, and performance-driven optimization.
 
-The S0–S2 tests do not establish commit, event, persistence, migration, scheduler, or full P0 promotion equivalence. Performance results are baselines, not pass/fail thresholds.
+The S0–S4 tests do not establish durable persistence, migration, or full P0 promotion equivalence. Performance results are baselines, not pass/fail thresholds.
