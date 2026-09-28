@@ -123,22 +123,27 @@ type SurvivalReport struct {
 }
 
 // Survival is a separate trusted adapter; the S5 Runner and its observation
-// remain unchanged. The attempt journal is in-memory, not a durable checkpoint.
+// remain unchanged. Checkpoints are captured between coordinator steps.
 type Survival struct {
-	kernel   *kernel.Kernel
-	sched    *scheduler.Scheduler
-	registry component.Registry
-	seeds    []component.ComponentSeed
-	bound    map[sim.EntityID]*strategy.Bound
-	public   map[sim.EntityID]map[sim.EntityID]bool
-	ref      strategy.Ref
-	seed     uint64
-	weight   float64
-	hours    int
-	actors   int
-	initial  SurvivalMetrics
-	journal  []SurvivalBatch
-	pending  *survivalPending
+	boundary       sync.Mutex
+	kernel         *kernel.Kernel
+	sched          *scheduler.Scheduler
+	policies       *strategy.Registry
+	lineage        survivalLineage
+	activeWeight   float64
+	randomPosition uint64
+	registry       component.Registry
+	seeds          []component.ComponentSeed
+	bound          map[sim.EntityID]*strategy.Bound
+	public         map[sim.EntityID]map[sim.EntityID]bool
+	ref            strategy.Ref
+	seed           uint64
+	weight         float64
+	hours          int
+	actors         int
+	initial        SurvivalMetrics
+	journal        []SurvivalBatch
+	pending        *survivalPending
 }
 
 type survivalPending struct {
@@ -189,7 +194,7 @@ func NewSurvival(o SurvivalOptions) (*Survival, error) {
 	if err = policies.Register(policy); err != nil {
 		return nil, err
 	}
-	s := &Survival{registry: reg, ref: policy.Ref, seed: o.Seed, weight: o.EatWeight, hours: o.Hours, actors: o.Actors, bound: make(map[sim.EntityID]*strategy.Bound), public: make(map[sim.EntityID]map[sim.EntityID]bool)}
+	s := &Survival{registry: reg, policies: policies, ref: policy.Ref, seed: o.Seed, weight: o.EatWeight, activeWeight: o.EatWeight, hours: o.Hours, actors: o.Actors, lineage: survivalLineage{compatibility: survivalCompatibilitySame}, bound: make(map[sim.EntityID]*strategy.Bound), public: make(map[sim.EntityID]map[sim.EntityID]bool)}
 	random := sim.NewRandomStream(sim.RandomState{Seed: o.Seed, Stream: 1})
 	// Cache IDs cannot overlap actors, even at the maximum bounded actor count.
 	caches := []sim.EntityID{1001, 1002, 1003, 1004}
@@ -210,6 +215,7 @@ func NewSurvival(o SurvivalOptions) (*Survival, error) {
 		}
 		s.bound[actor] = b
 	}
+	s.randomPosition = random.State().Position
 	s.kernel, err = kernel.New(reg, 0, s.seeds)
 	if err != nil {
 		return nil, err
@@ -386,6 +392,8 @@ func survivalKey(ref strategy.Ref, at sim.SimTime, actor sim.EntityID) string {
 }
 
 func (s *Survival) Step(ctx context.Context) (bool, error) {
+	s.boundary.Lock()
+	defer s.boundary.Unlock()
 	s.pending = &survivalPending{attempts: make(map[sim.EntityID]SurvivalAttempt), proposed: make(map[sim.EntityID]bool)}
 	defer func() { s.pending = nil }()
 	events, processed, err := s.sched.Step(ctx)
@@ -611,7 +619,7 @@ func (s *Survival) Report(wall, cpu time.Duration) (SurvivalReport, error) {
 	if err != nil {
 		return SurvivalReport{}, err
 	}
-	report := SurvivalReport{Seed: s.seed, SeedAlgorithm: "sim.RandomStream/SplitMix64 (source-versioned)", Policy: s.ref, PolicyFormat: strategy.FormatV1, EatWeight: s.weight, RestRuleVersion: 1, EatRuleVersion: 1, Actors: s.actors, SimulatedHours: int(s.sched.Time() / sim.SimTime(hour)), Initial: s.initial, Final: final, Rejected: make(map[SurvivalReason]int), Events: len(events), WallTime: wall, CPUTime: cpu, ReplayOK: same && reflect.DeepEqual(final, replayMetrics)}
+	report := SurvivalReport{Seed: s.seed, SeedAlgorithm: "sim.RandomStream/SplitMix64 (source-versioned)", Policy: s.ref, PolicyFormat: strategy.FormatV1, EatWeight: s.activeWeight, RestRuleVersion: 1, EatRuleVersion: 1, Actors: s.actors, SimulatedHours: int(s.sched.Time() / sim.SimTime(hour)), Initial: s.initial, Final: final, Rejected: make(map[SurvivalReason]int), Events: len(events), WallTime: wall, CPUTime: cpu, ReplayOK: same && reflect.DeepEqual(final, replayMetrics)}
 	for i, ev := range events {
 		if err := checkSurvivalEvent(ev); err != nil {
 			return report, err

@@ -1,6 +1,6 @@
 # P0 implementation plan
 
-Status: S0–S5 integrated; S6 bounded survival demo implemented; full P0 remains open
+Status: S0–S6 bounded survival demo implemented; single-machine checkpoint awaiting integration review; full P0 remains open
 
 This plan sequences the executable work described by [P0-SPEC](P0-SPEC.md) and preserves the unified component boundary accepted in [ADR 0005](adr/0005-unified-hybrid-components.md). Go is provisional while P0 measures correctness and cost.
 
@@ -40,10 +40,16 @@ This plan sequences the executable work described by [P0-SPEC](P0-SPEC.md) and p
 - Format-v1 strategy data pins an exact policy version with a fixed candidate/evaluation budget; actor bindings override parameter values without copying action specifications. A value-only observation limits strategy access to own energy/hunger and configured public food views.
 - A separate survival adapter revalidates choices against the common scheduler snapshot; hourly wakes, one-winner cache contention, finite food and energy, complement hunger, and zero-energy stopping provide a bounded causal loop. It does not modify the S5 runner or its observation contract.
 - `go run ./cmd/survival -actors=48 -seed=7 -hours=12 -workers=4 -eat-cost=1` prints JSON including accounting, rejected reasons, CPU/wall durations in nanoseconds (`cpu_time_ns`, `wall_time_ns`) and accepted-state replay. Changing `-eat-cost=0` with the same seed tests policy sensitivity; altering `-seed` tests resource sensitivity.
-- The typed attempt journal includes the pinned reference and rejected attempts only in-process. Accepted-event replay verifies the same seed/registry, canonical event bytes, tip, scanned components and projections, but cannot reconstruct wakes or authenticate policy provenance by itself.
+- The typed attempt journal includes the pinned reference and rejected attempts. Accepted-event replay verifies the same seed/registry, canonical event bytes, tip, scanned components and projections, but cannot reconstruct wakes or authenticate policy provenance by itself.
+
+### S7a — Durable survival checkpoint boundary
+
+- `cmd/survival` can create a checkpoint at a quiescent hourly step, resume with a different worker count in a new process, and fork with an explicit future Eat-weight change. It uses an immutable, no-clobber, atomically published five-section bundle with a digest and parent lineage reference.
+- Restore independently constructs the scenario schema/policy, verifies genesis, accepted event replay and projections, scheduler portable head/fibers/wakes within the scenario horizon, exact actor bindings, typed attempt links and original config, and manifest identity before returning a world. Parent state and projection hashes must match the full same-tip head or a replayed accepted prefix. Incompatible versions/configuration are rejected; no migration is available.
+- A branch keeps the original historical policy weight in the journal, verifies the common source checkpoint, and records the active intervention and parent digest/head. Rejection reasons are retained but not independently regenerated; full perception history, adversarial authentication and per-step durability remain outside this slice.
 
 ## Next slices
 
-Later slices add durable checkpoints, branching, long-run validation, and performance-driven optimization.
+Later slices add long-run validation, fuller perception evidence, and performance-driven optimization.
 
 The S0–S5 tests do not establish durable persistence, migration, or full P0 promotion equivalence. Performance results are baselines, not pass/fail thresholds.
