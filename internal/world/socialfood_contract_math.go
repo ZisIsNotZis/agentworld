@@ -190,11 +190,18 @@ func SocialFoodRefuse(hour int, donor, recipient sim.EntityID, c SocialFoodConse
 	}
 	return r, l, nil
 }
-func SocialFoodExpire(hour int, owner sim.EntityID, r SocialFoodRequestState) (SocialFoodRequestState, error) {
-	if hour <= 0 || hour > SocialFoodHorizonHours || !validSocialFoodRequest(owner, r) || r.Status != SocialFoodPending || r.Hour+1 != int64(hour) {
+
+// SocialFoodExpire closes an unanswered request at the same hour's finalization
+// boundary, after reply/gift. A stale request cannot be expired at a later pulse.
+func SocialFoodExpire(hour int, at sim.SimTime, owner sim.EntityID, r SocialFoodRequestState) (SocialFoodRequestState, error) {
+	finalize, err := SocialFoodPhaseTime(hour, 3)
+	if err != nil || at != finalize || !validSocialFoodRequest(owner, r) || r.Status != SocialFoodPending || r.Hour != int64(hour) {
 		return SocialFoodRequestState{}, ErrSocialFoodContract
 	}
 	r.Status = SocialFoodExpired
+	if !validSocialFoodRequest(owner, r) {
+		return SocialFoodRequestState{}, ErrSocialFoodContract
+	}
 	return r, nil
 }
 func SocialFoodWithdraw(hour int, owner sim.EntityID, r SocialFoodRequestState) (SocialFoodRequestState, error) {

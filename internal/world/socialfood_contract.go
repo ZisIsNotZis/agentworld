@@ -191,6 +191,24 @@ func SocialFoodRegistry() (component.Registry, error) {
 	return b.Freeze()
 }
 
+// SocialFoodExpireProposal emits only the checked pending->expired status
+// transition. There is no bag, energy, or assistance-counter delta on expiry.
+// The trusted runner must supply a fresh post-reply authoritative request,
+// not a cached pending value that may already have been accepted or refused.
+func SocialFoodExpireProposal(key string, hour int, at sim.SimTime, owner sim.EntityID, pending SocialFoodRequestState) (kernel.Proposal, error) {
+	if key == "" {
+		return kernel.Proposal{}, ErrSocialFoodContract
+	}
+	expired, err := SocialFoodExpire(hour, at, owner, pending)
+	if err != nil {
+		return kernel.Proposal{}, err
+	}
+	return kernel.Proposal{
+		Key: key, Time: at, Cause: kernel.Cause{Actor: owner}, Rule: SocialFoodExpireRule, RuleVersion: SocialFoodRuleVersion,
+		Patches: []component.Patch{{Entity: owner, Component: SocialFoodRequestTypeID, SchemaVersion: SocialFoodSchemaVersion, Field: SocialFoodRequestStatusField, Value: sim.IntegerValue(int64(expired.Status))}},
+	}, nil
+}
+
 // SocialFoodGiftProposal builds an atomic proposal only from the result of a
 // checked pending request and independent donor consent. The kernel validates
 // schema and atomic patch admission, not cross-component semantics: its

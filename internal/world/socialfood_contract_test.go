@@ -267,10 +267,11 @@ func TestSocialFoodRefusalExpiryAndInvalidConsent(t *testing.T) {
 	if _, _, err := SocialFoodRefuse(0, 5, 4, consent, r, actors[4], l); err == nil {
 		t.Fatal("duplicate reply")
 	}
-	if _, err := SocialFoodExpire(1, 4, refused); err == nil {
+	finalize, _ := SocialFoodPhaseTime(0, 3)
+	if _, err := SocialFoodExpire(0, finalize, 4, refused); err == nil {
 		t.Fatal("refused request expired")
 	}
-	expired, err := SocialFoodExpire(1, 4, r)
+	expired, err := SocialFoodExpire(0, finalize, 4, r)
 	if err != nil || expired.Status != SocialFoodExpired {
 		t.Fatalf("expiry %+v %v", expired, err)
 	}
@@ -306,11 +307,80 @@ func TestSocialFoodRefusalExpiryAndInvalidConsent(t *testing.T) {
 	if _, err := SocialFoodWithdraw(0, 4, r); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SocialFoodExpire(1, 4, SocialFoodRequestState{Status: SocialFoodPending}); err == nil {
+	if _, err := SocialFoodExpire(0, finalize, 4, SocialFoodRequestState{Status: SocialFoodPending}); err == nil {
 		t.Fatal("forged pending")
 	}
 	if !reflect.DeepEqual(actors[4].Bag, SocialFoodBagState{Units: 1, Source: 3001, Gatherer: 5}) {
 		t.Fatal("failed transfer mutated donor")
+	}
+}
+func TestSocialFoodExpireFinalizationBoundaryAndStatusOnlyProposal(t *testing.T) {
+	actor := socialFoodActors()[3]
+	actor.Energy, actor.BasalSpent = 8, 3
+	pending, err := SocialFoodRequest(0, 4, 5, true, 2, socialFoodRequests()[3], actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	finalize, _ := SocialFoodPhaseTime(0, 3)
+	for _, tc := range []struct {
+		name        string
+		hour, phase int
+		request     SocialFoodRequestState
+	}{
+		{"request-phase-premature", 0, 1, pending},
+		{"reply-phase-premature", 0, 2, pending},
+		{"next-hour-stale", 1, 3, pending},
+		{"already-accepted", 0, 3, SocialFoodRequestState{ID: pending.ID, Hour: 0, Addressee: 5, Claim: 2, Status: SocialFoodAccepted, Requests: 1, Gifts: 1}},
+		{"already-refused", 0, 3, SocialFoodRequestState{ID: pending.ID, Hour: 0, Addressee: 5, Claim: 2, Status: SocialFoodRefused, Requests: 1, Refusals: 1}},
+		{"already-expired", 0, 3, SocialFoodRequestState{ID: pending.ID, Hour: 0, Addressee: 5, Claim: 2, Status: SocialFoodExpired, Requests: 1}},
+		{"already-withdrawn", 0, 3, SocialFoodRequestState{ID: pending.ID, Hour: 0, Addressee: 5, Claim: 2, Status: SocialFoodWithdrawn, Requests: 1}},
+		{"answered-pending", 0, 3, SocialFoodRequestState{ID: pending.ID, Hour: 0, Addressee: 5, Claim: 2, Status: SocialFoodPending, Requests: 1, Gifts: 1}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			at, _ := SocialFoodPhaseTime(tc.hour, tc.phase)
+			original := tc.request
+			result, err := SocialFoodExpire(tc.hour, at, 4, tc.request)
+			if !errors.Is(err, ErrSocialFoodContract) || result != (SocialFoodRequestState{}) || tc.request != original {
+				t.Fatalf("invalid expiry mutated: %+v %v", result, err)
+			}
+			if _, err := SocialFoodExpireProposal(tc.name, tc.hour, at, 4, tc.request); !errors.Is(err, ErrSocialFoodContract) {
+				t.Fatalf("invalid event constructed: %v", err)
+			}
+		})
+	}
+	if _, err := SocialFoodExpire(0, finalize-1, 4, pending); err == nil {
+		t.Fatal("early timestamp admitted")
+	}
+	if _, err := SocialFoodExpire(0, finalize+1, 4, pending); err == nil {
+		t.Fatal("late timestamp admitted")
+	}
+	if _, err := SocialFoodExpire(0, finalize, 5, pending); err == nil {
+		t.Fatal("foreign owner admitted")
+	}
+	expired, err := SocialFoodExpire(0, finalize, 4, pending)
+	if err != nil || expired.Status != SocialFoodExpired || expired.ID != pending.ID || expired.Requests != pending.Requests || expired.Gifts != pending.Gifts || expired.Refusals != pending.Refusals || pending.Status != SocialFoodPending || !validSocialFoodRequest(4, expired) {
+		t.Fatalf("expiry invariant: %+v %v", expired, err)
+	}
+	proposal, err := SocialFoodExpireProposal("expire/0/4", 0, finalize, 4, pending)
+	if err != nil || proposal.Time != finalize || proposal.Cause.Actor != 4 || proposal.Rule != SocialFoodExpireRule || proposal.RuleVersion != SocialFoodRuleVersion || len(proposal.Patches) != 1 {
+		t.Fatalf("expiry event: %+v %v", proposal, err)
+	}
+	patch := proposal.Patches[0]
+	status, err := patch.Value.Integer()
+	if err != nil || patch.Entity != 4 || patch.Component != SocialFoodRequestTypeID || patch.SchemaVersion != SocialFoodSchemaVersion || patch.Field != SocialFoodRequestStatusField || status != int64(SocialFoodExpired) {
+		t.Fatalf("non-status expiry patch: %+v %v", patch, err)
+	}
+	if _, err := SocialFoodExpire(0, finalize, 4, expired); err == nil {
+		t.Fatal("duplicate expiry admitted")
+	}
+	if _, err := SocialFoodExpireProposal("duplicate", 0, finalize, 4, expired); err == nil {
+		t.Fatal("duplicate expiry event constructed")
+	}
+	if _, err := SocialFoodRequest(0, 4, 5, true, 2, expired, actor); err == nil {
+		t.Fatal("second same-hour request after expiry")
+	}
+	if next, err := SocialFoodRequest(1, 4, 5, true, 2, expired, actor); err != nil || next.Status != SocialFoodPending || next.Requests != 2 {
+		t.Fatalf("next-hour request: %+v %v", next, err)
 	}
 }
 func TestSocialFoodClaimZeroRefusalAndOutstandingRequest(t *testing.T) {
