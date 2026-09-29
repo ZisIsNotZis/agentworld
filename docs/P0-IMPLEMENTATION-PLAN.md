@@ -58,6 +58,10 @@ The v2 runner, journal and audited branch checkpoints are reported by `cmd/socia
 
 ## Next slices
 
+#### Sequencing decision (operator, 2026-09-28)
+
+Ticket 12's social result was structurally near-determined because production is exogenous and zero-sum; its value is the verified fork/branch/journal infrastructure. The operator set the P0 mechanism order: productive capacity and endogenous surplus first, then reproduction/genetics once surplus exists, then affect/motive richness (selfishness, altruism, opportunism), and reciprocity/credit only after both. The design ticket is [13-productive-capacity](../.scratch/13-productive-capacity/spec.md).
+
 S6 is an architecture smoke, not an endurance or causal-validity demonstration: the seed-7 maximum-bound probe (256 actors, requested 240 hours) ends with all actors stopped at hour 29. The four finite caches have no replenishment and become inedible by hour 21. One-winner-per-cache-hour contention and ordered actor keys visibly bias access and constrain hourly throughput; their separate contribution to extinction timing has not been isolated by an intervention. The P0 gap remains a renewable survival ecology with time-based needs and capacity-valid allocation, plus the specified birth, aging, death, health, location, weather, movement, social actions, longer horizons, fuller perception evidence, and measured scaling toward approximately 1,000 actors over decades. The separate bounded food-flow pilot tests that next mechanism; the earlier S6 probe's trajectory and costs remain in `.scratch/09-p0-scale-and-validity/spec.md`, not a claim of P0 completion. Future P0 work must still measure new scales and include the missing mechanisms before drawing endurance or causal-validity conclusions.
 
 The S0–S5 tests do not establish durable persistence, migration, or full P0 promotion equivalence. Performance results are baselines, not pass/fail thresholds.
