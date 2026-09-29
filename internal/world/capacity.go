@@ -216,6 +216,12 @@ func NewCapacity(o CapacityOptions) (*Capacity, error) {
 	if o.Workers < 1 || o.Yield < 0 || o.Yield > CapacitySlotsPerPatch {
 		return nil, ErrCapacityRunner
 	}
+	// The frozen policy has no Enabled input, so a disabled founder world
+	// would still emit stored-meal capital evidence; endowments are an
+	// enabled-branch instrument only (runner review P2 #4).
+	if !o.Enabled && len(o.Founders) > 0 {
+		return nil, ErrCapacityRunner
+	}
 	seen := make(map[sim.EntityID]bool, len(o.Founders))
 	for _, founder := range o.Founders {
 		if _, err := CapacityActorPatchID(founder.Actor); err != nil || seen[founder.Actor] ||

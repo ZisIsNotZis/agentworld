@@ -788,3 +788,17 @@ func journalIndex(t *testing.T, batches []CapacityBatch, batch CapacityBatch) in
 	t.Fatal("batch vanished")
 	return 0
 }
+
+func TestCapacityNewCapacityRejectsFoundersWhenDisabled(t *testing.T) {
+	// Runner review P2 #4 / persistence review P1: founder endowments are an
+	// enabled-branch instrument; the frozen policy has no Enabled input, so a
+	// disabled founder world would still emit stored-meal capital evidence.
+	if _, err := NewCapacity(CapacityOptions{Workers: 1, Yield: 8, Enabled: false,
+		Founders: []CapacityFounder{{Actor: 1, Granary: 4}}}); err == nil {
+		t.Fatal("founder endowment accepted on the disabled branch")
+	}
+	if _, err := NewCapacity(CapacityOptions{Workers: 1, Yield: 8, Enabled: true,
+		Founders: []CapacityFounder{{Actor: 1, Granary: 4}}}); err != nil {
+		t.Fatalf("enabled founder world rejected: %v", err)
+	}
+}

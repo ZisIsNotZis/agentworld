@@ -275,6 +275,33 @@ func TestCapacityCheckpointBranchForkMatchesBaselines(t *testing.T) {
 				enabledOpts := opts
 				enabledOpts.Enabled = true
 				const hour = 12
+				if len(tc.founders) > 0 {
+					// Founder endowments exist only on the enabled branch
+					// (NewCapacity rejects founders×disabled), so the founder
+					// lineage is captured enabled and must refuse a disabled
+					// intervention outright.
+					rootOpts := opts
+					rootOpts.Enabled = true
+					baselineEnabled := capacityRunTo(t, rootOpts, hour)
+					_, rootPath, rootDigest := capacityCaptureNeutral(t, rootOpts)
+					restoredRoot, gotRoot, err := RestoreCapacityCheckpoint(rootPath, rootOpts)
+					if err != nil || gotRoot != rootDigest {
+						t.Fatalf("root restore: %x %v", gotRoot, err)
+					}
+					capacityStepToHour(t, restoredRoot, hour)
+					if !reflect.DeepEqual(mustCapacityHandoff(t, restoredRoot), mustCapacityHandoff(t, baselineEnabled)) {
+						t.Fatal("restored founder root diverged from uninterrupted run")
+					}
+					branchPath := filepath.Join(t.TempDir(), "fork-disabled.bundle")
+					if _, err := BranchCapacityCheckpoint(rootPath, rootOpts, false, branchPath); err == nil {
+						t.Fatal("branch to disabled published over a founder lineage")
+					}
+					if _, err := os.Stat(branchPath); !os.IsNotExist(err) {
+						t.Fatal("refused founder branch published a file")
+					}
+					return
+				}
+				opts.Enabled = false
 				baselineEnabled := capacityRunTo(t, enabledOpts, hour)
 				baselineDisabled := capacityRunTo(t, opts, hour)
 				_, rootPath, rootDigest := capacityCaptureNeutral(t, opts)
@@ -493,6 +520,7 @@ func TestCapacityCheckpointRejectsForgedScenarioFlagAndPolicy(t *testing.T) {
 	enabledOpts.Enabled = true
 	founderOpts := opts
 	founderOpts.Founders = []CapacityFounder{{Actor: 1, Granary: 4}}
+	founderOpts.Enabled = true
 	_, rootPath, rootDigest := capacityCaptureNeutral(t, opts)
 	_, founderPath, _ := capacityCaptureNeutral(t, founderOpts)
 	branchPath := filepath.Join(t.TempDir(), "reject-branch.bundle")
