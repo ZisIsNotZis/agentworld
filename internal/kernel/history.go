@@ -11,13 +11,16 @@ import (
 )
 
 const (
-	HistoryFormatVersion       uint32 = 1
-	MaxHistoryBytes                   = 128 << 20
-	MaxHistoryEvents                  = 65536
-	MaxHistoryPatches                 = 65536
-	MaxHistoryValueNodes              = 1 << 18
-	MaxHistoryProjectionBytes         = 32 << 20
-	MaxHistoryProjectedMetrics        = 65536
+	HistoryFormatVersion uint32 = 1
+	MaxHistoryBytes             = 128 << 20
+	MaxHistoryEvents            = 65536
+	// Capacity v3 full-horizon enabled cells reach ~73k deltas; the ceilings
+	// are resource bounds, not simulation semantics, and are sized above the
+	// measured worst case with headroom.
+	MaxHistoryPatches          = 1 << 18
+	MaxHistoryValueNodes       = 1 << 19
+	MaxHistoryProjectionBytes  = 32 << 20
+	MaxHistoryProjectedMetrics = 65536
 )
 
 var historyMagic = [4]byte{'A', 'W', 'K', 'H'}
