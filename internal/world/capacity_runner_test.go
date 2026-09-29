@@ -157,10 +157,11 @@ func TestCapacityRunnerBootstrapTroughHandComputed(t *testing.T) {
 		if got != w {
 			t.Fatalf("h%d actor1 hand trajectory: got %+v want %+v", h, got, w)
 		}
-		if a.Bag.Units != 0 || a.Body.LastGatherHour != int64(h-1) && h > 0 {
-			if a.Bag.Units != 0 {
-				t.Fatalf("h%d actor1 holds a bag at the pulse: %+v", h, a)
-			}
+		if a.Bag.Units != 0 {
+			t.Fatalf("h%d actor1 holds a bag at the pulse: %+v", h, a)
+		}
+		if h > 0 && a.Body.LastGatherHour != int64(h-1) {
+			t.Fatalf("h%d actor1 last-gather-hour %d, want %d", h, a.Body.LastGatherHour, h-1)
 		}
 	}
 	checks := f.Checkpoints()
