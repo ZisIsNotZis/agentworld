@@ -75,6 +75,21 @@ go run ./cmd/socialfood -q=3 -seed=0 -workers=1 -hours=168 -branch=enabled -out=
 
 `-branch` selects `enabled`, `disabled`, or `both` (default); bundles (`social-neutral-h0.bundle`, `social-branch-enabled.bundle`, `social-branch-disabled.bundle`) are published into `-checkpoint-dir`, which must not exist (default: a fresh temporary directory that is kept and reported). The JSON goes to stdout and, if `-out` is given, to a previously absent file; existing outputs are never reused or overwritten, and stray positional arguments are rejected. Reports are labeled `synthetic/model-conditional` and include the neutral-root digest plus both branch digests (fork lineage), per-hour alive checkpoints, per-actor consumed/energy/hunger/survival and ledger totals, actor 1/8/16 hourly traces, witnessed request/gift/refusal/expiry counts with a privileged claim-versus-truth gift audit, directed dyad assistance fractions `(gifts+1)/(requests+2)`, per-patch consumed Gini (zero total is defined as zero inequality), gift donor costs in units, event/history/journal/checkpoint bytes and wall/CPU/peak-RSS costs with zero model tokens. When both branches run, a comparison section records alive-trajectory differences, survivor sets and donor costs. Full predeclared matrix results and limitations: [ticket evidence](.scratch/12-social-food-transfer/spec.md).
 
+## Productive-capacity v3 pilot (synthetic, model-conditional)
+
+The separately versioned capacity v3 fixture adds private per-actor worksites and granaries to the same 16-actor/two-patch/168-hour shape: a build (20 minutes, one held bag unit) invests into work-in-progress, two builds complete one capital point (k ∈ [0,8]) that yields exactly one food unit per pulse into the owner's granary [0,8] and survives exactly six hourly depreciation pulses; wild production and v1 meal physiology are unchanged. `cmd/capacity` never edits policy bytes: it publishes a verified neutral h0 checkpoint, records the enable/disable intervention (and the founder-B endowment — actor 1 granary 4, enabled-only, because a capital endowment is impossible under the frozen h0 conservation) as branch children sharing the parent digest, continues each child to `-hours`, and reports per branch.
+
+```sh
+mkdir -p .tmp
+go run ./cmd/capacity -q=8 -seed=0 -workers=1 -hours=168 -branch=enabled -out=.tmp/capacity-q8-s0-w1-enabled.json
+go run ./cmd/capacity -q=5 -seed=7 -workers=4 -hours=168 -branch=both -out=.tmp/capacity-q5-s7-w4.json
+go run ./cmd/capacity -q=0 -seed=0 -workers=1 -hours=12 -branch=both -out=.tmp/capacity-q0-s0-w1.json
+# Recorded founder-B variant (enabled-only):
+go run ./cmd/capacity -q=3 -seed=0 -workers=1 -hours=168 -branch=enabled -founder=B -out=.tmp/capacity-q3-s0-w1-enabled-founderB.json
+```
+
+`-branch` selects `enabled`, `disabled`, or `both` (default); bundles (`capacity-neutral-h0.bundle`, `capacity-branch-enabled.bundle`, `capacity-branch-disabled.bundle`) are published into `-checkpoint-dir`, which must not exist (default: a fresh temporary directory that is kept and reported). The JSON goes to stdout and, if `-out` is given, to a previously absent file; existing outputs are never reused or overwritten, and stray positional arguments are rejected. Reports are labeled `synthetic/model-conditional` and include the neutral-root digest plus each branch digest (fork lineage), hourly alive checkpoints with per-hour conservation re-verification, per-actor energy/hunger/capital/wip/granary stock/invested units/points created and decayed/yield total and unrealized/stored versus wild meals/survival hours, aggregate ledgers, the predeclared `surplus-flow-48h` window (hours 120–168 capital yield minus stored meals, clamped to the available hours below h168), per-patch wild-consumption Gini and capital-held Gini (zero total is defined as zero inequality), typed build/paired-meal/fallback and gather-denial counts, restored accepted-history link checks, event/history/journal/checkpoint bytes and wall/CPU/peak-RSS costs with zero model tokens. A disabled branch or a q0 cell recording any capital event fails the run. Full predeclared matrix results and the falsification verdict: [ticket evidence](.scratch/13-productive-capacity/spec.md).
+
 ## Start here
 
 - [Vision](docs/VISION.md)
