@@ -150,9 +150,11 @@ func equalReproductionFounderGenomes(a, b []ReproductionFounderGenomeRow) bool {
 // expectedReproductionFounderGenomes derives the frozen founder genome rows
 // from the seed exactly as NewReproduction does: the runner-owned founder
 // stream (0x464F554E, positions 0-15) yields the immutable lifetimes and the
-// loci start neutral. A genome-variant root would record different rows and
-// can never match this derivation, so variants fail closed against the
-// pinned neutral format.
+// loci start neutral. The declared expectation of a run is
+// reproductionDeclaredFounderGenomes below: this derivation, or the same rows
+// with the declared founder locus-m fixture applied — never the bare seed
+// alone, so a genome-variant root cannot pass under the neutral declaration
+// and vice versa.
 func expectedReproductionFounderGenomes(seed uint64) ([]ReproductionFounderGenomeRow, error) {
 	stream := sim.NewRandomStream(sim.RandomState{Seed: seed, Stream: ReproductionFounderStream})
 	out := make([]ReproductionFounderGenomeRow, 0, ReproductionFounderCount)
@@ -255,7 +257,7 @@ func (f *Reproduction) ExportJournal() ([]byte, error) {
 	if err != nil || schedulerHead != head {
 		return nil, ErrReproductionJournal
 	}
-	data, err := EncodeReproductionJournal(f.journal, f.k, head, f.sched.Time(), f.journalConfig())
+	data, err := encodeReproductionJournal(f.journal, f.k, head, f.sched.Time(), f.journalConfig(), f.declaredFounders)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +279,11 @@ func (f *Reproduction) ExportJournal() ([]byte, error) {
 // RestoreJournal replaces only the journal and only after full validation.
 // Kernel, scheduler and other runner state are checkpoint responsibilities.
 // It will not silently import a journal from another seed, yield, births
-// flag, founder genome set, or policy fingerprint.
+// flag, founder genome set, or policy fingerprint. Like ExportJournal, it
+// pins Boundary to the runner's own births flag and therefore fails closed
+// on a runner derived from a Branch child (whose boundary topology belongs
+// to the parent); such lineages restore through the history-aware decode and
+// the checkpoint restore paths instead.
 func (f *Reproduction) RestoreJournal(data []byte, verified kernel.PortableHead) error {
 	if f == nil {
 		return ErrReproductionJournal
@@ -287,7 +293,7 @@ func (f *Reproduction) RestoreJournal(data []byte, verified kernel.PortableHead)
 	if f.k == nil || f.sched == nil || f.pending != nil {
 		return ErrReproductionJournal
 	}
-	batches, err := DecodeReproductionJournalWithScheduler(data, f.k, verified, f.sched, f.journalConfig())
+	batches, err := decodeReproductionJournalWithScheduler(data, f.k, verified, f.sched, f.journalConfig(), f.declaredFounders)
 	if err != nil {
 		return err
 	}
@@ -296,11 +302,16 @@ func (f *Reproduction) RestoreJournal(data []byte, verified kernel.PortableHead)
 }
 
 // EncodeReproductionJournal validates accepted history and typed evidence at
-// a closed timestamp. It does not certify open activities or scheduler wakes;
-// ExportJournal and the scheduler-aware decoder do that at publication and
-// restore.
+// a closed timestamp under the canonical (seed-derived) founder declaration.
+// It does not certify open activities or scheduler wakes; ExportJournal and
+// the scheduler-aware decoder do that at publication and restore. A declared
+// founder fixture verifies through the unexported core the runner methods use.
 func EncodeReproductionJournal(batches []ReproductionBatch, k *kernel.Kernel, verified kernel.PortableHead, schedulerTime sim.SimTime, config ReproductionJournalConfig) ([]byte, error) {
-	if err := verifyReproductionJournal(batches, k, verified, schedulerTime, config); err != nil {
+	return encodeReproductionJournal(batches, k, verified, schedulerTime, config, mustReproductionFounderGenomes(config.Seed))
+}
+
+func encodeReproductionJournal(batches []ReproductionBatch, k *kernel.Kernel, verified kernel.PortableHead, schedulerTime sim.SimTime, config ReproductionJournalConfig, declared []ReproductionFounderGenomeRow) ([]byte, error) {
+	if err := verifyReproductionJournal(batches, k, verified, schedulerTime, config, declared); err != nil {
 		return nil, err
 	}
 	wire := reproductionJournalWire{Format: ReproductionJournalFormatVersion, Head: verified, SchedulerTime: schedulerTime,
@@ -323,6 +334,10 @@ func EncodeReproductionJournal(batches []ReproductionBatch, k *kernel.Kernel, ve
 // This is history-only partial validation: a schedulerTime cannot prove open
 // fibers, activity tokens, pending wakes, or the runner's outstanding maps.
 func DecodeReproductionJournal(data []byte, k *kernel.Kernel, verified kernel.PortableHead, schedulerTime sim.SimTime, config ReproductionJournalConfig) ([]ReproductionBatch, error) {
+	return decodeReproductionJournal(data, k, verified, schedulerTime, config, mustReproductionFounderGenomes(config.Seed))
+}
+
+func decodeReproductionJournal(data []byte, k *kernel.Kernel, verified kernel.PortableHead, schedulerTime sim.SimTime, config ReproductionJournalConfig, declared []ReproductionFounderGenomeRow) ([]ReproductionBatch, error) {
 	if len(data) < 12+sha256.Size || len(data) > MaxReproductionJournalBytes || !bytes.Equal(data[:4], reproductionJournalMagic[:]) ||
 		binary.BigEndian.Uint32(data[4:8]) != ReproductionJournalFormatVersion || int(binary.BigEndian.Uint32(data[8:12])) != len(data)-12-sha256.Size {
 		return nil, ErrReproductionJournal
@@ -340,18 +355,24 @@ func DecodeReproductionJournal(data []byte, k *kernel.Kernel, verified kernel.Po
 		return nil, ErrReproductionJournal
 	}
 	canonical, err := json.Marshal(wire)
-	if err != nil || !bytes.Equal(canonical, data[12:len(body)]) || verifyReproductionJournal(wire.Batches, k, verified, schedulerTime, config) != nil {
+	if err != nil || !bytes.Equal(canonical, data[12:len(body)]) || verifyReproductionJournal(wire.Batches, k, verified, schedulerTime, config, declared) != nil {
 		return nil, ErrReproductionJournal
 	}
 	return wire.Batches, nil
 }
 
-// DecodeReproductionJournalWithScheduler is the complete checkpoint seam. The
-// scheduler must first be restored independently against the verified head.
-// Its canonical portable state must match the trusted replay of these
-// batches, including open activities, tokens, pending wakes (the reserved
-// WakeBirth first claims included) and stopped fibers.
+// DecodeReproductionJournalWithScheduler is the complete checkpoint seam
+// under the canonical (seed-derived) founder declaration; the runner methods
+// and checkpoint restore use the declared-fixture core below. The scheduler
+// must first be restored independently against the verified head. Its
+// canonical portable state must match the trusted replay of these batches,
+// including open activities, tokens, pending wakes (the reserved WakeBirth
+// first claims included) and stopped fibers.
 func DecodeReproductionJournalWithScheduler(data []byte, k *kernel.Kernel, verified kernel.PortableHead, sched *scheduler.Scheduler, config ReproductionJournalConfig) ([]ReproductionBatch, error) {
+	return decodeReproductionJournalWithScheduler(data, k, verified, sched, config, mustReproductionFounderGenomes(config.Seed))
+}
+
+func decodeReproductionJournalWithScheduler(data []byte, k *kernel.Kernel, verified kernel.PortableHead, sched *scheduler.Scheduler, config ReproductionJournalConfig, declared []ReproductionFounderGenomeRow) ([]ReproductionBatch, error) {
 	if sched == nil {
 		return nil, ErrReproductionJournal
 	}
@@ -359,7 +380,7 @@ func DecodeReproductionJournalWithScheduler(data []byte, k *kernel.Kernel, verif
 	if err != nil || head != verified {
 		return nil, ErrReproductionJournal
 	}
-	batches, err := DecodeReproductionJournal(data, k, verified, sched.Time(), config)
+	batches, err := decodeReproductionJournal(data, k, verified, sched.Time(), config, declared)
 	if err != nil {
 		return nil, ErrReproductionJournal
 	}
@@ -451,11 +472,11 @@ func reproductionJournalCounts(batches []ReproductionBatch) ReproductionJournalC
 // are checked for type and admitted-vs-denied, but the allocator's denial
 // reason is re-derived deterministically, so the recorded label must match
 // exactly.
-func verifyReproductionJournal(batches []ReproductionBatch, k *kernel.Kernel, verified kernel.PortableHead, at sim.SimTime, config ReproductionJournalConfig) error {
+func verifyReproductionJournal(batches []ReproductionBatch, k *kernel.Kernel, verified kernel.PortableHead, at sim.SimTime, config ReproductionJournalConfig, declared []ReproductionFounderGenomeRow) error {
 	if k == nil || config.Yield < 0 || config.Yield > ReproductionSlotsPerPatch ||
 		config.Policy != strategy.FrozenReproductionPolicy().Ref ||
 		!validReproductionFounderGenomes(config.Founders) ||
-		!equalReproductionFounderGenomes(reproductionNormalizeFounders(config.Founders), mustReproductionFounderGenomes(config.Seed)) ||
+		!equalReproductionFounderGenomes(reproductionNormalizeFounders(config.Founders), reproductionNormalizeFounders(declared)) ||
 		at < 0 || at > sim.SimTime(ReproductionHorizonHours)*sim.SimTime(ReproductionHour) || len(batches) > MaxReproductionJournalBatches {
 		return ErrReproductionJournal
 	}
@@ -497,6 +518,44 @@ func mustReproductionFounderGenomes(seed uint64) []ReproductionFounderGenomeRow 
 	return out
 }
 
+// reproductionDeclaredFounderGenomes derives the founder genome rows a world
+// built from o must carry: the frozen all-neutral seed derivation, or the
+// same rows with the declared founder locus-m fixture applied. The declared
+// set — not the bare seed — is the run-identity anchor everywhere a bundle,
+// manifest or journal is verified, so a neutral root under a variant option
+// and a variant root under the default option are both rejected.
+func reproductionDeclaredFounderGenomes(o ReproductionOptions) ([]ReproductionFounderGenomeRow, error) {
+	rows, err := expectedReproductionFounderGenomes(o.Seed)
+	if err != nil {
+		return nil, err
+	}
+	if len(o.FounderLocusM) == 0 {
+		return rows, nil
+	}
+	if err := o.validateFounderLocusM(); err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		rows[i].Genome.LocusM = o.FounderLocusM[i]
+	}
+	return rows, nil
+}
+
+// reproductionFounderLocusFromRows extracts the declared locus-m fixture from
+// a verified founder row set (nil when the rows are empty; an all-neutral
+// set yields neutral overrides, which construct byte-identically to the
+// frozen derivation).
+func reproductionFounderLocusFromRows(rows []ReproductionFounderGenomeRow) []int64 {
+	if len(rows) != ReproductionFounderCount {
+		return nil
+	}
+	out := make([]int64, len(rows))
+	for i := range rows {
+		out[i] = rows[i].Genome.LocusM
+	}
+	return out
+}
+
 // replayReproductionJournal rebuilds a trusted reference runner from the
 // pinned configuration and steps it through the recorded batches. The
 // reference is also the source of the runner-only state (dynamic roster,
@@ -510,8 +569,10 @@ func replayReproductionJournal(batches []ReproductionBatch, config ReproductionJ
 	// applies the recorded intervention after the h0 pulse: a Branch lineage's
 	// journal is reproducible from genesis only under that two-flag schedule,
 	// and for every other bundle boundary and continuation flag are equal.
+	// The declared founder fixture rides in config.Founders, which every
+	// caller has already pinned against the declared expectation.
 	reference, err := NewReproduction(ReproductionOptions{Yield: config.Yield, Seed: config.Seed,
-		Workers: 1, Births: config.Boundary})
+		Workers: 1, Births: config.Boundary, FounderLocusM: reproductionFounderLocusFromRows(config.Founders)})
 	if err != nil {
 		return nil, ErrReproductionJournal
 	}

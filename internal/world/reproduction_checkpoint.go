@@ -1123,7 +1123,10 @@ func reproductionReplayMetrics(deathsAge, deathsStarvation, birthRequests, diver
 // bundle's genesis or the final authoritative comparison fails. Gates
 // G1/G2a/G2b/G3 are re-checked at every hour and gate G7 bounds every field,
 // so a raw-kernel in-range patch bypass cannot survive replay silently.
-func reproductionCheckpointsFromHistory(k *kernel.Kernel, journal []ReproductionBatch, yield int64, seed uint64) ([]ReproductionCheckpoint, error) {
+func reproductionCheckpointsFromHistory(k *kernel.Kernel, journal []ReproductionBatch, yield int64, seed uint64, founderLocusM []int64) ([]ReproductionCheckpoint, error) {
+	if len(founderLocusM) != 0 && len(founderLocusM) != ReproductionFounderCount {
+		return nil, ErrReproductionCheckpoint
+	}
 	table, err := reproductionBoundsTableForRegistry()
 	if err != nil {
 		return nil, err
@@ -1133,13 +1136,17 @@ func reproductionCheckpointsFromHistory(k *kernel.Kernel, journal []Reproduction
 		p.patches[i].Yield = yield
 	}
 	// The h0 seed state mirrors NewReproduction exactly: the founder stream's
-	// first sixteen draws are the immutable founder lifetimes.
+	// first sixteen draws are the immutable founder lifetimes, with the
+	// declared founder locus-m fixture applied when present.
 	stream := sim.NewRandomStream(sim.RandomState{Seed: seed, Stream: ReproductionFounderStream})
 	for i := range p.founders {
 		lifetime := ReproductionLifetimeBase + int64(stream.Uint64()%ReproductionLifetimeSpan)
 		a, err := ReproductionFounderState(sim.EntityID(i+1), lifetime)
 		if err != nil {
 			return nil, err
+		}
+		if len(founderLocusM) != 0 {
+			a.Genome.LocusM = founderLocusM[i]
 		}
 		p.founders[i] = a
 	}
@@ -1284,7 +1291,7 @@ func (f *Reproduction) SaveCheckpoint(path string) ([32]byte, error) {
 	}
 	// Do not publish a same-ref altered policy that a fresh executable would
 	// reject later: the independent constructor pins the current policy contract.
-	fresh, err := NewReproduction(ReproductionOptions{Yield: f.yield, Seed: f.seed, Workers: 1, Births: f.births})
+	fresh, err := NewReproduction(ReproductionOptions{Yield: f.yield, Seed: f.seed, Workers: 1, Births: f.births, FounderLocusM: f.founderLocusM})
 	if err != nil {
 		return [32]byte{}, ErrReproductionCheckpoint
 	}
@@ -1310,11 +1317,11 @@ func (f *Reproduction) SaveCheckpoint(path string) ([32]byte, error) {
 	if err := verifyReproductionStrategy(strategyBytes, fresh, f.stateView()); err != nil {
 		return [32]byte{}, err
 	}
-	journalBytes, err := EncodeReproductionJournal(f.journal, f.k, head, snap.Time, f.journalConfig())
+	journalBytes, err := encodeReproductionJournal(f.journal, f.k, head, snap.Time, f.journalConfig(), f.declaredFounders)
 	if err != nil {
 		return [32]byte{}, err
 	}
-	checks, err := reproductionCheckpointsFromHistory(f.k, f.journal, f.yield, f.seed)
+	checks, err := reproductionCheckpointsFromHistory(f.k, f.journal, f.yield, f.seed, f.founderLocusM)
 	if err != nil || !equalReproductionCheckpoints(checks, f.checkpoints) {
 		return [32]byte{}, ErrReproductionCheckpoint
 	}
@@ -1400,11 +1407,11 @@ func (f *Reproduction) SaveResumeCheckpoint(path string) ([32]byte, error) {
 	boundary := reproductionBoundaryBirths(f.journal)
 	resumeConfig := f.journalConfig()
 	resumeConfig.Boundary = boundary
-	journalBytes, err := EncodeReproductionJournal(f.journal, f.k, head, at, resumeConfig)
+	journalBytes, err := encodeReproductionJournal(f.journal, f.k, head, at, resumeConfig, f.declaredFounders)
 	if err != nil {
 		return [32]byte{}, err
 	}
-	checks, err := reproductionCheckpointsFromHistory(f.k, f.journal, f.yield, f.seed)
+	checks, err := reproductionCheckpointsFromHistory(f.k, f.journal, f.yield, f.seed, f.founderLocusM)
 	if err != nil || !equalReproductionCheckpoints(checks, f.checkpoints) {
 		return [32]byte{}, ErrReproductionCheckpoint
 	}
@@ -1472,7 +1479,7 @@ func restoreReproductionSections(sections []checkpoint.Section, m reproductionMa
 	// (the v4 h0 pulse is births-asymmetric by frozen design).
 	identityConfig := fresh.journalConfig()
 	identityConfig.Boundary = m.boundary
-	journal, err := DecodeReproductionJournal(sections[0].Data, k, head, sched.Time(), identityConfig)
+	journal, err := decodeReproductionJournal(sections[0].Data, k, head, sched.Time(), identityConfig, fresh.declaredFounders)
 	if err != nil {
 		return fail(err)
 	}
@@ -1519,7 +1526,7 @@ func restoreReproductionSections(sections []checkpoint.Section, m reproductionMa
 	if fingerprint != m.policyFingerprint {
 		return nil, ErrReproductionCheckpoint
 	}
-	checks, err := reproductionCheckpointsFromHistory(k, journal, fresh.yield, fresh.seed)
+	checks, err := reproductionCheckpointsFromHistory(k, journal, fresh.yield, fresh.seed, fresh.founderLocusM)
 	if err != nil {
 		return fail(err)
 	}
@@ -1586,13 +1593,17 @@ func reproductionCheckedSections(path string) ([]checkpoint.Section, [32]byte, r
 }
 
 // reproductionManifestMatches reports whether the bundle's recorded scenario
-// is exactly the declared one: yield, seed, births flag, and the frozen
-// founder genome rows. The founders must equal the seed derivation of the
-// declared options, so a genome-variant (or otherwise forged) founder set is
-// rejected as a scenario mismatch.
+// is exactly the declared one: yield, seed, births flag, and the declared
+// founder genome rows — the frozen seed derivation, or the declared founder
+// locus-m fixture. A neutral root under a variant option and a variant root
+// under the default option both mismatch here, so neither restores nor
+// branches (typed failure, nothing published).
 func reproductionManifestMatches(m reproductionManifest, expected ReproductionOptions) bool {
-	return m.yield == expected.Yield && m.seed == expected.Seed && m.births == expected.Births &&
-		equalReproductionFounderGenomes(m.founders, mustReproductionFounderGenomes(expected.Seed))
+	if m.yield != expected.Yield || m.seed != expected.Seed || m.births != expected.Births {
+		return false
+	}
+	declared, err := reproductionDeclaredFounderGenomes(expected)
+	return err == nil && equalReproductionFounderGenomes(m.founders, declared)
 }
 
 // RestoreReproductionCheckpoint rebuilds an independent executable runner
@@ -1604,6 +1615,9 @@ func reproductionManifestMatches(m reproductionManifest, expected ReproductionOp
 func RestoreReproductionCheckpoint(path string, expected ReproductionOptions) (*Reproduction, [32]byte, error) {
 	if expected.Workers < 1 {
 		return nil, [32]byte{}, ErrReproductionCheckpoint
+	}
+	if err := expected.validateFounderLocusM(); err != nil {
+		return nil, [32]byte{}, fmt.Errorf("%w: %v", ErrReproductionCheckpoint, err)
 	}
 	sections, digest, m, err := reproductionCheckedSections(path)
 	if err != nil {
@@ -1660,14 +1674,14 @@ func BranchReproductionCheckpoint(path string, expected ReproductionOptions, bir
 	if m.boundary && !births {
 		return [32]byte{}, ErrReproductionCheckpoint
 	}
-	parent, err := restoreReproductionSections(sections, m, ReproductionOptions{Yield: m.yield, Seed: m.seed, Workers: 1, Births: m.births})
+	parent, err := restoreReproductionSections(sections, m, ReproductionOptions{Yield: m.yield, Seed: m.seed, Workers: 1, Births: m.births, FounderLocusM: reproductionFounderLocusFromRows(m.founders)})
 	if err != nil {
 		return [32]byte{}, err
 	}
 	config := parent.journalConfig()
 	config.Boundary = m.boundary
 	config.Births = births
-	journalBytes, err := EncodeReproductionJournal(parent.journal, parent.k, m.head, m.time, config)
+	journalBytes, err := encodeReproductionJournal(parent.journal, parent.k, m.head, m.time, config, parent.declaredFounders)
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("%w: %v", ErrReproductionCheckpoint, err)
 	}

@@ -82,6 +82,38 @@ type ReproductionOptions struct {
 	Seed    uint64
 	Workers int
 	Births  bool // the frozen branch intervention: births enabled vs disabled
+
+	// FounderLocusM is the declared founder locus-m fixture override of the
+	// frozen genome-variant matrix class (ticket 14): exactly one allele per
+	// founder, actors 1..16 in order, each inside the frozen [5,7] bounds.
+	// The recorded fixture is 7 for actors 1-8 and 5 for actors 9-16; loci
+	// y/w and every lifetime stay on the frozen seed derivation, and no
+	// heredity or policy semantics change — only the initial founder allele
+	// values are option-supplied. Nil/empty keeps the frozen all-neutral
+	// derivation byte-identically: every digest, bundle, journal and gate is
+	// unchanged. The declared set is part of run identity — checkpoint
+	// manifests and journal verification pin it, so a neutral root under a
+	// variant option and a variant root under the default option are both
+	// rejected (fail closed, nothing published).
+	FounderLocusM []int64
+}
+
+// validateFounderLocusM checks a declared founder locus-m override: nil/empty
+// means the frozen all-neutral derivation; otherwise exactly one allele per
+// founder, each within the frozen locus bounds.
+func (o ReproductionOptions) validateFounderLocusM() error {
+	if len(o.FounderLocusM) == 0 {
+		return nil
+	}
+	if len(o.FounderLocusM) != ReproductionFounderCount {
+		return fmt.Errorf("%w: founder locus-m override must name all %d founders, got %d", ErrReproductionRunner, ReproductionFounderCount, len(o.FounderLocusM))
+	}
+	for i, m := range o.FounderLocusM {
+		if m < ReproductionGenomeLocusMin || m > ReproductionGenomeLocusMax {
+			return fmt.Errorf("%w: founder %d locus-m %d outside [%d,%d]", ErrReproductionRunner, i+1, m, ReproductionGenomeLocusMin, ReproductionGenomeLocusMax)
+		}
+	}
+	return nil
 }
 
 // ReproductionMealIntent is the deferred stored meal of one hour, verbatim
@@ -195,34 +227,36 @@ type ReproductionHandoff struct {
 }
 
 type Reproduction struct {
-	mu             sync.Mutex
-	k              *kernel.Kernel
-	sched          *scheduler.Scheduler
-	registry       component.Registry
-	seeds          []component.ComponentSeed
-	policies       *strategy.ReproductionRegistry
-	ref            strategy.ReproductionRef
-	bound          map[sim.EntityID]*strategy.ReproductionBound
-	seed           uint64
-	yield          int64
-	births         bool
-	roster         []sim.EntityID // founders 1..16 then newborns ascending
-	newborns       []sim.EntityID // registration (= birth) order
-	pulseLifecycle map[sim.EntityID]scheduler.Lifecycle
-	current        map[sim.EntityID]strategy.ReproductionAction // Gather|Build activity in flight
-	denied         map[sim.EntityID]int64                       // last denied-gather hour, typed evidence
-	meals          map[sim.EntityID]ReproductionMealIntent      // deferred paired/fallback meals of the running hour
-	birthWakes     map[sim.EntityID]int64                       // newborn -> hour of its reserved WakeBirth first claim
-	admissions     map[sim.EntityID]FoodFlowGatherAdmission     // claim-step allocation, set before the step
-	pending        *reproductionPending
-	journal        []ReproductionBatch
-	checkpoints    []ReproductionCheckpoint
-	steps          int
-	deathsAge      int64
-	deathsStarve   int64
-	birthFiles     int64
-	divergences    int64
-	refusals       map[ReproductionRefusalReason]int64
+	mu               sync.Mutex
+	k                *kernel.Kernel
+	sched            *scheduler.Scheduler
+	registry         component.Registry
+	seeds            []component.ComponentSeed
+	policies         *strategy.ReproductionRegistry
+	ref              strategy.ReproductionRef
+	bound            map[sim.EntityID]*strategy.ReproductionBound
+	seed             uint64
+	yield            int64
+	births           bool
+	roster           []sim.EntityID                 // founders 1..16 then newborns ascending
+	newborns         []sim.EntityID                 // registration (= birth) order
+	founderLocusM    []int64                        // declared founder locus-m fixture, nil = frozen derivation
+	declaredFounders []ReproductionFounderGenomeRow // normalized declared founder rows, the run-identity anchor
+	pulseLifecycle   map[sim.EntityID]scheduler.Lifecycle
+	current          map[sim.EntityID]strategy.ReproductionAction // Gather|Build activity in flight
+	denied           map[sim.EntityID]int64                       // last denied-gather hour, typed evidence
+	meals            map[sim.EntityID]ReproductionMealIntent      // deferred paired/fallback meals of the running hour
+	birthWakes       map[sim.EntityID]int64                       // newborn -> hour of its reserved WakeBirth first claim
+	admissions       map[sim.EntityID]FoodFlowGatherAdmission     // claim-step allocation, set before the step
+	pending          *reproductionPending
+	journal          []ReproductionBatch
+	checkpoints      []ReproductionCheckpoint
+	steps            int
+	deathsAge        int64
+	deathsStarve     int64
+	birthFiles       int64
+	divergences      int64
+	refusals         map[ReproductionRefusalReason]int64
 }
 
 type reproductionDeath struct {
@@ -262,13 +296,22 @@ func reproductionProposal(kind string, at sim.SimTime, actor sim.EntityID, rule 
 }
 
 // NewReproduction builds the neutral v4 h0 world: two patches with wild
-// yield q, sixteen all-neutral founders whose immutable lifetimes are the
-// runner-owned stream 0x464F554E positions 0-15 (96 + draw mod 48), and the
-// frozen policy bound to every roster entity. The h0 world is gated by the
-// frozen extended conservation before any kernel exists.
+// yield q, sixteen founders whose immutable lifetimes are the runner-owned
+// stream 0x464F554E positions 0-15 (96 + draw mod 48) and whose loci are the
+// frozen all-neutral derivation unless the declared FounderLocusM fixture
+// overrides locus m, plus the frozen policy bound to every roster entity.
+// The h0 world is gated by the frozen extended conservation before any
+// kernel exists.
 func NewReproduction(o ReproductionOptions) (*Reproduction, error) {
 	if o.Workers < 1 || o.Yield < 0 || o.Yield > ReproductionSlotsPerPatch {
 		return nil, ErrReproductionRunner
+	}
+	if err := o.validateFounderLocusM(); err != nil {
+		return nil, err
+	}
+	declaredFounders, err := reproductionDeclaredFounderGenomes(o)
+	if err != nil {
+		return nil, err
 	}
 	reg, err := ReproductionRegistry()
 	if err != nil {
@@ -280,13 +323,15 @@ func NewReproduction(o ReproductionOptions) (*Reproduction, error) {
 		return nil, err
 	}
 	f := &Reproduction{registry: reg, policies: policies, ref: policy.Ref, seed: o.Seed, yield: o.Yield, births: o.Births,
-		bound:          make(map[sim.EntityID]*strategy.ReproductionBound),
-		pulseLifecycle: make(map[sim.EntityID]scheduler.Lifecycle),
-		current:        make(map[sim.EntityID]strategy.ReproductionAction),
-		denied:         make(map[sim.EntityID]int64),
-		meals:          make(map[sim.EntityID]ReproductionMealIntent),
-		birthWakes:     make(map[sim.EntityID]int64),
-		refusals:       make(map[ReproductionRefusalReason]int64)}
+		founderLocusM:    append([]int64(nil), o.FounderLocusM...),
+		declaredFounders: reproductionNormalizeFounders(declaredFounders),
+		bound:            make(map[sim.EntityID]*strategy.ReproductionBound),
+		pulseLifecycle:   make(map[sim.EntityID]scheduler.Lifecycle),
+		current:          make(map[sim.EntityID]strategy.ReproductionAction),
+		denied:           make(map[sim.EntityID]int64),
+		meals:            make(map[sim.EntityID]ReproductionMealIntent),
+		birthWakes:       make(map[sim.EntityID]int64),
+		refusals:         make(map[ReproductionRefusalReason]int64)}
 	// The neutral h0 ledgers, built once and gated by the frozen extended
 	// conservation before any kernel exists. Founder lifetimes are the
 	// runner-owned founder-stream draws; the genome rows are immutable
@@ -302,6 +347,16 @@ func NewReproduction(o ReproductionOptions) (*Reproduction, error) {
 		actors[i], err = ReproductionFounderState(actor, lifetime)
 		if err != nil {
 			return nil, err
+		}
+		// The declared locus-m fixture overrides only the initial allele
+		// values; the frozen derivation keeps lifetimes, birth columns and
+		// every other locus, so the variant rows stay inside the frozen
+		// genome contract and the h0 conservation below is untouched.
+		if len(o.FounderLocusM) != 0 {
+			actors[i].Genome.LocusM = o.FounderLocusM[i]
+			if !validReproductionGenome(actor, actors[i].Genome) {
+				return nil, ErrReproductionRunner
+			}
 		}
 	}
 	for i := range patches {
@@ -1903,6 +1958,15 @@ func (f *Reproduction) registerNewborn(ev kernel.Event, hour int) error {
 	newborn := sim.EntityID(0)
 	for _, d := range ev.Deltas {
 		if d.Component == ReproductionGenomeTypeID && d.Entity >= sim.EntityID(ReproductionFirstNewbornID) {
+			// Rule 410 also patches the parents' genome rows (the
+			// birth-granary-paid ledger), and a parent may itself be a
+			// registered newborn. The allocated newborn is the unique
+			// genome-row entity not yet in the roster; every
+			// already-registered entity is a parent patch. Two distinct
+			// unregistered newborn rows in one event remain a hard error.
+			if f.rosterContains(d.Entity) {
+				continue
+			}
 			if newborn != 0 && d.Entity != newborn {
 				return ErrReproductionRunner
 			}
