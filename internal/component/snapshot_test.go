@@ -93,11 +93,11 @@ func TestSnapshotRoundTripAndStorageEquivalence(t *testing.T) {
 		t.Fatal(err)
 	}
 	patch := []Patch{{Entity: 1, Component: EnergyTypeID, SchemaVersion: 1, Field: EnergyReserveField, Value: mustScalarValue(t, 3)}}
-	left, leftAuth, leftDeltas, leftMetrics, err := Stage(builtinRestored, builtinAuth, version, 1, 1, patch)
+	left, leftAuth, leftDeltas, leftMetrics, err := Stage(builtinRestored, builtinAuth, version, 1, 1, patch, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	right, rightAuth, rightDeltas, rightMetrics, err := Stage(restored, auth, version, 1, 1, patch)
+	right, rightAuth, rightDeltas, rightMetrics, err := Stage(restored, auth, version, 1, 1, patch, nil)
 	if err != nil || !reflect.DeepEqual(leftDeltas, rightDeltas) || !reflect.DeepEqual(leftMetrics, rightMetrics) {
 		t.Fatalf("restored storage transition differs: %v", err)
 	}

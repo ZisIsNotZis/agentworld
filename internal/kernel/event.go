@@ -20,6 +20,14 @@ type Cause struct {
 
 func (c Cause) valid() bool { return (c.World && c.Actor == 0) || (!c.World && c.Actor != 0) }
 
+// Event kinds. A component-patch event replaces values in rows that already
+// exist; an entity-create event additionally allocates complete newborn rows,
+// carried as absent-before deltas ahead of the transition's patches.
+const (
+	KindComponentPatch = "component-patch"
+	KindEntityCreate   = "entity-create"
+)
+
 type Event struct {
 	ID                          sim.EventID
 	Time                        sim.SimTime

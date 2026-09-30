@@ -11,9 +11,15 @@ import (
 )
 
 const (
-	HistoryFormatVersion uint32 = 1
-	MaxHistoryBytes             = 128 << 20
-	MaxHistoryEvents            = 65536
+	// HistoryFormatV1 events are component-patch only; HistoryFormatV2 adds
+	// entity-create. Export writes V1 unless an entity-create event exists,
+	// so v1/v2/v3-world histories stay byte-identical, and restore rejects
+	// either kind in the other format.
+	HistoryFormatV1 uint32 = 1
+	HistoryFormatV2 uint32 = 2
+
+	MaxHistoryBytes  = 128 << 20
+	MaxHistoryEvents = 65536
 	// Capacity v3 full-horizon enabled cells reach ~73k deltas; the ceilings
 	// are resource bounds, not simulation semantics, and are sized above the
 	// measured worst case with headroom.
@@ -73,7 +79,14 @@ func (k *Kernel) ExportHistory() ([]byte, PortableHead, error) {
 	}
 	var out bytes.Buffer
 	writeHistoryNumber(&out, historyMagic)
-	writeHistoryNumber(&out, HistoryFormatVersion)
+	format := HistoryFormatV1
+	for _, event := range k.events {
+		if event.Kind == KindEntityCreate {
+			format = HistoryFormatV2
+			break
+		}
+	}
+	writeHistoryNumber(&out, format)
 	out.Write(head.RegistryFingerprint[:])
 	writeHistoryNumber(&out, uint32(len(k.genesis)))
 	writeHistoryNumber(&out, uint32(len(snapshot)))
@@ -102,7 +115,7 @@ func (k *Kernel) ExportHistory() ([]byte, PortableHead, error) {
 		if err != nil || hash != event.Hash || len(body)+68 > MaxHistoryBytes-out.Len() || uint64(len(event.Deltas)) > MaxHistoryPatches-patches {
 			return nil, PortableHead{}, ErrEventIntegrity
 		}
-		_, used, err := decodeHistoryProposal(body, event.ID, event.BeforeVersion, MaxHistoryValueNodes-nodes)
+		_, _, used, err := decodeHistoryProposal(body, event.ID, event.BeforeVersion, MaxHistoryValueNodes-nodes)
 		if err != nil {
 			return nil, PortableHead{}, ErrEventIntegrity
 		}
@@ -142,7 +155,7 @@ func RestoreHistory(registry component.Registry, data []byte) (*Kernel, Portable
 	copy(head.SnapshotHash[:], r.take(32))
 	copy(head.ProjectionHash[:], r.take(32))
 	fingerprint, err := component.RegistryFingerprint(registry)
-	if r.bad || !bytes.Equal(magic, historyMagic[:]) || format != HistoryFormatVersion || head.RegistryFingerprint != fingerprint ||
+	if r.bad || !bytes.Equal(magic, historyMagic[:]) || (format != HistoryFormatV1 && format != HistoryFormatV2) || head.RegistryFingerprint != fingerprint ||
 		genesisSize > component.MaxSnapshotBytes || snapshotSize > component.MaxSnapshotBytes || eventCount > MaxHistoryEvents ||
 		uint64(head.GenesisVersion) > ^uint64(0)-uint64(eventCount) || head.Version != head.GenesisVersion+sim.WorldVersion(eventCount) ||
 		head.TipID != sim.EventID(eventCount) || (eventCount == 0 && (head.TipTime != 0 || head.TipHash != [32]byte{})) {
@@ -186,6 +199,7 @@ func RestoreHistory(registry component.Registry, data []byte) (*Kernel, Portable
 	type encodedEvent struct {
 		body     []byte
 		hash     [32]byte
+		kind     string
 		proposal Proposal
 	}
 	var group []encodedEvent
@@ -193,9 +207,20 @@ func RestoreHistory(registry component.Registry, data []byte) (*Kernel, Portable
 		if len(group) == 0 {
 			return nil
 		}
+		// All events in the group were planned against this batch-start
+		// snapshot, which is also what makes the entity-create partition exact.
+		reader, authority, batchVersion := k.reader, k.authority, k.version
 		plans := make([]Plan, 0, len(group))
 		for _, encoded := range group {
-			plan, err := k.Plan(encoded.proposal, k.authority)
+			proposal := encoded.proposal
+			if encoded.kind == KindEntityCreate {
+				allocations, patches, err := partitionEntityCreate(reader, authority, batchVersion, proposal.Patches)
+				if err != nil {
+					return ErrEventIntegrity
+				}
+				proposal.Allocations, proposal.Patches = allocations, patches
+			}
+			plan, err := k.Plan(proposal, k.authority)
 			if err != nil {
 				return ErrEventIntegrity
 			}
@@ -217,6 +242,7 @@ func RestoreHistory(registry component.Registry, data []byte) (*Kernel, Portable
 	var previous [32]byte
 	var lastTime sim.SimTime
 	var patches, nodes uint64
+	var sawEntityCreate bool
 	for i := uint32(0); i < eventCount; i++ {
 		size := r.u32()
 		linked := r.take(32)
@@ -233,9 +259,15 @@ func RestoreHistory(registry component.Registry, data []byte) (*Kernel, Portable
 		if !bytes.Equal(computed.Sum(nil), hash[:]) {
 			return fail()
 		}
-		proposal, used, err := decodeHistoryProposal(body, sim.EventID(i+1), head.GenesisVersion+sim.WorldVersion(i), MaxHistoryValueNodes-nodes)
+		proposal, kind, used, err := decodeHistoryProposal(body, sim.EventID(i+1), head.GenesisVersion+sim.WorldVersion(i), MaxHistoryValueNodes-nodes)
 		if err != nil || uint64(len(proposal.Patches)) > MaxHistoryPatches-patches || (i > 0 && proposal.Time < lastTime) {
 			return fail()
+		}
+		if kind == KindEntityCreate {
+			if format == HistoryFormatV1 {
+				return fail()
+			}
+			sawEntityCreate = true
 		}
 		patches += uint64(len(proposal.Patches))
 		nodes += used
@@ -244,10 +276,13 @@ func RestoreHistory(registry component.Registry, data []byte) (*Kernel, Portable
 				return fail()
 			}
 		}
-		group = append(group, encodedEvent{body: body, hash: hash, proposal: proposal})
+		group = append(group, encodedEvent{body: body, hash: hash, kind: kind, proposal: proposal})
 		lastTime, previous = proposal.Time, hash
 	}
-	if r.bad || r.remaining() != 0 || flush() != nil || (eventCount != 0 && (head.TipTime != lastTime || head.TipHash != previous)) {
+	if r.bad || r.remaining() != 0 || flush() != nil || (eventCount != 0 && (head.TipTime != lastTime || head.TipHash != previous)) ||
+		// The format declares exactly what the encoder emitted: V2 exists
+		// only when an entity-create event does.
+		(format == HistoryFormatV2 && !sawEntityCreate) {
 		return fail()
 	}
 	final, err := component.EncodeSnapshot(registry, k.reader, k.authority, k.version)
@@ -314,12 +349,13 @@ func writeHistoryHashNumber(h hash.Hash, number uint32) {
 // decodeHistoryProposal reads only the proposal-bearing prefix. The replayed
 // canonical event body must equal the entire input, so no untrusted metric
 // can be accepted without reproducing its schema/projection and all its bytes.
-func decodeHistoryProposal(body []byte, id sim.EventID, version sim.WorldVersion, maxNodes uint64) (Proposal, uint64, error) {
+// The returned kind is enforced against the history format by RestoreHistory.
+func decodeHistoryProposal(body []byte, id sim.EventID, version sim.WorldVersion, maxNodes uint64) (Proposal, string, uint64, error) {
 	r := historyReader{data: body}
 	eventID, time := sim.EventID(r.u64()), sim.SimTime(r.u64())
 	before, after := r.u64(), r.u64()
 	if r.bad || eventID != id || time < 0 || before != uint64(version) || before == ^uint64(0) || after != before+1 {
-		return Proposal{}, 0, ErrEventIntegrity
+		return Proposal{}, "", 0, ErrEventIntegrity
 	}
 	kind := r.text()
 	key := r.text()
@@ -327,12 +363,12 @@ func decodeHistoryProposal(body []byte, id sim.EventID, version sim.WorldVersion
 	actor := sim.EntityID(r.u64())
 	rule, ruleVersion := sim.RuleID(r.u32()), r.u32()
 	count := r.u32()
-	if r.bad || kind != "component-patch" || len(key) == 0 || len(key) > 4096 || len(world) != 1 || world[0] > 1 || count == 0 || count > 4096 || uint64(count)*32 > uint64(r.remaining()) {
-		return Proposal{}, 0, ErrEventIntegrity
+	if r.bad || (kind != KindComponentPatch && kind != KindEntityCreate) || len(key) == 0 || len(key) > 4096 || len(world) != 1 || world[0] > 1 || count == 0 || count > 4096 || uint64(count)*32 > uint64(r.remaining()) {
+		return Proposal{}, "", 0, ErrEventIntegrity
 	}
 	p := Proposal{Key: key, Time: time, Cause: Cause{Actor: actor, World: world[0] == 1}, Rule: rule, RuleVersion: ruleVersion, Patches: make([]component.Patch, 0, count)}
 	if !p.Cause.valid() || p.Rule == 0 || p.RuleVersion == 0 {
-		return Proposal{}, 0, ErrEventIntegrity
+		return Proposal{}, "", 0, ErrEventIntegrity
 	}
 	var nodes uint64
 	for j := uint32(0); j < count; j++ {
@@ -340,29 +376,29 @@ func decodeHistoryProposal(body []byte, id sim.EventID, version sim.WorldVersion
 		before := r.value()
 		encoded := r.value()
 		if r.bad || len(before) == 0 || len(encoded) == 0 || nodes >= maxNodes {
-			return Proposal{}, 0, ErrEventIntegrity
+			return Proposal{}, "", 0, ErrEventIntegrity
 		}
 		used, err := sim.CountValueNodes(before, maxNodes-nodes)
 		if err != nil {
-			return Proposal{}, 0, ErrEventIntegrity
+			return Proposal{}, "", 0, ErrEventIntegrity
 		}
 		nodes += used
 		used, err = sim.CountValueNodes(encoded, maxNodes-nodes)
 		if err != nil {
-			return Proposal{}, 0, ErrEventIntegrity
+			return Proposal{}, "", 0, ErrEventIntegrity
 		}
 		nodes += used
 		value, err := sim.DecodeValue(encoded)
 		if err != nil {
-			return Proposal{}, 0, ErrEventIntegrity
+			return Proposal{}, "", 0, ErrEventIntegrity
 		}
 		patch.Value = value
 		p.Patches = append(p.Patches, patch)
 	}
 	if r.bad || r.u32() > 4096 || r.bad {
-		return Proposal{}, 0, ErrEventIntegrity
+		return Proposal{}, "", 0, ErrEventIntegrity
 	}
-	return p, nodes, nil
+	return p, kind, nodes, nil
 }
 
 type historyReader struct {

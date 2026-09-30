@@ -475,3 +475,261 @@ func TestReplayRejectsTampering(t *testing.T) {
 		t.Fatalf("accepted changed projection version: %v", err)
 	}
 }
+
+func birthFixture(t *testing.T) (*Kernel, component.Registry, []component.ComponentSeed, fixture, fixture) {
+	t.Helper()
+	energy, fatigue := fixtures()[0], fixtures()[2]
+	builder := component.NewRegistryBuilder()
+	for _, descriptor := range []component.ComponentDescriptor{energy.descriptor, fatigue.descriptor} {
+		if err := builder.Register(descriptor); err != nil {
+			t.Fatal(err)
+		}
+	}
+	registry, err := builder.Freeze()
+	if err != nil {
+		t.Fatal(err)
+	}
+	seeds := []component.ComponentSeed{
+		{Entity: 1, Component: energy.descriptor.TypeID, Fields: []component.FieldSeed{{Field: energy.field, Value: scalar(t, 0)}}},
+		{Entity: 2, Component: energy.descriptor.TypeID},
+	}
+	k, err := New(registry, 7, seeds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return k, registry, seeds, energy, fatigue
+}
+
+func birthProposal(t *testing.T, energy, fatigue fixture, key string, newborn sim.EntityID) Proposal {
+	t.Helper()
+	return Proposal{
+		Key: key, Time: 19, Cause: Cause{Actor: 1}, Rule: 1, RuleVersion: 1,
+		Patches: []component.Patch{{Entity: 1, Component: energy.descriptor.TypeID, SchemaVersion: 1, Field: energy.field, Value: scalar(t, .5)}},
+		Allocations: []component.ComponentSeed{
+			{Entity: newborn, Component: energy.descriptor.TypeID, Fields: []component.FieldSeed{{Field: energy.field, Value: scalar(t, .125)}}},
+			{Entity: newborn, Component: fatigue.descriptor.TypeID, Fields: []component.FieldSeed{{Field: fatigue.field, Value: absent(t, sim.Missing)}}},
+		},
+	}
+}
+
+func TestEntityCreateCommitReplayAndReconstruction(t *testing.T) {
+	k, registry, seeds, energy, fatigue := birthFixture(t)
+	_, auth, _ := k.Snapshot()
+	// One batch: a same-time parent patch plus the birth proposal. The birth
+	// carries the newborn's complete rows and one parent cost patch under a
+	// single version bump.
+	sibling := proposal(energy, "a", 2, scalar(t, .25))
+	birth := birthProposal(t, energy, fatigue, "birth", 10001)
+	plans := make([]Plan, 0, 2)
+	for _, p := range []Proposal{sibling, birth} {
+		plan, err := k.Plan(p, auth)
+		if err != nil {
+			t.Fatal(err)
+		}
+		plans = append(plans, plan)
+	}
+	accepted, err := k.CommitBatch(plans)
+	if err != nil || len(accepted) != 2 {
+		t.Fatalf("batch commit: %v, %v", accepted, err)
+	}
+	patchEvent, birthEvent := accepted[0], accepted[1]
+	if patchEvent.Kind != KindComponentPatch || patchEvent.BeforeVersion != 7 || patchEvent.AfterVersion != 8 {
+		t.Fatalf("patch event: %+v", patchEvent)
+	}
+	if birthEvent.Kind != KindEntityCreate || birthEvent.ID != 2 || birthEvent.BeforeVersion != 8 || birthEvent.AfterVersion != 9 {
+		t.Fatalf("birth event version/kind: %+v", birthEvent)
+	}
+	// Complete newborn rows lead as absent-before deltas; the cost patch follows.
+	if len(birthEvent.Deltas) != 3 ||
+		birthEvent.Deltas[0].Entity != 10001 || birthEvent.Deltas[0].Component != energy.descriptor.TypeID || !birthEvent.Deltas[0].Before.Equal(absent(t, sim.Missing)) || !birthEvent.Deltas[0].After.Equal(scalar(t, .125)) ||
+		birthEvent.Deltas[1].Entity != 10001 || birthEvent.Deltas[1].Component != fatigue.descriptor.TypeID || !birthEvent.Deltas[1].After.Equal(absent(t, sim.Missing)) ||
+		birthEvent.Deltas[2].Entity != 1 {
+		t.Fatalf("birth deltas: %+v", birthEvent.Deltas)
+	}
+	// Newborn rows carry no projection metrics; the parent patch does.
+	if len(birthEvent.Metrics) != 1 || birthEvent.Metrics[0].After.Provenance().Entity != 1 {
+		t.Fatalf("birth metrics: %+v", birthEvent.Metrics)
+	}
+	if !read(t, k, energy, 10001).Equal(scalar(t, .125)) || !read(t, k, fatigue, 10001).Equal(absent(t, sim.Missing)) {
+		t.Fatal("newborn rows not committed")
+	}
+	replayed, err := Replay(registry, 7, seeds, k.Events())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(eventBytes(t, k.Events()), eventBytes(t, replayed.Events())) || !reflect.DeepEqual(k.Events(), replayed.Events()) {
+		t.Fatal("replayed entity-create events differ")
+	}
+	snapshot := func(ker *Kernel) []byte {
+		r, a, v := ker.Snapshot()
+		data, err := component.EncodeSnapshot(registry, r, a, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return data
+	}
+	if !bytes.Equal(snapshot(k), snapshot(replayed)) {
+		t.Fatal("replay did not reconstruct absent-before newborn rows exactly")
+	}
+	if !read(t, replayed, energy, 10001).Equal(scalar(t, .125)) {
+		t.Fatal("replayed newborn row wrong")
+	}
+}
+
+func TestEntityCreateRejectsInvalidAllocationsAtomically(t *testing.T) {
+	k, _, _, energy, fatigue := birthFixture(t)
+	_, auth, _ := k.Snapshot()
+	birth := birthProposal(t, energy, fatigue, "birth", 10001)
+	failures := []struct {
+		name  string
+		tweak func(p Proposal) Proposal
+		want  error
+	}{
+		{"collision same component", func(p Proposal) Proposal { p.Allocations[0].Entity = 1; return p }, component.ErrEntityExists},
+		{"collision other component", func(p Proposal) Proposal { p.Allocations[1].Entity = 2; return p }, component.ErrEntityExists},
+		{"partial row", func(p Proposal) Proposal { p.Allocations[0].Fields = nil; return p }, component.ErrPartialAllocation},
+		{"cross-seed duplicate", func(p Proposal) Proposal {
+			p.Allocations = append(p.Allocations, component.ComponentSeed{Entity: 10001, Component: energy.descriptor.TypeID, Fields: []component.FieldSeed{{Field: energy.field, Value: scalar(t, .5)}}})
+			return p
+		}, component.ErrDuplicateAllocation},
+		{"patch on allocated entity", func(p Proposal) Proposal {
+			p.Patches = append(p.Patches, component.Patch{Entity: 10001, Component: energy.descriptor.TypeID, SchemaVersion: 1, Field: energy.field, Value: scalar(t, .5)})
+			return p
+		}, component.ErrAllocationOverlap},
+		{"seed outside bounds", func(p Proposal) Proposal { p.Allocations[1].Fields[0].Value = scalar(t, 7); return p }, component.ErrValueOutsideSchema},
+		{"zero entity", func(p Proposal) Proposal { p.Allocations[0].Entity = 0; return p }, component.ErrInvalidRequest},
+	}
+	for _, tc := range failures {
+		t.Run(tc.name, func(t *testing.T) {
+			_, auth, version := k.Snapshot()
+			if _, err := k.Plan(tc.tweak(birthProposal(t, energy, fatigue, "birth", 10001)), auth); !errors.Is(err, tc.want) {
+				t.Fatalf("plan error: %v", err)
+			}
+			if len(k.Events()) != 0 || k.SnapshotHead().Version != version || !read(t, k, energy, 1).Equal(scalar(t, 0)) {
+				t.Fatal("rejected allocation mutated state")
+			}
+		})
+	}
+	// A plan owns its allocation input.
+	_, auth, _ = k.Snapshot()
+	plan, err := k.Plan(birth, auth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	birth.Allocations[0].Fields[0].Value = scalar(t, .9)
+	if _, err := k.CommitBatch([]Plan{plan}); err != nil {
+		t.Fatal(err)
+	}
+	if !read(t, k, energy, 10001).Equal(scalar(t, .125)) {
+		t.Fatal("plan did not own its allocation input")
+	}
+	if !read(t, k, energy, 10001).Equal(scalar(t, .125)) {
+		t.Fatal("plan did not own its allocation input")
+	}
+}
+
+func TestEntityCreateCollidingBirthsLoseStructurally(t *testing.T) {
+	k, registry, seeds, energy, fatigue := birthFixture(t)
+	_, auth, _ := k.Snapshot()
+	first := birthProposal(t, energy, fatigue, "a", 10001)
+	second := birthProposal(t, energy, fatigue, "b", 10001)
+	plans := make([]Plan, 0, 2)
+	for _, p := range []Proposal{first, second} {
+		plan, err := k.Plan(p, auth)
+		if err != nil {
+			t.Fatal(err)
+		}
+		plans = append(plans, plan)
+	}
+	accepted, err := k.CommitBatch(plans)
+	if err != nil || len(accepted) != 1 || accepted[0].Key != "a" {
+		t.Fatalf("colliding births: %v, %v", accepted, err)
+	}
+	if k.SnapshotHead().Version != 8 || len(k.Events()) != 1 {
+		t.Fatal("loser changed version or log")
+	}
+	if _, err := Replay(registry, 7, seeds, k.Events()); err != nil {
+		t.Fatal(err)
+	}
+	// Invalidity aborts the whole batch before any structural staging: the
+	// forged plan collides with the parent's existing row.
+	_, auth, _ = k.Snapshot()
+	good := birthProposal(t, energy, fatigue, "c", 10002)
+	good.Time = 20
+	valid := birthProposal(t, energy, fatigue, "d", 10003)
+	valid.Time = 20
+	goodPlan, err := k.Plan(good, auth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	badPlan, err := k.Plan(valid, auth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	badPlan.proposal.Allocations[0].Entity = 1
+	if _, err := k.CommitBatch([]Plan{goodPlan, badPlan}); !errors.Is(err, component.ErrEntityExists) {
+		t.Fatalf("invalid batch accepted: %v", err)
+	}
+	if len(k.Events()) != 1 || k.SnapshotHead().Version != 8 {
+		t.Fatal("invalid batch mutated state")
+	}
+}
+
+func TestReplayRejectsEntityCreateTampering(t *testing.T) {
+	k, registry, seeds, energy, fatigue := birthFixture(t)
+	_, auth, _ := k.Snapshot()
+	birth := birthProposal(t, energy, fatigue, "birth", 10001)
+	birth.Time = 19
+	plan, err := k.Plan(birth, auth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := k.CommitBatch([]Plan{plan}); err != nil {
+		t.Fatal(err)
+	}
+	_, auth, _ = k.Snapshot()
+	later := proposal(energy, "later", 1, scalar(t, .4))
+	later.Time = 20
+	plan, err = k.Plan(later, auth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := k.CommitBatch([]Plan{plan}); err != nil {
+		t.Fatal(err)
+	}
+	rehash := func(es []Event) {
+		for i := range es {
+			es[i].Hash, _ = hashEvent(es[i])
+			if i+1 < len(es) {
+				es[i+1].PreviousHash = es[i].Hash
+			}
+		}
+	}
+	// Rehashed semantic breaks must still fail: a kind flip turns newborn rows
+	// into patches on missing rows, dropping deltas loses the cost patch, and
+	// reordered deltas cannot reproduce the canonical event body. A rehashed
+	// value change is a different but internally consistent history, so it is
+	// rejected only by its broken hash, like any recorded event.
+	cases := []struct {
+		name   string
+		rehash bool
+		mutate func(es []Event)
+	}{
+		{"value", false, func(es []Event) { es[0].Deltas[0].After = scalar(t, .9) }},
+		{"kind", true, func(es []Event) { es[0].Kind = KindComponentPatch }},
+		{"drop", true, func(es []Event) { es[0].Deltas = es[0].Deltas[:2] }},
+		{"reorder", true, func(es []Event) { es[0].Deltas[0], es[0].Deltas[2] = es[0].Deltas[2], es[0].Deltas[0] }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			es := k.Events()
+			tc.mutate(es)
+			if tc.rehash {
+				rehash(es)
+			}
+			if _, err := Replay(registry, 7, seeds, es); !errors.Is(err, ErrEventIntegrity) {
+				t.Fatalf("accepted tampered entity-create event: %v", err)
+			}
+		})
+	}
+}

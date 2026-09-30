@@ -281,3 +281,152 @@ func TestHistoryRejectsRehashedInvalidEventsAndSnapshotMismatch(t *testing.T) {
 		t.Fatalf("accepted rule mismatch: %v", err)
 	}
 }
+
+func TestHistoryEntityCreateVersionedFormats(t *testing.T) {
+	// v1 regression: a patch-only history must keep exporting byte-identical
+	// format-1 bytes, and v1/v2/v3-world restores stay green.
+	patchKernel, registry, _ := historyFixture(t, component.BuiltinStorage)
+	_, auth, _ := patchKernel.Snapshot()
+	plan, err := patchKernel.Plan(proposal(fixtures()[0], "one", 1, scalar(t, .5)), auth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := patchKernel.CommitBatch([]Plan{plan}); err != nil {
+		t.Fatal(err)
+	}
+	wireV1, headV1, err := patchKernel.ExportHistory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if format := binary.BigEndian.Uint32(wireV1[4:8]); format != HistoryFormatV1 {
+		t.Fatalf("patch-only history exported format %d", format)
+	}
+	restoredV1, gotV1, err := RestoreHistory(registry, wireV1)
+	if err != nil || gotV1 != headV1 {
+		t.Fatalf("v1 restore: %+v %v", gotV1, err)
+	}
+	againV1, _, err := restoredV1.ExportHistory()
+	if err != nil || !bytes.Equal(againV1, wireV1) {
+		t.Fatalf("v1 bytes changed: %v", err)
+	}
+	// A format-2 header without any entity-create event is not a canonical
+	// encoder output and must be rejected.
+	forged := bytes.Clone(wireV1)
+	binary.BigEndian.PutUint32(forged[4:8], HistoryFormatV2)
+	if _, _, err := RestoreHistory(registry, forged); !errors.Is(err, ErrEventIntegrity) {
+		t.Fatalf("accepted v2 header without entity-create: %v", err)
+	}
+
+	// A birth switches the export to format 2; restores reproduce the events
+	// and the newborn rows exactly.
+	k, _, _ := historyFixture(t, component.BuiltinStorage)
+	_, auth, _ = k.Snapshot()
+	birth := proposal(fixtures()[0], "birth", 1, scalar(t, .5))
+	birth.Allocations = []component.ComponentSeed{{
+		Entity: 10001, Component: fixtures()[0].descriptor.TypeID,
+		Fields: []component.FieldSeed{{Field: fixtures()[0].field, Value: scalar(t, .125)}},
+	}}
+	birthPlan, err := k.Plan(birth, auth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted, err := k.CommitBatch([]Plan{birthPlan})
+	if err != nil || len(accepted) != 1 || accepted[0].Kind != KindEntityCreate {
+		t.Fatalf("birth commit: %+v %v", accepted, err)
+	}
+	wireV2, headV2, err := k.ExportHistory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if format := binary.BigEndian.Uint32(wireV2[4:8]); format != HistoryFormatV2 {
+		t.Fatalf("entity-create history exported format %d", format)
+	}
+	restoredV2, gotV2, err := RestoreHistory(registry, wireV2)
+	if err != nil || gotV2 != headV2 {
+		t.Fatalf("v2 restore: %+v %v", gotV2, err)
+	}
+	if !reflect.DeepEqual(k.Events(), restoredV2.Events()) {
+		t.Fatal("restored events differ")
+	}
+	if !read(t, restoredV2, fixtures()[0], 10001).Equal(scalar(t, .125)) {
+		t.Fatal("restored kernel lost the newborn row")
+	}
+	againV2, _, err := restoredV2.ExportHistory()
+	if err != nil || !bytes.Equal(againV2, wireV2) {
+		t.Fatalf("v2 bytes changed: %v", err)
+	}
+	// An entity-create event is invalid in a format-1 history.
+	forgedV2 := bytes.Clone(wireV2)
+	binary.BigEndian.PutUint32(forgedV2[4:8], HistoryFormatV1)
+	if _, _, err := RestoreHistory(registry, forgedV2); !errors.Is(err, ErrEventIntegrity) {
+		t.Fatalf("accepted entity-create in v1 history: %v", err)
+	}
+	// A restored kernel continues committing births and stays portable.
+	_, auth, _ = restoredV2.Snapshot()
+	next := proposal(fixtures()[0], "next", 10001, scalar(t, .3))
+	next.Time = 21
+	nextPlan, err := restoredV2.Plan(next, auth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := restoredV2.CommitBatch([]Plan{nextPlan}); err != nil {
+		t.Fatal(err)
+	}
+	continuedWire, continuedHead, err := restoredV2.ExportHistory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, gotContinued, err := RestoreHistory(registry, continuedWire); err != nil || gotContinued != continuedHead {
+		t.Fatalf("continued restore: %+v %v", gotContinued, err)
+	}
+}
+
+func TestHistoryRejectsEntityCreateSnapshotTampering(t *testing.T) {
+	registry := singleHistoryRegistry(t)
+	k, _, _ := historyFixture(t, component.BuiltinStorage)
+	_, auth, _ := k.Snapshot()
+	birth := proposal(fixtures()[0], "birth", 1, scalar(t, .5))
+	birth.Allocations = []component.ComponentSeed{{
+		Entity: 10001, Component: fixtures()[0].descriptor.TypeID,
+		Fields: []component.FieldSeed{{Field: fixtures()[0].field, Value: scalar(t, .125)}},
+	}}
+	plan, err := k.Plan(birth, auth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := k.CommitBatch([]Plan{plan}); err != nil {
+		t.Fatal(err)
+	}
+	wire, _, err := k.ExportHistory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Rewrite the newborn's seeded value inside the event body and rehash the
+	// event chain and header tip. Replay still recomputes different deltas,
+	// so the recorded final snapshot can no longer match.
+	body := historyFrameOffset(wire) + 68
+	tampered := bytes.Clone(wire)
+	tampered[body+112] ^= 0x01
+	frame := historyFrameOffset(tampered)
+	h := sha256.New()
+	h.Write(tampered[frame+4 : frame+36])
+	h.Write(tampered[body:])
+	copy(tampered[frame+36:frame+68], h.Sum(nil))
+	copy(tampered[116:148], tampered[frame+36:frame+68])
+	if _, _, err := RestoreHistory(registry, tampered); !errors.Is(err, ErrEventIntegrity) {
+		t.Fatalf("accepted rehashed entity-create tamper: %v", err)
+	}
+}
+
+func singleHistoryRegistry(t *testing.T) component.Registry {
+	t.Helper()
+	builder := component.NewRegistryBuilder()
+	if err := builder.Register(component.EnergyDescriptor()); err != nil {
+		t.Fatal(err)
+	}
+	registry, err := builder.Freeze()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return registry
+}

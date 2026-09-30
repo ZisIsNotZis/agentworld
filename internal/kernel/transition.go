@@ -21,6 +21,11 @@ type Proposal struct {
 	Rule        sim.RuleID
 	RuleVersion uint32
 	Patches     []component.Patch
+	// Allocations lists complete newborn component rows committed with the
+	// patches in one version bump. A non-empty list makes the committed event
+	// an entity-create; every allocated ID must be new across the snapshot and
+	// every seed must cover its component's full schema.
+	Allocations []component.ComponentSeed
 }
 
 type Plan struct {
@@ -105,6 +110,14 @@ func (k *Kernel) Events() []Event {
 }
 func cloneProposal(p Proposal) Proposal {
 	p.Patches = append([]component.Patch(nil), p.Patches...)
+	if len(p.Allocations) > 0 {
+		allocations := make([]component.ComponentSeed, len(p.Allocations))
+		for i, seed := range p.Allocations {
+			seed.Fields = append([]component.FieldSeed(nil), seed.Fields...)
+			allocations[i] = seed
+		}
+		p.Allocations = allocations
+	}
 	return p
 }
 func (k *Kernel) check(p Proposal, reader component.Reader, auth component.Authority, version sim.WorldVersion) error {
@@ -128,7 +141,7 @@ func (k *Kernel) check(p Proposal, reader component.Reader, auth component.Autho
 			return ErrInvalidProposal
 		}
 	}
-	_, _, _, _, err := component.Stage(reader, auth, version, p.Rule, p.RuleVersion, p.Patches)
+	_, _, _, _, err := component.Stage(reader, auth, version, p.Rule, p.RuleVersion, p.Patches, p.Allocations)
 	return err
 }
 
@@ -199,6 +212,7 @@ func (k *Kernel) commitBatch(plans []Plan) ([]Event, error) {
 		}
 	}
 	seen := make(map[fieldKey]struct{})
+	created := make(map[sim.EntityID]struct{})
 	winners := make([]Plan, 0, len(ordered))
 	for _, plan := range ordered {
 		conflict := false
@@ -208,12 +222,25 @@ func (k *Kernel) commitBatch(plans []Plan) ([]Event, error) {
 				break
 			}
 		}
+		if !conflict {
+			// An entity ID allocated by an earlier winner is taken; the whole
+			// colliding birth stages nothing structurally.
+			for _, seed := range plan.proposal.Allocations {
+				if _, ok := created[seed.Entity]; ok {
+					conflict = true
+					break
+				}
+			}
+		}
 		if conflict {
 			continue
 		}
 		winners = append(winners, plan)
 		for _, p := range plan.proposal.Patches {
 			seen[fieldKey{p.Entity, p.Component, p.Field}] = struct{}{}
+		}
+		for _, seed := range plan.proposal.Allocations {
+			created[seed.Entity] = struct{}{}
 		}
 	}
 	if uint64(len(k.events)) > math.MaxUint64-uint64(len(winners)) || uint64(k.version) > math.MaxUint64-uint64(len(winners)) {
@@ -226,11 +253,15 @@ func (k *Kernel) commitBatch(plans []Plan) ([]Event, error) {
 		previous = k.events[len(k.events)-1].Hash
 	}
 	for _, plan := range winners {
-		next, nextAuthority, deltas, metrics, err := component.Stage(reader, authority, version, plan.proposal.Rule, plan.proposal.RuleVersion, plan.proposal.Patches)
+		kind := KindComponentPatch
+		if len(plan.proposal.Allocations) > 0 {
+			kind = KindEntityCreate
+		}
+		next, nextAuthority, deltas, metrics, err := component.Stage(reader, authority, version, plan.proposal.Rule, plan.proposal.RuleVersion, plan.proposal.Patches, plan.proposal.Allocations)
 		if err != nil {
 			return nil, err
 		}
-		event := Event{ID: sim.EventID(uint64(len(k.events) + len(events) + 1)), Time: plan.proposal.Time, BeforeVersion: version, AfterVersion: version + 1, Kind: "component-patch", Key: plan.proposal.Key, Cause: plan.proposal.Cause, Rule: plan.proposal.Rule, RuleVersion: plan.proposal.RuleVersion, Deltas: deltas, Metrics: metrics, PreviousHash: previous}
+		event := Event{ID: sim.EventID(uint64(len(k.events) + len(events) + 1)), Time: plan.proposal.Time, BeforeVersion: version, AfterVersion: version + 1, Kind: kind, Key: plan.proposal.Key, Cause: plan.proposal.Cause, Rule: plan.proposal.Rule, RuleVersion: plan.proposal.RuleVersion, Deltas: deltas, Metrics: metrics, PreviousHash: previous}
 		event.Hash, err = hashEvent(event)
 		if err != nil {
 			return nil, err
