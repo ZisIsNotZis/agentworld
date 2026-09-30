@@ -23,6 +23,12 @@ func (c Cause) valid() bool { return (c.World && c.Actor == 0) || (!c.World && c
 // Event kinds. A component-patch event replaces values in rows that already
 // exist; an entity-create event additionally allocates complete newborn rows,
 // carried as absent-before deltas ahead of the transition's patches.
+//
+// Projections are per-entity-scoped by construction: newborn rows declare no
+// projection metrics, so an entity-create contributes no deltas to any other
+// entity's projections. A future cross-entity/aggregate projection would
+// silently exclude newborns from those deltas and must not be registered
+// without extending the allocation path first.
 const (
 	KindComponentPatch = "component-patch"
 	KindEntityCreate   = "entity-create"

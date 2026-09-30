@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"reflect"
 	"testing"
@@ -429,4 +430,39 @@ func singleHistoryRegistry(t *testing.T) component.Registry {
 		t.Fatal(err)
 	}
 	return registry
+}
+
+// Review P2: the v1-format byte layout is pinned by a digest over the export
+// of a fixed deterministic patch-only history, so any container-layout change
+// (even a test-green one) fails here instead of silently breaking recorded
+// pre-allocation artifacts.
+func TestHistoryV1PatchOnlyEncodingDigestPinned(t *testing.T) {
+	k, _, _ := historyFixture(t, component.DynamicStorage)
+	_, auth, _ := k.Snapshot()
+	plans := make([]Plan, 0, 2)
+	for _, p := range []Proposal{proposal(fixtures()[0], "a", 1, scalar(t, .2)), proposal(fixtures()[0], "b", 2, scalar(t, .3))} {
+		plan, err := k.Plan(p, auth)
+		if err != nil {
+			t.Fatal(err)
+		}
+		plans = append(plans, plan)
+	}
+	if _, err := k.CommitBatch(plans); err != nil {
+		t.Fatal(err)
+	}
+	encoded, _, err := k.ExportHistory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(encoded) == 0 || bytes.Contains(encoded, []byte(KindEntityCreate)) {
+		t.Fatal("fixture must be a patch-only v1 history")
+	}
+	digest := sha256.Sum256(encoded)
+	// Recorded 2026-09-29 at feature/14-reproduction-genetics f9a1d48; any
+	// byte-level layout change to the v1 history container must update this
+	// pinned value deliberately, never as a side effect.
+	const pinned = "07bc433a8989ec9117155030137caf587f2d27bc58ae6f0e807ecfd6b3a59c31"
+	if got := hex.EncodeToString(digest[:]); got != pinned {
+		t.Fatalf("v1 history layout drift: got %s want %s", got, pinned)
+	}
 }
