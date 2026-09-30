@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -232,6 +233,9 @@ func TestReproductionFounderVariantBranchAndJournalIdentity(t *testing.T) {
 	refusedPath := filepath.Join(dir, "never.bundle")
 	if _, err := BranchReproductionCheckpoint(rootPath, ReproductionOptions{Yield: 8, Seed: 0, Workers: 1, Births: false}, true, refusedPath); !errors.Is(err, ErrReproductionCheckpoint) {
 		t.Fatalf("variant root branched under the neutral declaration: err=%v", err)
+	}
+	if _, err := os.Stat(refusedPath); !os.IsNotExist(err) {
+		t.Fatalf("refused variant branch published a file: %v", err)
 	}
 	if _, _, err := RestoreReproductionCheckpoint(childPath, ReproductionOptions{Yield: 8, Seed: 0, Workers: 1, Births: true}); !errors.Is(err, ErrReproductionCheckpoint) {
 		t.Fatalf("variant child restored under the neutral declaration: err=%v", err)

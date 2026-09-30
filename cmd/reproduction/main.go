@@ -921,10 +921,6 @@ type fieldCheck struct {
 	V3   int64
 }
 
-// fieldCheck is one named v3-visible field comparison.
-
-// fieldCheck is one named v3-visible field comparison.
-
 // compareV3Reference loads a recorded ticket-13 capacity report and compares
 // the v4 births-disabled child against it: alive-by-hour through the common
 // horizon, and — when the horizons match — the complete per-actor and
