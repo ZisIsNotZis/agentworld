@@ -1,5 +1,5 @@
 # Active work
 
-- Ticket 13 (productive capacity/surplus) merged to master at `d9f8861`: v3 capacity mechanism, "productive forces emerged" supported per frozen criteria (q-graded, non-universal). Evidence: 41 runs in `.tmp/capacity-*.json` (gitignored; reproducible via `cmd/capacity`).
-- Next per operator sequencing (docs/P0-IMPLEMENTATION-PLAN.md): reproduction/genetics once surplus exists (gated by the frozen surplus indicator), then affect/motive richness, then reciprocity/credit. Ticket 14 not yet opened.
-- Operator decision points recorded in `.scratch/13-productive-capacity/spec.md` (founder-A removed pre-experiment; kernel ceilings raised as infrastructure, not gates).
+- Ticket 14 (reproduction and genetics, v4) merged to master at `77c5729`. Both frozen falsification verdicts SUPPORTED: births create endogenous population dynamics (8/8 q∈{5,8} enabled cells), and heritable variation affects population outcomes (4/4 q5 variant cells: locus-m allele-7 0.50→1.00 by h72, allele-5 extinct while 7 persists). Honest structural result: every enabled population grows (peak 18–21) then collapses to 0 by h168 because the frozen 16-birth cap plus founder aging end generational turnover — no self-sustenance claim.
+- Evidence: 31 JSONs under ignored `.tmp/reproduction-*.json`; reproducible via `go run ./cmd/reproduction`.
+- Next per the operator's recorded sequencing (docs/P0-IMPLEMENTATION-PLAN.md): exchange/trade, then money, then richer social concepts — each gated on its predecessor's landed, quantified preconditions. Ticket 15 not yet opened. The obvious first question for that design is the one v4 left open: inheritance (dead granaries stay frozen) and whether the birth cap should be replaced by carrying-capacity feedback.
