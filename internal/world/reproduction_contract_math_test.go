@@ -647,25 +647,27 @@ func TestReproductionBirthRequestAndReplyNegativeFixtures(t *testing.T) {
 		t.Fatalf("proposer death mid-phase: %+v %v", silent, err)
 	}
 	// Forged claims accepted by the consenter's formula are refused by the
-	// runner gate on truth: claims 9/9 (within bounds at filing) with
-	// truth far below the gate.
+	// runner gate on truth. Reported 2/3 with truth below the gate must give
+	// a typed GateThresholds refusal, never an accept.
 	claims := filed
 	claims.Request.ReportedCapital, claims.Request.ReportedGranary = 2, 3
 	poor := proposer
 	poor.Granary = ReproductionGranaryState{Stock: 0, YieldTotal: 0, LastStoredMealHour: ReproductionNeverHour}
 	poor.Worksite = ReproductionWorksiteState{LastBuildHour: ReproductionNeverHour}
-	refused, err := ReproductionBirthReply(hour, 0, true, drawsOf(7), 1, 2, claims, consenter)
-	if err != nil {
-		t.Fatal(err)
+	poorClaims := claims
+	poorClaims.Granary, poorClaims.Worksite = poor.Granary, poor.Worksite
+	refused, err := ReproductionBirthReply(hour, 0, true, drawsOf(7), 1, 2, poorClaims, consenter)
+	if err != nil || refused.Decision != ReproductionReplyRefuse || refused.Reason != ReproductionRefusalGateThresholds {
+		t.Fatalf("forged-claim truth refusal: %+v %v", refused, err)
 	}
-	if _, err := ReproductionBirthReply(hour, 0, true, drawsOf(7), 1, 2, func() ReproductionActorState {
-		c := claims
-		c.Granary, c.Worksite = poor.Granary, poor.Worksite
-		return c
-	}(), consenter); err != nil {
-		t.Fatalf("claim refusal reply: %v", err)
+	// Reported claims below the consent formula refuse with the claims reason
+	// even when the proposer's truth would qualify.
+	underReported := filed
+	underReported.Request.ReportedCapital, underReported.Request.ReportedGranary = 1, 1
+	claimsRefused, err := ReproductionBirthReply(hour, 0, true, drawsOf(7), 1, 2, underReported, consenter)
+	if err != nil || claimsRefused.Decision != ReproductionReplyRefuse || claimsRefused.Reason != ReproductionRefusalConsentClaims {
+		t.Fatalf("reported-claim refusal: %+v %v", claimsRefused, err)
 	}
-	_ = refused
 	// Consenter's own state below the consent formula.
 	poorConsenter := consenter
 	poorConsenter.Granary.Stock = 2
@@ -789,5 +791,36 @@ func TestReproductionFounderNeutrality(t *testing.T) {
 	idle := ReproductionIdleRequestState()
 	if idle != (ReproductionBirthRequestState{Hour: -1, LastRequestHour: -1, LastReplyHour: -1}) {
 		t.Fatalf("idle row: %+v", idle)
+	}
+}
+
+// Review P1: the batched basal path must equal repeated hourly invocation, so
+// the frozen hourly lattice and v3 byte-identity hold for any elapsedHours.
+func TestReproductionBasalBatchedEqualsHourly(t *testing.T) {
+	for _, m := range []int64{5, 6, 7} {
+		seed, err := ReproductionFounderState(1, 120)
+		if err != nil {
+			t.Fatal(err)
+		}
+		seed.Genome.LocusM = m
+		batched := seed
+		var wantSpent, wantUnmet int64
+		for h := 1; h <= 5; h++ {
+			next, cost, _, err := ReproductionBasal(h, 1, batched, 1)
+			if err != nil {
+				t.Fatalf("m=%d hourly h=%d: %v", m, h, err)
+			}
+			batched = next
+			wantSpent += cost.EnergySpent
+			wantUnmet += cost.UnmetEnergy
+		}
+		single, cost, _, err := ReproductionBasal(1, 1, seed, 5)
+		if err != nil {
+			t.Fatalf("m=%d batched: %v", m, err)
+		}
+		if single.Body.Energy != batched.Body.Energy || single.Body.BasalDebt != batched.Body.BasalDebt ||
+			single.Body.Hunger != batched.Body.Hunger || cost.EnergySpent != wantSpent || cost.UnmetEnergy != wantUnmet {
+			t.Fatalf("m=%d batched %+v/%+v != hourly %+v/%d,%d", m, single.Body, cost, batched.Body, wantSpent, wantUnmet)
+		}
 	}
 }

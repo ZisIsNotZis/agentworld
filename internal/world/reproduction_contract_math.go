@@ -331,16 +331,21 @@ func ReproductionBasal(hour int, actorID sim.EntityID, a ReproductionActorState,
 		return ReproductionActorState{}, ReproductionBasalCost{}, false, ErrReproductionContract
 	}
 	m := a.Genome.LocusM
-	a.Body.BasalDebt += ReproductionGenomeDenominator
-	if a.Body.BasalDebt > ReproductionBasalDebtMax {
-		return ReproductionActorState{}, ReproductionBasalCost{}, false, ErrReproductionContract
-	}
 	var result ReproductionBasalCost
-	for a.Body.BasalDebt >= m && a.Body.Energy >= 1 {
-		a.Body.Energy--
-		a.Body.BasalSpent++
-		a.Body.BasalDebt -= m
-		result.EnergySpent++
+	// Accrual and drain happen once per elapsed hour so the batched path
+	// reproduces the frozen hourly lattice exactly (v3 byte-identity holds at
+	// neutral 6 for any elapsedHours, not only 1).
+	for h := int64(0); h < elapsedHours; h++ {
+		a.Body.BasalDebt += ReproductionGenomeDenominator
+		if a.Body.BasalDebt > ReproductionBasalDebtMax {
+			return ReproductionActorState{}, ReproductionBasalCost{}, false, ErrReproductionContract
+		}
+		for a.Body.BasalDebt >= m && a.Body.Energy >= 1 {
+			a.Body.Energy--
+			a.Body.BasalSpent++
+			a.Body.BasalDebt -= m
+			result.EnergySpent++
+		}
 	}
 	result.UnmetEnergy = elapsedHours - result.EnergySpent
 	if elapsedHours >= ReproductionHungerCapacity-a.Body.Hunger {

@@ -418,7 +418,9 @@ func ReproductionRegistry() (component.Registry, error) {
 }
 
 // reproductionPatchFieldAllowed is the field-level half of the G5 ownership
-// guard: the exact (rule, component, field) triples any proposal may patch.
+// guard: the (rule, component, field) triples any proposal may patch for
+// actor-owned components. Patch and slot ledgers are not actor-owned and are
+// checked at rule+entity level instead (v3 guard parity).
 // Genome immutability is encoded here: only rules 404/413 may write
 // died-hour and only rule 410 may write birth-granary-paid; loci, hours,
 // and parent refs are never patchable after creation (parent refs are set
