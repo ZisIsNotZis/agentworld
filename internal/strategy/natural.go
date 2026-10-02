@@ -90,11 +90,11 @@ const (
 	// Frozen consent thresholds and derived-kinship limits, verbatim v4
 	// (world.NaturalConsentMinGranary/Capital/Energy, NaturalKinProhibited
 	// Depth, NaturalKinWalkLimit).
-	naturalConsentMinGranary int64 = 3
-	naturalConsentMinCapital int64 = 2
-	naturalConsentMinEnergy  int64 = 3
-	naturalKinProhibitedDepth      = 2
-	naturalKinWalkLimit            = 10
+	naturalConsentMinGranary  int64 = 3
+	naturalConsentMinCapital  int64 = 2
+	naturalConsentMinEnergy   int64 = 3
+	naturalKinProhibitedDepth       = 2
+	naturalKinWalkLimit             = 10
 
 	// The ten-minute rest of a denied gatherer with an empty granary, the v1
 	// rest window; it stays inside the frozen hour's remaining phases.
@@ -709,10 +709,10 @@ const (
 type NaturalReplyReason uint8
 
 const (
-	NaturalReplyReasonNone         NaturalReplyReason = iota
-	NaturalReplyReasonConsentOwn                      // the consenter's own state fails the consent formula
-	NaturalReplyReasonConsentClaims                   // the reported claims fail the consent formula
-	NaturalReplyReasonKin                             // kin walk distance ≤ 2
+	NaturalReplyReasonNone          NaturalReplyReason = iota
+	NaturalReplyReasonConsentOwn                       // the consenter's own state fails the consent formula
+	NaturalReplyReasonConsentClaims                    // the reported claims fail the consent formula
+	NaturalReplyReasonKin                              // kin walk distance ≤ 2
 )
 
 // NaturalReplyChoice is one reply intention; the runner places it at the

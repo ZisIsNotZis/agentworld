@@ -124,6 +124,11 @@ const (
 	NaturalPatchIDBase = 1001
 	NaturalSlotIDBase  = 2001
 
+	// NaturalMaxPatchesFixedIDSpace is derived, not declared: the founder block
+	// 1..8P must stay strictly below the patch block starting at 1001, so the
+	// fixed-block ID space is disjoint for every valid P.
+	NaturalMaxPatchesFixedIDSpace = (NaturalPatchIDBase - 1) / NaturalSlotsPerPatch
+
 	// The frozen v5 type-ID block. The eight components below occupy
 	// 0x80000050-0x80000057 contiguously; 0x80000058-0x8000005A stay inside
 	// the frozen block and are never used by any other world version.
@@ -240,10 +245,17 @@ const (
 
 // Entity-ID space, fixed forever: actors 1..8P (founders) and the
 // allocator-issued newborn block strictly above the highest fixed entity ID;
-// patches 1001..1000+P; slots 2001..2000+8P. The blocks are disjoint by
-// construction, so a newborn ID can never collide with a fixed entity and
-// typed failure occurs only at MaxUint64 (P15).
-func NaturalPatchCountValid(patches int) bool { return patches >= 1 }
+// patches 1001..1000+P; slots 2001..2000+8P. The blocks are disjoint for
+// every valid P — the binding constraint is that the founder block must stay
+// below the patch block, i.e. 8P < NaturalPatchIDBase — so a newborn ID can
+// never collide with a fixed entity and typed failure occurs only at
+// MaxUint64 (P15). P is a declared fixture parameter, so this is an explicit,
+// typed precondition rather than a silent overlap; deriving the block bases
+// from P (removing the precondition entirely) is the recorded follow-up if a
+// fixture larger than NaturalMaxPatchesFixedIDSpace is ever needed.
+func NaturalPatchCountValid(patches int) bool {
+	return patches >= 1 && patches <= NaturalMaxPatchesFixedIDSpace
+}
 
 func NaturalFounderCount(patches int) (int, error) {
 	if !NaturalPatchCountValid(patches) {

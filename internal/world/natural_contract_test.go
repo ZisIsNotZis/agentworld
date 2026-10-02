@@ -1246,3 +1246,43 @@ func TestNaturalKernelAdmissionBuildClaimBirthEntityCreateAndNegativeFixtures(t 
 		t.Fatalf("forged tenure write survived the guard: %v", err)
 	}
 }
+
+// The fixed-block ID space is disjoint for every valid P; larger P is refused
+// with a typed error instead of silently overlapping blocks (P15: an explicit
+// fixture precondition, never a hidden ID-range bound).
+func TestNaturalPatchCountPreconditionKeepsIDBlocksDisjoint(t *testing.T) {
+	if NaturalMaxPatchesFixedIDSpace != 125 {
+		t.Fatalf("derived max patches changed: %d", NaturalMaxPatchesFixedIDSpace)
+	}
+	if !NaturalPatchCountValid(NaturalMaxPatchesFixedIDSpace) || NaturalPatchCountValid(NaturalMaxPatchesFixedIDSpace+1) {
+		t.Fatal("patch-count precondition is not exactly the derived bound")
+	}
+	for _, patches := range []int{1, 2, 32, 125} {
+		founders, err := NaturalFounderCount(patches)
+		if err != nil {
+			t.Fatalf("P=%d: %v", patches, err)
+		}
+		lastPatch, err := NaturalPatchID(patches, patches-1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if sim.EntityID(founders) >= lastPatch {
+			t.Fatalf("P=%d: founder block reaches the patch block (%d >= %d)", patches, founders, lastPatch)
+		}
+		highest, err := NaturalHighestFixedEntityID(patches)
+		if err != nil {
+			t.Fatal(err)
+		}
+		firstNewborn := highest + 1
+		lastSlot, err := NaturalSlotID(patches, patches-1, NaturalSlotsPerPatch-1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if firstNewborn <= lastSlot {
+			t.Fatalf("P=%d: newborn block overlaps slots (%d <= %d)", patches, firstNewborn, lastSlot)
+		}
+	}
+	if _, err := NaturalFounderCount(NaturalMaxPatchesFixedIDSpace + 1); !errors.Is(err, ErrNaturalContract) {
+		t.Fatal("P above the derived bound admitted")
+	}
+}
