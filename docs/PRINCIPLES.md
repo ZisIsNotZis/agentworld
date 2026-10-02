@@ -81,3 +81,15 @@ Use invariants, adversarial scenarios, ablations, sensitivity analysis, independ
 ## P14 — Simulation is not real-world proof
 
 Policy branches generate model-conditional evidence. Reports state assumptions, sensitivities, failure modes, and missing real-world data. They do not convert simulated success into a claim of real-world effectiveness.
+
+## P15 — Limits come from nature or from our compute, never from arbitrary design caps
+
+Operator decision, 2026-09-29. Modeled populations, stocks, and production must be bounded by modeled natural constraints: accessible resources, land and space, energy and material conversion, upkeep, regeneration, mortality, and agents' own choices. A global design cap such as "at most N births", a legible ID range that silently caps a population, or a hard ceiling on an institution is prohibited as a *modeling* device.
+
+The only legitimate hard limits are the simulator's own finite compute and storage. Those limits must be:
+
+- instrumented and reported as the binding constraint (which ceiling, at what value, at which hour);
+- fail-loud, never silent truncation of a trajectory;
+- resolved case by case, with the outcome reported verbatim: hitting a compute ceiling means either the run outgrew the harness — a successful result to be recorded and scaled — or the design is at fault — a defect to be diagnosed and fixed. It is never grounds for quietly lowering the mechanism.
+
+A frozen experimental gate may still bound an *experiment* (a horizon, a fixture size, a sampling schedule), and a versioned fixture may still declare its own bounds for reproducibility; but such bounds are experiment parameters, and no mechanism may depend on them to appear viable. When a bound in a fixture is doing modeling work, it is a P15 violation and must be replaced by a modeled constraint.
