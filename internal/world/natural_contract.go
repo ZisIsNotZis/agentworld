@@ -6,6 +6,7 @@ import (
 	"agentworld/internal/sim"
 	"errors"
 	"fmt"
+	"math"
 )
 
 // Natural v5 is the frozen natural-limits world (ticket 15). Its component,
@@ -1001,7 +1002,7 @@ func naturalNewbornAllocations(patches int, id, home sim.EntityID, n NaturalActo
 // The stream itself is runner-owned; this contract only pins the position
 // arithmetic. The ordinal is unbounded (no cap; P15).
 func NaturalBirthDrawPosition(births int64) (uint64, error) {
-	if births < 0 {
+	if births < 0 || births > math.MaxInt64/NaturalDrawsPerBirth {
 		return 0, ErrNaturalContract
 	}
 	return uint64(NaturalDrawsPerBirth * births), nil

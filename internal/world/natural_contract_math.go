@@ -434,6 +434,12 @@ func NaturalSpoilage(patches int, ownerID sim.EntityID, a NaturalActorState) (Na
 		return NaturalActorState{}, NaturalSpoilageResult{}, ErrNaturalContract
 	}
 	g := a.Granary
+	// An at-rest debt carry is always < S between pulses (the loop below
+	// exits only with debt < S), so a carry at or above the period is forged
+	// even when no unit rots this pulse.
+	if g.SpoilDebt >= NaturalSpoilagePeriod {
+		return NaturalActorState{}, NaturalSpoilageResult{}, ErrNaturalContract
+	}
 	g.SpoilDebt += g.Stock
 	if g.SpoilDebt > NaturalSpoilDebtMax {
 		return NaturalActorState{}, NaturalSpoilageResult{}, ErrNaturalContract

@@ -3,6 +3,7 @@ package world
 import (
 	"agentworld/internal/sim"
 	"errors"
+	"math"
 	"reflect"
 	"testing"
 )
@@ -750,25 +751,32 @@ func TestNaturalLandIdentityDeadOwnerWindow(t *testing.T) {
 	if aliveCapital != 0 || aliveTenured != 2 || aliveCapital == aliveTenured {
 		t.Fatalf("documented alive-only gap: capital %d tenured %d", aliveCapital, aliveTenured)
 	}
-	// Tenured slots without their owner in the roster: rejected.
-	_, _, founders = buildWorld(1, 2)
-	rogue := founders[0]
-	rogue.Worksite.Capital = 1 // ledger says one point, two slots tenured
-	if _, err := NaturalCheckConservation(patches, patchStates, slotStates, replaceFounder(founders, 0, rogue), nil, 2016); !errors.Is(err, ErrNaturalContract) {
+	// Three documented tenure violations, each made ledger-coherent so that
+	// the guard under test is the one that fires (never naturalStock or the
+	// intake identity).
+	//
+	// (1) capital/tenure mismatch: per-actor G2b and the patch intake
+	// identity both hold, so only the land identity can reject.
+	patchStatesA, slotsA, foundersA := buildWorld(1, 2)
+	rogue := foundersA[0]
+	rogue.Worksite = NaturalWorksiteState{Capital: 1, PointsCreated: 2, PointsDecayed: 1, InvestedUnits: 4}
+	if _, err := NaturalCheckConservation(patches, patchStatesA, slotsA, replaceFounder(foundersA, 0, rogue), nil, 2016); !errors.Is(err, ErrNaturalContract) {
 		t.Fatal("capital/tenure mismatch admitted")
 	}
-	// A tenured slot whose owner lives on another patch: rejected.
-	_, slotStates, founders = buildWorld(1, 1)
-	misplaced := founders[1]
-	misplaced.Bag = NaturalBagState{Source: 1002}
-	slotStates[0][0].Owner = 2
-	if _, err := NaturalCheckConservation(patches, patchStates, slotStates, replaceFounder(founders, 1, misplaced), nil, 2016); !errors.Is(err, ErrNaturalContract) {
+	// (2) a tenured slot owned by an existing actor whose home patch is the
+	// other patch: only the owner-home check can reject.
+	patchStatesB, slotsB, foundersB := buildWorld(1, 1)
+	patchStatesB[0].Produced = 2 // one tenured slot's gather history
+	slotsB[0][0].Owner = 9
+	foundersB[8].Worksite = NaturalWorksiteState{Capital: 1, PointsCreated: 1, InvestedUnits: 2}
+	if _, err := NaturalCheckConservation(patches, patchStatesB, slotsB, foundersB, nil, 2016); !errors.Is(err, ErrNaturalContract) {
 		t.Fatal("cross-patch tenure admitted")
 	}
-	// A tenured slot owned by an unknown actor: rejected.
-	_, slotStates, founders = buildWorld(0, 1)
-	slotStates[0][0].Owner = 2017
-	if _, err := NaturalCheckConservation(patches, patchStates, slotStates, founders, nil, 2016); !errors.Is(err, ErrNaturalContract) {
+	// (3) a tenured slot whose owner is not in the roster at all.
+	patchStatesC, slotsC, foundersC := buildWorld(0, 1)
+	patchStatesC[0].Produced = 2
+	slotsC[0][0].Owner = 2017
+	if _, err := NaturalCheckConservation(patches, patchStatesC, slotsC, foundersC, nil, 2016); !errors.Is(err, ErrNaturalContract) {
 		t.Fatal("unregistered tenure owner admitted")
 	}
 }
@@ -1160,4 +1168,35 @@ func naturalForgedNewborn(t *testing.T, patches int, id, parentA, parentB sim.En
 		Request:  NaturalIdleRequestState(),
 	}
 	return NaturalNewbornState{ID: id, State: state}
+}
+
+// Review P2: an at-rest spoilage carry at or above the period is unreachable
+// (the loop exits only with debt < S) and must be rejected even when no unit
+// rots this pulse.
+func TestNaturalSpoilageRejectsAtRestCarry(t *testing.T) {
+	patches := 2
+	a, err := NaturalFounderState(patches, 1, 120)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.Granary = NaturalGranaryState{Stock: 1, CultivatedTotal: 1, SpoilDebt: NaturalSpoilagePeriod, LastStoredMealHour: NaturalNeverHour}
+	if _, _, err := NaturalSpoilage(patches, 1, a); !errors.Is(err, ErrNaturalContract) {
+		t.Fatalf("at-rest spoilage carry admitted: %v", err)
+	}
+	a.Granary.SpoilDebt = NaturalSpoilagePeriod - 1
+	if _, _, err := NaturalSpoilage(patches, 1, a); err != nil {
+		t.Fatalf("legal carry rejected: %v", err)
+	}
+}
+
+// Review P2: the birth draw position fails typed rather than wrapping when
+// the ordinal cannot be multiplied by seven.
+func TestNaturalBirthDrawPositionOverflowIsTyped(t *testing.T) {
+	if _, err := NaturalBirthDrawPosition(math.MaxInt64); !errors.Is(err, ErrNaturalContract) {
+		t.Fatalf("overflow admitted: %v", err)
+	}
+	pos, err := NaturalBirthDrawPosition(3)
+	if err != nil || pos != 21 {
+		t.Fatalf("legal position: %d %v", pos, err)
+	}
 }
