@@ -190,6 +190,18 @@ var naturalHourlyProjectedCeilings = []NaturalCeiling{
 	NaturalCeilingRunnerSteps,
 }
 
+// naturalCeilingIsHourlyProjected reports whether a ceiling has an hourly
+// observed value and therefore a real trailing-hour rate (and a legitimate
+// projected binding hour).
+func naturalCeilingIsHourlyProjected(ceiling NaturalCeiling) bool {
+	for _, candidate := range naturalHourlyProjectedCeilings {
+		if candidate == ceiling {
+			return true
+		}
+	}
+	return false
+}
+
 // NaturalFrozenCeilingThresholds quotes the frozen compute ceilings: kernel
 // history constants, the component snapshot bound, the kernel event-value
 // bounds (kernel maxEventBytes is unexported; its frozen value 1<<20 is
@@ -325,7 +337,14 @@ func (l *naturalLedger) rows(hour int) []NaturalCeilingRow {
 	out := make([]NaturalCeilingRow, 0, len(naturalCeilingOrder))
 	for _, ceiling := range naturalCeilingOrder {
 		observed := l.observed[ceiling]
-		rate := int64(observed) - int64(l.prev[ceiling])
+		// Only the hourly-projected ceilings have a meaningful trailing-hour
+		// rate; the others (per-item byte maxima, allocator IDs, portable
+		// bytes) are not sampled hourly, so reporting a rate or a binding
+		// hour for them would be a fabricated forecast.
+		rate := int64(0)
+		if naturalCeilingIsHourlyProjected(ceiling) {
+			rate = int64(observed) - int64(l.prev[ceiling])
+		}
 		out = append(out, NaturalCeilingRow{Ceiling: ceiling, Threshold: l.thresholds[ceiling], Observed: observed,
 			RateLastHour: rate, ProjectedBindingHour: naturalProjectBindingHour(l.thresholds[ceiling], observed, rate, hour)})
 	}
@@ -2670,6 +2689,7 @@ func (f *Natural) checkpoint(h int, snap scheduler.Snapshot) (NaturalCheckpoint,
 	f.ledger.set(NaturalCeilingPortableFibers, uint64(len(snap.Fibers)))
 	f.ledger.set(NaturalCeilingPortableWakes, uint64(len(snap.Wakes)))
 	f.ledger.set(NaturalCeilingRunnerSteps, uint64(f.steps))
+	f.ledger.set(NaturalCeilingAllocatorIDs, uint64(f.allocator.Last()))
 	if ceiling, crossed := f.ledger.crossing(); crossed {
 		return NaturalCheckpoint{}, &NaturalCeilingHitError{Hit: f.ceilingHit(ceiling, f.ledger.thresholds[ceiling], f.ledger.observed[ceiling], h, head.Version)}
 	}
@@ -2818,6 +2838,10 @@ func (f *Natural) Handoff() (NaturalHandoff, error) {
 		return NaturalHandoff{}, ErrNaturalRunner
 	}
 	f.ledger.set(NaturalCeilingPortableBytes, uint64(len(portable)))
+	if ceiling, crossed := f.ledger.crossing(); crossed {
+		h := int(f.sched.Time() / sim.SimTime(NaturalHour))
+		return NaturalHandoff{}, f.haltWithHit(f.ceilingHit(ceiling, f.ledger.thresholds[ceiling], f.ledger.observed[ceiling], h, head.Version))
+	}
 	out := NaturalHandoff{FormatVersion: NaturalFormatVersion, Patches: f.patches, R: f.r, Seed: f.seed, Births: f.births,
 		Policy: f.ref, Steps: f.steps, History: history, SchedulerBytes: portable, Head: head,
 		Newborns:          append([]sim.EntityID(nil), f.newborns...),

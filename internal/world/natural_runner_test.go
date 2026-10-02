@@ -1439,3 +1439,37 @@ func TestNaturalRunnerHourlyBoundsAndHandoffSeam(t *testing.T) {
 		t.Fatal("handoff head drift")
 	}
 }
+
+// Review P2: the hourly ledger must not fabricate a trailing-hour rate or a
+// projected binding hour for ceilings that are not sampled hourly, and the
+// allocator-ids row must report the real allocator state.
+func TestNaturalCeilingLedgerRowsAreHonest(t *testing.T) {
+	f, err := NewNatural(NaturalOptions{Patches: 2, R: 8, Seed: 0, Workers: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	naturalRunTo(t, f, 3)
+	check := f.Checkpoints()[3]
+	byCeiling := map[NaturalCeiling]NaturalCeilingRow{}
+	for _, row := range check.Ledger {
+		if _, dup := byCeiling[row.Ceiling]; dup {
+			t.Fatalf("duplicate ceiling row %s", row.Ceiling)
+		}
+		byCeiling[row.Ceiling] = row
+	}
+	for _, ceiling := range naturalCeilingOrder {
+		row, ok := byCeiling[ceiling]
+		if !ok {
+			t.Fatalf("missing ceiling row %s", ceiling)
+		}
+		if naturalCeilingIsHourlyProjected(ceiling) {
+			continue
+		}
+		if row.RateLastHour != 0 || row.ProjectedBindingHour != -1 {
+			t.Fatalf("%s: fabricated rate/binding hour %+v", ceiling, row)
+		}
+	}
+	if got := byCeiling[NaturalCeilingAllocatorIDs].Observed; got != uint64(check.AllocatorLast) {
+		t.Fatalf("allocator-ids observed %d, want %d", got, check.AllocatorLast)
+	}
+}
