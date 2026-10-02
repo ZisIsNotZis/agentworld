@@ -74,6 +74,15 @@ const (
 	naturalHorizonHours  = 168
 	naturalSlotsPerPatch = 8
 
+	// naturalPatchIDBase / naturalMaxPatchesFixedIDSpace mirror the world's
+	// fixed-ID geometry locally: the founder block 1..8P must stay strictly
+	// below the patch block starting at 1001, so P is bounded by
+	// (1001-1)/8 = 125. The strategy package cannot import the world package
+	// (cycle), so the same derived value is restated here and cross-checked
+	// against the world predicate in the lane tests.
+	naturalPatchIDBase            = 1001
+	naturalMaxPatchesFixedIDSpace = (naturalPatchIDBase - 1) / naturalSlotsPerPatch
+
 	naturalEnergyCapacity int64 = 12
 	naturalHungerCapacity int64 = 24
 	naturalBagCapacity    int64 = 1
@@ -226,9 +235,12 @@ type NaturalRegistry struct {
 }
 
 // NewNaturalRegistry builds the registry for one fixture shape (P patches).
-// A patches value below 1 yields no registry at all.
+// A patches value outside the fixture's valid range yields no registry at
+// all: below 1, or above the derived fixed-ID-space bound (founder block
+// 1..8P must stay strictly below the patch block, so the world's
+// NaturalPatchCountValid is mirrored here as defence in depth).
 func NewNaturalRegistry(patches int) *NaturalRegistry {
-	if patches < 1 {
+	if patches < 1 || patches > naturalMaxPatchesFixedIDSpace {
 		return nil
 	}
 	return &NaturalRegistry{patches: patches, policies: make(map[NaturalRef]NaturalPolicy)}
