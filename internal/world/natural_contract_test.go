@@ -474,7 +474,7 @@ func TestNaturalIDSpacePartitionAndAllocatorFreshness(t *testing.T) {
 	}
 	// The entity-create builder rejects every fixed-block ID as a newborn.
 	for _, bad := range []sim.EntityID{0, 1, 8, 1001, 1002, 2001, 2016} {
-		if _, err := naturalNewbornAllocations(2, bad, 1001, newborn.State); !errors.Is(err, ErrNaturalContract) {
+		if _, err := naturalNewbornAllocationsFor(NaturalMechanismV5, 2, bad, 1001, newborn.State); !errors.Is(err, ErrNaturalContract) {
 			t.Fatalf("fixed-block allocation %d survived", bad)
 		}
 	}
@@ -627,7 +627,7 @@ func TestNaturalOwnershipGuardTenureGenomeAndNegativeFixtures(t *testing.T) {
 		Granary: NaturalGranaryState{LastStoredMealHour: NaturalNeverHour}, Request: NaturalIdleRequestState(),
 	}
 	newbornState.Genome = NaturalGenomeState{LocusM: 6, LocusY: 6, LocusW: 6, ParentA: 1, ParentB: 2, DeathHour: 96, DiedHour: NaturalNeverHour}
-	seed, err := naturalNewbornAllocations(2, 2017, 1001, newbornState)
+	seed, err := naturalNewbornAllocationsFor(NaturalMechanismV5, 2, 2017, 1001, newbornState)
 	if err != nil {
 		t.Fatal(err)
 	}

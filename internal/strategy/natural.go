@@ -362,6 +362,7 @@ const (
 	NaturalBuild                              // invest the held unit into the worksite
 	NaturalRest                               // ten-minute rest after a denied gather
 	NaturalWait                               // a fallback only, never a planned action
+	NaturalProvision                          // convert one granary unit into the bag at the claim instant (natural/7)
 )
 
 type NaturalFallback uint8

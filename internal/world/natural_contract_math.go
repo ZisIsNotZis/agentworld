@@ -14,10 +14,17 @@ import (
 //
 //	G1  per patch-hour: R = cultivatedGranted + wildFilled + regenUnrealized
 //	    lifetime:       R·pulses = gathered + wildStock + granted + unrealized
-//	    and per patch:  gathered = consumed + held + invested, with
+//	    and per patch:  gathered = consumed + held + invested (mechanism
+//	                    v6: gathered + provisioned = consumed + held +
+//	                    invested; provisioned is rule 515's granary-to-bag
+//	                    inflow and is zero in every v5 state), with
 //	                    gathered + standing stock = the wild share produced
 //	G2a per granary:    cultivatedTotal = stock + storedMeals + spoiled
 //	                    + birthGranaryPaid
+//	G2a′ (mechanism v6): cultivatedTotal = stock + storedMeals + provisioned
+//	                    + spoiled + birthGranaryPaid — the v5 identity
+//	                    extended by rule 515's withdrawal ledger; at
+//	                    provisioned = 0 (every v5 state) it is exactly G2a.
 //	G2b per actor:      invested = 2·created + wip; created − decayed = k;
 //	    land:           tenuredSlots(patch) = Σk over ALL tenure holders
 //	                    (dead included) ≤ 8, each tenured slot's owner an
@@ -60,6 +67,10 @@ type NaturalGranaryState struct {
 	LastStoredMealHour                  int64
 	SpoilDebt                           int64 // spoilage carry: debt+=stock, drained 24 per rotted unit
 	Spoiled                             int64
+	// Provisioned counts granary units drawn as worksite provisions under
+	// rule 515 (mechanism v6 only). It is zero in every v5 state — the v5
+	// validators require exactly that — and grows by one per provision.
+	Provisioned int64
 }
 type NaturalGenomeState struct {
 	LocusM, LocusY, LocusW         int64        // alleles in [5,7], neutral 6, immutable post-creation
@@ -131,10 +142,12 @@ type NaturalGrantEntitlement struct {
 // regen split: only living owners' cultivated slots are entitled.
 type NaturalAliveLookup func(sim.EntityID) bool
 
-// NaturalBalance carries the aggregate frozen gates G1, G2a, G2b, and G3.
+// NaturalBalance carries the aggregate frozen gates G1, G2a (G2a′ under
+// mechanism v6), G2b, and G3.
 type NaturalBalance struct {
 	Produced, Granted, Unrealized, Gathered, Consumed, Stock, Held, Invested int64
 	CultivatedTotal, GranaryStock, StoredMeals, Spoiled                      int64
+	Provisioned                                                              int64 // mechanism v6 only; zero in every v5 balance
 	Capital, Wip, PointsCreated, PointsDecayed, TenuredSlots                 int64
 	InitialEnergy, Energy, BasalSpent, EnergyCapLost                         int64
 	BirthGranaryPaid, Births                                                 int64
@@ -227,13 +240,27 @@ func validNaturalWorksite(w NaturalWorksiteState) bool {
 		w.PointsCreated-w.PointsDecayed == w.Capital
 }
 
-func validNaturalGranary(g NaturalGranaryState) bool {
-	return g.Stock >= 0 && g.Stock <= NaturalGranaryStockMax &&
+// validNaturalGranaryFor is the mechanism-parameterized granary validator.
+// The zero value requires the v6-only provisioned ledger to be exactly zero
+// (the field does not exist in v5) and keeps every frozen v5 bound;
+// NaturalMechanismV6 admits provisioned in its horizon envelope [0,168].
+func validNaturalGranaryFor(m NaturalMechanism, g NaturalGranaryState) bool {
+	if !(g.Stock >= 0 && g.Stock <= NaturalGranaryStockMax &&
 		g.CultivatedTotal >= 0 && g.CultivatedTotal <= NaturalGranaryStockMax &&
 		g.StoredMeals >= 0 && g.StoredMeals <= NaturalHorizonHours &&
 		g.LastStoredMealHour >= NaturalNeverHour && g.LastStoredMealHour < NaturalHorizonHours &&
 		g.SpoilDebt >= 0 && g.SpoilDebt <= NaturalSpoilDebtMax &&
-		g.Spoiled >= 0 && g.Spoiled <= NaturalSpoiledMax
+		g.Spoiled >= 0 && g.Spoiled <= NaturalSpoiledMax) {
+		return false
+	}
+	if m == NaturalMechanismV6 {
+		return g.Provisioned >= 0 && g.Provisioned <= NaturalProvisionedMax
+	}
+	return g.Provisioned == 0
+}
+
+func validNaturalGranary(g NaturalGranaryState) bool {
+	return validNaturalGranaryFor(NaturalMechanismV5, g)
 }
 
 // validNaturalGenome checks the frozen bounds and lineage shape: founders
@@ -292,14 +319,17 @@ func naturalAlive(a NaturalActorState) bool {
 	return a.Genome.DiedHour == NaturalNeverHour && a.Body.Energy > 0
 }
 
-// validNaturalActor checks the six rows of one actor: home-patch provenance
-// (founder homes are ID-placed; newborn homes are carried), never-gathered
-// coherence, the per-actor G2a granary identity with the spoilage and birth
-// ledgers, the per-actor G3 energy identity with the creation base (11
-// founder, 8 newborn), and the alive invariant died-hour=-1 ⇒ energy>0.
-func validNaturalActor(patches int, actor sim.EntityID, a NaturalActorState) bool {
+// validNaturalActorFor checks the six rows of one actor under the mechanism
+// axis: home-patch provenance (founder homes are ID-placed; newborn homes
+// are carried), never-gathered coherence, the per-actor granary identity —
+// G2a′ cultivatedTotal = stock + storedMeals + provisioned + spoiled +
+// birthGranaryPaid, which at provisioned = 0 (enforced for every v5 state)
+// is exactly the frozen v5 G2a — the per-actor G3 energy identity with the
+// creation base (11 founder, 8 newborn), and the alive invariant
+// died-hour=-1 ⇒ energy>0.
+func validNaturalActorFor(m NaturalMechanism, patches int, actor sim.EntityID, a NaturalActorState) bool {
 	if !naturalActorEntity(patches, actor) || !validNaturalBody(a.Body) || !validNaturalWorksite(a.Worksite) ||
-		!validNaturalGranary(a.Granary) || !validNaturalGenome(patches, actor, a.Genome) || !validNaturalBirthRequest(patches, actor, a.Request) {
+		!validNaturalGranaryFor(m, a.Granary) || !validNaturalGenome(patches, actor, a.Genome) || !validNaturalBirthRequest(patches, actor, a.Request) {
 		return false
 	}
 	home := a.Bag.Source
@@ -312,20 +342,31 @@ func validNaturalActor(patches int, actor sim.EntityID, a NaturalActorState) boo
 	if !validNaturalBag(patches, home, a.Bag) {
 		return false
 	}
-	if a.Body.LastGatherHour == NaturalNeverHour && (a.Bag.Units != 0 || a.Body.Consumed != 0) {
+	// Never-gathered coherence: a bag unit or a consumed meal needs a
+	// source. Under the v6 mechanism a provisioned unit is the second bag
+	// source (a granary draw, recorded in the provisioned ledger), so a
+	// positive provisioned ledger admits both; the v5 zero value pins
+	// provisioned to zero and keeps the frozen form exactly.
+	if a.Body.LastGatherHour == NaturalNeverHour && a.Granary.Provisioned == 0 && (a.Bag.Units != 0 || a.Body.Consumed != 0) {
 		return false
 	}
 	base := NaturalFounderInitialEnergy
 	if !naturalFounderEntity(patches, actor) {
 		base = NaturalNewbornEnergy
 	}
-	// G2a extended: every cultivated unit received is standing, eaten,
-	// spoiled, or paid toward a birth.
-	if a.Granary.CultivatedTotal != a.Granary.Stock+a.Granary.StoredMeals+a.Granary.Spoiled+a.Genome.BirthGranaryPaid {
+	// G2a′: every cultivated unit received is standing, eaten as a stored
+	// meal, drawn as a worksite provision (v6 only), spoiled, or paid
+	// toward a birth.
+	if a.Granary.CultivatedTotal != a.Granary.Stock+a.Granary.StoredMeals+a.Granary.Provisioned+a.Granary.Spoiled+a.Genome.BirthGranaryPaid {
 		return false
 	}
 	// G3 per actor.
 	return base+a.Body.Consumed+a.Granary.StoredMeals == a.Body.Energy+a.Body.BasalSpent+a.Body.CapLost
+}
+
+// validNaturalActor is the frozen v5 validator (the mechanism zero value).
+func validNaturalActor(patches int, actor sim.EntityID, a NaturalActorState) bool {
+	return validNaturalActorFor(NaturalMechanismV5, patches, actor, a)
 }
 
 // naturalStock verifies the patch production ledger against its slots
@@ -408,7 +449,14 @@ func NaturalRegenSplit(patches, hour int, patch NaturalPatchState, slots [Natura
 // zero mutation, no yield (the frozen "grant to a dead owner" negative),
 // leaving that budget term unrealized upstream.
 func NaturalCultivatedGrant(patches int, ownerID sim.EntityID, a NaturalActorState, units int64) (NaturalActorState, NaturalGrantResult, error) {
-	if !naturalActorEntity(patches, ownerID) || !validNaturalActor(patches, ownerID, a) || units < 1 || units > NaturalSlotsPerPatch {
+	return NaturalCultivatedGrantFor(NaturalMechanismV5, patches, ownerID, a, units)
+}
+
+// NaturalCultivatedGrantFor is the mechanism-parameterized flat grant; the
+// zero value reproduces NaturalCultivatedGrant exactly, and only the granary
+// validation (G2a′) differs under NaturalMechanismV6.
+func NaturalCultivatedGrantFor(m NaturalMechanism, patches int, ownerID sim.EntityID, a NaturalActorState, units int64) (NaturalActorState, NaturalGrantResult, error) {
+	if !naturalActorEntity(patches, ownerID) || !validNaturalActorFor(m, patches, ownerID, a) || units < 1 || units > NaturalSlotsPerPatch {
 		return NaturalActorState{}, NaturalGrantResult{}, ErrNaturalContract
 	}
 	if !naturalAlive(a) {
@@ -416,7 +464,7 @@ func NaturalCultivatedGrant(patches int, ownerID sim.EntityID, a NaturalActorSta
 	}
 	a.Granary.Stock += units
 	a.Granary.CultivatedTotal += units
-	if !validNaturalActor(patches, ownerID, a) {
+	if !validNaturalActorFor(m, patches, ownerID, a) {
 		return NaturalActorState{}, NaturalGrantResult{}, ErrNaturalContract
 	}
 	return a, NaturalGrantResult{Realized: units}, nil
@@ -430,7 +478,13 @@ func NaturalCultivatedGrant(patches int, ownerID sim.EntityID, a NaturalActorSta
 // reachable states; anything larger is forged and rejected with zero
 // mutation.
 func NaturalSpoilage(patches int, ownerID sim.EntityID, a NaturalActorState) (NaturalActorState, NaturalSpoilageResult, error) {
-	if !naturalActorEntity(patches, ownerID) || !validNaturalActor(patches, ownerID, a) {
+	return NaturalSpoilageFor(NaturalMechanismV5, patches, ownerID, a)
+}
+
+// NaturalSpoilageFor is the mechanism-parameterized spoilage loop; the zero
+// value reproduces NaturalSpoilage exactly.
+func NaturalSpoilageFor(m NaturalMechanism, patches int, ownerID sim.EntityID, a NaturalActorState) (NaturalActorState, NaturalSpoilageResult, error) {
+	if !naturalActorEntity(patches, ownerID) || !validNaturalActorFor(m, patches, ownerID, a) {
 		return NaturalActorState{}, NaturalSpoilageResult{}, ErrNaturalContract
 	}
 	g := a.Granary
@@ -455,7 +509,7 @@ func NaturalSpoilage(patches int, ownerID sim.EntityID, a NaturalActorState) (Na
 		result.Spoiled++
 	}
 	a.Granary = g
-	if !validNaturalActor(patches, ownerID, a) {
+	if !validNaturalActorFor(m, patches, ownerID, a) {
 		return NaturalActorState{}, NaturalSpoilageResult{}, ErrNaturalContract
 	}
 	return a, result, nil
@@ -470,7 +524,13 @@ func NaturalSpoilage(patches int, ownerID sim.EntityID, a NaturalActorState) (Na
 // The transient debt never exceeds 14 for reachable states; anything larger
 // is rejected with zero mutation.
 func NaturalWear(patches int, ownerID sim.EntityID, a NaturalActorState, homePatch sim.EntityID, homeSlots [NaturalSlotsPerPatch]NaturalSlotState) (NaturalActorState, [NaturalSlotsPerPatch]NaturalSlotState, NaturalWearResult, error) {
-	if !naturalActorEntity(patches, ownerID) || !validNaturalActor(patches, ownerID, a) {
+	return NaturalWearFor(NaturalMechanismV5, patches, ownerID, a, homePatch, homeSlots)
+}
+
+// NaturalWearFor is the mechanism-parameterized wear loop; the zero value
+// reproduces NaturalWear exactly.
+func NaturalWearFor(m NaturalMechanism, patches int, ownerID sim.EntityID, a NaturalActorState, homePatch sim.EntityID, homeSlots [NaturalSlotsPerPatch]NaturalSlotState) (NaturalActorState, [NaturalSlotsPerPatch]NaturalSlotState, NaturalWearResult, error) {
+	if !naturalActorEntity(patches, ownerID) || !validNaturalActorFor(m, patches, ownerID, a) {
 		return NaturalActorState{}, homeSlots, NaturalWearResult{}, ErrNaturalContract
 	}
 	// Cultivation is home-patch-only: the slot array must be the owner's
@@ -513,7 +573,7 @@ func NaturalWear(patches int, ownerID sim.EntityID, a NaturalActorState, homePat
 		}
 	}
 	a.Worksite = w
-	if !validNaturalActor(patches, ownerID, a) {
+	if !validNaturalActorFor(m, patches, ownerID, a) {
 		return NaturalActorState{}, homeSlots, NaturalWearResult{}, ErrNaturalContract
 	}
 	return a, out, result, nil
@@ -527,7 +587,13 @@ func NaturalWear(patches int, ownerID sim.EntityID, a NaturalActorState, homePat
 // written (only rule 504 may write it, only from -1 down to the current
 // hour) and the runner issues its EffectStop. Hunger accrues exactly as v3.
 func NaturalBasal(patches, hour int, actorID sim.EntityID, a NaturalActorState, elapsedHours int64) (NaturalActorState, NaturalBasalCost, bool, error) {
-	if _, err := NaturalHourTime(hour); err != nil || !naturalActorEntity(patches, actorID) || !validNaturalActor(patches, actorID, a) ||
+	return NaturalBasalFor(NaturalMechanismV5, patches, hour, actorID, a, elapsedHours)
+}
+
+// NaturalBasalFor is the mechanism-parameterized basal loop; the zero value
+// reproduces NaturalBasal exactly.
+func NaturalBasalFor(m NaturalMechanism, patches, hour int, actorID sim.EntityID, a NaturalActorState, elapsedHours int64) (NaturalActorState, NaturalBasalCost, bool, error) {
+	if _, err := NaturalHourTime(hour); err != nil || !naturalActorEntity(patches, actorID) || !validNaturalActorFor(m, patches, actorID, a) ||
 		elapsedHours < 1 || elapsedHours > NaturalHorizonHours || !naturalAlive(a) {
 		return NaturalActorState{}, NaturalBasalCost{}, false, ErrNaturalContract
 	}
@@ -537,7 +603,7 @@ func NaturalBasal(patches, hour int, actorID sim.EntityID, a NaturalActorState, 
 	if a.Body.BasalSpent+2*elapsedHours > NaturalBasalSpentMax {
 		return NaturalActorState{}, NaturalBasalCost{}, false, ErrNaturalContract
 	}
-	m := a.Genome.LocusM
+	locusM := a.Genome.LocusM
 	var result NaturalBasalCost
 	// Accrual and drain happen once per elapsed hour so the batched path
 	// reproduces the frozen hourly lattice exactly (v3 byte-identity holds
@@ -547,10 +613,10 @@ func NaturalBasal(patches, hour int, actorID sim.EntityID, a NaturalActorState, 
 		if a.Body.BasalDebt > NaturalBasalDebtMax {
 			return NaturalActorState{}, NaturalBasalCost{}, false, ErrNaturalContract
 		}
-		for a.Body.BasalDebt >= m && a.Body.Energy >= 1 {
+		for a.Body.BasalDebt >= locusM && a.Body.Energy >= 1 {
 			a.Body.Energy--
 			a.Body.BasalSpent++
-			a.Body.BasalDebt -= m
+			a.Body.BasalDebt -= locusM
 			result.EnergySpent++
 		}
 	}
@@ -564,7 +630,7 @@ func NaturalBasal(patches, hour int, actorID sim.EntityID, a NaturalActorState, 
 	if starved {
 		a.Genome.DiedHour = int64(hour)
 	}
-	if !validNaturalActor(patches, actorID, a) {
+	if !validNaturalActorFor(m, patches, actorID, a) {
 		return NaturalActorState{}, NaturalBasalCost{}, false, ErrNaturalContract
 	}
 	return a, result, starved, nil
@@ -574,9 +640,15 @@ func NaturalBasal(patches, hour int, actorID sim.EntityID, a NaturalActorState, 
 // bag, v1-v4-identical among the living: dead actors take no actions. The
 // bag's home-patch source is already present and unchanged.
 func NaturalGather(patches int, patchID, slotID, actorID sim.EntityID, hour int, slot NaturalSlotState, a NaturalActorState) (NaturalSlotState, NaturalActorState, error) {
+	return NaturalGatherFor(NaturalMechanismV5, patches, patchID, slotID, actorID, hour, slot, a)
+}
+
+// NaturalGatherFor is the mechanism-parameterized gather; the zero value
+// reproduces NaturalGather exactly.
+func NaturalGatherFor(m NaturalMechanism, patches int, patchID, slotID, actorID sim.EntityID, hour int, slot NaturalSlotState, a NaturalActorState) (NaturalSlotState, NaturalActorState, error) {
 	home := a.Bag.Source
 	if home != patchID || hour < 0 || hour >= NaturalHorizonHours || !validNaturalSlot(slot) || slot.Stock != 1 ||
-		slot.Gathered > int64(hour) || !validNaturalActor(patches, actorID, a) || !naturalAlive(a) || a.Bag.Units != 0 || a.Body.LastGatherHour >= int64(hour) {
+		slot.Gathered > int64(hour) || !validNaturalActorFor(m, patches, actorID, a) || !naturalAlive(a) || a.Bag.Units != 0 || a.Body.LastGatherHour >= int64(hour) {
 		return NaturalSlotState{}, NaturalActorState{}, ErrNaturalContract
 	}
 	index := int(patchID - NaturalPatchIDBase)
@@ -591,7 +663,7 @@ func NaturalGather(patches int, patchID, slotID, actorID sim.EntityID, hour int,
 	slot.Stock, slot.Gathered = 0, slot.Gathered+1
 	a.Bag.Units = 1
 	a.Body.LastGatherHour = int64(hour)
-	if !validNaturalActor(patches, actorID, a) {
+	if !validNaturalActorFor(m, patches, actorID, a) {
 		return NaturalSlotState{}, NaturalActorState{}, ErrNaturalContract
 	}
 	return slot, a, nil
@@ -601,7 +673,13 @@ func NaturalGather(patches int, patchID, slotID, actorID sim.EntityID, hour int,
 // meal semantics: +1 energy, counted spill at the cap-12 ceiling, -1
 // hunger.
 func NaturalConsume(patches int, actorID sim.EntityID, a NaturalActorState) (NaturalActorState, NaturalMeal, error) {
-	if !naturalActorEntity(patches, actorID) || !validNaturalActor(patches, actorID, a) || !naturalAlive(a) || a.Bag.Units != 1 || a.Body.Consumed >= NaturalHorizonHours {
+	return NaturalConsumeFor(NaturalMechanismV5, patches, actorID, a)
+}
+
+// NaturalConsumeFor is the mechanism-parameterized consume; the zero value
+// reproduces NaturalConsume exactly.
+func NaturalConsumeFor(m NaturalMechanism, patches int, actorID sim.EntityID, a NaturalActorState) (NaturalActorState, NaturalMeal, error) {
+	if !naturalActorEntity(patches, actorID) || !validNaturalActorFor(m, patches, actorID, a) || !naturalAlive(a) || a.Bag.Units != 1 || a.Body.Consumed >= NaturalHorizonHours {
 		return NaturalActorState{}, NaturalMeal{}, ErrNaturalContract
 	}
 	a.Bag.Units = 0
@@ -616,7 +694,7 @@ func NaturalConsume(patches int, actorID sim.EntityID, a NaturalActorState) (Nat
 	if a.Body.Hunger > 0 {
 		a.Body.Hunger--
 	}
-	if !validNaturalActor(patches, actorID, a) {
+	if !validNaturalActorFor(m, patches, actorID, a) {
 		return NaturalActorState{}, NaturalMeal{}, ErrNaturalContract
 	}
 	return a, result, nil
@@ -631,6 +709,12 @@ func NaturalConsume(patches int, actorID sim.EntityID, a NaturalActorState) (Nat
 // slot never holds standing stock. No eligible slot ⇒ typed refusal with
 // zero mutation: nothing converts, the bag keeps its unit.
 func NaturalBuild(patches, hour int, actorID sim.EntityID, a NaturalActorState, homePatch sim.EntityID, homeSlots [NaturalSlotsPerPatch]NaturalSlotState) (NaturalActorState, [NaturalSlotsPerPatch]NaturalSlotState, NaturalBuildResult, error) {
+	return NaturalBuildFor(NaturalMechanismV5, patches, hour, actorID, a, homePatch, homeSlots)
+}
+
+// NaturalBuildFor is the mechanism-parameterized build; the zero value
+// reproduces NaturalBuild exactly.
+func NaturalBuildFor(m NaturalMechanism, patches, hour int, actorID sim.EntityID, a NaturalActorState, homePatch sim.EntityID, homeSlots [NaturalSlotsPerPatch]NaturalSlotState) (NaturalActorState, [NaturalSlotsPerPatch]NaturalSlotState, NaturalBuildResult, error) {
 	if _, err := NaturalPhaseTime(hour, NaturalPhaseBagDecision); err != nil {
 		return NaturalActorState{}, homeSlots, NaturalBuildResult{}, ErrNaturalContract
 	}
@@ -642,7 +726,7 @@ func NaturalBuild(patches, hour int, actorID sim.EntityID, a NaturalActorState, 
 	if _, err := NaturalPatchID(patches, int(a.Bag.Source)-NaturalPatchIDBase); err != nil {
 		return NaturalActorState{}, homeSlots, NaturalBuildResult{}, ErrNaturalContract
 	}
-	if !naturalActorEntity(patches, actorID) || !validNaturalActor(patches, actorID, a) || !naturalAlive(a) {
+	if !naturalActorEntity(patches, actorID) || !validNaturalActorFor(m, patches, actorID, a) || !naturalAlive(a) {
 		return NaturalActorState{}, homeSlots, NaturalBuildResult{}, ErrNaturalContract
 	}
 	if a.Bag.Units != 1 || a.Worksite.Capital+a.Worksite.Wip >= NaturalKMax || a.Worksite.LastBuildHour >= int64(hour) {
@@ -691,17 +775,30 @@ func NaturalBuild(patches, hour int, actorID sim.EntityID, a NaturalActorState, 
 			return NaturalActorState{}, homeSlots, NaturalBuildResult{}, &NaturalBuildRefusalError{Reason: reason}
 		}
 	}
-	if !validNaturalActor(patches, actorID, a) {
+	if !validNaturalActorFor(m, patches, actorID, a) {
 		return NaturalActorState{}, homeSlots, NaturalBuildResult{}, ErrNaturalContract
 	}
 	return a, homeSlots, result, nil
 }
 
-// NaturalEatStored is the only granary draw, with v1-v4 meal semantics;
-// dead owners' granaries are frozen (they only spoil).
+// NaturalEatStored is the only granary draw of the v5 mechanism, with
+// v1-v4 meal semantics; dead owners' granaries are frozen (they only
+// spoil). The once-per-actor-hour draw discipline stays runner-owned in
+// the frozen v5 bytes (naturalPairIntent / naturalPairedMealGate).
 func NaturalEatStored(patches, hour int, actorID sim.EntityID, a NaturalActorState) (NaturalActorState, NaturalMeal, error) {
-	if hour < 0 || hour >= NaturalHorizonHours || !naturalActorEntity(patches, actorID) || !validNaturalActor(patches, actorID, a) || !naturalAlive(a) ||
-		a.Granary.Stock < 1 || a.Granary.StoredMeals >= NaturalHorizonHours {
+	return NaturalEatStoredFor(NaturalMechanismV5, patches, hour, actorID, a)
+}
+
+// NaturalEatStoredFor is the mechanism-parameterized eat-stored; the zero
+// value reproduces NaturalEatStored exactly. Under NaturalMechanismV6 the
+// contract itself enforces the shared one-draw-per-actor-hour guard
+// (LastStoredMealHour < hour) in both directions, because rule 515 can
+// also draw in the same hour: a provision hour draws no stored meal and no
+// second draw follows a stored meal.
+func NaturalEatStoredFor(m NaturalMechanism, patches, hour int, actorID sim.EntityID, a NaturalActorState) (NaturalActorState, NaturalMeal, error) {
+	if hour < 0 || hour >= NaturalHorizonHours || !naturalActorEntity(patches, actorID) || !validNaturalActorFor(m, patches, actorID, a) || !naturalAlive(a) ||
+		a.Granary.Stock < 1 || a.Granary.StoredMeals >= NaturalHorizonHours ||
+		(m == NaturalMechanismV6 && a.Granary.LastStoredMealHour >= int64(hour)) {
 		return NaturalActorState{}, NaturalMeal{}, ErrNaturalContract
 	}
 	a.Granary.Stock--
@@ -717,10 +814,38 @@ func NaturalEatStored(patches, hour int, actorID sim.EntityID, a NaturalActorSta
 	if a.Body.Hunger > 0 {
 		a.Body.Hunger--
 	}
-	if !validNaturalActor(patches, actorID, a) {
+	if !validNaturalActorFor(m, patches, actorID, a) {
 		return NaturalActorState{}, NaturalMeal{}, ErrNaturalContract
 	}
 	return a, result, nil
+}
+
+// NaturalProvision is the pure rule-515 conversion of the v7 design (ticket
+// 17), mechanism v6 only — every call under the zero value is refused: at
+// the claim instant an actor holding no bag unit, alive, with at least one
+// granary stock unit and no earlier draw this hour (the shared
+// LastStoredMealHour < hour guard), converts exactly one stock unit into
+// one bag unit: stock−1, provisioned+1, LastStoredMealHour = hour, bag+1.
+// Conservation is exact per draw (stock−1 = bag+1, a transfer, never a
+// creation): the body is untouched, so G3 is unchanged, and G2a′ stays
+// exact because provisioned absorbs the withdrawn stock unit.
+func NaturalProvision(m NaturalMechanism, patches, hour int, actorID sim.EntityID, a NaturalActorState) (NaturalActorState, error) {
+	if m != NaturalMechanismV6 {
+		return NaturalActorState{}, ErrNaturalContract
+	}
+	if hour < 0 || hour >= NaturalHorizonHours || !naturalActorEntity(patches, actorID) || !validNaturalActorFor(m, patches, actorID, a) || !naturalAlive(a) ||
+		a.Bag.Units != 0 || a.Granary.Stock < 1 ||
+		a.Granary.LastStoredMealHour >= int64(hour) || a.Granary.Provisioned >= NaturalProvisionedMax {
+		return NaturalActorState{}, ErrNaturalContract
+	}
+	a.Granary.Stock--
+	a.Granary.Provisioned++
+	a.Granary.LastStoredMealHour = int64(hour)
+	a.Bag.Units++
+	if !validNaturalActorFor(m, patches, actorID, a) {
+		return NaturalActorState{}, ErrNaturalContract
+	}
+	return a, nil
 }
 
 // NaturalIdleRequestState is the canonical never-filed request row.
@@ -920,10 +1045,16 @@ func NaturalChildGenome(patches int, proposerID, consenterID sim.EntityID, propo
 // request, and no earlier request this hour (one request per actor-hour);
 // it never consults the proposer's truth against the claims.
 func NaturalBirthRequest(patches, hour int, proposerID, addressee sim.EntityID, reportedCapital, reportedGranary int64, proposer NaturalActorState) (NaturalActorState, error) {
+	return NaturalBirthRequestFor(NaturalMechanismV5, patches, hour, proposerID, addressee, reportedCapital, reportedGranary, proposer)
+}
+
+// NaturalBirthRequestFor is the mechanism-parameterized filing; the zero
+// value reproduces NaturalBirthRequest exactly.
+func NaturalBirthRequestFor(m NaturalMechanism, patches, hour int, proposerID, addressee sim.EntityID, reportedCapital, reportedGranary int64, proposer NaturalActorState) (NaturalActorState, error) {
 	if _, err := NaturalPhaseTime(hour, NaturalPhaseBirthRequest); err != nil ||
 		!naturalActorEntity(patches, proposerID) || !naturalActorEntity(patches, addressee) || addressee == proposerID ||
 		reportedCapital < 0 || reportedCapital > NaturalKMax || reportedGranary < 0 || reportedGranary > NaturalGranaryStockMax ||
-		!validNaturalActor(patches, proposerID, proposer) || !naturalAlive(proposer) ||
+		!validNaturalActorFor(m, patches, proposerID, proposer) || !naturalAlive(proposer) ||
 		proposer.Request.Status == NaturalRequestPending || proposer.Request.LastRequestHour >= int64(hour) {
 		return NaturalActorState{}, ErrNaturalContract
 	}
@@ -933,7 +1064,7 @@ func NaturalBirthRequest(patches, hour int, proposerID, addressee sim.EntityID, 
 	proposer.Request.ReportedGranary = reportedGranary
 	proposer.Request.Status = NaturalRequestPending
 	proposer.Request.LastRequestHour = int64(hour)
-	if !validNaturalActor(patches, proposerID, proposer) {
+	if !validNaturalActorFor(m, patches, proposerID, proposer) {
 		return NaturalActorState{}, ErrNaturalContract
 	}
 	return proposer, nil
@@ -1003,9 +1134,15 @@ type NaturalReplyResult struct {
 // allocator-fresh newbornID, and the request is consumed as accepted.
 // kinAllowed must be the trusted runner's kin-walk verdict for the pair.
 func NaturalBirthReply(patches, hour int, kinAllowed bool, draws []uint64, newbornID, proposerID, consenterID sim.EntityID, proposer, consenter NaturalActorState) (NaturalReplyResult, error) {
+	return NaturalBirthReplyFor(NaturalMechanismV5, patches, hour, kinAllowed, draws, newbornID, proposerID, consenterID, proposer, consenter)
+}
+
+// NaturalBirthReplyFor is the mechanism-parameterized reply; the zero value
+// reproduces NaturalBirthReply exactly.
+func NaturalBirthReplyFor(m NaturalMechanism, patches, hour int, kinAllowed bool, draws []uint64, newbornID, proposerID, consenterID sim.EntityID, proposer, consenter NaturalActorState) (NaturalReplyResult, error) {
 	if _, err := NaturalPhaseTime(hour, NaturalPhaseBirthReply); err != nil ||
 		!naturalActorEntity(patches, proposerID) || !naturalActorEntity(patches, consenterID) || proposerID == consenterID ||
-		!validNaturalActor(patches, proposerID, proposer) || !validNaturalActor(patches, consenterID, consenter) {
+		!validNaturalActorFor(m, patches, proposerID, proposer) || !validNaturalActorFor(m, patches, consenterID, consenter) {
 		return NaturalReplyResult{}, ErrNaturalContract
 	}
 	request := proposer.Request
@@ -1020,7 +1157,7 @@ func NaturalBirthReply(patches, hour int, kinAllowed bool, draws []uint64, newbo
 		if decision == NaturalReplyRefuse {
 			result.Proposer.Request.Status = NaturalRequestRefused
 			result.Consenter.Request.LastReplyHour = int64(hour)
-			if !validNaturalActor(patches, proposerID, result.Proposer) || !validNaturalActor(patches, consenterID, result.Consenter) {
+			if !validNaturalActorFor(m, patches, proposerID, result.Proposer) || !validNaturalActorFor(m, patches, consenterID, result.Consenter) {
 				return NaturalReplyResult{}, ErrNaturalContract
 			}
 		}
@@ -1054,13 +1191,13 @@ func NaturalBirthReply(patches, hour int, kinAllowed bool, draws []uint64, newbo
 	if err != nil {
 		return NaturalReplyResult{}, err
 	}
-	birth, err := NaturalBirth(patches, hour, kinAllowed, newbornID, proposerID, consenterID, proposer, consenter, child)
+	birth, err := NaturalBirthFor(m, patches, hour, kinAllowed, newbornID, proposerID, consenterID, proposer, consenter, child)
 	if err != nil {
 		return NaturalReplyResult{}, err
 	}
 	birth.Proposer.Request.Status = NaturalRequestAccepted
 	birth.Consenter.Request.LastReplyHour = int64(hour)
-	if !validNaturalActor(patches, proposerID, birth.Proposer) || !validNaturalActor(patches, consenterID, birth.Consenter) || !validNaturalActor(patches, newbornID, birth.Newborn) {
+	if !validNaturalActorFor(m, patches, proposerID, birth.Proposer) || !validNaturalActorFor(m, patches, consenterID, birth.Consenter) || !validNaturalActorFor(m, patches, newbornID, birth.Newborn) {
 		return NaturalReplyResult{}, ErrNaturalContract
 	}
 	return NaturalReplyResult{Decision: NaturalReplyAccept, Proposer: birth.Proposer, Consenter: birth.Consenter, NewbornID: newbornID, Newborn: birth.Newborn}, nil
@@ -1084,9 +1221,15 @@ type NaturalBirthResult struct {
 // must be allocator-fresh (there is no birth-count cap; P15). kinAllowed
 // must be the trusted runner's kin-walk verdict for the pair.
 func NaturalBirth(patches, hour int, kinAllowed bool, newbornID, proposerID, consenterID sim.EntityID, proposer, consenter NaturalActorState, child NaturalGenomeState) (NaturalBirthResult, error) {
+	return NaturalBirthFor(NaturalMechanismV5, patches, hour, kinAllowed, newbornID, proposerID, consenterID, proposer, consenter, child)
+}
+
+// NaturalBirthFor is the mechanism-parameterized birth; the zero value
+// reproduces NaturalBirth exactly.
+func NaturalBirthFor(m NaturalMechanism, patches, hour int, kinAllowed bool, newbornID, proposerID, consenterID sim.EntityID, proposer, consenter NaturalActorState, child NaturalGenomeState) (NaturalBirthResult, error) {
 	if hour < 0 || hour >= NaturalHorizonHours || !naturalActorEntity(patches, proposerID) || !naturalActorEntity(patches, consenterID) || proposerID == consenterID ||
 		!naturalNewbornEntity(patches, newbornID) ||
-		!validNaturalActor(patches, proposerID, proposer) || !validNaturalActor(patches, consenterID, consenter) ||
+		!validNaturalActorFor(m, patches, proposerID, proposer) || !validNaturalActorFor(m, patches, consenterID, consenter) ||
 		!validNaturalGenome(patches, newbornID, child) ||
 		child.ParentA != proposerID || child.ParentB != consenterID || child.BirthHour != int64(hour) {
 		return NaturalBirthResult{}, ErrNaturalContract
@@ -1118,7 +1261,7 @@ func NaturalBirth(patches, hour int, kinAllowed bool, newbornID, proposerID, con
 		Genome:   child,
 		Request:  NaturalIdleRequestState(),
 	}
-	if !validNaturalActor(patches, proposerID, proposer) || !validNaturalActor(patches, consenterID, consenter) || !validNaturalActor(patches, newbornID, newborn) {
+	if !validNaturalActorFor(m, patches, proposerID, proposer) || !validNaturalActorFor(m, patches, consenterID, consenter) || !validNaturalActorFor(m, patches, newbornID, newborn) {
 		return NaturalBirthResult{}, ErrNaturalContract
 	}
 	return NaturalBirthResult{ProposerID: proposerID, ConsenterID: consenterID, Proposer: proposer, Consenter: consenter, NewbornID: newbornID, Newborn: newborn}, nil
@@ -1156,8 +1299,10 @@ func NaturalAgeDeath(patches, hour int, actorID sim.EntityID, genome NaturalGeno
 //
 //		G1  per patch: produced+granted+unrealized = R·pulses; gathered+stock =
 //		    produced; gathered = consumed + held + invested over the actors
-//		    whose home is that patch.
-//		G2a ΣcultivatedTotal = Σstored + Σstock + Σspoiled + Σbirth-granary-paid;
+//		    whose home is that patch (mechanism v6: the provisioned inflow
+//		    joins gathered on the inflow side; zero-valued in v5).
+//		G2a ΣcultivatedTotal = Σstored + Σstock + Σspoiled + Σbirth-granary-paid
+//		   (mechanism v6: G2a′ adds the Σprovisioned term; zero-valued in v5);
 //	   and per patch the entitlement seam is exact: grants(patch) =
 //	   ΣcultivatedTotal over the actors whose home is that patch (rule 508
 //	   moves every entitlement into its owner's granary in the same pulse).
@@ -1178,6 +1323,14 @@ func NaturalAgeDeath(patches, hour int, actorID sim.EntityID, genome NaturalGeno
 // birth has happened and the maximum newborn ID otherwise (mismatch fails
 // closed, per the frozen restore discipline).
 func NaturalCheckConservation(patches int, patchStates []NaturalPatchState, slotStates [][]NaturalSlotState, founders []NaturalActorState, newborns []NaturalNewbornState, allocatorLast sim.EntityID) (NaturalBalance, error) {
+	return NaturalCheckConservationFor(NaturalMechanismV5, patches, patchStates, slotStates, founders, newborns, allocatorLast)
+}
+
+// NaturalCheckConservationFor is the mechanism-parameterized conservation
+// gate; the zero value reproduces NaturalCheckConservation exactly
+// (provisioned is pinned to zero per actor there, so the G2a′ aggregate
+// below reduces to the frozen v5 G2a term for term).
+func NaturalCheckConservationFor(m NaturalMechanism, patches int, patchStates []NaturalPatchState, slotStates [][]NaturalSlotState, founders []NaturalActorState, newborns []NaturalNewbornState, allocatorLast sim.EntityID) (NaturalBalance, error) {
 	founderCount, err := NaturalFounderCount(patches)
 	if err != nil || len(patchStates) != patches || len(slotStates) != patches || len(founders) != founderCount {
 		return NaturalBalance{}, ErrNaturalContract
@@ -1195,7 +1348,7 @@ func NaturalCheckConservation(patches int, patchStates []NaturalPatchState, slot
 	actors := make(map[sim.EntityID]NaturalActorState, founderCount+len(newborns))
 	for i, founder := range founders {
 		actor := sim.EntityID(i + 1)
-		if !validNaturalActor(patches, actor, founder) {
+		if !validNaturalActorFor(m, patches, actor, founder) {
 			return NaturalBalance{}, ErrNaturalContract
 		}
 		parents[actor] = [2]sim.EntityID{}
@@ -1210,7 +1363,7 @@ func NaturalCheckConservation(patches int, patchStates []NaturalPatchState, slot
 		}
 		seen[newborn.ID] = true
 		lastNewborn = newborn.ID
-		if !validNaturalActor(patches, newborn.ID, newborn.State) {
+		if !validNaturalActorFor(m, patches, newborn.ID, newborn.State) {
 			return NaturalBalance{}, ErrNaturalContract
 		}
 		parents[newborn.ID] = [2]sim.EntityID{newborn.State.Genome.ParentA, newborn.State.Genome.ParentB}
@@ -1265,7 +1418,7 @@ func NaturalCheckConservation(patches int, patchStates []NaturalPatchState, slot
 		b.Granted += p.Granted
 		b.Unrealized += p.Unrealized
 		patchID := sim.EntityID(NaturalPatchIDBase + i)
-		var gathered, consumed, held, invested, tenured, cultivated int64
+		var gathered, consumed, held, invested, provisioned, tenured, cultivated int64
 		for _, slot := range patchSlots {
 			gathered += slot.Gathered
 			b.Stock += slot.Stock
@@ -1290,10 +1443,15 @@ func NaturalCheckConservation(patches int, patchStates []NaturalPatchState, slot
 			consumed += a.Body.Consumed
 			held += a.Bag.Units
 			invested += a.Worksite.InvestedUnits
+			// Rule 515 inflow: provisions enter the bag without a gather,
+			// so the bag-intake identity admits them on the inflow side
+			// (zero under the v5 zero value, which keeps the frozen form).
+			provisioned += a.Granary.Provisioned
 			cultivated += a.Granary.CultivatedTotal
 			b.CultivatedTotal += a.Granary.CultivatedTotal
 			b.GranaryStock += a.Granary.Stock
 			b.StoredMeals += a.Granary.StoredMeals
+			b.Provisioned += a.Granary.Provisioned
 			b.Spoiled += a.Granary.Spoiled
 			b.Capital += a.Worksite.Capital
 			b.Wip += a.Worksite.Wip
@@ -1304,7 +1462,7 @@ func NaturalCheckConservation(patches int, patchStates []NaturalPatchState, slot
 			b.EnergyCapLost += a.Body.CapLost
 			b.BirthGranaryPaid += a.Genome.BirthGranaryPaid
 		}
-		if gathered != consumed+held+invested {
+		if gathered+provisioned != consumed+held+invested {
 			return NaturalBalance{}, ErrNaturalContract
 		}
 		// Flat-grant seam: every entitlement the split granted on this patch
@@ -1326,10 +1484,13 @@ func NaturalCheckConservation(patches int, patchStates []NaturalPatchState, slot
 			return NaturalBalance{}, ErrNaturalContract
 		}
 	}
-	// Pass 4: aggregate identities, G1, G2b, G2a extended, G3 extended.
-	if b.Gathered != b.Consumed+b.Held+b.Invested || b.Produced != b.Gathered+b.Stock ||
+	// Pass 4: aggregate identities, G1 (with the v6 provisioned inflow;
+	// exactly the frozen form while provisioned is pinned to zero), G2b,
+	// G2a′ (exactly G2a while the provisioned ledger is pinned to zero by
+	// the per-actor validator), G3 extended.
+	if b.Gathered+b.Provisioned != b.Consumed+b.Held+b.Invested || b.Produced != b.Gathered+b.Stock ||
 		b.Invested != NaturalPointCostWip*b.PointsCreated+b.Wip || b.PointsCreated-b.PointsDecayed != b.Capital ||
-		b.CultivatedTotal != b.StoredMeals+b.GranaryStock+b.Spoiled+b.BirthGranaryPaid ||
+		b.CultivatedTotal != b.StoredMeals+b.GranaryStock+b.Provisioned+b.Spoiled+b.BirthGranaryPaid ||
 		b.InitialEnergy+NaturalNewbornEnergy*b.Births+b.Consumed+b.StoredMeals != b.Energy+b.BasalSpent+b.EnergyCapLost {
 		return NaturalBalance{}, ErrNaturalContract
 	}

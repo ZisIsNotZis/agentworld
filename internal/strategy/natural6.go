@@ -84,22 +84,25 @@ func validNaturalPolicyV6(p NaturalPolicy) bool {
 
 // ValidFrozenNaturalPolicy reports whether p is exactly the frozen content
 // of a policy in the executable's frozen natural ref set {natural/5,
-// natural/6} — the declared identity, the format matching the ref version,
-// and the frozen 32/32 budget. This is the ref-set predicate for the D1
-// policy-selection seam; v5's own validation (validNaturalPolicy) is
-// untouched and stays v5-only, so a v5-only executable keeps rejecting the
-// v6 ref everywhere it validated policy content before.
+// natural/6, natural/7, natural/8} — the declared identity, the format
+// matching the ref version, and the frozen 32/32 budget. This is the ref-set
+// predicate for the D1 policy-selection seam; v5's own validation
+// (validNaturalPolicy) is untouched and stays v5-only, so a v5-only
+// executable keeps rejecting the v6 ref everywhere it validated policy
+// content before.
 func ValidFrozenNaturalPolicy(p NaturalPolicy) bool {
-	return p == FrozenNaturalPolicy() || p == FrozenNaturalPolicyV6()
+	return p == FrozenNaturalPolicy() || p == FrozenNaturalPolicyV6() ||
+		p == FrozenNaturalPolicy7() || p == FrozenNaturalPolicy7b()
 }
 
 // FrozenNaturalPolicyForRef resolves a reference of the frozen natural ref
-// set {natural/5, natural/6} to its frozen content, with the format matching
-// the ref version. Any other reference — {natural,7}, a foreign ID, or the
-// zero ref — fails closed with ErrUnknownNaturalPolicy. This is the single
-// resolution point for the seam's binding site: the world resolves its
-// configured policy ref here, registers the result with
-// RegisterFrozenNatural, and binds every actor by the same ref.
+// set {natural/5, natural/6, natural/7, natural/8} to its frozen content,
+// with the format matching the ref version. Any other reference — {natural,
+// 9}, a foreign ID, or the zero ref — fails closed with
+// ErrUnknownNaturalPolicy. This is the single resolution point for the
+// seam's binding site: the world resolves its configured policy ref here,
+// registers the result with RegisterFrozenNatural, and binds every actor by
+// the same ref.
 func FrozenNaturalPolicyForRef(ref NaturalRef) (NaturalPolicy, error) {
 	if ref == FrozenNaturalPolicy().Ref {
 		return FrozenNaturalPolicy(), nil
@@ -107,18 +110,26 @@ func FrozenNaturalPolicyForRef(ref NaturalRef) (NaturalPolicy, error) {
 	if ref == FrozenNaturalPolicyV6().Ref {
 		return FrozenNaturalPolicyV6(), nil
 	}
+	if ref == FrozenNaturalPolicy7().Ref {
+		return FrozenNaturalPolicy7(), nil
+	}
+	if ref == FrozenNaturalPolicy7b().Ref {
+		return FrozenNaturalPolicy7b(), nil
+	}
 	return NaturalPolicy{}, ErrUnknownNaturalPolicy
 }
 
 // RegisterFrozenNatural registers one policy of the frozen natural ref set
 // under its own ref, applying the same per-ref shape validation the frozen
 // Register applies to v5 (declared format and ref, budget within the frozen
-// ceiling). It is the v6-aware registration path for the policy-selection
-// seam: the frozen v5 Register keeps its v5-only validation untouched and
-// continues to reject the v6 ref. Registering both frozen refs into one
-// registry is supported; Bind still resolves exactly the bound ref.
+// ceiling). It is the ref-set-aware registration path for the
+// policy-selection seam: the frozen v5 Register keeps its v5-only validation
+// untouched and continues to reject the v6, v7, and v8 refs. Registering
+// several frozen refs into one registry is supported; Bind still resolves
+// exactly the bound ref.
 func (r *NaturalRegistry) RegisterFrozenNatural(policy NaturalPolicy) error {
-	if r == nil || !(validNaturalPolicy(policy) || validNaturalPolicyV6(policy)) {
+	if r == nil || !(validNaturalPolicy(policy) || validNaturalPolicyV6(policy) ||
+		validNaturalPolicy7(policy) || validNaturalPolicy7b(policy)) {
 		return ErrInvalidNaturalPolicy
 	}
 	r.mu.Lock()
@@ -432,10 +443,10 @@ func (b *NaturalBound) EvaluateBirthReplyV6(obs NaturalReplyObservation) (Natura
 // the complete frozen content (format, ref identity, budget) in fixed
 // big-endian order with exact framing, 22 bytes for the frozen refs. The
 // functions below are the ref-set-aware twins: identical framing, the
-// validation set extended to the frozen ref set {natural/5, natural/6}. A
-// v5-only executable keeps refusing v6 bytes because EncodeNaturalPolicy,
-// DecodeNaturalPolicy, and VerifyNaturalPolicy validate v5 content only and
-// stay byte-frozen.
+// validation set extended to the frozen ref set {natural/5, natural/6,
+// natural/7, natural/8}. A v5-only executable keeps refusing v6, v7, and v8
+// bytes because EncodeNaturalPolicy, DecodeNaturalPolicy, and
+// VerifyNaturalPolicy validate v5 content only and stay byte-frozen.
 
 // appendNaturalPolicyWire frames p with the untouched natural framing. The
 // framing is mirrored from natural_codec.go; byte identity for v5 content is
@@ -456,7 +467,8 @@ func appendNaturalPolicyWire(p NaturalPolicy) []byte {
 // mirroring EncodeNaturalPolicy's semantics; VerifyFrozenNaturalPolicy
 // rejects variant restorations against the frozen expectation.
 func EncodeFrozenNaturalPolicy(p NaturalPolicy) ([]byte, error) {
-	if !validNaturalPolicy(p) && !validNaturalPolicyV6(p) {
+	if !validNaturalPolicy(p) && !validNaturalPolicyV6(p) &&
+		!validNaturalPolicy7(p) && !validNaturalPolicy7b(p) {
 		return nil, ErrInvalidNaturalPolicy
 	}
 	return appendNaturalPolicyWire(p), nil

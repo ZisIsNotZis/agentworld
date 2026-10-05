@@ -260,11 +260,11 @@ func TestNaturalPolicySeamBidirectionalRefMismatch(t *testing.T) {
 		t.Fatalf("v6 bundle accepted under a v5-only expectation: %v", err)
 	}
 	// An unknown expectation ref is refused before any work.
-	unknown := naturalSeamExpectation(strategy.NaturalRef{ID: "natural", Version: 7}, 1, false)
+	unknown := naturalSeamExpectation(strategy.NaturalRef{ID: "natural", Version: 9}, 1, false)
 	if err := unknown.validate(); !errors.Is(err, ErrNaturalCheckpoint) {
 		t.Fatalf("unknown expectation ref validated: %v", err)
 	}
-	if _, err := NewNatural(NaturalOptions{Patches: 2, R: 8, Seed: 7, Workers: 1, PolicyRef: strategy.NaturalRef{ID: "natural", Version: 7}}); !errors.Is(err, ErrNaturalRunner) {
+	if _, err := NewNatural(NaturalOptions{Patches: 2, R: 8, Seed: 7, Workers: 1, PolicyRef: strategy.NaturalRef{ID: "natural", Version: 9}}); !errors.Is(err, ErrNaturalRunner) {
 		t.Fatalf("unknown option ref accepted: %v", err)
 	}
 	// Branch refuses before publication both ways: the destinations must not
@@ -346,7 +346,7 @@ func TestNaturalPolicySeamForgedRefAndFingerprintFailClosed(t *testing.T) {
 		t.Fatalf("natural/6 config with a natural/5 fingerprint encoded: %v", err)
 	}
 	unknown := f6.journalConfig()
-	unknown.Policy = strategy.NaturalRef{ID: "natural", Version: 7}
+	unknown.Policy = strategy.NaturalRef{ID: "natural", Version: 9}
 	if _, err := EncodeNaturalJournal(f6.Journal(), f6.k, head, f6.sched.Time(), unknown); !errors.Is(err, ErrNaturalJournal) {
 		t.Fatalf("unknown journal ref encoded: %v", err)
 	}

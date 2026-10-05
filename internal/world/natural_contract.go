@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 )
 
 // Natural v5 is the frozen natural-limits world (ticket 15). Its component,
@@ -36,9 +37,26 @@ import (
 //   - the land identity holds over ALL tenure holders (dead included):
 //     tenured slots(patch) = Σk over owners, ≤ 8. During a dead owner's
 //     decay window the alive-only equality is weaker, exactly as documented.
+//
+// Ticket 17 declares the mechanism-version axis on top of these frozen v5
+// bytes: NaturalMechanismV5 is the zero value and reproduces every
+// descriptor, version, and name below byte-identically, while
+// NaturalMechanismV6 (world axis version 6 — distinct from the policy
+// formats natural/5 | natural/6 | natural/7) additively registers rule 515
+// "provision", the granary provisioned ledger field, the G2a′ identity, and
+// the widened G5 writer admissions (granary stock, provisioned,
+// last-stored-meal-hour, bag units under 515). No new component is created:
+// the type-ID block stays 0x80000050-0x8000005A with 0x80000058-0x8000005A
+// unused, because provision writes existing granary and bag rows plus the
+// version-gated granary field. No frozen constant and no frozen v5 field
+// list is mutated; if parameterization ever required that, the declared
+// stop condition is to split the world into a parallel file family instead.
 var ErrNaturalContract = errors.New("invalid natural v5 contract")
 
 const (
+	// The frozen v5 version fields. They are exactly what the zero value of
+	// the mechanism axis (NaturalMechanismV5) produces; NaturalMechanismV6
+	// produces the corresponding version 6 fields through its accessors.
 	NaturalFormatVersion     uint32                = 5
 	NaturalSchemaVersion     sim.SchemaVersion     = 5
 	NaturalRuleVersion       uint32                = 5
@@ -118,6 +136,12 @@ const (
 	NaturalSpoiledMax          int64 = 8 * NaturalHorizonHours                           // 1344
 	NaturalBasalSpentMax       int64 = 6 * NaturalHorizonHours                           // 1008
 	NaturalBirthGranaryPaidMax int64 = 4 * NaturalHorizonHours                           // 672
+
+	// NaturalProvisionedMax is the mechanism-v6-only provisioned-ledger
+	// envelope (ticket 17): at most one granary draw per actor-hour — the
+	// stored-meal draw and the provision share the LastStoredMealHour
+	// guard — so provisions cannot exceed the horizon.
+	NaturalProvisionedMax int64 = NaturalHorizonHours // 168
 )
 
 const (
@@ -158,6 +182,12 @@ const (
 	NaturalBirthRefuseRule  sim.RuleID = 512 // birth-refusal (request rows only)
 	NaturalBirthExpireRule  sim.RuleID = 513 // birth-expiry (world, pulse)
 	NaturalAgeDeathRule     sim.RuleID = 514 // age-death (world, pulse)
+
+	// NaturalProvisionRule (515) exists only under NaturalMechanismV6: at
+	// the frozen claim instant an actor holding no bag unit converts one
+	// granary stock unit into one bag unit (stock−1, provisioned+1,
+	// LastStoredMealHour = hour, bag+1). The v5 rule table stays 501-514.
+	NaturalProvisionRule sim.RuleID = 515 // provision (actor; claim instant; mechanism v6 only)
 )
 
 const (
@@ -204,6 +234,12 @@ const (
 	NaturalGranaryLastStoredMealHourField
 	NaturalGranarySpoilDebtField
 	NaturalGranarySpoiledField
+
+	// NaturalGranaryProvisionedField (7) is the mechanism-v6-only ledger of
+	// granary units drawn as worksite provisions (rule 515). It is appended
+	// after the frozen v5 fields so the frozen six identities never shift;
+	// the v5 granary schema keeps exactly fields 1-6.
+	NaturalGranaryProvisionedField
 )
 const (
 	NaturalGenomeLocusMField sim.FieldID = 1 + iota
@@ -242,6 +278,57 @@ const (
 	NaturalPhaseBirthRequest
 	NaturalPhaseBirthReply
 )
+
+// NaturalMechanism is the declared mechanism-version axis of the natural
+// world (ticket 17 v7 design). The zero value is exactly the frozen v5
+// mechanism: every descriptor, version field, and name it produces is
+// byte-identical to the frozen v5 bytes. NaturalMechanismV6 (world axis
+// version 6) is the only other admitted value and is strictly additive:
+// rule 515, the granary provisioned field, G2a′, and the widened writer
+// admissions exist only under it. Recording caution pinned by the design:
+// this is the WORLD axis, never to be conflated with the policy formats
+// natural/5 | natural/6 | natural/7.
+type NaturalMechanism uint16
+
+const (
+	// NaturalMechanismV5 is the zero value ≡ the frozen v5 world.
+	NaturalMechanismV5 NaturalMechanism = 0
+	// NaturalMechanismV6 adds rule 515 "provision" (world axis version 6).
+	NaturalMechanismV6 NaturalMechanism = 6
+)
+
+// NaturalMechanismValid reports the admitted axis values: the zero value
+// (≡ v5) and 6. Literal 5 is not a second spelling of v5 — the zero value
+// is the one v5 spelling — and everything else fails closed.
+func NaturalMechanismValid(m NaturalMechanism) bool {
+	return m == NaturalMechanismV5 || m == NaturalMechanismV6
+}
+
+// worldVersion is the world axis version number of the mechanism: 5 for the
+// zero value, 6 for NaturalMechanismV6. Anything else is unreachable
+// through NaturalRegistryFor and falls back to the frozen v5 identity.
+func (m NaturalMechanism) worldVersion() uint32 {
+	if m == NaturalMechanismV6 {
+		return 6
+	}
+	return 5
+}
+
+// FormatVersion parameterizes the frozen NaturalFormatVersion.
+func (m NaturalMechanism) FormatVersion() uint32 { return m.worldVersion() }
+
+// SchemaVersion parameterizes the frozen NaturalSchemaVersion.
+func (m NaturalMechanism) SchemaVersion() sim.SchemaVersion {
+	return sim.SchemaVersion(m.worldVersion())
+}
+
+// RuleVersion parameterizes the frozen NaturalRuleVersion.
+func (m NaturalMechanism) RuleVersion() uint32 { return m.worldVersion() }
+
+// ProjectionVersion parameterizes the frozen NaturalProjectionVersion.
+func (m NaturalMechanism) ProjectionVersion() sim.ProjectionVersion {
+	return sim.ProjectionVersion(m.worldVersion())
+}
 
 // Entity-ID space, fixed forever: actors 1..8P (founders) and the
 // allocator-issued newborn block strictly above the highest fixed entity ID;
@@ -398,8 +485,19 @@ func naturalRef(id sim.FieldID, name string, states ...sim.ValueState) component
 	}
 	return component.FieldDescriptor{ID: id, Name: name, Type: component.ValueType{Kind: sim.EntityRefKind}, Unit: "entity-id", PermittedStates: states, Uncertainty: component.UncertaintyForbidden}
 }
+
+// naturalNameSuffix is the descriptor/rule name suffix of the mechanism
+// axis: "v5" for the zero value, "v6" under NaturalMechanismV6.
+func naturalNameSuffix(m NaturalMechanism) string {
+	return "v" + strconv.FormatUint(uint64(m.worldVersion()), 10)
+}
+
+func naturalRuleFor(m NaturalMechanism, id sim.RuleID, name string) component.TransitionRuleDescriptor {
+	return component.TransitionRuleDescriptor{ID: id, Version: m.RuleVersion(), Name: "natural-" + name + "-" + naturalNameSuffix(m)}
+}
+
 func naturalRule(id sim.RuleID, name string) component.TransitionRuleDescriptor {
-	return component.TransitionRuleDescriptor{ID: id, Version: NaturalRuleVersion, Name: "natural-" + name + "-v5"}
+	return naturalRuleFor(NaturalMechanismV5, id, name)
 }
 
 // naturalDescriptor pins the v3/v4 identity-projection pattern: every
@@ -408,56 +506,77 @@ func naturalRule(id sim.RuleID, name string) component.TransitionRuleDescriptor 
 // blends. Ref fields carry no projection. Worksite, granary, genome, and
 // birth-request rows are private per-actor components; slot tenure is
 // privileged state with no observation constructor in this package (Q7).
-func naturalDescriptor(id sim.ComponentTypeID, name string, fields []component.FieldDescriptor, rules ...component.TransitionRuleDescriptor) component.ComponentDescriptor {
+func naturalDescriptorFor(m NaturalMechanism, id sim.ComponentTypeID, name string, fields []component.FieldDescriptor, rules ...component.TransitionRuleDescriptor) component.ComponentDescriptor {
 	projections := make([]component.ProjectionDescriptor, 0, len(fields))
 	for _, f := range fields {
 		if f.Type.Kind != sim.IntegerKind {
 			continue
 		}
-		projections = append(projections, component.ProjectionDescriptor{ID: sim.ProjectionID(f.ID), Version: NaturalProjectionVersion, Name: name + "-" + f.Name, SourceFields: []sim.FieldID{f.ID}, Coefficients: []float64{1}, Unit: f.Unit, Bounds: f.Bounds, MissingBehavior: component.PreserveSourceState})
+		projections = append(projections, component.ProjectionDescriptor{ID: sim.ProjectionID(f.ID), Version: m.ProjectionVersion(), Name: name + "-" + f.Name, SourceFields: []sim.FieldID{f.ID}, Coefficients: []float64{1}, Unit: f.Unit, Bounds: f.Bounds, MissingBehavior: component.PreserveSourceState})
 	}
-	return component.ComponentDescriptor{TypeID: id, SchemaVersion: NaturalSchemaVersion, Name: name, Fields: fields, AccessPolicy: component.AccessAuthorizedReadProject, TransitionRules: rules, Projections: projections, MigrationPolicy: component.MigrationRejectUnlisted, StorageClass: component.DynamicStorage, ComplexityCost: 1}
+	return component.ComponentDescriptor{TypeID: id, SchemaVersion: m.SchemaVersion(), Name: name, Fields: fields, AccessPolicy: component.AccessAuthorizedReadProject, TransitionRules: rules, Projections: projections, MigrationPolicy: component.MigrationRejectUnlisted, StorageClass: component.DynamicStorage, ComplexityCost: 1}
 }
 
-func NaturalPatchDescriptor() component.ComponentDescriptor {
-	return naturalDescriptor(NaturalPatchTypeID, "natural-patch-v5", []component.FieldDescriptor{
+func naturalDescriptor(id sim.ComponentTypeID, name string, fields []component.FieldDescriptor, rules ...component.TransitionRuleDescriptor) component.ComponentDescriptor {
+	return naturalDescriptorFor(NaturalMechanismV5, id, name, fields, rules...)
+}
+
+func NaturalPatchDescriptorFor(m NaturalMechanism) component.ComponentDescriptor {
+	return naturalDescriptorFor(m, NaturalPatchTypeID, "natural-patch-"+naturalNameSuffix(m), []component.FieldDescriptor{
 		naturalInteger(1, "yield", "food/hour", 0, NaturalSlotsPerPatch),
 		naturalInteger(2, "pulses", "hours", 0, NaturalHorizonHours),
 		naturalInteger(3, "produced", "food", 0, float64(NaturalGranaryStockMax)),
 		naturalInteger(4, "granted", "food", 0, float64(NaturalGranaryStockMax)),
 		naturalInteger(5, "unrealized", "food", 0, float64(NaturalGranaryStockMax))},
-		naturalRule(NaturalRegenSplitRule, "regen-split"))
+		naturalRuleFor(m, NaturalRegenSplitRule, "regen-split"))
 }
 
-func NaturalSlotDescriptor() component.ComponentDescriptor {
+func NaturalPatchDescriptor() component.ComponentDescriptor {
+	return NaturalPatchDescriptorFor(NaturalMechanismV5)
+}
+
+func NaturalSlotDescriptorFor(m NaturalMechanism) component.ComponentDescriptor {
 	// Tenure is privileged (Q7): mode 0 wild / 1 cultivated, the owner ref
 	// present iff cultivated, and the redundant cultivated flag that must
 	// agree with the mode (G2b consistency). Only rules 503/505/514 may
 	// write tenure (G5); a cultivated slot never holds standing stock.
-	return naturalDescriptor(NaturalSlotTypeID, "natural-slot-v5", []component.FieldDescriptor{
+	return naturalDescriptorFor(m, NaturalSlotTypeID, "natural-slot-"+naturalNameSuffix(m), []component.FieldDescriptor{
 		naturalInteger(1, "stock", "food", 0, 1),
 		naturalRef(2, "patch"),
 		naturalInteger(3, "gathered", "food", 0, NaturalHorizonHours),
 		naturalInteger(4, "tenure-mode", "state", 0, 1),
 		naturalRef(5, "tenure-owner"),
 		naturalInteger(6, "tenure-cultivated", "state", 0, 1)},
-		naturalRule(NaturalRegenSplitRule, "regen-split"), naturalRule(NaturalWearRule, "wear"),
-		naturalRule(NaturalBuildRule, "build"), naturalRule(NaturalGatherRule, "gather"))
+		naturalRuleFor(m, NaturalRegenSplitRule, "regen-split"), naturalRuleFor(m, NaturalWearRule, "wear"),
+		naturalRuleFor(m, NaturalBuildRule, "build"), naturalRuleFor(m, NaturalGatherRule, "gather"))
 }
 
-func NaturalBagDescriptor() component.ComponentDescriptor {
+func NaturalSlotDescriptor() component.ComponentDescriptor {
+	return NaturalSlotDescriptorFor(NaturalMechanismV5)
+}
+
+func NaturalBagDescriptorFor(m NaturalMechanism) component.ComponentDescriptor {
 	// The bag stays 0..1 and wild-only; it is never a store. The
 	// source-patch field is always present: the holder's home patch, which
 	// is where a newborn's placement lives (proposer's patch; founders are
-	// ID-placed) and where its cultivation must live.
-	return naturalDescriptor(NaturalBagTypeID, "natural-bag-v5", []component.FieldDescriptor{
-		naturalInteger(1, "units", "food", 0, float64(NaturalBagCapacity)), naturalRef(2, "home-patch", sim.Present)},
-		naturalRule(NaturalGatherRule, "gather"), naturalRule(NaturalConsumeRule, "consume"),
-		naturalRule(NaturalBuildRule, "build"), naturalRule(NaturalBirthReplyRule, "birth-reply"))
+	// ID-placed) and where its cultivation must live. Under the v6
+	// mechanism the bag additionally admits rule 515's bag+1 write.
+	rules := []component.TransitionRuleDescriptor{
+		naturalRuleFor(m, NaturalGatherRule, "gather"), naturalRuleFor(m, NaturalConsumeRule, "consume"),
+		naturalRuleFor(m, NaturalBuildRule, "build"), naturalRuleFor(m, NaturalBirthReplyRule, "birth-reply")}
+	if m == NaturalMechanismV6 {
+		rules = append(rules, naturalRuleFor(m, NaturalProvisionRule, "provision"))
+	}
+	return naturalDescriptorFor(m, NaturalBagTypeID, "natural-bag-"+naturalNameSuffix(m), []component.FieldDescriptor{
+		naturalInteger(1, "units", "food", 0, float64(NaturalBagCapacity)), naturalRef(2, "home-patch", sim.Present)}, rules...)
 }
 
-func NaturalBodyDescriptor() component.ComponentDescriptor {
-	return naturalDescriptor(NaturalBodyTypeID, "natural-body-v5", []component.FieldDescriptor{
+func NaturalBagDescriptor() component.ComponentDescriptor {
+	return NaturalBagDescriptorFor(NaturalMechanismV5)
+}
+
+func NaturalBodyDescriptorFor(m NaturalMechanism) component.ComponentDescriptor {
+	return naturalDescriptorFor(m, NaturalBodyTypeID, "natural-body-"+naturalNameSuffix(m), []component.FieldDescriptor{
 		naturalInteger(1, "energy", "energy", 0, float64(NaturalEnergyCapacity)),
 		naturalInteger(2, "hunger", "hours", 0, float64(NaturalHungerCapacity)),
 		naturalInteger(3, "basal-spent", "energy", 0, float64(NaturalBasalSpentMax)),
@@ -465,13 +584,17 @@ func NaturalBodyDescriptor() component.ComponentDescriptor {
 		naturalInteger(5, "consumed-home-patch", "food", 0, NaturalHorizonHours),
 		{ID: NaturalBodyLastGatherHourField, Name: "last-gather-hour", Type: component.ValueType{Kind: sim.IntegerKind}, Unit: "hour", Bounds: naturalHourBounds(), PermittedStates: []sim.ValueState{sim.Present}, Uncertainty: component.UncertaintyForbidden},
 		naturalInteger(7, "basal-debt", "energy", 0, float64(NaturalBasalDebtMax))},
-		naturalRule(NaturalBasalRule, "basal"), naturalRule(NaturalGatherRule, "gather"),
-		naturalRule(NaturalConsumeRule, "consume"), naturalRule(NaturalEatStoredRule, "eat-stored"),
-		naturalRule(NaturalBirthReplyRule, "birth-reply"))
+		naturalRuleFor(m, NaturalBasalRule, "basal"), naturalRuleFor(m, NaturalGatherRule, "gather"),
+		naturalRuleFor(m, NaturalConsumeRule, "consume"), naturalRuleFor(m, NaturalEatStoredRule, "eat-stored"),
+		naturalRuleFor(m, NaturalBirthReplyRule, "birth-reply"))
 }
 
-func NaturalWorksiteDescriptor() component.ComponentDescriptor {
-	return naturalDescriptor(NaturalWorksiteTypeID, "natural-worksite-v5", []component.FieldDescriptor{
+func NaturalBodyDescriptor() component.ComponentDescriptor {
+	return NaturalBodyDescriptorFor(NaturalMechanismV5)
+}
+
+func NaturalWorksiteDescriptorFor(m NaturalMechanism) component.ComponentDescriptor {
+	return naturalDescriptorFor(m, NaturalWorksiteTypeID, "natural-worksite-"+naturalNameSuffix(m), []component.FieldDescriptor{
 		naturalInteger(1, "capital", "points", 0, float64(NaturalKMax)),
 		naturalInteger(2, "wip", "units", 0, float64(NaturalWipMax)),
 		naturalInteger(3, "wear-debt", "points", 0, float64(NaturalWearDebtMax)),
@@ -479,34 +602,51 @@ func NaturalWorksiteDescriptor() component.ComponentDescriptor {
 		naturalInteger(5, "points-created", "points", 0, NaturalHorizonHours),
 		naturalInteger(6, "points-decayed", "points", 0, NaturalHorizonHours),
 		{ID: NaturalWorksiteLastBuildHourField, Name: "last-build-hour", Type: component.ValueType{Kind: sim.IntegerKind}, Unit: "hour", Bounds: naturalHourBounds(), PermittedStates: []sim.ValueState{sim.Present}, Uncertainty: component.UncertaintyForbidden}},
-		naturalRule(NaturalWearRule, "wear"), naturalRule(NaturalBuildRule, "build"),
-		naturalRule(NaturalBirthReplyRule, "birth-reply"))
+		naturalRuleFor(m, NaturalWearRule, "wear"), naturalRuleFor(m, NaturalBuildRule, "build"),
+		naturalRuleFor(m, NaturalBirthReplyRule, "birth-reply"))
 }
 
-func NaturalGranaryDescriptor() component.ComponentDescriptor {
+func NaturalWorksiteDescriptor() component.ComponentDescriptor {
+	return NaturalWorksiteDescriptorFor(NaturalMechanismV5)
+}
+
+func NaturalGranaryDescriptorFor(m NaturalMechanism) component.ComponentDescriptor {
 	// Storage is bounded by spoilage, not by a cap (Q2): stock, the
 	// cultivated-received ledger, the spoil-debt carry, and the spoiled
 	// counter carry horizon-envelope bounds that cannot bind behavior
 	// before h=168. The v4 yield-unrealized and yield-debt fields are
 	// retired: grants are never lost to fullness and never lag the budget.
-	return naturalDescriptor(NaturalGranaryTypeID, "natural-granary-v5", []component.FieldDescriptor{
+	// Under the v6 mechanism the descriptor additively carries field 7
+	// "provisioned" (rule 515's withdrawal ledger) and admits rule 515;
+	// the v5 zero value keeps exactly the frozen six-field list.
+	fields := []component.FieldDescriptor{
 		naturalInteger(1, "stock", "food", 0, float64(NaturalGranaryStockMax)),
 		naturalInteger(2, "cultivated-total", "food", 0, float64(NaturalGranaryStockMax)),
 		naturalInteger(3, "stored-meals", "meals", 0, NaturalHorizonHours),
 		{ID: NaturalGranaryLastStoredMealHourField, Name: "last-stored-meal-hour", Type: component.ValueType{Kind: sim.IntegerKind}, Unit: "hour", Bounds: naturalHourBounds(), PermittedStates: []sim.ValueState{sim.Present}, Uncertainty: component.UncertaintyForbidden},
 		naturalInteger(5, "spoil-debt", "food", 0, float64(NaturalSpoilDebtMax)),
-		naturalInteger(6, "spoiled", "food", 0, float64(NaturalSpoiledMax))},
-		naturalRule(NaturalSpoilageRule, "spoilage"), naturalRule(NaturalGrantRule, "yield-grant"),
-		naturalRule(NaturalEatStoredRule, "eat-stored"), naturalRule(NaturalBirthReplyRule, "birth-reply"))
+		naturalInteger(6, "spoiled", "food", 0, float64(NaturalSpoiledMax))}
+	rules := []component.TransitionRuleDescriptor{
+		naturalRuleFor(m, NaturalSpoilageRule, "spoilage"), naturalRuleFor(m, NaturalGrantRule, "yield-grant"),
+		naturalRuleFor(m, NaturalEatStoredRule, "eat-stored"), naturalRuleFor(m, NaturalBirthReplyRule, "birth-reply")}
+	if m == NaturalMechanismV6 {
+		fields = append(fields, naturalInteger(NaturalGranaryProvisionedField, "provisioned", "meals", 0, float64(NaturalProvisionedMax)))
+		rules = append(rules, naturalRuleFor(m, NaturalProvisionRule, "provision"))
+	}
+	return naturalDescriptorFor(m, NaturalGranaryTypeID, "natural-granary-"+naturalNameSuffix(m), fields, rules...)
 }
 
-func NaturalGenomeDescriptor() component.ComponentDescriptor {
+func NaturalGranaryDescriptor() component.ComponentDescriptor {
+	return NaturalGranaryDescriptorFor(NaturalMechanismV5)
+}
+
+func NaturalGenomeDescriptorFor(m NaturalMechanism) component.ComponentDescriptor {
 	// The heritable genome. Immutable post-creation except died-hour
 	// (rules 504/514); rule 511 may additionally write birth-granary-paid
 	// on the two paying parents, and only rule 511's allocation sets the
 	// parent refs of a newborn row. Locus-y is heritable but
 	// production-neutral in v5 (corrigendum: flat grants).
-	return naturalDescriptor(NaturalGenomeTypeID, "natural-genome-v5", []component.FieldDescriptor{
+	return naturalDescriptorFor(m, NaturalGenomeTypeID, "natural-genome-"+naturalNameSuffix(m), []component.FieldDescriptor{
 		naturalInteger(1, "locus-m", "allele", float64(NaturalGenomeLocusMin), float64(NaturalGenomeLocusMax)),
 		naturalInteger(2, "locus-y", "allele", float64(NaturalGenomeLocusMin), float64(NaturalGenomeLocusMax)),
 		naturalInteger(3, "locus-w", "allele", float64(NaturalGenomeLocusMin), float64(NaturalGenomeLocusMax)),
@@ -516,14 +656,18 @@ func NaturalGenomeDescriptor() component.ComponentDescriptor {
 		naturalInteger(7, "death-hour", "hour", 0, 479),
 		naturalInteger(8, "died-hour", "hour", float64(NaturalNeverHour), NaturalHorizonHours),
 		naturalInteger(9, "birth-granary-paid", "food", 0, float64(NaturalBirthGranaryPaidMax))},
-		naturalRule(NaturalBasalRule, "basal"), naturalRule(NaturalBirthReplyRule, "birth-reply"),
-		naturalRule(NaturalAgeDeathRule, "age-death"))
+		naturalRuleFor(m, NaturalBasalRule, "basal"), naturalRuleFor(m, NaturalBirthReplyRule, "birth-reply"),
+		naturalRuleFor(m, NaturalAgeDeathRule, "age-death"))
 }
 
-func NaturalBirthRequestDescriptor() component.ComponentDescriptor {
+func NaturalGenomeDescriptor() component.ComponentDescriptor {
+	return NaturalGenomeDescriptorFor(NaturalMechanismV5)
+}
+
+func NaturalBirthRequestDescriptorFor(m NaturalMechanism) component.ComponentDescriptor {
 	// The reported-granary claim carries the granary horizon envelope: a
 	// self-reported claim must be able to state any reachable true value.
-	return naturalDescriptor(NaturalBirthRequestTypeID, "natural-birthrequest-v5", []component.FieldDescriptor{
+	return naturalDescriptorFor(m, NaturalBirthRequestTypeID, "natural-birthrequest-"+naturalNameSuffix(m), []component.FieldDescriptor{
 		naturalInteger(1, "hour", "hour", float64(NaturalNeverHour), NaturalHorizonHours-1),
 		naturalRef(2, "addressee"),
 		naturalInteger(3, "reported-capital", "points", 0, float64(NaturalKMax)),
@@ -531,21 +675,37 @@ func NaturalBirthRequestDescriptor() component.ComponentDescriptor {
 		naturalInteger(5, "status", "state", 0, 4),
 		naturalInteger(6, "last-request-hour", "hour", float64(NaturalNeverHour), NaturalHorizonHours-1),
 		naturalInteger(7, "last-reply-hour", "hour", float64(NaturalNeverHour), NaturalHorizonHours-1)},
-		naturalRule(NaturalBirthRequestRule, "birth-request"), naturalRule(NaturalBirthReplyRule, "birth-reply"),
-		naturalRule(NaturalBirthRefuseRule, "birth-refusal"), naturalRule(NaturalBirthExpireRule, "birth-expiry"))
+		naturalRuleFor(m, NaturalBirthRequestRule, "birth-request"), naturalRuleFor(m, NaturalBirthReplyRule, "birth-reply"),
+		naturalRuleFor(m, NaturalBirthRefuseRule, "birth-refusal"), naturalRuleFor(m, NaturalBirthExpireRule, "birth-expiry"))
 }
 
-// NaturalRegistry is intentionally disjoint from the v1, v2, v3, v4, and S6
-// registries: type IDs, rule IDs, and versions never collide, so no history
-// can be replayed across world versions by accident.
-func NaturalRegistry() (component.Registry, error) {
+func NaturalBirthRequestDescriptor() component.ComponentDescriptor {
+	return NaturalBirthRequestDescriptorFor(NaturalMechanismV5)
+}
+
+// NaturalRegistryFor builds the registry of the mechanism axis: the zero
+// value reproduces the frozen v5 registry byte-identically;
+// NaturalMechanismV6 additively carries rule 515 on the granary and bag
+// descriptors and the provisioned field on the granary. Any other value
+// fails closed. The registry stays intentionally disjoint from the v1, v2,
+// v3, v4, and S6 registries: type IDs, rule IDs, and versions never
+// collide, so no history can be replayed across world versions by accident.
+func NaturalRegistryFor(m NaturalMechanism) (component.Registry, error) {
+	if !NaturalMechanismValid(m) {
+		return component.Registry{}, fmt.Errorf("%w: mechanism %d is not an admitted mechanism version", ErrNaturalContract, uint16(m))
+	}
 	b := component.NewRegistryBuilder()
-	for _, d := range []component.ComponentDescriptor{NaturalPatchDescriptor(), NaturalSlotDescriptor(), NaturalBagDescriptor(), NaturalBodyDescriptor(), NaturalWorksiteDescriptor(), NaturalGranaryDescriptor(), NaturalGenomeDescriptor(), NaturalBirthRequestDescriptor()} {
+	for _, d := range []component.ComponentDescriptor{NaturalPatchDescriptorFor(m), NaturalSlotDescriptorFor(m), NaturalBagDescriptorFor(m), NaturalBodyDescriptorFor(m), NaturalWorksiteDescriptorFor(m), NaturalGranaryDescriptorFor(m), NaturalGenomeDescriptorFor(m), NaturalBirthRequestDescriptorFor(m)} {
 		if err := b.Register(d); err != nil {
 			return component.Registry{}, fmt.Errorf("%w: %v", ErrNaturalContract, err)
 		}
 	}
 	return b.Freeze()
+}
+
+// NaturalRegistry is the frozen v5 registry (the mechanism zero value).
+func NaturalRegistry() (component.Registry, error) {
+	return NaturalRegistryFor(NaturalMechanismV5)
 }
 
 // naturalSlotTenureField reports whether the field is a tenure write (mode,
@@ -565,6 +725,29 @@ func naturalSlotTenureField(field sim.FieldID) bool {
 // died-hour and only rule 511 may write birth-granary-paid; loci, hours,
 // and parent refs are never patchable after creation (parent refs are set
 // only by rule 511's newborn allocation).
+// naturalPatchFieldAllowedFor is the mechanism-parameterized field-level
+// half of the G5 ownership guard. The v5 zero value is exactly the frozen
+// v5 writer set. NaturalMechanismV6 additively admits rule 515's four
+// (component, field) admissions — granary stock, granary provisioned,
+// granary last-stored-meal-hour, bag units — and nothing else; every 515
+// write under the v5 zero value is refused, so the widened writer set
+// exists only under the new mechanism version.
+func naturalPatchFieldAllowedFor(m NaturalMechanism, rule sim.RuleID, componentType sim.ComponentTypeID, field sim.FieldID) bool {
+	if rule == NaturalProvisionRule {
+		if m != NaturalMechanismV6 {
+			return false
+		}
+		switch componentType {
+		case NaturalGranaryTypeID:
+			return field == NaturalGranaryStockField || field == NaturalGranaryProvisionedField || field == NaturalGranaryLastStoredMealHourField
+		case NaturalBagTypeID:
+			return field == NaturalBagUnitsField
+		}
+		return false
+	}
+	return naturalPatchFieldAllowed(rule, componentType, field)
+}
+
 func naturalPatchFieldAllowed(rule sim.RuleID, componentType sim.ComponentTypeID, field sim.FieldID) bool {
 	switch rule {
 	case NaturalGatherRule:
@@ -666,7 +849,17 @@ func naturalWorldRule(rule sim.RuleID) bool {
 // and rule admission, not ownership; the runner and journal replay must
 // apply this check to every natural proposal.
 func NaturalCheckOwnership(p kernel.Proposal, patches int) error {
-	if p.RuleVersion != NaturalRuleVersion {
+	return NaturalCheckOwnershipFor(NaturalMechanismV5, p, patches)
+}
+
+// NaturalCheckOwnershipFor is the mechanism-parameterized ownership guard:
+// the zero value is byte-identical to NaturalCheckOwnership (rule 515 and
+// its widened admissions do not exist there); NaturalMechanismV6 admits the
+// provision rule 515 as an actor-caused own-rows rule over its four
+// enumerated (component, field) admissions and requires the v6 rule
+// version.
+func NaturalCheckOwnershipFor(m NaturalMechanism, p kernel.Proposal, patches int) error {
+	if p.RuleVersion != m.RuleVersion() {
 		return ErrNaturalContract
 	}
 	if naturalWorldRule(p.Rule) != p.Cause.World || (p.Cause.World && p.Cause.Actor != 0) || (!p.Cause.World && p.Cause.Actor == 0) {
@@ -710,16 +903,18 @@ func NaturalCheckOwnership(p kernel.Proposal, patches int) error {
 				return ErrNaturalContract
 			}
 		default:
-			if !naturalPatchFieldAllowed(p.Rule, patch.Component, patch.Field) {
+			if !naturalPatchFieldAllowedFor(m, p.Rule, patch.Component, patch.Field) {
 				return ErrNaturalContract
 			}
 			if !naturalActorEntity(patches, patch.Entity) {
 				return ErrNaturalContract
 			}
 			switch p.Rule {
-			case NaturalGatherRule, NaturalConsumeRule, NaturalBuildRule, NaturalEatStoredRule, NaturalBirthRequestRule:
+			case NaturalGatherRule, NaturalConsumeRule, NaturalBuildRule, NaturalEatStoredRule, NaturalBirthRequestRule, NaturalProvisionRule:
 				// Possession-by-identity: a causal actor may only mutate
-				// its own rows; there is no transfer or salvage path.
+				// its own rows; there is no transfer or salvage path. Rule
+				// 515 (admitted only under mechanism v6 by the field guard
+				// above) is an own-rows rule like the other draw rules.
 				if patch.Entity != p.Cause.Actor {
 					return ErrNaturalContract
 				}
@@ -753,6 +948,10 @@ func NaturalCheckOwnership(p kernel.Proposal, patches int) error {
 // h+1µs claim time: slot stock/gathered plus the gatherer's own bag and body
 // rows. Eligibility is delegated entirely to NaturalGather.
 func NaturalGatherProposal(key string, patches, hour int, actor, slot sim.EntityID, slotBefore NaturalSlotState, a NaturalActorState) (kernel.Proposal, error) {
+	return NaturalGatherProposalFor(NaturalMechanismV5, key, patches, hour, actor, slot, slotBefore, a)
+}
+
+func NaturalGatherProposalFor(m NaturalMechanism, key string, patches, hour int, actor, slot sim.EntityID, slotBefore NaturalSlotState, a NaturalActorState) (kernel.Proposal, error) {
 	home := a.Bag.Source
 	if _, err := NaturalPatchID(patches, int(home)-NaturalPatchIDBase); err != nil {
 		return kernel.Proposal{}, ErrNaturalContract
@@ -761,16 +960,16 @@ func NaturalGatherProposal(key string, patches, hour int, actor, slot sim.Entity
 	if err != nil {
 		return kernel.Proposal{}, ErrNaturalContract
 	}
-	nextSlot, next, err := NaturalGather(patches, home, slot, actor, hour, slotBefore, a)
+	nextSlot, next, err := NaturalGatherFor(m, patches, home, slot, actor, hour, slotBefore, a)
 	if err != nil {
 		return kernel.Proposal{}, err
 	}
-	return kernel.Proposal{Key: key, Time: at, Cause: kernel.Cause{Actor: actor}, Rule: NaturalGatherRule, RuleVersion: NaturalRuleVersion,
+	return kernel.Proposal{Key: key, Time: at, Cause: kernel.Cause{Actor: actor}, Rule: NaturalGatherRule, RuleVersion: m.RuleVersion(),
 		Patches: []component.Patch{
-			{Entity: slot, Component: NaturalSlotTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalSlotStockField, Value: sim.IntegerValue(nextSlot.Stock)},
-			{Entity: slot, Component: NaturalSlotTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalSlotGatheredField, Value: sim.IntegerValue(nextSlot.Gathered)},
-			{Entity: actor, Component: NaturalBagTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBagUnitsField, Value: sim.IntegerValue(next.Bag.Units)},
-			{Entity: actor, Component: NaturalBodyTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBodyLastGatherHourField, Value: sim.IntegerValue(next.Body.LastGatherHour)},
+			{Entity: slot, Component: NaturalSlotTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalSlotStockField, Value: sim.IntegerValue(nextSlot.Stock)},
+			{Entity: slot, Component: NaturalSlotTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalSlotGatheredField, Value: sim.IntegerValue(nextSlot.Gathered)},
+			{Entity: actor, Component: NaturalBagTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBagUnitsField, Value: sim.IntegerValue(next.Bag.Units)},
+			{Entity: actor, Component: NaturalBodyTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBodyLastGatherHourField, Value: sim.IntegerValue(next.Body.LastGatherHour)},
 		}}, nil
 }
 
@@ -778,27 +977,35 @@ func NaturalGatherProposal(key string, patches, hour int, actor, slot sim.Entity
 // decision, the Build alternative of the single bag decision point. The
 // bag's home-patch source is retained, never cleared.
 func NaturalConsumeProposal(key string, patches, hour int, actor sim.EntityID, a NaturalActorState) (kernel.Proposal, error) {
+	return NaturalConsumeProposalFor(NaturalMechanismV5, key, patches, hour, actor, a)
+}
+
+func NaturalConsumeProposalFor(m NaturalMechanism, key string, patches, hour int, actor sim.EntityID, a NaturalActorState) (kernel.Proposal, error) {
 	at, err := NaturalPhaseTime(hour, NaturalPhaseBagDecision)
 	if err != nil {
 		return kernel.Proposal{}, ErrNaturalContract
 	}
-	next, _, err := NaturalConsume(patches, actor, a)
+	next, _, err := NaturalConsumeFor(m, patches, actor, a)
 	if err != nil {
 		return kernel.Proposal{}, err
 	}
-	return kernel.Proposal{Key: key, Time: at, Cause: kernel.Cause{Actor: actor}, Rule: NaturalConsumeRule, RuleVersion: NaturalRuleVersion,
+	return kernel.Proposal{Key: key, Time: at, Cause: kernel.Cause{Actor: actor}, Rule: NaturalConsumeRule, RuleVersion: m.RuleVersion(),
 		Patches: []component.Patch{
-			{Entity: actor, Component: NaturalBagTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBagUnitsField, Value: sim.IntegerValue(next.Bag.Units)},
-			{Entity: actor, Component: NaturalBodyTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBodyEnergyField, Value: sim.IntegerValue(next.Body.Energy)},
-			{Entity: actor, Component: NaturalBodyTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBodyHungerField, Value: sim.IntegerValue(next.Body.Hunger)},
-			{Entity: actor, Component: NaturalBodyTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBodyCapLostField, Value: sim.IntegerValue(next.Body.CapLost)},
-			{Entity: actor, Component: NaturalBodyTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBodyConsumedField, Value: sim.IntegerValue(next.Body.Consumed)},
+			{Entity: actor, Component: NaturalBagTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBagUnitsField, Value: sim.IntegerValue(next.Bag.Units)},
+			{Entity: actor, Component: NaturalBodyTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBodyEnergyField, Value: sim.IntegerValue(next.Body.Energy)},
+			{Entity: actor, Component: NaturalBodyTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBodyHungerField, Value: sim.IntegerValue(next.Body.Hunger)},
+			{Entity: actor, Component: NaturalBodyTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBodyCapLostField, Value: sim.IntegerValue(next.Body.CapLost)},
+			{Entity: actor, Component: NaturalBodyTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBodyConsumedField, Value: sim.IntegerValue(next.Body.Consumed)},
 		}}, nil
 }
 
 // NaturalEatStoredProposal is the only granary draw. at must be exactly the
 // h+1µs claim or the h+40m+4µs paired meal of the given hour.
 func NaturalEatStoredProposal(key string, patches, hour int, at sim.SimTime, actor sim.EntityID, a NaturalActorState) (kernel.Proposal, error) {
+	return NaturalEatStoredProposalFor(NaturalMechanismV5, key, patches, hour, at, actor, a)
+}
+
+func NaturalEatStoredProposalFor(m NaturalMechanism, key string, patches, hour int, at sim.SimTime, actor sim.EntityID, a NaturalActorState) (kernel.Proposal, error) {
 	claim, err := NaturalPhaseTime(hour, NaturalPhaseClaim)
 	if err != nil {
 		return kernel.Proposal{}, ErrNaturalContract
@@ -807,18 +1014,44 @@ func NaturalEatStoredProposal(key string, patches, hour int, at sim.SimTime, act
 	if at != claim && at != paired {
 		return kernel.Proposal{}, ErrNaturalContract
 	}
-	next, _, err := NaturalEatStored(patches, hour, actor, a)
+	next, _, err := NaturalEatStoredFor(m, patches, hour, actor, a)
 	if err != nil {
 		return kernel.Proposal{}, err
 	}
-	return kernel.Proposal{Key: key, Time: at, Cause: kernel.Cause{Actor: actor}, Rule: NaturalEatStoredRule, RuleVersion: NaturalRuleVersion,
+	return kernel.Proposal{Key: key, Time: at, Cause: kernel.Cause{Actor: actor}, Rule: NaturalEatStoredRule, RuleVersion: m.RuleVersion(),
 		Patches: []component.Patch{
-			{Entity: actor, Component: NaturalGranaryTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalGranaryStockField, Value: sim.IntegerValue(next.Granary.Stock)},
-			{Entity: actor, Component: NaturalGranaryTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalGranaryStoredMealsField, Value: sim.IntegerValue(next.Granary.StoredMeals)},
-			{Entity: actor, Component: NaturalGranaryTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalGranaryLastStoredMealHourField, Value: sim.IntegerValue(next.Granary.LastStoredMealHour)},
-			{Entity: actor, Component: NaturalBodyTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBodyEnergyField, Value: sim.IntegerValue(next.Body.Energy)},
-			{Entity: actor, Component: NaturalBodyTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBodyHungerField, Value: sim.IntegerValue(next.Body.Hunger)},
-			{Entity: actor, Component: NaturalBodyTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBodyCapLostField, Value: sim.IntegerValue(next.Body.CapLost)},
+			{Entity: actor, Component: NaturalGranaryTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalGranaryStockField, Value: sim.IntegerValue(next.Granary.Stock)},
+			{Entity: actor, Component: NaturalGranaryTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalGranaryStoredMealsField, Value: sim.IntegerValue(next.Granary.StoredMeals)},
+			{Entity: actor, Component: NaturalGranaryTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalGranaryLastStoredMealHourField, Value: sim.IntegerValue(next.Granary.LastStoredMealHour)},
+			{Entity: actor, Component: NaturalBodyTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBodyEnergyField, Value: sim.IntegerValue(next.Body.Energy)},
+			{Entity: actor, Component: NaturalBodyTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBodyHungerField, Value: sim.IntegerValue(next.Body.Hunger)},
+			{Entity: actor, Component: NaturalBodyTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBodyCapLostField, Value: sim.IntegerValue(next.Body.CapLost)},
+		}}, nil
+}
+
+// NaturalProvisionProposal builds the rule-515 intention at the frozen
+// h+1µs claim instant, mechanism v6 only (the zero value refuses): granary
+// stock/provisioned/last-stored-meal-hour plus the actor's own bag row. The
+// converted unit takes the normal bag decision afterward; the actor's body
+// is untouched — the meal is taken as worksite provision, not eaten.
+func NaturalProvisionProposal(m NaturalMechanism, key string, patches, hour int, actor sim.EntityID, a NaturalActorState) (kernel.Proposal, error) {
+	if m != NaturalMechanismV6 {
+		return kernel.Proposal{}, ErrNaturalContract
+	}
+	at, err := NaturalPhaseTime(hour, NaturalPhaseClaim)
+	if err != nil {
+		return kernel.Proposal{}, ErrNaturalContract
+	}
+	next, err := NaturalProvision(m, patches, hour, actor, a)
+	if err != nil {
+		return kernel.Proposal{}, err
+	}
+	return kernel.Proposal{Key: key, Time: at, Cause: kernel.Cause{Actor: actor}, Rule: NaturalProvisionRule, RuleVersion: m.RuleVersion(),
+		Patches: []component.Patch{
+			{Entity: actor, Component: NaturalGranaryTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalGranaryStockField, Value: sim.IntegerValue(next.Granary.Stock)},
+			{Entity: actor, Component: NaturalGranaryTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalGranaryProvisionedField, Value: sim.IntegerValue(next.Granary.Provisioned)},
+			{Entity: actor, Component: NaturalGranaryTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalGranaryLastStoredMealHourField, Value: sim.IntegerValue(next.Granary.LastStoredMealHour)},
+			{Entity: actor, Component: NaturalBagTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBagUnitsField, Value: sim.IntegerValue(next.Bag.Units)},
 		}}, nil
 }
 
@@ -828,21 +1061,25 @@ func NaturalEatStoredProposal(key string, patches, hour int, at sim.SimTime, act
 // any paired eat-stored of the same hour. A claimed slot's tenure patches
 // ride on the same proposal; the slot's stock is already 0 and never written.
 func NaturalBuildProposal(key string, patches, hour int, actor sim.EntityID, a NaturalActorState, homeSlots [NaturalSlotsPerPatch]NaturalSlotState) (kernel.Proposal, error) {
+	return NaturalBuildProposalFor(NaturalMechanismV5, key, patches, hour, actor, a, homeSlots)
+}
+
+func NaturalBuildProposalFor(m NaturalMechanism, key string, patches, hour int, actor sim.EntityID, a NaturalActorState, homeSlots [NaturalSlotsPerPatch]NaturalSlotState) (kernel.Proposal, error) {
 	start, err := NaturalPhaseTime(hour, NaturalPhaseBuildStart)
 	if err != nil {
 		return kernel.Proposal{}, ErrNaturalContract
 	}
-	next, slots, result, err := NaturalBuild(patches, hour, actor, a, a.Bag.Source, homeSlots)
+	next, slots, result, err := NaturalBuildFor(m, patches, hour, actor, a, a.Bag.Source, homeSlots)
 	if err != nil {
 		return kernel.Proposal{}, err
 	}
 	patchList := []component.Patch{
-		{Entity: actor, Component: NaturalBagTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBagUnitsField, Value: sim.IntegerValue(next.Bag.Units)},
-		{Entity: actor, Component: NaturalWorksiteTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalWorksiteCapitalField, Value: sim.IntegerValue(next.Worksite.Capital)},
-		{Entity: actor, Component: NaturalWorksiteTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalWorksiteWipField, Value: sim.IntegerValue(next.Worksite.Wip)},
-		{Entity: actor, Component: NaturalWorksiteTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalWorksiteInvestedUnitsField, Value: sim.IntegerValue(next.Worksite.InvestedUnits)},
-		{Entity: actor, Component: NaturalWorksiteTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalWorksitePointsCreatedField, Value: sim.IntegerValue(next.Worksite.PointsCreated)},
-		{Entity: actor, Component: NaturalWorksiteTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalWorksiteLastBuildHourField, Value: sim.IntegerValue(next.Worksite.LastBuildHour)},
+		{Entity: actor, Component: NaturalBagTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBagUnitsField, Value: sim.IntegerValue(next.Bag.Units)},
+		{Entity: actor, Component: NaturalWorksiteTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalWorksiteCapitalField, Value: sim.IntegerValue(next.Worksite.Capital)},
+		{Entity: actor, Component: NaturalWorksiteTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalWorksiteWipField, Value: sim.IntegerValue(next.Worksite.Wip)},
+		{Entity: actor, Component: NaturalWorksiteTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalWorksiteInvestedUnitsField, Value: sim.IntegerValue(next.Worksite.InvestedUnits)},
+		{Entity: actor, Component: NaturalWorksiteTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalWorksitePointsCreatedField, Value: sim.IntegerValue(next.Worksite.PointsCreated)},
+		{Entity: actor, Component: NaturalWorksiteTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalWorksiteLastBuildHourField, Value: sim.IntegerValue(next.Worksite.LastBuildHour)},
 	}
 	if result.ClaimedSlotIndex >= 0 {
 		slotID, err := NaturalSlotID(patches, int(a.Bag.Source)-NaturalPatchIDBase, result.ClaimedSlotIndex)
@@ -855,22 +1092,26 @@ func NaturalBuildProposal(key string, patches, hour int, actor sim.EntityID, a N
 			return kernel.Proposal{}, ErrNaturalContract
 		}
 		patchList = append(patchList,
-			component.Patch{Entity: slotID, Component: NaturalSlotTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalSlotTenureModeField, Value: sim.IntegerValue(int64(tenure.Mode))},
-			component.Patch{Entity: slotID, Component: NaturalSlotTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalSlotTenureOwnerField, Value: ownerRef},
-			component.Patch{Entity: slotID, Component: NaturalSlotTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalSlotTenureCultivatedField, Value: sim.IntegerValue(tenure.Cultivated)})
+			component.Patch{Entity: slotID, Component: NaturalSlotTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalSlotTenureModeField, Value: sim.IntegerValue(int64(tenure.Mode))},
+			component.Patch{Entity: slotID, Component: NaturalSlotTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalSlotTenureOwnerField, Value: ownerRef},
+			component.Patch{Entity: slotID, Component: NaturalSlotTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalSlotTenureCultivatedField, Value: sim.IntegerValue(tenure.Cultivated)})
 	}
-	return kernel.Proposal{Key: key, Time: NaturalBuildCompletion(start), Cause: kernel.Cause{Actor: actor}, Rule: NaturalBuildRule, RuleVersion: NaturalRuleVersion, Patches: patchList}, nil
+	return kernel.Proposal{Key: key, Time: NaturalBuildCompletion(start), Cause: kernel.Cause{Actor: actor}, Rule: NaturalBuildRule, RuleVersion: m.RuleVersion(), Patches: patchList}, nil
 }
 
 // NaturalBirthRequestProposal files the addressed request at the frozen
 // h+40m+5µs phase with self-reported capital/granary claims. Eligibility is
 // delegated to NaturalBirthRequest.
 func NaturalBirthRequestProposal(key string, patches, hour int, proposer, addressee sim.EntityID, reportedCapital, reportedGranary int64, a NaturalActorState) (kernel.Proposal, error) {
+	return NaturalBirthRequestProposalFor(NaturalMechanismV5, key, patches, hour, proposer, addressee, reportedCapital, reportedGranary, a)
+}
+
+func NaturalBirthRequestProposalFor(m NaturalMechanism, key string, patches, hour int, proposer, addressee sim.EntityID, reportedCapital, reportedGranary int64, a NaturalActorState) (kernel.Proposal, error) {
 	at, err := NaturalPhaseTime(hour, NaturalPhaseBirthRequest)
 	if err != nil {
 		return kernel.Proposal{}, ErrNaturalContract
 	}
-	next, err := NaturalBirthRequest(patches, hour, proposer, addressee, reportedCapital, reportedGranary, a)
+	next, err := NaturalBirthRequestFor(m, patches, hour, proposer, addressee, reportedCapital, reportedGranary, a)
 	if err != nil {
 		return kernel.Proposal{}, err
 	}
@@ -878,14 +1119,14 @@ func NaturalBirthRequestProposal(key string, patches, hour int, proposer, addres
 	if err != nil {
 		return kernel.Proposal{}, ErrNaturalContract
 	}
-	return kernel.Proposal{Key: key, Time: at, Cause: kernel.Cause{Actor: proposer}, Rule: NaturalBirthRequestRule, RuleVersion: NaturalRuleVersion,
+	return kernel.Proposal{Key: key, Time: at, Cause: kernel.Cause{Actor: proposer}, Rule: NaturalBirthRequestRule, RuleVersion: m.RuleVersion(),
 		Patches: []component.Patch{
-			{Entity: proposer, Component: NaturalBirthRequestTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBirthRequestHourField, Value: sim.IntegerValue(next.Request.Hour)},
-			{Entity: proposer, Component: NaturalBirthRequestTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBirthRequestAddresseeField, Value: addresseeRef},
-			{Entity: proposer, Component: NaturalBirthRequestTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBirthRequestReportedCapitalField, Value: sim.IntegerValue(next.Request.ReportedCapital)},
-			{Entity: proposer, Component: NaturalBirthRequestTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBirthRequestReportedGranaryField, Value: sim.IntegerValue(next.Request.ReportedGranary)},
-			{Entity: proposer, Component: NaturalBirthRequestTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBirthRequestStatusField, Value: sim.IntegerValue(int64(next.Request.Status))},
-			{Entity: proposer, Component: NaturalBirthRequestTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBirthRequestLastRequestHourField, Value: sim.IntegerValue(next.Request.LastRequestHour)},
+			{Entity: proposer, Component: NaturalBirthRequestTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBirthRequestHourField, Value: sim.IntegerValue(next.Request.Hour)},
+			{Entity: proposer, Component: NaturalBirthRequestTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBirthRequestAddresseeField, Value: addresseeRef},
+			{Entity: proposer, Component: NaturalBirthRequestTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBirthRequestReportedCapitalField, Value: sim.IntegerValue(next.Request.ReportedCapital)},
+			{Entity: proposer, Component: NaturalBirthRequestTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBirthRequestReportedGranaryField, Value: sim.IntegerValue(next.Request.ReportedGranary)},
+			{Entity: proposer, Component: NaturalBirthRequestTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBirthRequestStatusField, Value: sim.IntegerValue(int64(next.Request.Status))},
+			{Entity: proposer, Component: NaturalBirthRequestTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBirthRequestLastRequestHourField, Value: sim.IntegerValue(next.Request.LastRequestHour)},
 		}}, nil
 }
 
@@ -898,6 +1139,10 @@ func NaturalBirthRequestProposal(key string, patches, hour int, proposer, addres
 // proposer's request status and the consenter's last-reply-hour. A
 // zero-mutation refusal (a death between phases) has no proposal at all.
 func NaturalBirthReplyProposal(key string, patches, hour int, proposer, consenter sim.EntityID, result NaturalReplyResult) (kernel.Proposal, error) {
+	return NaturalBirthReplyProposalFor(NaturalMechanismV5, key, patches, hour, proposer, consenter, result)
+}
+
+func NaturalBirthReplyProposalFor(m NaturalMechanism, key string, patches, hour int, proposer, consenter sim.EntityID, result NaturalReplyResult) (kernel.Proposal, error) {
 	at, err := NaturalPhaseTime(hour, NaturalPhaseBirthReply)
 	if err != nil {
 		return kernel.Proposal{}, ErrNaturalContract
@@ -906,41 +1151,43 @@ func NaturalBirthReplyProposal(key string, patches, hour int, proposer, consente
 	case NaturalReplyRefuseSilent:
 		return kernel.Proposal{}, ErrNaturalContract
 	case NaturalReplyRefuse:
-		return kernel.Proposal{Key: key, Time: at, Cause: kernel.Cause{Actor: consenter}, Rule: NaturalBirthRefuseRule, RuleVersion: NaturalRuleVersion,
+		return kernel.Proposal{Key: key, Time: at, Cause: kernel.Cause{Actor: consenter}, Rule: NaturalBirthRefuseRule, RuleVersion: m.RuleVersion(),
 			Patches: []component.Patch{
-				{Entity: proposer, Component: NaturalBirthRequestTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBirthRequestStatusField, Value: sim.IntegerValue(int64(result.Proposer.Request.Status))},
-				{Entity: consenter, Component: NaturalBirthRequestTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBirthRequestLastReplyHourField, Value: sim.IntegerValue(result.Consenter.Request.LastReplyHour)},
+				{Entity: proposer, Component: NaturalBirthRequestTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBirthRequestStatusField, Value: sim.IntegerValue(int64(result.Proposer.Request.Status))},
+				{Entity: consenter, Component: NaturalBirthRequestTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBirthRequestLastReplyHourField, Value: sim.IntegerValue(result.Consenter.Request.LastReplyHour)},
 			}}, nil
 	case NaturalReplyAccept:
-		if !validNaturalActor(patches, proposer, result.Proposer) || !validNaturalActor(patches, consenter, result.Consenter) {
+		if !validNaturalActorFor(m, patches, proposer, result.Proposer) || !validNaturalActorFor(m, patches, consenter, result.Consenter) {
 			return kernel.Proposal{}, ErrNaturalContract
 		}
-		allocations, err := naturalNewbornAllocations(patches, result.NewbornID, result.Newborn.Bag.Source, result.Newborn)
+		allocations, err := naturalNewbornAllocationsFor(m, patches, result.NewbornID, result.Newborn.Bag.Source, result.Newborn)
 		if err != nil {
 			return kernel.Proposal{}, err
 		}
-		return kernel.Proposal{Key: key, Time: at, Cause: kernel.Cause{Actor: consenter}, Rule: NaturalBirthReplyRule, RuleVersion: NaturalRuleVersion,
+		return kernel.Proposal{Key: key, Time: at, Cause: kernel.Cause{Actor: consenter}, Rule: NaturalBirthReplyRule, RuleVersion: m.RuleVersion(),
 			Patches: []component.Patch{
-				{Entity: proposer, Component: NaturalBodyTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBodyEnergyField, Value: sim.IntegerValue(result.Proposer.Body.Energy)},
-				{Entity: proposer, Component: NaturalBodyTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBodyBasalSpentField, Value: sim.IntegerValue(result.Proposer.Body.BasalSpent)},
-				{Entity: proposer, Component: NaturalGranaryTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalGranaryStockField, Value: sim.IntegerValue(result.Proposer.Granary.Stock)},
-				{Entity: proposer, Component: NaturalGenomeTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalGenomeBirthGranaryPaidField, Value: sim.IntegerValue(result.Proposer.Genome.BirthGranaryPaid)},
-				{Entity: proposer, Component: NaturalBirthRequestTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBirthRequestStatusField, Value: sim.IntegerValue(int64(result.Proposer.Request.Status))},
-				{Entity: consenter, Component: NaturalBodyTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBodyEnergyField, Value: sim.IntegerValue(result.Consenter.Body.Energy)},
-				{Entity: consenter, Component: NaturalBodyTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBodyBasalSpentField, Value: sim.IntegerValue(result.Consenter.Body.BasalSpent)},
-				{Entity: consenter, Component: NaturalGranaryTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalGranaryStockField, Value: sim.IntegerValue(result.Consenter.Granary.Stock)},
-				{Entity: consenter, Component: NaturalGenomeTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalGenomeBirthGranaryPaidField, Value: sim.IntegerValue(result.Consenter.Genome.BirthGranaryPaid)},
-				{Entity: consenter, Component: NaturalBirthRequestTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalBirthRequestLastReplyHourField, Value: sim.IntegerValue(result.Consenter.Request.LastReplyHour)},
+				{Entity: proposer, Component: NaturalBodyTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBodyEnergyField, Value: sim.IntegerValue(result.Proposer.Body.Energy)},
+				{Entity: proposer, Component: NaturalBodyTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBodyBasalSpentField, Value: sim.IntegerValue(result.Proposer.Body.BasalSpent)},
+				{Entity: proposer, Component: NaturalGranaryTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalGranaryStockField, Value: sim.IntegerValue(result.Proposer.Granary.Stock)},
+				{Entity: proposer, Component: NaturalGenomeTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalGenomeBirthGranaryPaidField, Value: sim.IntegerValue(result.Proposer.Genome.BirthGranaryPaid)},
+				{Entity: proposer, Component: NaturalBirthRequestTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBirthRequestStatusField, Value: sim.IntegerValue(int64(result.Proposer.Request.Status))},
+				{Entity: consenter, Component: NaturalBodyTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBodyEnergyField, Value: sim.IntegerValue(result.Consenter.Body.Energy)},
+				{Entity: consenter, Component: NaturalBodyTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBodyBasalSpentField, Value: sim.IntegerValue(result.Consenter.Body.BasalSpent)},
+				{Entity: consenter, Component: NaturalGranaryTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalGranaryStockField, Value: sim.IntegerValue(result.Consenter.Granary.Stock)},
+				{Entity: consenter, Component: NaturalGenomeTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalGenomeBirthGranaryPaidField, Value: sim.IntegerValue(result.Consenter.Genome.BirthGranaryPaid)},
+				{Entity: consenter, Component: NaturalBirthRequestTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBirthRequestLastReplyHourField, Value: sim.IntegerValue(result.Consenter.Request.LastReplyHour)},
 			}, Allocations: allocations}, nil
 	}
 	return kernel.Proposal{}, ErrNaturalContract
 }
 
-// naturalNewbornAllocations builds the newborn's six complete rows (bag,
+// naturalNewbornAllocationsFor builds the newborn's six complete rows (bag,
 // body, worksite, granary, genome, birthrequest) in the kernel's
 // full-schema allocation shape. This is the entity-create proposal builder
-// for births; the newborn ID must be allocator-fresh (G5).
-func naturalNewbornAllocations(patches int, id, home sim.EntityID, n NaturalActorState) ([]component.ComponentSeed, error) {
+// for births; the newborn ID must be allocator-fresh (G5). Under the v6
+// mechanism the granary row carries the provisioned field (0 for every
+// newborn); the v5 zero value keeps the frozen six-field granary list.
+func naturalNewbornAllocationsFor(m NaturalMechanism, patches int, id, home sim.EntityID, n NaturalActorState) ([]component.ComponentSeed, error) {
 	if !naturalNewbornEntity(patches, id) || n.Bag.Source != home {
 		return nil, ErrNaturalContract
 	}
@@ -959,6 +1206,16 @@ func naturalNewbornAllocations(patches int, id, home sim.EntityID, n NaturalActo
 	addresseeRef, err := genomeRefValue(n.Request.Addressee)
 	if err != nil {
 		return nil, err
+	}
+	granary := []component.FieldSeed{
+		{Field: NaturalGranaryStockField, Value: sim.IntegerValue(n.Granary.Stock)},
+		{Field: NaturalGranaryCultivatedTotalField, Value: sim.IntegerValue(n.Granary.CultivatedTotal)},
+		{Field: NaturalGranaryStoredMealsField, Value: sim.IntegerValue(n.Granary.StoredMeals)},
+		{Field: NaturalGranaryLastStoredMealHourField, Value: sim.IntegerValue(n.Granary.LastStoredMealHour)},
+		{Field: NaturalGranarySpoilDebtField, Value: sim.IntegerValue(n.Granary.SpoilDebt)},
+		{Field: NaturalGranarySpoiledField, Value: sim.IntegerValue(n.Granary.Spoiled)}}
+	if m == NaturalMechanismV6 {
+		granary = append(granary, component.FieldSeed{Field: NaturalGranaryProvisionedField, Value: sim.IntegerValue(n.Granary.Provisioned)})
 	}
 	return []component.ComponentSeed{
 		{Entity: id, Component: NaturalBagTypeID, Fields: []component.FieldSeed{
@@ -980,13 +1237,7 @@ func naturalNewbornAllocations(patches int, id, home sim.EntityID, n NaturalActo
 			{Field: NaturalWorksitePointsCreatedField, Value: sim.IntegerValue(n.Worksite.PointsCreated)},
 			{Field: NaturalWorksitePointsDecayedField, Value: sim.IntegerValue(n.Worksite.PointsDecayed)},
 			{Field: NaturalWorksiteLastBuildHourField, Value: sim.IntegerValue(n.Worksite.LastBuildHour)}}},
-		{Entity: id, Component: NaturalGranaryTypeID, Fields: []component.FieldSeed{
-			{Field: NaturalGranaryStockField, Value: sim.IntegerValue(n.Granary.Stock)},
-			{Field: NaturalGranaryCultivatedTotalField, Value: sim.IntegerValue(n.Granary.CultivatedTotal)},
-			{Field: NaturalGranaryStoredMealsField, Value: sim.IntegerValue(n.Granary.StoredMeals)},
-			{Field: NaturalGranaryLastStoredMealHourField, Value: sim.IntegerValue(n.Granary.LastStoredMealHour)},
-			{Field: NaturalGranarySpoilDebtField, Value: sim.IntegerValue(n.Granary.SpoilDebt)},
-			{Field: NaturalGranarySpoiledField, Value: sim.IntegerValue(n.Granary.Spoiled)}}},
+		{Entity: id, Component: NaturalGranaryTypeID, Fields: granary},
 		{Entity: id, Component: NaturalGenomeTypeID, Fields: []component.FieldSeed{
 			{Field: NaturalGenomeLocusMField, Value: sim.IntegerValue(n.Genome.LocusM)},
 			{Field: NaturalGenomeLocusYField, Value: sim.IntegerValue(n.Genome.LocusY)},

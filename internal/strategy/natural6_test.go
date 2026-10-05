@@ -80,7 +80,7 @@ func TestNaturalV6FrozenIdentityRefSetAndRegistration(t *testing.T) {
 		t.Fatalf("natural/6 resolution: %+v %v", got, err)
 	}
 	for _, unknown := range []strategy.NaturalRef{
-		{ID: "natural", Version: 7}, {ID: "natural", Version: 0}, {ID: "other", Version: 5}, {ID: "natural-v6", Version: 6}, {},
+		{ID: "natural", Version: 9}, {ID: "natural", Version: 0}, {ID: "other", Version: 5}, {ID: "natural-v6", Version: 6}, {},
 	} {
 		if got, err := strategy.FrozenNaturalPolicyForRef(unknown); !errors.Is(err, strategy.ErrUnknownNaturalPolicy) {
 			t.Fatalf("unknown ref %v resolved to %+v (%v)", unknown, got, err)
