@@ -474,6 +474,14 @@ type NaturalOptions struct {
 	Workers int
 	Births  bool
 
+	// PolicyRef is the declared policy identity (ticket 16 D1 seam): the
+	// single binding site resolves it through the frozen natural ref set
+	// {natural/5, natural/6} and binds every roster entity by it. The zero
+	// value is exactly natural/5, so every recorded v5 scenario keeps its
+	// bytes; the ref is run identity end to end (journal config, checkpoint
+	// manifest, bidirectional mismatch rejection).
+	PolicyRef strategy.NaturalRef
+
 	// CultivationDisabled is the declared cultivation ablation of the frozen
 	// matrix (cell D): an experiment intervention, never a mechanism or
 	// policy change. The frozen policy bytes are unchanged — the runner
@@ -492,9 +500,22 @@ type NaturalOptions struct {
 	CeilingThresholds map[NaturalCeiling]int64
 }
 
+// policyRef resolves the declared policy identity: the zero value is the
+// frozen natural/5 ref (D1 default-preservation), anything else must be a
+// member of the frozen natural ref set, checked at NewNatural.
+func (o NaturalOptions) policyRef() strategy.NaturalRef {
+	if o.PolicyRef == (strategy.NaturalRef{}) {
+		return strategy.FrozenNaturalPolicy().Ref
+	}
+	return o.PolicyRef
+}
+
 func (o NaturalOptions) validate() error {
 	if !NaturalPatchCountValid(o.Patches) {
 		return fmt.Errorf("%w: patches %d outside the derived ID-space precondition", ErrNaturalRunner, o.Patches)
+	}
+	if _, err := strategy.FrozenNaturalPolicyForRef(o.policyRef()); err != nil {
+		return fmt.Errorf("%w: policy ref %+v is not in the frozen natural ref set {natural/5, natural/6}: %v", ErrNaturalRunner, o.PolicyRef, err)
 	}
 	if o.R < 0 || o.R > NaturalSlotsPerPatch {
 		return fmt.Errorf("%w: R %d outside [0,%d]", ErrNaturalRunner, o.R, NaturalSlotsPerPatch)
@@ -716,9 +737,16 @@ func NewNatural(o NaturalOptions) (*Natural, error) {
 	if err != nil {
 		return nil, err
 	}
-	policy := strategy.FrozenNaturalPolicy()
+	// The single binding site (ticket 16 D1 seam): the declared policy ref is
+	// resolved against the executable's frozen ref set and every roster
+	// entity below binds the same resolved ref. An unknown ref fails closed
+	// before any world exists.
+	policy, err := strategy.FrozenNaturalPolicyForRef(o.policyRef())
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrNaturalRunner, err)
+	}
 	policies := strategy.NewNaturalRegistry(o.Patches)
-	if err = policies.Register(policy); err != nil {
+	if err = policies.RegisterFrozenNatural(policy); err != nil {
 		return nil, err
 	}
 	seeds, actors, err := naturalGenesisSeeds(o.Patches, o.R, o.Seed)
@@ -771,6 +799,49 @@ func NewNatural(o NaturalOptions) (*Natural, error) {
 		return nil, err
 	}
 	return f, nil
+}
+
+// # The policy cascade dispatch (ticket 16 D1 seam)
+//
+// The frozen v5 cascade bytes cannot detect a v6 bound: their only ref check
+// is obs.Ref against the bound's own ref, which a v6 bound satisfies. The
+// ref discipline therefore lives in the dispatch, not the cascade — every
+// evaluation site routes through these helpers, which call the matching
+// cascade for the runner's bound ref (the v6 cascade's own bound-identity
+// guard fails closed under any other bound content).
+func naturalDispatchesV6(ref strategy.NaturalRef) bool {
+	frozen, err := strategy.FrozenNaturalPolicyForRef(ref)
+	return err == nil && frozen.Ref == strategy.FrozenNaturalPolicyV6().Ref
+}
+
+// naturalEvaluate dispatches the frozen hourly decision cascade matching the
+// runner's bound policy ref: natural/5 bound → the frozen v5 Evaluate,
+// natural/6 bound → EvaluateV6.
+func (f *Natural) naturalEvaluate(id sim.EntityID, obs strategy.NaturalObservation) (strategy.NaturalChoice, error) {
+	if naturalDispatchesV6(f.ref) {
+		return f.bound[id].EvaluateV6(obs)
+	}
+	return f.bound[id].Evaluate(obs)
+}
+
+// naturalEvaluateBirthRequest dispatches the frozen proposer decision at
+// h+40m+5µs for the bound ref (EvaluateBirthRequestV6 files only at own
+// energy ≥ 4).
+func (f *Natural) naturalEvaluateBirthRequest(id sim.EntityID, obs strategy.NaturalRequestObservation) (strategy.NaturalRequestChoice, error) {
+	if naturalDispatchesV6(f.ref) {
+		return f.bound[id].EvaluateBirthRequestV6(obs)
+	}
+	return f.bound[id].EvaluateBirthRequest(obs)
+}
+
+// naturalEvaluateBirthReply dispatches the frozen consenter decision at
+// h+40m+6µs for the bound ref (EvaluateBirthReplyV6 accepts only at own
+// energy ≥ 4).
+func (f *Natural) naturalEvaluateBirthReply(id sim.EntityID, obs strategy.NaturalReplyObservation) (strategy.NaturalReplyChoice, error) {
+	if naturalDispatchesV6(f.ref) {
+		return f.bound[id].EvaluateBirthReplyV6(obs)
+	}
+	return f.bound[id].EvaluateBirthReply(obs)
 }
 
 // naturalActorState reads one actor's six component rows at one version.
@@ -1378,7 +1449,7 @@ func (f *Natural) naturalDenialEat(view scheduler.SnapshotView, hour int, at sim
 	if err != nil {
 		return kernel.Proposal{}, NaturalAttempt{}, err
 	}
-	choice, err := f.bound[id].Evaluate(obs)
+	choice, err := f.naturalEvaluate(id, obs)
 	if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
 		return kernel.Proposal{}, NaturalAttempt{}, ErrNaturalRunner
 	}
@@ -1464,7 +1535,7 @@ func (f *Natural) evaluate(_ context.Context, ready scheduler.ReadyFiber, view s
 		if err != nil {
 			return out, err
 		}
-		choice, err := f.bound[id].Evaluate(obs)
+		choice, err := f.naturalEvaluate(id, obs)
 		if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
 			return out, ErrNaturalRunner
 		}
@@ -1542,7 +1613,7 @@ func (f *Natural) evaluate(_ context.Context, ready scheduler.ReadyFiber, view s
 		if err != nil {
 			return out, err
 		}
-		choice, err := f.bound[id].Evaluate(obs)
+		choice, err := f.naturalEvaluate(id, obs)
 		if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
 			return out, ErrNaturalRunner
 		}
@@ -1580,7 +1651,7 @@ func (f *Natural) evaluate(_ context.Context, ready scheduler.ReadyFiber, view s
 		if err != nil {
 			return out, err
 		}
-		choice, err := f.bound[id].Evaluate(obs)
+		choice, err := f.naturalEvaluate(id, obs)
 		if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
 			return out, ErrNaturalRunner
 		}
@@ -1823,7 +1894,7 @@ func (f *Natural) birthRequestDecision(view scheduler.SnapshotView, hour int, at
 		OwnRequest:   strategy.NaturalRequestGuard{Status: strategy.NaturalRequestStatus(a.Request.Status), LastRequestHour: a.Request.LastRequestHour},
 		PatchMates:   mates,
 	}
-	choice, err := f.bound[proposer].EvaluateBirthRequest(obs)
+	choice, err := f.naturalEvaluateBirthRequest(proposer, obs)
 	if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
 		return kernel.Proposal{}, false, ErrNaturalRunner
 	}
@@ -1922,7 +1993,7 @@ func (f *Natural) birthReplyDecision(view scheduler.SnapshotView, hour int, at s
 		OwnLastReplyHour: self.Request.LastReplyHour,
 		Pending:          pending,
 	}
-	choice, err := f.bound[consenter].EvaluateBirthReply(obs)
+	choice, err := f.naturalEvaluateBirthReply(consenter, obs)
 	if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
 		return empty, NaturalAttempt{}, ErrNaturalRunner
 	}
@@ -2203,7 +2274,7 @@ func (f *Natural) allocate(at sim.SimTime) error {
 		if err != nil {
 			return err
 		}
-		choice, err := f.bound[id].Evaluate(obs)
+		choice, err := f.naturalEvaluate(id, obs)
 		if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
 			return ErrNaturalRunner
 		}

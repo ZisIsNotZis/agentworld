@@ -71,7 +71,10 @@ type NaturalJournalConfig struct {
 	// genesis (natural_checkpoint.go). A neutral world and a fixture world
 	// with the same P/R/seed are different runs; the flag keeps them apart.
 	// CultivationDisabled declares the cultivation-ablation intervention
-	// (matrix cell D); it is run identity like the births flags.
+	// (matrix cell D); it is run identity like the births flags. Policy is
+	// the declared ref from the frozen natural ref set {natural/5,
+	// natural/6} (ticket 16 D1 seam) and PolicyFingerprint its exact frozen
+	// content fingerprint; a ref/fingerprint disagreement fails closed.
 	FounderTenure       bool
 	CultivationDisabled bool
 	Policy              strategy.NaturalRef
@@ -111,7 +114,10 @@ type naturalJournalWire struct {
 
 // validNaturalJournalConfig checks the declared run identity's shape before
 // any replay: a valid patch count, the budget inside the frozen range, the
-// fixture's declared budget coherence, and the frozen policy identity.
+// fixture's declared budget coherence, and a policy ref inside the frozen
+// natural ref set {natural/5, natural/6} (ticket 16 D1 seam) — the exact
+// content match against the ref's frozen fingerprint happens in
+// verifyNaturalJournal, so a ref/fingerprint disagreement fails closed.
 func validNaturalJournalConfig(config NaturalJournalConfig) bool {
 	if !NaturalPatchCountValid(config.Patches) || config.R < 0 || config.R > NaturalSlotsPerPatch {
 		return false
@@ -122,20 +128,32 @@ func validNaturalJournalConfig(config NaturalJournalConfig) bool {
 	if config.CultivationDisabled && config.FounderTenure {
 		return false
 	}
-	return config.Policy == strategy.FrozenNaturalPolicy().Ref
+	_, err := strategy.FrozenNaturalPolicyForRef(config.Policy)
+	return err == nil
 }
 
-func naturalJournalFingerprint() ([32]byte, error) {
-	return strategy.NaturalPolicyFingerprint(strategy.FrozenNaturalPolicy())
+// naturalJournalFingerprint resolves a frozen natural ref to the exact
+// content fingerprint of its frozen policy; an unknown ref fails closed.
+func naturalJournalFingerprint(ref strategy.NaturalRef) ([32]byte, error) {
+	policy, err := strategy.FrozenNaturalPolicyForRef(ref)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	return strategy.FrozenNaturalPolicyFingerprint(policy)
 }
 
 // journalConfig pins the natural journal's run identity under the
 // coordinator lock. An altered same-ref policy must never export under the
 // frozen fingerprint: the fingerprint is left at a value no decoder accepts.
+// The fingerprint is the exact content of the runner's own declared ref in
+// the frozen natural ref set (ticket 16 D1 seam).
 func (f *Natural) journalConfig() NaturalJournalConfig {
-	fingerprint, err := naturalJournalFingerprint()
-	if err != nil || f.k == nil || f.bound[1] == nil || f.bound[1].Policy() != strategy.FrozenNaturalPolicy() {
-		fingerprint = [32]byte{}
+	fingerprint := [32]byte{}
+	if frozen, err := strategy.FrozenNaturalPolicyForRef(f.ref); err == nil &&
+		f.k != nil && f.bound[1] != nil && f.bound[1].Policy() == frozen {
+		if exact, err := strategy.FrozenNaturalPolicyFingerprint(frozen); err == nil {
+			fingerprint = exact
+		}
 	}
 	return NaturalJournalConfig{Patches: f.patches, R: f.r, Seed: f.seed, Births: f.births, Boundary: f.births,
 		FounderTenure: f.naturalRunnerTenure(), CultivationDisabled: f.cultivationDisabled,
@@ -414,8 +432,11 @@ func verifyNaturalJournal(batches []NaturalBatch, k *kernel.Kernel, verified ker
 		at < 0 || at > sim.SimTime(NaturalHorizonHours)*sim.SimTime(NaturalHour) || len(batches) > MaxNaturalJournalBatches {
 		return ErrNaturalJournal
 	}
-	fingerprint, err := naturalJournalFingerprint()
+	fingerprint, err := naturalJournalFingerprint(config.Policy)
 	if err != nil || fingerprint != config.PolicyFingerprint {
+		// Fail closed on both an unknown ref and a fingerprint that disagrees
+		// with the declared ref (ticket 16 D1 seam: ref-vs-fingerprint
+		// disagreement never decodes, encodes, or replays).
 		return ErrNaturalJournal
 	}
 	_, head, err := k.ExportHistory()
@@ -460,7 +481,7 @@ func replayNaturalJournal(batches []NaturalBatch, config NaturalJournalConfig) (
 	}
 	reference, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: config.Patches, R: config.R,
 		Seed: config.Seed, Workers: 1, Births: config.Boundary, FounderTenure: config.FounderTenure,
-		CultivationDisabled: config.CultivationDisabled})
+		CultivationDisabled: config.CultivationDisabled, PolicyRef: config.Policy})
 	if err != nil {
 		return nil, ErrNaturalJournal
 	}

@@ -64,6 +64,34 @@ const naturalMaxBranchDepth = 63
 
 var ErrNaturalCheckpoint = errors.New("invalid or incompatible natural v5 checkpoint")
 
+// naturalManifestPolicyFormatSlot is the manifest's policy-format slot: the
+// position of the declared policy format inside the pinned u32 constant
+// block written by encodeNaturalManifest. It is the one parameterized slot
+// of the frozen manifest layout (ticket 16 D1 seam): its value is run
+// identity — naturalPolicyFormats, i.e. 5 for a natural/5 bundle and 6 for
+// a natural/6 bundle — and every other constant stays byte-pinned, so the
+// manifest width and field order are unchanged.
+const naturalManifestPolicyFormatSlot = 6
+
+// naturalPolicyFormats is the closed set of manifest policy-format values a
+// decoder accepts; anything else fails closed.
+func naturalPolicyFormats() map[uint32]bool {
+	return map[uint32]bool{strategy.NaturalPolicyFormatV5: true, strategy.NaturalPolicyFormatV6: true}
+}
+
+// naturalManifestPolicyRef resolves the manifest's declared policy identity
+// from its policy-format slot: 5 is natural/5, 6 is natural/6, anything else
+// fails closed (decode already rejects foreign slots).
+func (m naturalManifest) naturalManifestPolicyRef() (strategy.NaturalRef, error) {
+	switch m.policyFormat {
+	case strategy.NaturalPolicyFormatV5:
+		return strategy.FrozenNaturalPolicy().Ref, nil
+	case strategy.NaturalPolicyFormatV6:
+		return strategy.FrozenNaturalPolicyV6().Ref, nil
+	}
+	return strategy.NaturalRef{}, ErrNaturalCheckpoint
+}
+
 // Distinct v5 magics: no earlier pilot's bundle or strategy section can
 // decode as a natural v5 manifest or strategy section, and vice versa
 // (bundles AWFM/AWS2/AWC3/AWR4/AWSM, strategies AWFS/AWSF/AWCT/AWRT).
@@ -77,9 +105,11 @@ const (
 
 // NaturalRestoreOptions is the declared scenario a bundle must match
 // exactly: the fixture shape of NaturalOptions (P, R, seed, workers, births)
-// plus the lane's declared founder-tenure fixture flag and the declared
-// cultivation-ablation intervention flag. The worker count is the caller's
-// choice, never the bundle's.
+// plus the lane's declared founder-tenure fixture flag, the declared
+// cultivation-ablation intervention flag, and the declared policy ref
+// (ticket 16 D1 seam; the zero value is exactly natural/5, so every recorded
+// v5 expectation keeps its bytes). The worker count is the caller's choice,
+// never the bundle's.
 type NaturalRestoreOptions struct {
 	Patches             int
 	R                   int64
@@ -88,6 +118,16 @@ type NaturalRestoreOptions struct {
 	Births              bool
 	FounderTenure       bool
 	CultivationDisabled bool
+	PolicyRef           strategy.NaturalRef
+}
+
+// policyRef resolves the declared policy identity: the zero value is the
+// frozen natural/5 ref (D1 default-preservation).
+func (o NaturalRestoreOptions) policyRef() strategy.NaturalRef {
+	if o.PolicyRef == (strategy.NaturalRef{}) {
+		return strategy.FrozenNaturalPolicy().Ref
+	}
+	return o.PolicyRef
 }
 
 func (o NaturalRestoreOptions) validate() error {
@@ -108,6 +148,9 @@ func (o NaturalRestoreOptions) validate() error {
 	if o.CultivationDisabled && o.FounderTenure {
 		return fmt.Errorf("%w: cultivation ablation with the founder-tenure fixture is not a declared scenario", ErrNaturalCheckpoint)
 	}
+	if _, err := strategy.FrozenNaturalPolicyForRef(o.policyRef()); err != nil {
+		return fmt.Errorf("%w: policy ref %+v is not in the frozen natural ref set {natural/5, natural/6}: %v", ErrNaturalCheckpoint, o.PolicyRef, err)
+	}
 	return nil
 }
 
@@ -119,11 +162,19 @@ func newNaturalReferenceRunner(expected NaturalRestoreOptions) (*Natural, error)
 	if err := expected.validate(); err != nil {
 		return nil, err
 	}
+	// The declared ref resolves against the executable's frozen ref set
+	// before any constructor runs: the reference runner and the world must
+	// bind the same policy bytes.
+	policy, err := strategy.FrozenNaturalPolicyForRef(expected.policyRef())
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrNaturalCheckpoint, err)
+	}
 	if expected.FounderTenure {
-		return newNaturalFixtureRunner(expected.Patches, expected.R, expected.Seed, expected.Births, expected.Workers)
+		return newNaturalFixtureRunnerForPolicy(expected.Patches, expected.R, expected.Seed, expected.Births, expected.Workers, policy)
 	}
 	return NewNatural(NaturalOptions{Patches: expected.Patches, R: expected.R, Seed: expected.Seed,
-		Workers: expected.Workers, Births: expected.Births, CultivationDisabled: expected.CultivationDisabled})
+		Workers: expected.Workers, Births: expected.Births, CultivationDisabled: expected.CultivationDisabled,
+		PolicyRef: policy.Ref})
 }
 
 // NewNaturalFixture builds the declared founder-tenure fixture world for the
@@ -141,11 +192,26 @@ func NewNaturalFixture(patches int, r int64, seed uint64, births bool, workers i
 }
 
 // newNaturalFixtureRunner builds the declared founder-tenure fixture world
-// over a real kernel, scheduler, and allocator: the seed-derived founder
-// genesis lifted by the fixture pre-history, the frozen policy bound to
-// every founder, and the clock's first wake at naturalFixtureStartHour.
+// under its frozen default policy identity (natural/5, the zero value of the
+// D1 policy-selection seam).
 func newNaturalFixtureRunner(patches int, r int64, seed uint64, births bool, workers int) (*Natural, error) {
-	if !NaturalPatchCountValid(patches) || r < naturalFixtureMinBudget || r > NaturalSlotsPerPatch || workers < 1 {
+	return newNaturalFixtureRunnerForPolicy(patches, r, seed, births, workers, strategy.FrozenNaturalPolicy())
+}
+
+// newNaturalFixtureRunnerForPolicy builds the declared founder-tenure fixture
+// world under one policy of the executable's frozen natural ref set — the
+// fixture genesis of the declared scenario at restore time. The policy must
+// be exactly the frozen content of a ref in {natural/5, natural/6}; anything
+// else fails closed. It is a deterministic ledger-coherent function of
+// exactly (P, R, seed) plus the continuation flags — not a genesis variant of
+// the ecology and not a state-injection point: no caller-supplied slots,
+// tenures, or ledgers exist. The fixture stays run identity everywhere
+// (journal config, checkpoint manifest, restore, branch) with the existing
+// bidirectional mismatch rejection; its first pulse is
+// naturalFixtureStartHour, so its first committed checkpoint is hour 2.
+func newNaturalFixtureRunnerForPolicy(patches int, r int64, seed uint64, births bool, workers int, policy strategy.NaturalPolicy) (*Natural, error) {
+	if !NaturalPatchCountValid(patches) || r < naturalFixtureMinBudget || r > NaturalSlotsPerPatch || workers < 1 ||
+		!strategy.ValidFrozenNaturalPolicy(policy) {
 		return nil, ErrNaturalCheckpoint
 	}
 	seeds, actors, err := naturalFixtureSeeds(patches, r, seed)
@@ -165,9 +231,8 @@ func newNaturalFixtureRunner(patches int, r int64, seed uint64, births bool, wor
 	if err != nil {
 		return nil, err
 	}
-	policy := strategy.FrozenNaturalPolicy()
 	policies := strategy.NewNaturalRegistry(patches)
-	if err = policies.Register(policy); err != nil {
+	if err = policies.RegisterFrozenNatural(policy); err != nil {
 		return nil, err
 	}
 	allocator, err := NaturalGenesisAllocator(patches)
@@ -387,6 +452,7 @@ type naturalManifest struct {
 	cultivation       bool // the declared cultivation-ablation intervention (cell D)
 	steps             int
 	time              sim.SimTime
+	policyFormat      uint32 // the declared policy identity: 5 (natural/5) or 6 (natural/6)
 	head              kernel.PortableHead
 	policyFingerprint [32]byte // exact frozen policy content fingerprint
 	parent            [32]byte // parent bundle digest; zero only for a root capture
@@ -405,7 +471,11 @@ func naturalBundleFlag(flag bool) byte {
 // naturalManifestConstants are the pinned frozen v5 constants every manifest
 // carries: world and format versions, the ID geometry, the inherited
 // physiology, the genome and consent constants, the declared spoilage
-// convention, the widened horizon envelopes, and the birth economics.
+// convention, the widened horizon envelopes, and the birth economics. The
+// policy-format slot (naturalManifestPolicyFormatSlot) pins natural/5 here;
+// encodeNaturalManifest substitutes the manifest's own declared format and
+// decodeNaturalManifest accepts exactly the frozen set, so the recorded v5
+// constants and the slot position stay byte-stable.
 func naturalManifestConstants() ([]uint32, []int64) {
 	u32s := []uint32{
 		naturalCheckpointFormat, NaturalFormatVersion, NaturalJournalFormatVersion, uint32(NaturalSchemaVersion),
@@ -432,6 +502,8 @@ func naturalManifestConstants() ([]uint32, []int64) {
 
 func encodeNaturalManifest(m naturalManifest) []byte {
 	u32s, u64s := naturalManifestConstants()
+	u32s = append([]uint32(nil), u32s...)
+	u32s[naturalManifestPolicyFormatSlot] = m.policyFormat
 	out := append([]byte(nil), naturalCheckpointMagic[:]...)
 	for _, v := range u32s {
 		out = binary.BigEndian.AppendUint32(out, v)
@@ -479,8 +551,19 @@ func decodeNaturalManifest(data []byte) (naturalManifest, error) {
 		return m, ErrNaturalCheckpoint
 	}
 	u32s, u64s := naturalManifestConstants()
-	for _, expected := range u32s {
-		if r.u32() != expected {
+	formats := naturalPolicyFormats()
+	for i, expected := range u32s {
+		v := r.u32()
+		if i == naturalManifestPolicyFormatSlot {
+			// The one parameterized slot: the declared policy identity. Every
+			// other constant must match its frozen value exactly.
+			if !formats[v] {
+				return m, ErrNaturalCheckpoint
+			}
+			m.policyFormat = v
+			continue
+		}
+		if v != expected {
 			return m, ErrNaturalCheckpoint
 		}
 	}
@@ -639,7 +722,7 @@ func verifyNaturalStrategy(data []byte, fresh *Natural, view scheduler.SnapshotV
 	if err != nil {
 		return err
 	}
-	if fresh == nil || fresh.bound[1] == nil || strategy.VerifyNaturalPolicy(policy, fresh.bound[1].Policy()) != nil {
+	if fresh == nil || fresh.bound[1] == nil || strategy.VerifyFrozenNaturalPolicy(policy, fresh.bound[1].Policy()) != nil {
 		return ErrNaturalCheckpoint
 	}
 	founders, err := NaturalFounderCount(fresh.patches)
@@ -674,7 +757,7 @@ func encodeNaturalStrategy(f *Natural) ([]byte, error) {
 		return nil, ErrNaturalCheckpoint
 	}
 	policy := f.bound[1].Policy()
-	policyBytes, err := strategy.EncodeNaturalPolicy(policy)
+	policyBytes, err := strategy.EncodeFrozenNaturalPolicy(policy)
 	if err != nil {
 		return nil, ErrNaturalCheckpoint
 	}
@@ -1837,7 +1920,7 @@ func (f *Natural) SaveCheckpoint(path string) ([32]byte, error) {
 	// Do not publish a same-ref altered policy that a fresh executable would
 	// reject later: the independent constructor pins the current policy contract.
 	fresh, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: f.patches, R: f.r, Seed: f.seed,
-		Workers: 1, Births: f.births, CultivationDisabled: f.cultivationDisabled})
+		Workers: 1, Births: f.births, CultivationDisabled: f.cultivationDisabled, PolicyRef: f.ref})
 	if err != nil {
 		return [32]byte{}, ErrNaturalCheckpoint
 	}
@@ -1879,7 +1962,8 @@ func (f *Natural) SaveResumeCheckpoint(path string) ([32]byte, error) {
 		return [32]byte{}, ErrNaturalCheckpoint
 	}
 	fresh, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: f.patches, R: f.r, Seed: f.seed,
-		Workers: 1, Births: f.births, FounderTenure: f.naturalRunnerTenure(), CultivationDisabled: f.cultivationDisabled})
+		Workers: 1, Births: f.births, FounderTenure: f.naturalRunnerTenure(), CultivationDisabled: f.cultivationDisabled,
+		PolicyRef: f.ref})
 	if err != nil {
 		return [32]byte{}, ErrNaturalCheckpoint
 	}
@@ -1940,10 +2024,14 @@ func (f *Natural) saveBundle(path string, fresh *Natural, boundary bool, m natur
 	if err != nil || !reflect.DeepEqual(checks, cloneNaturalCheckpoints(f.checkpoints)) {
 		return [32]byte{}, ErrNaturalCheckpoint
 	}
-	fingerprint, err := strategy.NaturalPolicyFingerprint(f.bound[1].Policy())
+	fingerprint, err := strategy.FrozenNaturalPolicyFingerprint(f.bound[1].Policy())
 	if err != nil {
 		return [32]byte{}, err
 	}
+	// The manifest's declared policy identity is pinned twice (ticket 16 D1
+	// seam): the policy-format slot and this exact content fingerprint, both
+	// derived from the bound policy the strategy section carries.
+	m.policyFormat = f.bound[1].Policy().FormatVersion
 	m.head = head
 	m.policyFingerprint = fingerprint
 	for i, part := range [][]byte{journalBytes, history, portable, strategyBytes} {
@@ -1976,8 +2064,17 @@ func restoreNaturalSections(sections []checkpoint.Section, m naturalManifest, ex
 	fail := func(err error) (*Natural, error) {
 		return nil, fmt.Errorf("%w: %v", ErrNaturalCheckpoint, err)
 	}
+	// The reference runner binds the manifest's own declared policy ref: the
+	// strategy section, the fingerprint pin, and the journal identity below
+	// are all verified against it, so a forged slot/content pairing fails
+	// closed even when the manifest bytes decode.
+	manifestRef, err := m.naturalManifestPolicyRef()
+	if err != nil {
+		return fail(err)
+	}
 	fresh, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: m.patches, R: m.r, Seed: m.seed,
-		Workers: expected.Workers, Births: m.births, FounderTenure: m.tenure, CultivationDisabled: m.cultivation})
+		Workers: expected.Workers, Births: m.births, FounderTenure: m.tenure, CultivationDisabled: m.cultivation,
+		PolicyRef: manifestRef})
 	if err != nil {
 		return fail(err)
 	}
@@ -2011,7 +2108,7 @@ func restoreNaturalSections(sections []checkpoint.Section, m naturalManifest, ex
 	identityConfig := NaturalJournalConfig{Patches: m.patches, R: m.r, Seed: m.seed,
 		Births: m.births, Boundary: m.boundary, FounderTenure: m.tenure,
 		CultivationDisabled: m.cultivation, Policy: fresh.ref}
-	fingerprint, err := naturalJournalFingerprint()
+	fingerprint, err := naturalJournalFingerprint(fresh.ref)
 	if err != nil {
 		return fail(err)
 	}
@@ -2056,7 +2153,7 @@ func restoreNaturalSections(sections []checkpoint.Section, m naturalManifest, ex
 	if err := verifyNaturalStrategy(sections[4].Data, fresh, headView); err != nil {
 		return fail(err)
 	}
-	policyFingerprint, err := strategy.NaturalPolicyFingerprint(fresh.bound[1].Policy())
+	policyFingerprint, err := strategy.FrozenNaturalPolicyFingerprint(fresh.bound[1].Policy())
 	if err != nil {
 		return fail(err)
 	}
@@ -2188,9 +2285,16 @@ func naturalCheckedSections(path string) ([]checkpoint.Section, [32]byte, natura
 }
 
 // naturalManifestMatches reports whether the bundle's recorded scenario is
-// exactly the declared one: patches, budget, seed, births flag, and the
-// declared genesis kind (neutral or founder-tenure fixture).
+// exactly the declared one: patches, budget, seed, births flag, the declared
+// genesis kind (neutral or founder-tenure fixture), and the declared policy
+// ref (ticket 16 D1 seam — bidirectional mismatch rejection: a natural/5
+// bundle refuses a natural/6 expectation and vice versa, before any restore
+// work and before any publication).
 func naturalManifestMatches(m naturalManifest, expected NaturalRestoreOptions) bool {
+	ref, err := m.naturalManifestPolicyRef()
+	if err != nil || ref != expected.policyRef() {
+		return false
+	}
 	return m.patches == expected.Patches && m.r == expected.R && m.seed == expected.Seed &&
 		m.births == expected.Births && m.tenure == expected.FounderTenure &&
 		m.cultivation == expected.CultivationDisabled
@@ -2264,8 +2368,14 @@ func BranchNaturalCheckpoint(path string, expected NaturalRestoreOptions, births
 	if m.boundary && !births {
 		return [32]byte{}, ErrNaturalCheckpoint
 	}
+	// The parent restores under the manifest's own declared policy ref (the
+	// expectation match above already pinned it to the declared one).
+	manifestRef, err := m.naturalManifestPolicyRef()
+	if err != nil {
+		return [32]byte{}, err
+	}
 	parent, err := restoreNaturalSections(sections, m, NaturalRestoreOptions{Patches: m.patches, R: m.r,
-		Seed: m.seed, Workers: 1, Births: m.births, FounderTenure: m.tenure})
+		Seed: m.seed, Workers: 1, Births: m.births, FounderTenure: m.tenure, PolicyRef: manifestRef})
 	if err != nil {
 		return [32]byte{}, err
 	}
