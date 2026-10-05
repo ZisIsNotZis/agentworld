@@ -40,6 +40,8 @@ Exit criteria:
 - CPU and memory profiles identify actual bottlenecks;
 - distinct strategies produce measurable and causally explainable population outcomes.
 
+The natural fixture records the first frozen strategy contrast for the last criterion: `natural/5` and `natural/6` (ticket 16) produce measurable, causally explainable — currently both sterile-null — population outcomes over the same world, with the surplus gap open and every falsification reported verbatim rather than tuned.
+
 ## P1 — Budgeted cognition
 
 Target: approximately 10,000 explicit people with selective model intervention.

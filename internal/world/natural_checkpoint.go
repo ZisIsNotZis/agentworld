@@ -191,6 +191,31 @@ func NewNaturalFixture(patches int, r int64, seed uint64, births bool, workers i
 	return newNaturalFixtureRunner(patches, r, seed, births, workers)
 }
 
+// NewNaturalFixtureForPolicy builds the declared founder-tenure fixture world
+// under one policy ref of the executable's frozen natural ref set — the
+// ticket-16 experiment-lane seam (supervisor-approved scoped exception,
+// 2026-09-29, recorded in .scratch/16-surplus-behaviour/spec.md): the only
+// exported genesis entry point that carries a policy ref, so the experiment
+// lane can create the v6 fixture cells (matrix cell E under natural/6). It is
+// a thin fail-closed wrapper over the internal path: the ref is resolved
+// through strategy.FrozenNaturalPolicyForRef (the zero ref and any ref
+// outside {natural/5, natural/6} are refused with a typed error — use
+// NewNaturalFixture for the frozen default), the policy must be exactly the
+// frozen content of that ref, and it stays a deterministic ledger-coherent
+// function of exactly (P, R, seed) plus the continuation flags with no
+// caller-supplied slots, tenures, or ledgers. The natural/5 ref is
+// default-preserving: it builds byte-identical bundles to NewNaturalFixture
+// (pinned by test). The ref remains run identity everywhere (journal config,
+// checkpoint manifest, restore, branch) with the existing bidirectional
+// mismatch rejection.
+func NewNaturalFixtureForPolicy(patches int, r int64, seed uint64, births bool, workers int, policyRef strategy.NaturalRef) (*Natural, error) {
+	policy, err := strategy.FrozenNaturalPolicyForRef(policyRef)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrNaturalCheckpoint, err)
+	}
+	return newNaturalFixtureRunnerForPolicy(patches, r, seed, births, workers, policy)
+}
+
 // newNaturalFixtureRunner builds the declared founder-tenure fixture world
 // under its frozen default policy identity (natural/5, the zero value of the
 // D1 policy-selection seam).

@@ -14,6 +14,23 @@
 // is unchanged, the runner routes every Build choice through the documented
 // denial loop, and any build event or attempt is a hard defect.
 //
+// The optional -policy flag (ticket 16 D1 policy-selection seam) selects the
+// frozen behaviour ref: natural/5 (the default, byte-identical to every
+// recorded pre-ticket-16 run) or natural/6, the surplus behaviour policy of
+// .scratch/16-surplus-behaviour/spec.md over the unchanged v5 world. The
+// policy ref is run identity end to end (journal config, checkpoint
+// manifest, bidirectional mismatch rejection). Under natural/6 the reporter
+// adds, purely additively, the predeclared ticket-16 metric sections:
+// per-actor trailing-24h surplus flow (SF) with its sustained-hours
+// counter and the ecology time-to-first-sustained-surplus, capital
+// persistence (share of alive hours with k≥1, Σk by hour, slot turnover),
+// time-to-first build choice/committed build/slot tenure/birth
+// filing/birth, and parent deaths within 24h of a birth payment — plus the
+// predeclared v6 outcome bands (A2 surplus, A3 births, A4 descriptive
+// dynamics, and the B/C/D/E/F cell bands of the frozen design). Every
+// natural/5 field and behaviour stays byte-compatible: a natural/5 report
+// carries none of the new keys.
+//
 // Per branch the reporter re-verifies the extended frozen conservation
 // identities at every hour, classifies typed journal evidence, verifies
 // keyed attempts against the restored accepted history, and reports: the
@@ -44,12 +61,15 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
+	"strings"
 	"syscall"
 	"time"
 
 	"agentworld/internal/checkpoint"
 	"agentworld/internal/kernel"
 	"agentworld/internal/sim"
+	"agentworld/internal/strategy"
 	"agentworld/internal/world"
 )
 
@@ -70,6 +90,26 @@ const (
 	verdictNoBranchFired   = "no-frozen-branch-fired"
 	evidencePostHaltNote   = "runner halted by a typed ceiling hit; the fail-loud halt refuses accepted-history export, so history-derived evidence is unavailable"
 	extrapolationOnlyLabel = "extrapolation-only"
+	policy5Name            = "natural/5"
+	policy6Name            = "natural/6"
+)
+
+// The predeclared ticket-16 v6 gate constants (frozen design, quoted): the
+// A2 surplus band (≥12 consecutive surplus-bearing hours, first such hour
+// ≤ 48), the A3 birth band (filings by h48, births by h96), the sustained
+// surplus run length, the C-cell granted/stock expectations, and the E-cell
+// starvation-free window.
+const (
+	v6SustainedSurplusHours   = 12
+	v6FirstSustainedHourBound = 48
+	v6FirstFilingHourBound    = 48
+	v6FirstBirthHourBound     = 96
+	v6CGroundedGrantFloor     = 288
+	v6CGranaryStockFloor      = 24
+	v6CExtinctionBound        = 143
+	v6EStarvationFreeHours    = 24
+	v6ParentDeathWindowHours  = 24
+	sfWindowHours             = 24
 )
 
 // Recorded ticket-14 cost baselines (frozen spec budgets): v4 measured
@@ -94,8 +134,37 @@ type options struct {
 	births              string
 	fixture             bool
 	cultivationDisabled bool
+	policy              string
 	out                 string
 	checkpointDir       string
+}
+
+// naturalPolicyName validates the declared --policy selection and returns
+// its canonical name. The zero value is exactly natural/5 (the D1
+// default-preservation contract, held at the CLI layer too): every recorded
+// pre-ticket-16 invocation keeps its bytes.
+func naturalPolicyName(policy string) (string, error) {
+	switch policy {
+	case "", policy5Name:
+		return policy5Name, nil
+	case policy6Name:
+		return policy6Name, nil
+	default:
+		return "", fmt.Errorf("invalid -policy value %q: the frozen natural ref set is {%s, %s}", policy, policy5Name, policy6Name)
+	}
+}
+
+// policyRef resolves the declared policy selection to its frozen ref for the
+// world seam (NaturalOptions.PolicyRef / NaturalRestoreOptions.PolicyRef).
+func (o options) policyRef() (strategy.NaturalRef, error) {
+	name, err := naturalPolicyName(o.policy)
+	if err != nil {
+		return strategy.NaturalRef{}, err
+	}
+	if name == policy6Name {
+		return strategy.FrozenNaturalPolicyV6().Ref, nil
+	}
+	return strategy.FrozenNaturalPolicy().Ref, nil
 }
 
 type checkpointInfo struct {
@@ -311,6 +380,86 @@ type replayTwinReport struct {
 	Note            string `json:"note"`
 }
 
+// v6ActorSurplusReport is one actor's sustained-hours counter: the longest
+// run of consecutive surplus-bearing hours and the total surplus-bearing
+// hours over the run.
+type v6ActorSurplusReport struct {
+	ID                         int `json:"id"`
+	MaxConsecutiveSurplusHours int `json:"max_consecutive_surplus_hours"`
+	SurplusBearingHours        int `json:"surplus_bearing_hours"`
+}
+
+// v6CapitalReport is the additive capital-persistence metric block: the
+// actor share of alive hours with k≥1, aggregate Σk by hour, and slot
+// turnover (tenure-mode transitions per patch).
+type v6CapitalReport struct {
+	Definition                   string  `json:"definition"`
+	ShareAliveHoursKGE1          float64 `json:"share_alive_hours_k_ge1"`
+	KTotalByHour                 []int64 `json:"k_total_by_hour"`
+	SlotTurnoverTotal            int     `json:"slot_turnover_total"`
+	SlotTurnoverPerPatchFinal24h []int   `json:"slot_turnover_per_patch_final_24h"`
+}
+
+// v6TimeToFirstReport is the additive time-to-first metric block, in
+// absolute hours (-1 = never). The D-cell build time is the first denial
+// attempt, per the frozen design.
+type v6TimeToFirstReport struct {
+	Definition        string `json:"definition"`
+	BuildChoiceHour   int    `json:"first_build_choice_hour"`
+	BuildAttemptHour  int    `json:"first_build_attempt_hour"`
+	BuildEventHour    int    `json:"first_committed_build_hour"`
+	DenialAttemptHour int    `json:"first_build_denial_attempt_hour"`
+	SlotTenureHour    int    `json:"first_tenured_slot_hour"`
+	BirthFilingHour   int    `json:"first_birth_filing_hour"`
+	BirthHour         int    `json:"first_birth_hour"`
+}
+
+// v6ParentDeathEntry records one (parent, birth payment, death) triple: a
+// parent that died within 24 h of paying a birth's granary price.
+type v6ParentDeathEntry struct {
+	Parent    int    `json:"parent"`
+	BirthHour int64  `json:"birth_hour"`
+	DeathHour int64  `json:"death_hour"`
+	Cause     string `json:"cause"`
+}
+
+type v6ParentDeathsReport struct {
+	Definition string               `json:"definition"`
+	Count      int                  `json:"parents"`
+	Entries    []v6ParentDeathEntry `json:"entries"`
+}
+
+// v6MetricsReport carries the additive ticket-16 v6 metric sections of the
+// frozen design (surplus flow with the sustained-hours counter, capital
+// persistence, time-to-first, parent deaths). It exists only under
+// natural/6; a natural/5 report carries no such key.
+type v6MetricsReport struct {
+	Definition                          string                 `json:"definition"`
+	SFByHourTotal                       []int64                `json:"sf_by_hour_total"`
+	SFRunTotal                          int64                  `json:"sf_run_total"`
+	RunMaxGranaryStock                  int64                  `json:"run_max_granary_stock"`
+	FirstSurplusBearingHour             int                    `json:"first_surplus_bearing_hour"`
+	FirstSustainedSurplusHour           int                    `json:"first_sustained_surplus_hour"`
+	FirstSustainedSurplusCompletionHour int                    `json:"first_sustained_surplus_completion_hour"`
+	MaxConsecutiveSurplusHours          int                    `json:"max_consecutive_surplus_hours"`
+	SurplusBearingActorHours            int                    `json:"surplus_bearing_actor_hours"`
+	PerActor                            []v6ActorSurplusReport `json:"per_actor_sustained_hours"`
+	CapitalPersistence                  v6CapitalReport        `json:"capital_persistence"`
+	TimeToFirst                         v6TimeToFirstReport    `json:"time_to_first"`
+	ParentDeaths                        v6ParentDeathsReport   `json:"parent_deaths_within_24h_of_birth_payment"`
+}
+
+// naturalActorLedger is the per-actor G2a ledger slice one SF window needs.
+type naturalActorLedger struct {
+	alive   bool
+	k       int64
+	granary int64
+	cult    int64
+	stored  int64
+	spoiled int64
+	paid    int64
+}
+
 type branchReport struct {
 	Births               bool               `json:"births"`
 	Fixture              bool               `json:"founder_tenure_genesis"`
@@ -343,6 +492,8 @@ type branchReport struct {
 	CPUTimeNS            int64              `json:"cpu_time_ns"`
 	PeakRSSBytes         int64              `json:"peak_rss_bytes"`
 	TokenCost            int                `json:"token_cost"`
+	V6Metrics            *v6MetricsReport   `json:"v6_metrics,omitempty"`
+	V6Bands              []bandReport       `json:"v6_bands,omitempty"`
 }
 
 type report struct {
@@ -563,6 +714,9 @@ func abs64(v int64) int64 {
 // bandFor evaluates the frozen band of the cell verbatim. A falsified band
 // is reported, never tuned and never fatal.
 func bandFor(o options, br *branchReport) bandReport {
+	if name, err := naturalPolicyName(o.policy); err == nil && name == policy6Name {
+		return v6BandsFor(o, br)[0]
+	}
 	pop := br.Population
 	last := len(pop.AliveByHour) - 1
 	switch {
@@ -616,6 +770,380 @@ func firstBirthHour(pop populationReport, firstHour int) int {
 		}
 	}
 	return -1
+}
+
+// --- ticket-16 v6 additive metrics (natural/6 only; never emitted for natural/5) ---
+
+const (
+	v6SurplusDefinition = "SF(actor, trailing 24h) = per-actor G2a ledger deltas over the trailing 24h: ΣcultivatedGranted − ΣstoredMealsDrawn − Σspoiled − ΣbirthGranaryPaid; windows shorter than 24h at run start or actor birth; surplus-bearing at h = alive ∧ k≥2 ∧ granary≥1 ∧ SF>0; sustained = ≥12 consecutive surplus-bearing hours; time-to-first-sustained-surplus = the first hour of the earliest ≥12-hour run (its completion hour reported alongside)"
+	v6CapitalDefinition = "capital persistence: actor share of alive hours with k≥1; Σk by hour (the aggregate balance, conservation-verified hourly); slot turnover = tenure-mode transitions (cultivated↔wild) per hour, totaled over the run and over the final trailing-24h window per patch"
+	v6TimeToFirstDef    = "time-to-first, absolute hours (-1 = never): first build choice = the first journal build attempt of any recording (committed \"build\" attempt or \"build-denied-eat\"; D cells record only the denial attempt); committed build = the first accepted build (the rule-505 event); tenured slot = first hour with cultivated slots > 0 (fixture founders hold tenure from the genesis pre-history); birth filing = first birth-request journal attempt; birth = first committed birth"
+	v6ParentDeathDef    = "parent deaths within 24h of a birth payment: a parent of some newborn (BirthHour bh) whose death hour d satisfies bh ≤ d ≤ bh+24; cause 'age' iff d equals the immutable scheduled death hour, else 'starvation'; parents counts distinct parents, entries list every qualifying (payment, death) pair"
+)
+
+// journalHour converts a journal timestamp to its absolute hour.
+func journalHour(t sim.SimTime) int {
+	return int(t / sim.SimTime(world.NaturalHour))
+}
+
+// buildV6Metrics computes the additive v6 metric sections from the hourly
+// checkpoints and the journal. Everything is derived from the same frozen
+// evidence the v5 reporter already uses; no world state is read twice and no
+// v5 field is touched.
+func buildV6Metrics(br *branchReport, checks []world.NaturalCheckpoint, journal []world.NaturalBatch) (v6MetricsReport, error) {
+	m := v6MetricsReport{
+		Definition:                          v6SurplusDefinition,
+		FirstSurplusBearingHour:             -1,
+		FirstSustainedSurplusHour:           -1,
+		FirstSustainedSurplusCompletionHour: -1,
+		TimeToFirst: v6TimeToFirstReport{
+			Definition:        v6TimeToFirstDef,
+			BuildChoiceHour:   -1,
+			BuildAttemptHour:  -1,
+			BuildEventHour:    -1,
+			DenialAttemptHour: -1,
+			SlotTenureHour:    -1,
+			BirthFilingHour:   -1,
+			BirthHour:         firstBirthHour(br.Population, br.FirstHour),
+		},
+		ParentDeaths: v6ParentDeathsReport{Definition: v6ParentDeathDef},
+	}
+	m.CapitalPersistence = v6CapitalReport{Definition: v6CapitalDefinition}
+	if len(checks) == 0 {
+		return m, errors.New("no hourly projection for v6 metrics")
+	}
+	patches := len(checks[0].Slots)
+	turnoverByHour := make([][]int, patches)
+	windows := map[sim.EntityID][]int64{}
+	counters := map[sim.EntityID]*v6ActorSurplusReport{}
+	var prev map[sim.EntityID]naturalActorLedger
+	var aliveHours, kge1Hours int64
+	delta := func(old, new int64, existed bool) int64 {
+		if !existed {
+			return new
+		}
+		return new - old
+	}
+	for i, c := range checks {
+		type idState struct {
+			id sim.EntityID
+			a  world.NaturalActorState
+		}
+		roster := make([]idState, 0, len(c.Founders)+len(c.Newborns))
+		for j := range c.Founders {
+			roster = append(roster, idState{sim.EntityID(j + 1), c.Founders[j]})
+		}
+		for _, nb := range c.Newborns {
+			roster = append(roster, idState{nb.ID, nb.State})
+		}
+		cur := make(map[sim.EntityID]naturalActorLedger, len(roster))
+		var sfTotal int64
+		for _, rs := range roster {
+			a := rs.a
+			sn := naturalActorLedger{alive: naturalAlive(a), k: a.Worksite.Capital, granary: a.Granary.Stock,
+				cult: a.Granary.CultivatedTotal, stored: a.Granary.StoredMeals, spoiled: a.Granary.Spoiled,
+				paid: a.Genome.BirthGranaryPaid}
+			cur[rs.id] = sn
+			p, had := prev[rs.id]
+			flow := delta(p.cult, sn.cult, had) - delta(p.stored, sn.stored, had) -
+				delta(p.spoiled, sn.spoiled, had) - delta(p.paid, sn.paid, had)
+			windows[rs.id] = append(windows[rs.id], flow)
+			win := windows[rs.id]
+			var sf int64
+			for j := len(win) - 1; j >= 0 && len(win)-1-j < sfWindowHours; j-- {
+				sf += win[j]
+			}
+			if sn.alive {
+				sfTotal += sf
+				aliveHours++
+				if sn.k >= 1 {
+					kge1Hours++
+				}
+			}
+			bearing := sn.alive && sn.k >= 2 && sn.granary >= 1 && sf > 0
+			ctr := counters[rs.id]
+			if ctr == nil {
+				ctr = &v6ActorSurplusReport{ID: int(rs.id)}
+				counters[rs.id] = ctr
+			}
+			if bearing {
+				ctr.MaxConsecutiveSurplusHours++
+				ctr.SurplusBearingHours++
+				m.SurplusBearingActorHours++
+				if m.FirstSurplusBearingHour < 0 {
+					m.FirstSurplusBearingHour = c.Hour
+				}
+				if ctr.MaxConsecutiveSurplusHours == v6SustainedSurplusHours && m.FirstSustainedSurplusHour < 0 {
+					m.FirstSustainedSurplusHour = c.Hour - (v6SustainedSurplusHours - 1)
+					m.FirstSustainedSurplusCompletionHour = c.Hour
+				}
+			} else {
+				ctr.MaxConsecutiveSurplusHours = 0
+			}
+			if ctr.MaxConsecutiveSurplusHours > m.MaxConsecutiveSurplusHours {
+				m.MaxConsecutiveSurplusHours = ctr.MaxConsecutiveSurplusHours
+			}
+		}
+		m.SFByHourTotal = append(m.SFByHourTotal, sfTotal)
+		m.CapitalPersistence.KTotalByHour = append(m.CapitalPersistence.KTotalByHour, c.Balance.Capital)
+		if c.Balance.GranaryStock > m.RunMaxGranaryStock {
+			m.RunMaxGranaryStock = c.Balance.GranaryStock
+		}
+		if i > 0 {
+			pc := checks[i-1]
+			if len(c.Slots) != len(pc.Slots) {
+				return m, fmt.Errorf("slot patch count changed at hour %d", c.Hour)
+			}
+			for p := range c.Slots {
+				if len(c.Slots[p]) != len(pc.Slots[p]) {
+					return m, fmt.Errorf("slot count changed at hour %d patch %d", c.Hour, p)
+				}
+				for s := range c.Slots[p] {
+					if c.Slots[p][s].Mode != pc.Slots[p][s].Mode {
+						m.CapitalPersistence.SlotTurnoverTotal++
+						turnoverByHour[p] = append(turnoverByHour[p], c.Hour)
+					}
+				}
+			}
+		}
+		prev = cur
+	}
+	if aliveHours > 0 {
+		m.CapitalPersistence.ShareAliveHoursKGE1 = float64(kge1Hours) / float64(aliveHours)
+	}
+	m.CapitalPersistence.SlotTurnoverPerPatchFinal24h = make([]int, patches)
+	tail := len(checks) - sfWindowHours
+	if tail < 0 {
+		tail = 0
+	}
+	for p := 0; p < patches; p++ {
+		for _, h := range turnoverByHour[p] {
+			if h >= checks[tail].Hour {
+				m.CapitalPersistence.SlotTurnoverPerPatchFinal24h[p]++
+			}
+		}
+	}
+	for _, id := range sortedActorIDs(counters) {
+		m.PerActor = append(m.PerActor, *counters[id])
+	}
+	final := checks[len(checks)-1]
+	m.SFRunTotal = final.Balance.CultivatedTotal - final.Balance.StoredMeals - final.Balance.Spoiled - final.Balance.BirthGranaryPaid
+	// Time-to-first from the journal (available even after a typed halt).
+	for _, b := range journal {
+		for _, a := range b.Attempts {
+			h := journalHour(a.Time)
+			switch a.Kind {
+			case "build":
+				if m.TimeToFirst.BuildAttemptHour < 0 {
+					m.TimeToFirst.BuildAttemptHour = h
+				}
+				if a.Accepted && m.TimeToFirst.BuildEventHour < 0 {
+					m.TimeToFirst.BuildEventHour = h
+				}
+			case "build-denied-eat":
+				if m.TimeToFirst.DenialAttemptHour < 0 {
+					m.TimeToFirst.DenialAttemptHour = h
+				}
+			case "birth-request":
+				if m.TimeToFirst.BirthFilingHour < 0 {
+					m.TimeToFirst.BirthFilingHour = h
+				}
+			}
+		}
+	}
+	m.TimeToFirst.BuildChoiceHour = m.TimeToFirst.BuildAttemptHour
+	if m.TimeToFirst.BuildChoiceHour < 0 || (m.TimeToFirst.DenialAttemptHour >= 0 && m.TimeToFirst.DenialAttemptHour < m.TimeToFirst.BuildChoiceHour) {
+		m.TimeToFirst.BuildChoiceHour = m.TimeToFirst.DenialAttemptHour
+	}
+	for _, c := range checks {
+		tenured := 0
+		for _, slots := range c.Slots {
+			for _, slot := range slots {
+				if slot.Mode == world.NaturalTenureCultivated {
+					tenured++
+				}
+			}
+		}
+		if tenured > 0 {
+			m.TimeToFirst.SlotTenureHour = c.Hour
+			break
+		}
+	}
+	// Parent deaths within 24h of a birth payment, from the final roster.
+	states := make(map[sim.EntityID]world.NaturalActorState, len(final.Founders)+len(final.Newborns))
+	for j := range final.Founders {
+		states[sim.EntityID(j+1)] = final.Founders[j]
+	}
+	for _, nb := range final.Newborns {
+		states[nb.ID] = nb.State
+	}
+	parents := map[int]bool{}
+	for _, nb := range final.Newborns {
+		bh := nb.State.Genome.BirthHour
+		for _, p := range [2]sim.EntityID{sim.EntityID(nb.State.Genome.ParentA), sim.EntityID(nb.State.Genome.ParentB)} {
+			if p == 0 {
+				continue
+			}
+			par, ok := states[p]
+			if !ok {
+				continue
+			}
+			d := par.Genome.DiedHour
+			if d == world.NaturalNeverHour || d < bh || d > bh+v6ParentDeathWindowHours {
+				continue
+			}
+			cause := "starvation"
+			if d == par.Genome.DeathHour {
+				cause = "age"
+			}
+			m.ParentDeaths.Entries = append(m.ParentDeaths.Entries, v6ParentDeathEntry{Parent: int(p), BirthHour: bh, DeathHour: d, Cause: cause})
+			parents[int(p)] = true
+		}
+	}
+	sort.Slice(m.ParentDeaths.Entries, func(i, j int) bool {
+		e, f := m.ParentDeaths.Entries[i], m.ParentDeaths.Entries[j]
+		if e.BirthHour != f.BirthHour {
+			return e.BirthHour < f.BirthHour
+		}
+		return e.Parent < f.Parent
+	})
+	m.ParentDeaths.Count = len(parents)
+	return m, nil
+}
+
+func sortedActorIDs(counters map[sim.EntityID]*v6ActorSurplusReport) []sim.EntityID {
+	ids := make([]sim.EntityID, 0, len(counters))
+	for id := range counters {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids
+}
+
+// v6BandsFor evaluates the predeclared ticket-16 v6 outcome bands of the
+// frozen design verbatim for this branch's cell. Band misses are outcomes:
+// reported, never tuned and never fatal. Cross-arm clauses (B/D hourly
+// identity to their v5/v6 twin cells) are evaluated by the L3 control
+// comparison across reports and noted in the criterion text.
+func v6BandsFor(o options, br *branchReport) []bandReport {
+	m := br.V6Metrics
+	deref := v6MetricsReport{FirstSurplusBearingHour: -1, FirstSustainedSurplusHour: -1, FirstSustainedSurplusCompletionHour: -1, TimeToFirst: v6TimeToFirstReport{BuildChoiceHour: -1, BuildAttemptHour: -1, BuildEventHour: -1, DenialAttemptHour: -1, SlotTenureHour: -1, BirthFilingHour: -1, BirthHour: -1}}
+	if m != nil {
+		deref = *m
+	}
+	pop := br.Population
+	builds := br.Events.Builds + br.Events.WorldEvents["build"]
+	switch {
+	case br.CultivationDisabled:
+		within := builds == 0 && br.Events.BuildDenialEats > 0 && br.Totals.Granted == 0 && br.Totals.StoredMeals == 0
+		return []bandReport{{Name: "D: cultivation ablation (v6)", Criterion: "zero rule-505 events ∧ zero committed build attempts ∧ denial loop engaged ∧ granted=0 ∧ stored=0 — the C>0/D=0 ledger delta is cultivation's sole signature (expected new finding: v6 still attempts builds, denial-eaten at high energy); alive-trajectory identity to v6-C is the L3 cross-arm comparison",
+			Observed:   fmt.Sprintf("rule-505 events=%d, committed builds=%d, denial-eaten attempts=%d (first at h%d), granted=%d, stored_meals=%d", br.Events.WorldEvents["build"], br.Events.Builds, br.Events.BuildDenialEats, deref.TimeToFirst.DenialAttemptHour, br.Totals.Granted, br.Totals.StoredMeals),
+			WithinBand: within}}
+	case o.r == 0:
+		within := pop.ExtinctionHour >= 0 && pop.ExtinctionHour <= 12 && br.Totals.Births == 0 && builds == 0
+		return []bandReport{{Name: "B: R=0 extinction (v6)", Criterion: "extinction ≤ h12 ∧ 0 births ∧ 0 committed builds (within-run); hourly identity to the v5-B control arm is the L3 cross-arm comparison (rule-coverage proof: the v6 deltas are unreachable at R=0)",
+			Observed:   fmt.Sprintf("extinction_hour=%d, births=%d, committed builds=%d, build choice recorded=%t (first at h%d), denial attempts=%d", pop.ExtinctionHour, br.Totals.Births, builds, deref.TimeToFirst.BuildChoiceHour >= 0, deref.TimeToFirst.BuildChoiceHour, br.Events.BuildDenialEats),
+			WithinBand: within}}
+	case br.Fixture:
+		starved := int64(0)
+		for i, n := range pop.DeathsStarvationByHour {
+			if br.FirstHour+i < v6EStarvationFreeHours {
+				starved += n
+			}
+		}
+		within := starved == 0 && br.Totals.Births >= 1
+		return []bandReport{{Name: "E: founder-tenure fixture (v6)", Criterion: "zero starvation deaths before h24 (the TFile=4 margin: paying from E≥4 must never leave a parent below the reserve within a day) ∧ births ≥ 1",
+			Observed:   fmt.Sprintf("starvation_deaths_before_h24=%d, births=%d, first_birth_hour=%d", starved, br.Totals.Births, firstBirthHour(pop, br.FirstHour)),
+			WithinBand: within}}
+	case !br.Births:
+		within := pop.ExtinctionHour >= 0 && pop.ExtinctionHour <= v6CExtinctionBound && br.Totals.Births == 0 &&
+			br.Totals.Granted >= v6CGroundedGrantFloor && deref.RunMaxGranaryStock >= v6CGranaryStockFloor &&
+			deref.FirstSustainedSurplusHour >= 0
+		return []bandReport{{Name: "C: births-off cultivation baseline (v6)", Criterion: "extinct ≤ h143 ∧ 0 births ∧ cumulative granted ≥ 288 ∧ run-max aggregate granary stock ≥ 24 ∧ A2-style sustained surplus (∃ actor ≥ 12 consecutive surplus-bearing hours)",
+			Observed:   fmt.Sprintf("extinction_hour=%d, births=%d, granted=%d, run_max_granary_stock=%d, first_sustained_surplus_hour=%d, max_consecutive_surplus_hours=%d", pop.ExtinctionHour, br.Totals.Births, br.Totals.Granted, deref.RunMaxGranaryStock, deref.FirstSustainedSurplusHour, deref.MaxConsecutiveSurplusHours),
+			WithinBand: within}}
+	case br.HaltedByCeilingHit:
+		verdict, twin := "none", false
+		if br.CeilingHit != nil {
+			verdict = br.CeilingHit.Verdict.Verdict
+			twin = br.CeilingHit.Verdict.ReplayIdentical != nil && *br.CeilingHit.Verdict.ReplayIdentical
+		}
+		within := br.CeilingHit != nil && br.ConservationVerified && twin
+		return []bandReport{{Name: "F: compute-ceiling instrumentation (v6)", Criterion: "typed NaturalCeilingHit with green conservation to the hit hour ∧ workers-twin checkpoint/journal-identical; verdict per the frozen P15 table, reported verbatim (hit-hour estimate h33–80 non-binding)",
+			Observed: fmt.Sprintf("ceiling=%s hit_hour=%d p15_verdict=%s twin_identical=%t", func() string {
+				if br.CeilingHit != nil {
+					return br.CeilingHit.Ceiling
+				}
+				return "none"
+			}(), func() int {
+				if br.CeilingHit != nil {
+					return br.CeilingHit.Hour
+				}
+				return -1
+			}(), verdict, twin),
+			WithinBand: within}}
+	default:
+		// A cells (organic births-on R=8): A2, A3, A4.
+		bands := make([]bandReport, 0, 3)
+		actorsSustained := 0
+		for _, a := range deref.PerActor {
+			if a.MaxConsecutiveSurplusHours >= v6SustainedSurplusHours {
+				actorsSustained++
+			}
+		}
+		if br.CompletedHour != world.NaturalHorizonHours {
+			bands = append(bands,
+				bandReport{Name: "A2: v6 surplus band", Criterion: "∃ actor with k≥2 ∧ granary≥1 ∧ trailing-24h SF>0 sustained ≥12 consecutive hours, first such hour ≤ 48",
+					Observed: fmt.Sprintf("not evaluable below h168 (completed_hour=%d)", br.CompletedHour), WithinBand: false},
+				bandReport{Name: "A3: v6 births band", Criterion: "filings > 0 by h48 ∧ births ≥ 1 by h96",
+					Observed: fmt.Sprintf("not evaluable below h168 (completed_hour=%d)", br.CompletedHour), WithinBand: false},
+				bandReport{Name: "A4: v6 dynamics classification (descriptive, non-gating)", Criterion: "takeoff-signal births≥8 ∧ ≥1 birth after h96 ∧ alive(168)≥8; stagnation births∈[1,7] ∨ alive(168)∈[1,7]; collapse-after-activity births≥1 ∧ alive(168)=0; sterile-null births=0; extinction ≤ h95 flagged collapse-faster-than-control",
+					Observed: fmt.Sprintf("truncated at h%d — not evaluable", br.CompletedHour), WithinBand: true})
+			return bands
+		}
+		a2Within := deref.FirstSustainedSurplusHour >= 0 && deref.FirstSustainedSurplusHour <= v6FirstSustainedHourBound
+		bands = append(bands, bandReport{Name: "A2: v6 surplus band", Criterion: "∃ actor with k≥2 ∧ granary≥1 ∧ trailing-24h SF>0 sustained ≥12 consecutive hours, first such hour ≤ 48",
+			Observed:   fmt.Sprintf("first_sustained_surplus_hour=%d (completion h%d), max_consecutive_surplus_hours=%d, actors_with_12h_runs=%d, surplus_bearing_actor_hours=%d, first_surplus_bearing_hour=%d", deref.FirstSustainedSurplusHour, deref.FirstSustainedSurplusCompletionHour, deref.MaxConsecutiveSurplusHours, actorsSustained, deref.SurplusBearingActorHours, deref.FirstSurplusBearingHour),
+			WithinBand: a2Within})
+		filing, birth := deref.TimeToFirst.BirthFilingHour, deref.TimeToFirst.BirthHour
+		a3Within := filing >= 0 && filing <= v6FirstFilingHourBound && birth >= 0 && birth <= v6FirstBirthHourBound
+		bands = append(bands, bandReport{Name: "A3: v6 births band", Criterion: "filings > 0 by h48 ∧ births ≥ 1 by h96 (filings with margins met but zero births = mechanism suspicion, investigated, never tuned)",
+			Observed:   fmt.Sprintf("first_birth_filing_hour=%d, birth_requests=%d, first_birth_hour=%d, births=%d", filing, br.Events.BirthRequests, birth, br.Totals.Births),
+			WithinBand: a3Within})
+		alive168 := pop.AliveByHour[168-br.FirstHour]
+		extinction := pop.ExtinctionHour
+		var labels []string
+		birthAfter96 := false
+		for h := v6FirstBirthHourBound + 1; h <= world.NaturalHorizonHours; h++ {
+			if pop.BirthsByHour[h-br.FirstHour] > 0 {
+				birthAfter96 = true
+				break
+			}
+		}
+		if br.Totals.Births >= 8 && birthAfter96 && alive168 >= 8 {
+			labels = append(labels, "takeoff-signal")
+		}
+		if (br.Totals.Births >= 1 && br.Totals.Births <= 7) || (alive168 >= 1 && alive168 <= 7) {
+			labels = append(labels, "stagnation")
+		}
+		if br.Totals.Births >= 1 && alive168 == 0 {
+			labels = append(labels, "collapse-after-activity")
+		}
+		if br.Totals.Births == 0 {
+			labels = append(labels, "sterile-null")
+		}
+		if extinction >= 0 && extinction <= 95 {
+			labels = append(labels, "collapse faster than control (extinction ≤ h95)")
+		}
+		classification := "none fired"
+		if len(labels) > 0 {
+			classification = strings.Join(labels, " + ")
+		}
+		bands = append(bands, bandReport{Name: "A4: v6 dynamics classification (descriptive, non-gating)", Criterion: "takeoff-signal births≥8 ∧ ≥1 birth after h96 ∧ alive(168)≥8; stagnation births∈[1,7] ∨ alive(168)∈[1,7]; collapse-after-activity births≥1 ∧ alive(168)=0; sterile-null births=0; extinction ≤ h95 flagged collapse-faster-than-control",
+			Observed:   fmt.Sprintf("births=%d, alive(168)=%d, extinction_hour=%d → %s", br.Totals.Births, alive168, extinction, classification),
+			WithinBand: true})
+		return bands
+	}
 }
 
 // historyEvidence restores the accepted history to count events and verify
@@ -957,8 +1485,12 @@ func runBranch(ctx context.Context, o options, births bool, parentDigest string,
 	if err != nil {
 		return br, err
 	}
+	ref, err := o.policyRef()
+	if err != nil {
+		return br, err
+	}
 	expected := world.NaturalRestoreOptions{Patches: o.patches, R: o.r, Seed: o.seed, Workers: o.workers,
-		Births: births, FounderTenure: fixture, CultivationDisabled: o.cultivationDisabled}
+		Births: births, FounderTenure: fixture, CultivationDisabled: o.cultivationDisabled, PolicyRef: ref}
 	f, restored, err := world.RestoreNaturalCheckpoint(childPath, expected)
 	if err != nil {
 		return br, err
@@ -1043,9 +1575,28 @@ func runBranch(ctx context.Context, o options, births bool, parentDigest string,
 		return br, err
 	}
 	br.WallTimeNS, br.CPUTimeNS, br.PeakRSSBytes = time.Since(start).Nanoseconds(), (cpuEnd - cpuStart).Nanoseconds(), rss
+	// The additive v6 sections are computed after the cost clock stops: pure
+	// post-processing of the same frozen evidence, never a v5 field.
+	if v6Requested(o) {
+		vm, err := buildV6Metrics(&br, checks, f.Journal())
+		if err != nil {
+			return br, err
+		}
+		br.V6Metrics = &vm
+	}
 	br.Band = bandFor(o, &br)
 	br.CostBudget = costBudget(o, &br)
+	if v6Requested(o) {
+		br.V6Bands = v6BandsFor(o, &br)
+	}
 	return br, nil
+}
+
+// v6Requested reports whether the run selected natural/6 (the additive
+// ticket-16 metric and band sections).
+func v6Requested(o options) bool {
+	name, err := naturalPolicyName(o.policy)
+	return err == nil && name == policy6Name
 }
 
 // classifyJournalRefusals carries the cumulative typed refusal histogram.
@@ -1072,8 +1623,12 @@ func classifyJournalRefusals(br *branchReport, checks []world.NaturalCheckpoint)
 // journal prefix for exact equality (timing-free replay evidence).
 func replayTwin(ctx context.Context, o options, bundlePath string, births, fixture bool, workers, hitHour int, checks []world.NaturalCheckpoint, journal []world.NaturalBatch) (replayTwinReport, error) {
 	twin := replayTwinReport{Workers: workers, HitHour: hitHour, Identical: true}
+	ref, err := o.policyRef()
+	if err != nil {
+		return twin, err
+	}
 	expected := world.NaturalRestoreOptions{Patches: o.patches, R: o.r, Seed: o.seed, Workers: workers,
-		Births: births, FounderTenure: fixture, CultivationDisabled: o.cultivationDisabled}
+		Births: births, FounderTenure: fixture, CultivationDisabled: o.cultivationDisabled, PolicyRef: ref}
 	f, _, err := world.RestoreNaturalCheckpoint(bundlePath, expected)
 	if err != nil {
 		return twin, err
@@ -1195,11 +1750,19 @@ func costBudget(o options, br *branchReport) costBudgetReport {
 }
 
 func run(ctx context.Context, o options) (report, error) {
+	policyName, err := naturalPolicyName(o.policy)
+	if err != nil {
+		return report{}, err
+	}
+	ref, err := o.policyRef()
+	if err != nil {
+		return report{}, err
+	}
 	r := report{
 		Status:   "synthetic/model-conditional; frozen natural-limits v5 fixture; no historical calibration, takeoff, or P0 scale claim",
-		Revision: "natural format-v5/schema-v5/rule-v5/projection-v5/policy natural/5",
+		Revision: fmt.Sprintf("natural format-v5/schema-v5/rule-v5/projection-v5/policy %s", policyName),
 		Patches:  o.patches, R: o.r, Seed: o.seed, Workers: o.workers, RequestedHours: o.hours,
-		Policy: "natural/5", BranchSelection: o.births, FounderTenure: o.fixture,
+		Policy: policyName, BranchSelection: o.births, FounderTenure: o.fixture,
 		CultivationDisabled: o.cultivationDisabled, TokenCost: 0,
 	}
 	founders := 8 * o.patches
@@ -1251,7 +1814,7 @@ func run(ctx context.Context, o options) (report, error) {
 		// construction, first pulse at h2, first publishable pulse boundary
 		// at h3. The fixture is run identity (journal config and manifest),
 		// so every continuation of this root is pinned to it.
-		fx, err := world.NewNaturalFixture(o.patches, o.r, o.seed, true, 1)
+		fx, err := world.NewNaturalFixtureForPolicy(o.patches, o.r, o.seed, true, 1, ref)
 		if err != nil {
 			return r, err
 		}
@@ -1280,7 +1843,7 @@ func run(ctx context.Context, o options) (report, error) {
 		// the only legal branch parent and every births-enabled cell is the
 		// recorded enable intervention branching from this same root.
 		root, err := world.NewNatural(world.NaturalOptions{Patches: o.patches, R: o.r, Seed: o.seed,
-			Workers: 1, Births: false, CultivationDisabled: o.cultivationDisabled})
+			Workers: 1, Births: false, CultivationDisabled: o.cultivationDisabled, PolicyRef: ref})
 		if err != nil {
 			return r, err
 		}
@@ -1324,7 +1887,7 @@ func run(ctx context.Context, o options) (report, error) {
 		childBytes := rootBytes
 		if !o.fixture {
 			expected := world.NaturalRestoreOptions{Patches: o.patches, R: o.r, Seed: o.seed, Workers: 1,
-				Births: false, CultivationDisabled: o.cultivationDisabled}
+				Births: false, CultivationDisabled: o.cultivationDisabled, PolicyRef: ref}
 			digest, err = world.BranchNaturalCheckpoint(rootPath, expected, plan.births, childPath)
 			if err != nil {
 				return r, err
@@ -1367,6 +1930,7 @@ func main() {
 	births := flag.String("births", bothBranchesFlag, "which recorded intervention to run: enabled, disabled, or both (children always branch from the births-disabled neutral root)")
 	fixture := flag.Bool("founder-tenure", false, "declared founder-tenure fixture genesis (births-enabled-only; the only genesis under which organic births are reachable)")
 	cultivationDisabled := flag.Bool("cultivation-disabled", false, "declared cultivation ablation (births-disabled-only): the frozen policy is unchanged; any build event is a defect")
+	policy := flag.String("policy", policy5Name, "frozen policy ref (ticket-16 policy-selection seam): natural/5 (default, byte-compatible with every recorded run) or natural/6")
 	out := flag.String("out", "", "new JSON report path; refused if it exists; the report also goes to stdout")
 	checkpointDir := flag.String("checkpoint-dir", "", "new directory for the root and branch bundles; must not exist; default creates a fresh temporary directory")
 	flag.Parse()
@@ -1375,7 +1939,7 @@ func main() {
 		os.Exit(2)
 	}
 	rep, err := run(context.Background(), options{patches: *patches, r: *r, seed: *seed, workers: *workers, hours: *hours,
-		births: *births, fixture: *fixture, cultivationDisabled: *cultivationDisabled, out: *out, checkpointDir: *checkpointDir})
+		births: *births, fixture: *fixture, cultivationDisabled: *cultivationDisabled, policy: *policy, out: *out, checkpointDir: *checkpointDir})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
