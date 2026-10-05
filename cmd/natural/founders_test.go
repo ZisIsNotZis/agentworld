@@ -501,8 +501,30 @@ func TestNaturalCLIV8MetricsDetector(t *testing.T) {
 	if bands[1].WithinBand {
 		t.Fatalf("V8-A2b must fire when a saturated-patch actor sustains: %+v", bands[1])
 	}
-	if !bands[2].WithinBand {
-		t.Fatalf("V8-A3 drift: %+v", bands[2])
+	// V8-A3 corrected per-patch semantics (review P2): in THIS fixture the
+	// only filing is on the saturated patch (whole-run filing h5) while the
+	// under-capacity patch's filing is -1, so A3 must be OUT — this is the
+	// exact divergence case the reviewer flagged, where the whole-run reading
+	// would have reported IN with wrong-patch evidence.
+	if bands[2].WithinBand {
+		t.Fatalf("V8-A3 must be OUT when only a saturated-patch actor filed: %+v", bands[2])
+	}
+	if !strings.Contains(bands[2].Observed, "first under-capacity-patch filing_hour=-1") {
+		t.Fatalf("V8-A3 must report the under-capacity filing explicitly: %s", bands[2].Observed)
+	}
+	// The positive direction: give the under-capacity patch a filing inside
+	// the bound and require A3 to flip IN, so both directions are bound.
+	ucFiling := *br
+	vmCopy := *br.V8Metrics
+	vmCopy.Patches = append([]v8PatchReport(nil), br.V8Metrics.Patches...)
+	for i := range vmCopy.Patches {
+		if vmCopy.Patches[i].Patch == 1002 {
+			vmCopy.Patches[i].FirstBirthFilingHour = 7
+		}
+	}
+	ucFiling.V8Metrics = &vmCopy
+	if got := v8BandsFor(o, &ucFiling); !got[2].WithinBand {
+		t.Fatalf("V8-A3 must be IN when the under-capacity patch files <= h48: %+v", got[2])
 	}
 	if !bands[3].WithinBand {
 		t.Fatalf("V8-A4 drift: %+v", bands[3])

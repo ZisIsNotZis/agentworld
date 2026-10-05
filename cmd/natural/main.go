@@ -732,6 +732,14 @@ type v8PatchReport struct {
 	FirstPerActorSustainedHour int     `json:"first_per_actor_sustained_hour"`
 	FirstBirthFilingHour       int     `json:"first_birth_filing_hour"`
 	FirstBirthHour             int     `json:"first_birth_hour"`
+	// Review P2 (ticket-18 L2): the density-hypothesis falsifier (ii) needs
+	// "same-patch starvation while unclaimed slack exists" to be evaluable
+	// from the report, so each patch column carries its lifetime unrealised
+	// regeneration budget (land that could have produced and did not) and its
+	// starvation death count (died_hour set without reaching the scheduled
+	// death hour).
+	UnrealizedSlack  int64 `json:"unrealized_slack_units"`
+	StarvationDeaths int   `json:"starvation_deaths"`
 }
 
 // v8ActorSurplusReport is one actor's ticket-18 surplus counters with the
@@ -2054,6 +2062,12 @@ func buildV8Metrics(o options, br *branchReport, checks []world.NaturalCheckpoin
 			if err != nil {
 				return m, err
 			}
+			// Falsifier-(ii) column: a death with died_hour set but short of
+			// the scheduled death hour is a starvation death for this patch.
+			if a.Genome.DiedHour != world.NaturalNeverHour && a.Genome.DiedHour != a.Genome.DeathHour &&
+				hp >= 0 && hp < len(m.Patches) {
+				m.Patches[hp].StarvationDeaths++
+			}
 			sn := naturalActorLedger{alive: naturalAlive(a), k: a.Worksite.Capital, granary: a.Granary.Stock,
 				cult: a.Granary.CultivatedTotal, stored: a.Granary.StoredMeals, provisioned: a.Granary.Provisioned,
 				spoiled: a.Granary.Spoiled, paid: a.Genome.BirthGranaryPaid}
@@ -2189,6 +2203,9 @@ func buildV8Metrics(o options, br *branchReport, checks []world.NaturalCheckpoin
 		m.Patches[p].FirstBirthHour = firsts[p].birth
 		if firsts[p].tenured >= 0 && (m.TimeToFirst.FirstTenuredSlotHour < 0 || firsts[p].tenured < m.TimeToFirst.FirstTenuredSlotHour) {
 			m.TimeToFirst.FirstTenuredSlotHour = firsts[p].tenured
+		}
+		if p < len(checks[len(checks)-1].Patches) {
+			m.Patches[p].UnrealizedSlack = checks[len(checks)-1].Patches[p].Unrealized
 		}
 	}
 
@@ -2410,21 +2427,31 @@ func v8BandsFor(o options, br *branchReport) []bandReport {
 		// on the under-capacity patch with first ≤ h96 — banking needs only
 		// slack, not births; missed ⇒ the actual lever was generational
 		// turnover, not slack, recorded verbatim.
-		holder, has := m.firstHolderBy(func(a v8ActorSurplusReport) int { return a.FirstPerActorSustainedHour })
+		// Review P2 (ticket-18 L2): the frozen criterion is a PER-PATCH claim
+		// ("surplus still flips on patch 1002 with first <= h96"), so read the
+		// minimum under-capacity-patch first-sustained hour. Selecting the
+		// globally earliest holder and requiring it to sit on the
+		// under-capacity patch could record a false MISS in an A2b-fired world
+		// and would corrupt a recorded diagnosis band.
 		uc := underCap()
-		onUnderCap := false
-		if has {
+		firstUnderCapSustained := -1
+		holderID, holderPatch := 0, 0
+		for i := range m.PerActor {
+			a := m.PerActor[i]
 			for _, p := range uc {
-				if holder.HomePatch == p.Patch {
-					onUnderCap = true
+				if a.HomePatch != p.Patch || a.FirstPerActorSustainedHour < 0 {
+					continue
+				}
+				if firstUnderCapSustained < 0 || a.FirstPerActorSustainedHour < firstUnderCapSustained {
+					firstUnderCapSustained, holderID, holderPatch = a.FirstPerActorSustainedHour, a.ID, a.HomePatch
 				}
 			}
 		}
-		within := has && holder.FirstPerActorSustainedHour <= v8FirstSustainedHourBound && onUnderCap
+		within := firstUnderCapSustained >= 0 && firstUnderCapSustained <= v8FirstSustainedHourBound
 		note, hourText := "none", "-1"
-		if has {
-			note = fmt.Sprintf("holder actor %d on patch %d", holder.ID, holder.HomePatch)
-			hourText = fmt.Sprintf("%d", holder.FirstPerActorSustainedHour)
+		if firstUnderCapSustained >= 0 {
+			note = fmt.Sprintf("holder actor %d on patch %d", holderID, holderPatch)
+			hourText = fmt.Sprintf("%d", firstUnderCapSustained)
 		}
 		return []bandReport{{Name: "V8-C2: births-off surplus at the founding band (gating for the diagnosis)", Criterion: "per-actor sustained surplus (k≥2 ∧ granary≥1 ∧ trailing-24h SF′>0 ≥12 consecutive hours) with first such hour ≤ 96 held by an under-capacity-patch actor — banking needs only slack, not births; missed ⇒ the actual lever was generational turnover, recorded verbatim with the diagnosis corrected",
 			Observed:   fmt.Sprintf("first_per_actor_sustained_hour=%s, %s, under-capacity patches: %s, completed_hour=%d", hourText, note, patchList(uc), br.CompletedHour),
@@ -2492,15 +2519,24 @@ func v8BandsFor(o options, br *branchReport) []bandReport {
 			Observed: a2bObserved, WithinBand: a2bWithin})
 		filing := m.TimeToFirst.FirstBirthFilingHour
 		uc := underCap()
-		firstUnderCapBirth := -1
+		// Review P2 (ticket-18 L2): the frozen criterion binds BOTH clauses to
+		// the under-capacity patch ("first birth filing <= h48 and first
+		// committed birth <= h96 on the under-capacity patch"), so the filing
+		// clause is the minimum under-capacity-patch filing, not the whole-run
+		// first filing (which could be a saturated-patch actor's and would
+		// report IN with wrong-patch evidence).
+		firstUnderCapFiling, firstUnderCapBirth := -1, -1
 		for _, p := range uc {
+			if p.FirstBirthFilingHour >= 0 && (firstUnderCapFiling < 0 || p.FirstBirthFilingHour < firstUnderCapFiling) {
+				firstUnderCapFiling = p.FirstBirthFilingHour
+			}
 			if p.FirstBirthHour >= 0 && (firstUnderCapBirth < 0 || p.FirstBirthHour < firstUnderCapBirth) {
 				firstUnderCapBirth = p.FirstBirthHour
 			}
 		}
-		a3Within := filing >= 0 && filing <= v8FirstFilingHourBound && firstUnderCapBirth >= 0 && firstUnderCapBirth <= v8FirstBirthHourBound
+		a3Within := firstUnderCapFiling >= 0 && firstUnderCapFiling <= v8FirstFilingHourBound && firstUnderCapBirth >= 0 && firstUnderCapBirth <= v8FirstBirthHourBound
 		bands = append(bands, bandReport{Name: "V8-A3: births band (gating)", Criterion: "first birth filing ≤ h48 ∧ first committed birth ≤ h96 on the under-capacity patch in ≥1 cell (zero filings = policy defect; filings with truth-met margins but zero births = mechanism suspicion, investigate never tune)",
-			Observed:   fmt.Sprintf("first_birth_filing_hour=%d, birth_requests=%d, first_birth_hour=%d, first under-capacity-patch birth_hour=%d, births=%d, under-capacity patches: %s", filing, br.Events.BirthRequests, m.TimeToFirst.FirstBirthHour, firstUnderCapBirth, br.Totals.Births, patchList(uc)),
+			Observed:   fmt.Sprintf("first_birth_filing_hour=%d (whole run), first under-capacity-patch filing_hour=%d, birth_requests=%d, first_birth_hour=%d, first under-capacity-patch birth_hour=%d, births=%d, under-capacity patches: %s", filing, firstUnderCapFiling, br.Events.BirthRequests, m.TimeToFirst.FirstBirthHour, firstUnderCapBirth, br.Totals.Births, patchList(uc)),
 			WithinBand: a3Within})
 		alive168 := pop.AliveByHour[168-br.FirstHour]
 		extinction := pop.ExtinctionHour
