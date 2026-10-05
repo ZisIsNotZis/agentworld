@@ -79,9 +79,13 @@ type NaturalJournalConfig struct {
 	// mechanism axis (ticket 17, the world version the journal was produced
 	// under); it is omitted at the v5 zero value so every recorded v5
 	// journal keeps its bytes, and a {5,6} disagreement fails closed.
+	// Founders is the declared founding-band fixture axis (ticket 18); it is
+	// omitted at the default (the full frozen block 8P) so every recorded
+	// journal keeps its bytes, and a band disagreement fails closed.
 	FounderTenure       bool
 	CultivationDisabled bool
 	Mechanism           NaturalMechanism `json:"Mechanism,omitempty"`
+	Founders            int              `json:"Founders,omitempty"`
 	Policy              strategy.NaturalRef
 	PolicyFingerprint   [32]byte
 }
@@ -138,6 +142,9 @@ func validNaturalJournalConfig(config NaturalJournalConfig) bool {
 	if config.CultivationDisabled && config.FounderTenure {
 		return false
 	}
+	if !NaturalFoundersValid(config.Patches, config.Founders) || (config.FounderTenure && config.Founders == 1) {
+		return false
+	}
 	mechanism := config.Mechanism
 	if mechanism == 0 {
 		mechanism = NaturalMechanismV5
@@ -168,9 +175,16 @@ func (f *Natural) journalConfig() NaturalJournalConfig {
 			fingerprint = exact
 		}
 	}
+	// The band rides omitempty exactly like the mechanism: the declared
+	// default (the full frozen block 8P) is omitted, so every recorded
+	// journal keeps its bytes and both default spellings export identically.
+	band := f.founders
+	if band == NaturalSlotsPerPatch*f.patches {
+		band = 0
+	}
 	return NaturalJournalConfig{Patches: f.patches, R: f.r, Seed: f.seed, Births: f.births, Boundary: f.births,
 		FounderTenure: f.naturalRunnerTenure(), CultivationDisabled: f.cultivationDisabled,
-		Mechanism: f.mechanism, Policy: f.ref, PolicyFingerprint: fingerprint}
+		Mechanism: f.mechanism, Founders: band, Policy: f.ref, PolicyFingerprint: fingerprint}
 }
 
 // ExportJournal publishes committed evidence only, not a disk bundle. The
@@ -346,6 +360,7 @@ func sameNaturalJournalConfig(a, b NaturalJournalConfig) bool {
 	return a.Patches == b.Patches && a.R == b.R && a.Seed == b.Seed &&
 		a.Births == b.Births && a.Boundary == b.Boundary && a.FounderTenure == b.FounderTenure &&
 		a.CultivationDisabled == b.CultivationDisabled && a.Mechanism == b.Mechanism &&
+		a.Founders == b.Founders &&
 		a.Policy == b.Policy && a.PolicyFingerprint == b.PolicyFingerprint
 }
 
@@ -496,7 +511,8 @@ func replayNaturalJournal(batches []NaturalBatch, config NaturalJournalConfig) (
 	}
 	reference, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: config.Patches, R: config.R,
 		Seed: config.Seed, Workers: 1, Births: config.Boundary, FounderTenure: config.FounderTenure,
-		CultivationDisabled: config.CultivationDisabled, PolicyRef: config.Policy, Mechanism: config.Mechanism})
+		CultivationDisabled: config.CultivationDisabled, PolicyRef: config.Policy, Mechanism: config.Mechanism,
+		Founders: config.Founders})
 	if err != nil {
 		return nil, ErrNaturalJournal
 	}

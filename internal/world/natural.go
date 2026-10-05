@@ -498,7 +498,7 @@ type NaturalOptions struct {
 	// exactly NaturalMechanismV5 — the frozen v5 world — so every recorded
 	// v5 scenario keeps its bytes; NaturalMechanismV6 additively carries
 	// rule 515 "provision" and the granary provisioned ledger. The axis is
-	// run identity end to end (checkpoint manifest version block, journal
+	// run identity end to end (checkpoint manifest mechanism block, journal
 	// config, bidirectional {5,6} mismatch rejection) and is resolved and
 	// validated at construction together with the ref/mechanism consistency
 	// rule: natural/5 and natural/6 are legal under either mechanism, while
@@ -506,6 +506,24 @@ type NaturalOptions struct {
 	// the v5 zero value (fail closed) — the provision affordance does not
 	// exist there.
 	Mechanism NaturalMechanism
+
+	// Founders is the declared founding-band fixture axis (ticket 18 v8
+	// design): the number of founder rows the genesis materializes from the
+	// frozen founder-stream positions 0..f−1, each seated by the frozen
+	// ID-placed home-patch mapping (1–8 → patch 1001, 9–16 → patch 1002,
+	// …). The zero value is exactly the full frozen block 8·Patches, so
+	// every recorded world is unchanged; an explicit 8·Patches is the same
+	// spelling of the same world (byte-identical bundles, pinned by test).
+	// The bound is derived from the frozen ID-space partition (the founder
+	// block must stay below the patch base, so 1 ≤ f ≤ 8·P; checked by
+	// NaturalFoundersValid). The axis is an initial condition of the
+	// experiment, never a population cap: newborns stay allocator-issued
+	// above the frozen genesis last-ID 2000+8P regardless of f, and the
+	// ceiling remains the derived carrying capacity. Run identity end to
+	// end (checkpoint manifest founders field, journal config,
+	// bidirectional mismatch rejection); no rule, constant, or policy byte
+	// changes with it.
+	Founders int
 
 	// CultivationDisabled is the declared cultivation ablation of the frozen
 	// matrix (cell D): an experiment intervention, never a mechanism or
@@ -545,6 +563,44 @@ func (o NaturalOptions) mechanism() NaturalMechanism {
 	return o.Mechanism
 }
 
+// NaturalFoundersValid is the derived bound of the founding-band fixture
+
+// axis: f == 0 is the default spelling of the full frozen founder block 8P,
+// and any explicit band must materialize a non-empty prefix of that block —
+// 1 ≤ f ≤ 8P, the bound derived from the frozen ID-space partition (the
+// founder block stays below the patch base, so NaturalFounderCount is the
+// exact admissible maximum). Everything else is refused.
+func NaturalFoundersValid(patches, founders int) bool {
+	if !NaturalPatchCountValid(patches) {
+		return false
+	}
+	if founders == 0 {
+		return true
+	}
+	block, err := NaturalFounderCount(patches)
+	return err == nil && founders >= 1 && founders <= block
+}
+
+// naturalFoundersResolved resolves the declared founding band to the
+// materialized founder count: the zero value is exactly the full frozen
+// founder block 8P, so the runner always carries a concrete 1 ≤ f ≤ 8P.
+func naturalFoundersResolved(patches, founders int) int {
+	if founders == 0 {
+		return NaturalSlotsPerPatch * patches
+	}
+	return founders
+}
+
+// declaredFounders reports the runner's founding band in its declared
+// (omitempty) form: zero at the full frozen block 8P default, so both
+// default spellings publish byte-identical manifest and journal fields.
+func (f *Natural) declaredFounders() int {
+	if f.founders == NaturalSlotsPerPatch*f.patches {
+		return 0
+	}
+	return f.founders
+}
+
 // naturalRefLegalUnderMechanism is the ref/mechanism consistency rule of
 // the frozen v7 design: the v5 zero value admits exactly the recorded ref
 // set {natural/5, natural/6}; mechanism v6 additionally admits the
@@ -577,6 +633,9 @@ func (o NaturalOptions) validate() error {
 	}
 	if !naturalRefLegalUnderMechanism(o.mechanism(), o.policyRef()) {
 		return fmt.Errorf("%w: policy ref %+v is not legal under mechanism %d (natural/7 and natural/7b require mechanism v6)", ErrNaturalRunner, o.policyRef(), uint16(o.mechanism()))
+	}
+	if !NaturalFoundersValid(o.Patches, o.Founders) {
+		return fmt.Errorf("%w: founders %d outside the derived founding-band bound [1,%d] (zero = default 8P)", ErrNaturalRunner, o.Founders, NaturalSlotsPerPatch*o.Patches)
 	}
 	if o.R < 0 || o.R > NaturalSlotsPerPatch {
 		return fmt.Errorf("%w: R %d outside [0,%d]", ErrNaturalRunner, o.R, NaturalSlotsPerPatch)
@@ -630,6 +689,7 @@ type Natural struct {
 	policies            *strategy.NaturalRegistry
 	ref                 strategy.NaturalRef
 	mechanism           NaturalMechanism // the declared mechanism axis; zero ≡ v5
+	founders            int              // the declared founding band, resolved: always 1 ≤ f ≤ 8P (zero declared ≡ 8P)
 	bound               map[sim.EntityID]*strategy.NaturalBound
 	patches             int
 	seed                uint64
@@ -697,25 +757,35 @@ func (f *Natural) naturalProposal(kind string, at sim.SimTime, actor sim.EntityI
 }
 
 // naturalGenesisSeeds builds the neutral h0 world: P patches with budget R,
-// every slot wild and empty (present patch ref, absent owner), and the 8P
-// founders in the v3/v4 initial state with founder-stream lifetimes. The
-// mechanism selects the granary seed field list: the v5 zero value keeps the
-// frozen six fields; mechanism v6 requires the provisioned ledger (field 7,
-// complete-row seeds at genesis), seeded 0.
-func naturalGenesisSeeds(mechanism NaturalMechanism, patches int, r int64, seed uint64) ([]component.ComponentSeed, []NaturalActorState, error) {
+// every slot wild and empty (present patch ref, absent owner), and the
+// founding band of f founders in the v3/v4 initial state with founder-stream
+// lifetimes — f materializes the prefix of the frozen founder block, drawing
+// stream positions 0..f−1, so founder i's lifetime equals the frozen world's
+// founder i lifetime for every i ≤ f (the zero-value spelling materializes
+// the whole block, 8P). The mechanism selects the granary seed field list:
+// the v5 zero value keeps the frozen six fields; mechanism v6 requires the
+// provisioned ledger (field 7, complete-row seeds at genesis), seeded 0.
+func naturalGenesisSeeds(mechanism NaturalMechanism, patches int, r int64, seed uint64, founders int) ([]component.ComponentSeed, []NaturalActorState, error) {
 	var seeds []component.ComponentSeed
-	founders, err := NaturalFounderCount(patches)
-	if err != nil {
-		return nil, nil, err
+	if !NaturalFoundersValid(patches, founders) {
+		return nil, nil, fmt.Errorf("%w: founders %d outside the derived founding-band bound", ErrNaturalRunner, founders)
+	}
+	if founders == 0 {
+		block, err := NaturalFounderCount(patches)
+		if err != nil {
+			return nil, nil, err
+		}
+		founders = block
 	}
 	lifetimes := sim.NewRandomStream(sim.RandomState{Seed: seed, Stream: NaturalFounderStream})
 	actors := make([]NaturalActorState, founders)
 	for i := range actors {
 		lifetime := NaturalLifetimeBase + int64(lifetimes.Uint64()%NaturalLifetimeSpan)
-		actors[i], err = NaturalFounderState(patches, sim.EntityID(i+1), lifetime)
+		actor, err := NaturalFounderState(patches, sim.EntityID(i+1), lifetime)
 		if err != nil {
 			return nil, nil, err
 		}
+		actors[i] = actor
 	}
 	for p := 0; p < patches; p++ {
 		patchID, err := NaturalPatchID(patches, p)
@@ -796,13 +866,15 @@ func naturalGenesisSeeds(mechanism NaturalMechanism, patches int, r int64, seed 
 	return seeds, actors, nil
 }
 
-// NewNatural builds the neutral v5 h0 world: P patches with budget R, 8P
-// founders whose immutable lifetimes are the runner-owned founder stream
-// positions 0..8P−1, the genesis allocator at the highest fixed entity ID
-// (2000+8P, so the first newborn is 2000+8P+1), and the frozen policy bound
-// to every roster entity. The h0 world is gated by the frozen extended
-// conservation — including the allocator cross-check — before any kernel
-// exists.
+// NewNatural builds the neutral v5 h0 world: P patches with budget R, the
+// declared founding band of 8P founders (the axis zero value; any explicit
+// f materializes stream positions 0..f−1) whose immutable lifetimes are the
+// runner-owned founder stream positions, the genesis allocator at the
+// highest fixed entity ID (2000+8P regardless of f — the last fixed slot of
+// the frozen partition, so the first newborn is 2000+8P+1), and the frozen
+// policy bound to every roster entity. The h0 world is gated by the frozen
+// extended conservation — including the allocator cross-check — before any
+// kernel exists.
 func NewNatural(o NaturalOptions) (*Natural, error) {
 	if err := o.validate(); err != nil {
 		return nil, err
@@ -831,7 +903,7 @@ func NewNatural(o NaturalOptions) (*Natural, error) {
 	if err = policies.RegisterFrozenNatural(policy); err != nil {
 		return nil, err
 	}
-	seeds, actors, err := naturalGenesisSeeds(o.mechanism(), o.Patches, o.R, o.Seed)
+	seeds, actors, err := naturalGenesisSeeds(o.mechanism(), o.Patches, o.R, o.Seed, o.Founders)
 	if err != nil {
 		return nil, err
 	}
@@ -847,7 +919,7 @@ func NewNatural(o NaturalOptions) (*Natural, error) {
 	if _, err = NaturalCheckConservationFor(o.mechanism(), o.Patches, make([]NaturalPatchState, o.Patches), slots, actors, nil, genesisLast); err != nil {
 		return nil, fmt.Errorf("%w: neutral h0 world breaks frozen conservation: %v", ErrNaturalRunner, err)
 	}
-	f := &Natural{registry: reg, policies: policies, ref: policy.Ref, mechanism: o.mechanism(), patches: o.Patches, seed: o.Seed, r: o.R, births: o.Births,
+	f := &Natural{registry: reg, policies: policies, ref: policy.Ref, mechanism: o.mechanism(), founders: naturalFoundersResolved(o.Patches, o.Founders), patches: o.Patches, seed: o.Seed, r: o.R, births: o.Births,
 		cultivationDisabled: o.CultivationDisabled,
 		bound:               make(map[sim.EntityID]*strategy.NaturalBound), allocator: allocator, ledger: ledger, thresholds: thresholds,
 		pulseLifecycle: make(map[sim.EntityID]scheduler.Lifecycle), current: make(map[sim.EntityID]strategy.NaturalAction),
@@ -2927,11 +2999,7 @@ func (f *Natural) checkpoint(h int, snap scheduler.Snapshot) (NaturalCheckpoint,
 	if len(w.actors) != len(f.roster) {
 		return NaturalCheckpoint{}, ErrNaturalRunner
 	}
-	founderCount, err := NaturalFounderCount(f.patches)
-	if err != nil {
-		return NaturalCheckpoint{}, err
-	}
-	founders := make([]NaturalActorState, founderCount)
+	founders := make([]NaturalActorState, f.founders)
 	for i := range founders {
 		a, ok := w.actors[sim.EntityID(i+1)]
 		if !ok {

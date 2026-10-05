@@ -1330,9 +1330,18 @@ func NaturalCheckConservation(patches int, patchStates []NaturalPatchState, slot
 // gate; the zero value reproduces NaturalCheckConservation exactly
 // (provisioned is pinned to zero per actor there, so the G2a′ aggregate
 // below reduces to the frozen v5 G2a term for term).
+//
+// The founder block is the declared founding-band fixture axis (ticket 18):
+// len(founders) is the materialized prefix f of the frozen ID-space founder
+// block 1..8P, so the gate's founder-count precondition is derived — the
+// founder IDs are exactly the contiguous positional prefix 1..len(founders)
+// by the loop below, bounded by the frozen block via NaturalFounderCount.
+// The zero value of the axis materializes the whole block, so the frozen v5
+// and v6 behavior (len(founders) == 8P) is bit-identical, and G3's
+// initial-energy term is 11·f by construction.
 func NaturalCheckConservationFor(m NaturalMechanism, patches int, patchStates []NaturalPatchState, slotStates [][]NaturalSlotState, founders []NaturalActorState, newborns []NaturalNewbornState, allocatorLast sim.EntityID) (NaturalBalance, error) {
-	founderCount, err := NaturalFounderCount(patches)
-	if err != nil || len(patchStates) != patches || len(slotStates) != patches || len(founders) != founderCount {
+	founderBlock, err := NaturalFounderCount(patches)
+	if err != nil || len(patchStates) != patches || len(slotStates) != patches || len(founders) < 1 || len(founders) > founderBlock {
 		return NaturalBalance{}, ErrNaturalContract
 	}
 	genesisLast, err := NaturalHighestFixedEntityID(patches)
@@ -1340,12 +1349,12 @@ func NaturalCheckConservationFor(m NaturalMechanism, patches int, patchStates []
 		return NaturalBalance{}, ErrNaturalContract
 	}
 	var b NaturalBalance
-	b.InitialEnergy = NaturalFounderInitialEnergy * int64(founderCount)
+	b.InitialEnergy = NaturalFounderInitialEnergy * int64(len(founders))
 	// Pass 1: every actor row and the parent map for the derived-kinship
 	// re-check.
-	parents := make(map[sim.EntityID][2]sim.EntityID, founderCount+len(newborns))
-	ids := make([]sim.EntityID, 0, founderCount+len(newborns))
-	actors := make(map[sim.EntityID]NaturalActorState, founderCount+len(newborns))
+	parents := make(map[sim.EntityID][2]sim.EntityID, len(founders)+len(newborns))
+	ids := make([]sim.EntityID, 0, len(founders)+len(newborns))
+	actors := make(map[sim.EntityID]NaturalActorState, len(founders)+len(newborns))
 	for i, founder := range founders {
 		actor := sim.EntityID(i + 1)
 		if !validNaturalActorFor(m, patches, actor, founder) {

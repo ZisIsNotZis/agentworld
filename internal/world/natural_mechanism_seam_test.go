@@ -786,7 +786,7 @@ func TestNaturalMechanismSeamSevenBNoProvisions(t *testing.T) {
 // passes the G2a′ genesis gate, provisions under natural/7, and its
 // pulse-boundary bundle round-trips under the declared v6 expectation.
 func TestNaturalMechanismSeamFixtureV6RoundTrip(t *testing.T) {
-	f, err := newNaturalFixtureRunnerForPolicy(2, 8, 3, true, 2, strategy.FrozenNaturalPolicy7(), NaturalMechanismV6)
+	f, err := newNaturalFixtureRunnerForPolicy(2, 8, 3, true, 2, strategy.FrozenNaturalPolicy7(), NaturalMechanismV6, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -812,7 +812,7 @@ func TestNaturalMechanismSeamFixtureV6RoundTrip(t *testing.T) {
 	naturalAssertConservationForMechanism(t, f, NaturalMechanismV6)
 	// The same fixture genesis under the v5 zero value refuses the provision
 	// policies (the shared constructor enforces the ref/mechanism rule).
-	if _, err := newNaturalFixtureRunnerForPolicy(2, 8, 3, true, 2, strategy.FrozenNaturalPolicy7(), NaturalMechanismV5); !errors.Is(err, ErrNaturalCheckpoint) {
+	if _, err := newNaturalFixtureRunnerForPolicy(2, 8, 3, true, 2, strategy.FrozenNaturalPolicy7(), NaturalMechanismV5, 0); !errors.Is(err, ErrNaturalCheckpoint) {
 		t.Fatal("v5 fixture accepted natural/7")
 	}
 	path := t.TempDir() + "/v6-fixture-resume.bundle"

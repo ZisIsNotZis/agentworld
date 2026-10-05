@@ -385,7 +385,7 @@ func naturalHybrid(t *testing.T, seeds []component.ComponentSeed, ceilings map[N
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &Natural{registry: reg, policies: policies, ref: policy.Ref, patches: 2, seed: 0, r: 8, births: true,
+	f := &Natural{registry: reg, policies: policies, ref: policy.Ref, founders: naturalFoundersResolved(2, 0), patches: 2, seed: 0, r: 8, births: true,
 		bound: make(map[sim.EntityID]*strategy.NaturalBound), allocator: allocator, ledger: ledger, thresholds: thresholds,
 		pulseLifecycle: make(map[sim.EntityID]scheduler.Lifecycle), current: make(map[sim.EntityID]strategy.NaturalAction),
 		denied: make(map[sim.EntityID]int64), deniedBuild: make(map[sim.EntityID]int64), meals: make(map[sim.EntityID]NaturalMealIntent),

@@ -143,6 +143,15 @@ type NaturalRestoreOptions struct {
 	CultivationDisabled bool
 	PolicyRef           strategy.NaturalRef
 	Mechanism           NaturalMechanism
+
+	// Founders is the declared founding-band fixture axis (ticket 18): the
+	// bundle must materialize exactly this founder prefix of the frozen ID
+	// space, matched bidirectionally against the manifest's founders field
+	// before any restore work or branch publication. The zero value is the
+	// full frozen block 8P (default-preservation: every recorded world
+	// restores unchanged); an explicit 8P is the same spelling of the same
+	// world.
+	Founders int
 }
 
 // policyRef resolves the declared policy identity: the zero value is the
@@ -181,6 +190,15 @@ func (o NaturalRestoreOptions) validate() error {
 	if o.CultivationDisabled && o.FounderTenure {
 		return fmt.Errorf("%w: cultivation ablation with the founder-tenure fixture is not a declared scenario", ErrNaturalCheckpoint)
 	}
+	if !NaturalFoundersValid(o.Patches, o.Founders) {
+		return fmt.Errorf("%w: founders %d outside the derived founding-band bound [1,%d] (zero = default 8P)", ErrNaturalCheckpoint, o.Founders, NaturalSlotsPerPatch*o.Patches)
+	}
+	// The fixture's coherent pre-history seats founders 1 and 2, so a
+	// fixture cell at f == 1 is not a declared scenario (f == 0 is the
+	// full-block default, E is f == 8P, E12 is f == 12).
+	if o.FounderTenure && o.Founders == 1 {
+		return fmt.Errorf("%w: founder-tenure fixture at founders 1 is not a declared scenario (the pre-history seats founders 1 and 2)", ErrNaturalCheckpoint)
+	}
 	if _, err := strategy.FrozenNaturalPolicyForRef(o.policyRef()); err != nil {
 		return fmt.Errorf("%w: policy ref %+v is not in the frozen natural ref set {natural/5, natural/6, natural/7, natural/7b}: %v", ErrNaturalCheckpoint, o.PolicyRef, err)
 	}
@@ -209,11 +227,11 @@ func newNaturalReferenceRunner(expected NaturalRestoreOptions) (*Natural, error)
 		return nil, fmt.Errorf("%w: %v", ErrNaturalCheckpoint, err)
 	}
 	if expected.FounderTenure {
-		return newNaturalFixtureRunnerForPolicy(expected.Patches, expected.R, expected.Seed, expected.Births, expected.Workers, policy, expected.mechanism())
+		return newNaturalFixtureRunnerForPolicy(expected.Patches, expected.R, expected.Seed, expected.Births, expected.Workers, policy, expected.mechanism(), expected.Founders)
 	}
 	return NewNatural(NaturalOptions{Patches: expected.Patches, R: expected.R, Seed: expected.Seed,
 		Workers: expected.Workers, Births: expected.Births, CultivationDisabled: expected.CultivationDisabled,
-		PolicyRef: policy.Ref, Mechanism: expected.mechanism()})
+		PolicyRef: policy.Ref, Mechanism: expected.mechanism(), Founders: expected.Founders})
 }
 
 // NewNaturalFixture builds the declared founder-tenure fixture world for the
@@ -267,18 +285,40 @@ func NewNaturalFixtureForPolicy(patches int, r int64, seed uint64, births bool, 
 // everywhere (checkpoint manifest mechanism block, journal config,
 // bidirectional {5,6} mismatch rejection).
 func NewNaturalFixtureForMechanism(patches int, r int64, seed uint64, births bool, workers int, policyRef strategy.NaturalRef, mechanism NaturalMechanism) (*Natural, error) {
+	return NewNaturalFixtureForConfig(patches, r, seed, births, workers, policyRef, mechanism, 0)
+}
+
+// NewNaturalFixtureForConfig builds the declared founder-tenure fixture
+// world under the full declared identity — one policy ref of the
+// executable's frozen natural ref set, one mechanism version, and one
+// founding band — the ticket-18 fixture seam of the founding-band axis (one
+// general form; NewNaturalFixture, NewNaturalFixtureForPolicy and
+// NewNaturalFixtureForMechanism stay delegating shims over it with the
+// default band). founders follows NaturalOptions.Founders exactly: the zero
+// value is the full frozen block 8P (default-preserving, byte-identical to
+// the existing seams, pinned by test), otherwise 1 ≤ f ≤ 8P via
+// NaturalFoundersValid, refused fail-closed otherwise — and the fixture's
+// coherent pre-history seats founders 1 and 2, so f ≥ 2 (f == 0 allowed as
+// the default spelling). No state injection: it stays a deterministic,
+// ledger-coherent function of exactly (P, R, seed, f) plus the continuation
+// flags, and the axis is run identity everywhere (checkpoint manifest
+// founders field, journal config, bidirectional mismatch rejection).
+func NewNaturalFixtureForConfig(patches int, r int64, seed uint64, births bool, workers int, policyRef strategy.NaturalRef, mechanism NaturalMechanism, founders int) (*Natural, error) {
 	policy, err := strategy.FrozenNaturalPolicyForRef(policyRef)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrNaturalCheckpoint, err)
 	}
-	return newNaturalFixtureRunnerForPolicy(patches, r, seed, births, workers, policy, mechanism)
+	if !NaturalFoundersValid(patches, founders) {
+		return nil, fmt.Errorf("%w: founders %d outside the derived founding-band bound", ErrNaturalCheckpoint, founders)
+	}
+	return newNaturalFixtureRunnerForPolicy(patches, r, seed, births, workers, policy, mechanism, founders)
 }
 
 // newNaturalFixtureRunner builds the declared founder-tenure fixture world
 // under its frozen default policy identity (natural/5, the zero value of the
 // D1 policy-selection seam).
 func newNaturalFixtureRunner(patches int, r int64, seed uint64, births bool, workers int) (*Natural, error) {
-	return newNaturalFixtureRunnerForPolicy(patches, r, seed, births, workers, strategy.FrozenNaturalPolicy(), NaturalMechanismV5)
+	return newNaturalFixtureRunnerForPolicy(patches, r, seed, births, workers, strategy.FrozenNaturalPolicy(), NaturalMechanismV5, 0)
 }
 
 // newNaturalFixtureRunnerForPolicy builds the declared founder-tenure fixture
@@ -294,19 +334,20 @@ func newNaturalFixtureRunner(patches int, r int64, seed uint64, births bool, wor
 // (journal config, checkpoint manifest, restore, branch) with the existing
 // bidirectional mismatch rejection; its first pulse is
 // naturalFixtureStartHour, so its first committed checkpoint is hour 2.
-func newNaturalFixtureRunnerForPolicy(patches int, r int64, seed uint64, births bool, workers int, policy strategy.NaturalPolicy, mechanism NaturalMechanism) (*Natural, error) {
+func newNaturalFixtureRunnerForPolicy(patches int, r int64, seed uint64, births bool, workers int, policy strategy.NaturalPolicy, mechanism NaturalMechanism, founders int) (*Natural, error) {
 	if !NaturalPatchCountValid(patches) || r < naturalFixtureMinBudget || r > NaturalSlotsPerPatch || workers < 1 ||
 		!NaturalMechanismValid(mechanism) || !naturalRefLegalUnderMechanism(mechanism, policy.Ref) ||
-		!strategy.ValidFrozenNaturalPolicy(policy) {
+		!strategy.ValidFrozenNaturalPolicy(policy) || !NaturalFoundersValid(patches, founders) ||
+		(founders != 0 && founders < 2) {
 		return nil, ErrNaturalCheckpoint
 	}
-	seeds, actors, err := naturalFixtureSeeds(mechanism, patches, r, seed)
+	seeds, actors, err := naturalFixtureSeeds(mechanism, patches, r, seed, founders)
 	if err != nil {
 		return nil, err
 	}
 	// The genesis gate reads the same declared projection mirror the journal
 	// reconstruction reads, so the seeds and the shadow cannot drift apart.
-	patchStates, slotStates, founderStates, err := naturalGenesisProjection(patches, r, seed, true)
+	patchStates, slotStates, founderStates, err := naturalGenesisProjection(patches, r, seed, true, founders)
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +366,7 @@ func newNaturalFixtureRunnerForPolicy(patches int, r int64, seed uint64, births 
 	if err != nil {
 		return nil, err
 	}
-	f := &Natural{registry: reg, policies: policies, ref: policy.Ref, mechanism: mechanism, patches: patches, seed: seed, r: r, births: births,
+	f := &Natural{registry: reg, policies: policies, ref: policy.Ref, mechanism: mechanism, founders: naturalFoundersResolved(patches, founders), patches: patches, seed: seed, r: r, births: births,
 		bound: make(map[sim.EntityID]*strategy.NaturalBound), allocator: allocator,
 		ledger: newFrozenNaturalLedger(), thresholds: frozenNaturalThresholds(),
 		pulseLifecycle: make(map[sim.EntityID]scheduler.Lifecycle), current: make(map[sim.EntityID]strategy.NaturalAction),
@@ -375,9 +416,14 @@ func (f *Natural) naturalRunnerTenure() bool {
 }
 
 // naturalFixtureSeeds builds the fixture kernel seeds: the neutral
-// seed-derived genesis lifted by the declared pre-history.
-func naturalFixtureSeeds(mechanism NaturalMechanism, patches int, r int64, seed uint64) ([]component.ComponentSeed, []NaturalActorState, error) {
-	seeds, actors, err := naturalGenesisSeeds(mechanism, patches, r, seed)
+// seed-derived genesis lifted by the declared pre-history. The founding band
+// rides the same axis (f founders; f ≥ 2 is a precondition of the coherent
+// pre-history, which seats founders 1 and 2).
+func naturalFixtureSeeds(mechanism NaturalMechanism, patches int, r int64, seed uint64, founders int) ([]component.ComponentSeed, []NaturalActorState, error) {
+	if founders != 0 && founders < 2 {
+		return nil, nil, fmt.Errorf("%w: founder-tenure fixture needs founders ≥ 2 (the pre-history seats founders 1 and 2), got %d", ErrNaturalCheckpoint, founders)
+	}
+	seeds, actors, err := naturalGenesisSeeds(mechanism, patches, r, seed, founders)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -539,6 +585,7 @@ type naturalManifest struct {
 	steps             int
 	time              sim.SimTime
 	mechanism         NaturalMechanism // the declared mechanism axis: zero ≡ v5, 6 = mechanism v6
+	founders          int              // the declared founding band: zero ≡ the full frozen block 8P
 	policyFormat      uint32           // the declared policy identity: 5..8 inside the frozen natural ref set
 	head              kernel.PortableHead
 	policyFingerprint [32]byte // exact frozen policy content fingerprint
@@ -621,6 +668,14 @@ func encodeNaturalManifest(m naturalManifest) []byte {
 	for _, hash := range m.sections {
 		out = append(out, hash[:]...)
 	}
+	// The founders field rides omitempty exactly like the mechanism block:
+	// the declared default (the full frozen block 8P) writes nothing, so
+	// every recorded manifest keeps its bytes and both default spellings
+	// encode identically; a non-default band extends the digest-covered body
+	// by exactly one u64.
+	if m.founders != 0 {
+		out = binary.BigEndian.AppendUint64(out, uint64(m.founders))
+	}
 	digest := sha256.Sum256(out)
 	return append(out, digest[:]...)
 }
@@ -634,9 +689,11 @@ func decodeNaturalManifest(data []byte) (naturalManifest, error) {
 	if sha256.Sum256(body) != [32]byte(data[len(data)-sha256.Size:]) {
 		return m, ErrNaturalCheckpoint
 	}
-	// The manifest is fixed-width; exact consumption rejects truncation,
-	// padding, and trailing fields.
-	if len(body) != len(encodeNaturalManifest(naturalManifest{}))-sha256.Size {
+	// The manifest is fixed-width at the declared default; a non-default
+	// founding band extends the body by exactly its omitempty u64 field.
+	// Exact consumption rejects truncation, padding, and trailing fields.
+	manifestBodyWidth := len(encodeNaturalManifest(naturalManifest{})) - sha256.Size
+	if len(body) != manifestBodyWidth && len(body) != manifestBodyWidth+8 {
 		return m, ErrNaturalCheckpoint
 	}
 	r := journalReader{data: body}
@@ -711,6 +768,10 @@ func decodeNaturalManifest(data []byte) (naturalManifest, error) {
 	for i := range m.sections {
 		copy(m.sections[i][:], r.take(32))
 	}
+	// The omitempty founding band: absent at the default, one u64 otherwise.
+	if len(body) == manifestBodyWidth+8 {
+		m.founders = int(r.u64())
+	}
 	// Boundary and lineage rules. time == 0 ↔ steps == 1: the only zero-time
 	// bundle is the neutral h0 pulse capture (or a Branch child of one); any
 	// later bundle is a pulse-boundary continuation. Continuation bundles
@@ -720,6 +781,8 @@ func decodeNaturalManifest(data []byte) (naturalManifest, error) {
 		!NaturalPatchCountValid(m.patches) || m.r < 0 || m.r > NaturalSlotsPerPatch ||
 		(m.tenure && m.r < naturalFixtureMinBudget) ||
 		(m.cultivation && m.tenure) ||
+		!NaturalFoundersValid(m.patches, m.founders) ||
+		(m.tenure && m.founders == 1) ||
 		m.steps < 1 || m.steps > NaturalStepCeiling ||
 		m.time < 0 || m.time > sim.SimTime(NaturalHorizonHours)*sim.SimTime(NaturalHour) ||
 		m.time%sim.SimTime(NaturalHour) != 0 {
@@ -844,10 +907,7 @@ func verifyNaturalStrategy(data []byte, fresh *Natural, view scheduler.SnapshotV
 	if fresh == nil || fresh.bound[1] == nil || strategy.VerifyFrozenNaturalPolicy(policy, fresh.bound[1].Policy()) != nil {
 		return ErrNaturalCheckpoint
 	}
-	founders, err := NaturalFounderCount(fresh.patches)
-	if err != nil {
-		return err
-	}
+	founders := fresh.founders
 	genomeRows, err := naturalGenomeRowEntities(view)
 	if err != nil {
 		return err
@@ -1006,15 +1066,14 @@ func verifyNaturalBoundaryTopology(snap scheduler.Snapshot, births bool, hour in
 // fiber armed for the next pulse, one claim wake per founder, the
 // births-enabled request wakes exactly when the flag demands them, and no
 // WakeBirth reservation (no newborn exists at h0).
-func verifyNaturalNeutralScheduler(k *kernel.Kernel, journal []NaturalBatch, snap scheduler.Snapshot, births bool, patches int) error {
+func verifyNaturalNeutralScheduler(k *kernel.Kernel, journal []NaturalBatch, snap scheduler.Snapshot, births bool, patches, founders int) error {
 	if k == nil || len(journal) != 1 || len(journal[0].Attempts) != 0 || journal[0].Time != 0 {
 		return ErrNaturalCheckpoint
 	}
 	if snap.Time != 0 || !snap.HasClosed || snap.Closed != 0 || snap.NextToken != 0 {
 		return ErrNaturalCheckpoint
 	}
-	founders, err := NaturalFounderCount(patches)
-	if err != nil || len(snap.Fibers) != founders+1 {
+	if founders < 1 || founders > NaturalSlotsPerPatch*patches || len(snap.Fibers) != founders+1 {
 		return ErrNaturalCheckpoint
 	}
 	roster := make([]sim.EntityID, 0, founders)
@@ -1758,19 +1817,27 @@ func (p *naturalProjection) finishBirth(patches int, hour int) error {
 }
 
 // naturalGenesisProjection mirrors the declared genesis projection state of
-// one scenario: the seed-derived founder rows, or the same rows lifted by
-// the declared founder-tenure fixture pre-history.
-func naturalGenesisProjection(patches int, r int64, seed uint64, tenure bool) ([]NaturalPatchState, [][]NaturalSlotState, []NaturalActorState, error) {
-	founders, err := NaturalFounderCount(patches)
-	if err != nil {
-		return nil, nil, nil, err
+// one scenario: the seed-derived founder rows (the founding-band prefix f of
+// the frozen block, stream positions 0..f−1), or the same rows lifted by
+// the declared founder-tenure fixture pre-history. tenure requires f ≥ 2 or
+// the default (f == 0): the pre-history seats founders 1 and 2.
+func naturalGenesisProjection(patches int, r int64, seed uint64, tenure bool, founders int) ([]NaturalPatchState, [][]NaturalSlotState, []NaturalActorState, error) {
+	if !NaturalFoundersValid(patches, founders) || (tenure && founders == 1) {
+		return nil, nil, nil, ErrNaturalCheckpoint
+	}
+	if founders == 0 {
+		block, err := NaturalFounderCount(patches)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		founders = block
 	}
 	var patchStates []NaturalPatchState
-	var slots [][]NaturalSlotState
+	slots := make([][]NaturalSlotState, patches)
 	if tenure {
 		patchStates, slots = fixturePatchStates(patches, r), fixtureSlotStates(patches, r)
 	} else {
-		patchStates, slots = make([]NaturalPatchState, patches), make([][]NaturalSlotState, patches)
+		patchStates = make([]NaturalPatchState, patches)
 		for i := range patchStates {
 			patchStates[i] = NaturalPatchState{Yield: r}
 			slots[i] = make([]NaturalSlotState, NaturalSlotsPerPatch)
@@ -1824,7 +1891,7 @@ func naturalProjectionFromHistory(k *kernel.Kernel, journal []NaturalBatch, conf
 	if err != nil {
 		return nil, err
 	}
-	patchStates, slots, founderRows, err := naturalGenesisProjection(patches, config.R, config.Seed, config.FounderTenure)
+	patchStates, slots, founderRows, err := naturalGenesisProjection(patches, config.R, config.Seed, config.FounderTenure, config.Founders)
 	if err != nil {
 		return nil, err
 	}
@@ -2104,7 +2171,8 @@ func (f *Natural) SaveCheckpoint(path string) ([32]byte, error) {
 	// Do not publish a same-ref altered policy that a fresh executable would
 	// reject later: the independent constructor pins the current policy contract.
 	fresh, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: f.patches, R: f.r, Seed: f.seed,
-		Workers: 1, Births: f.births, CultivationDisabled: f.cultivationDisabled, PolicyRef: f.ref, Mechanism: f.mechanism})
+		Workers: 1, Births: f.births, CultivationDisabled: f.cultivationDisabled, PolicyRef: f.ref, Mechanism: f.mechanism,
+		Founders: f.declaredFounders()})
 	if err != nil {
 		return [32]byte{}, ErrNaturalCheckpoint
 	}
@@ -2112,7 +2180,8 @@ func (f *Natural) SaveCheckpoint(path string) ([32]byte, error) {
 		return [32]byte{}, ErrNaturalCheckpoint
 	}
 	return f.saveBundle(path, fresh, f.births, naturalManifest{patches: f.patches, r: f.r, seed: f.seed,
-		births: f.births, boundary: f.births, cultivation: f.cultivationDisabled, mechanism: f.mechanism, steps: f.steps, time: f.sched.Time()})
+		births: f.births, boundary: f.births, cultivation: f.cultivationDisabled, mechanism: f.mechanism,
+		founders: f.declaredFounders(), steps: f.steps, time: f.sched.Time()})
 }
 
 // SaveResumeCheckpoint publishes a pulse-boundary continuation bundle: the
@@ -2147,7 +2216,7 @@ func (f *Natural) SaveResumeCheckpoint(path string) ([32]byte, error) {
 	}
 	fresh, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: f.patches, R: f.r, Seed: f.seed,
 		Workers: 1, Births: f.births, FounderTenure: f.naturalRunnerTenure(), CultivationDisabled: f.cultivationDisabled,
-		PolicyRef: f.ref, Mechanism: f.mechanism})
+		PolicyRef: f.ref, Mechanism: f.mechanism, Founders: f.declaredFounders()})
 	if err != nil {
 		return [32]byte{}, ErrNaturalCheckpoint
 	}
@@ -2160,7 +2229,8 @@ func (f *Natural) SaveResumeCheckpoint(path string) ([32]byte, error) {
 	// boundary flags.
 	boundary := naturalBoundaryBirths(f.journal, f.checkpoints[0].Hour)
 	m := naturalManifest{patches: f.patches, r: f.r, seed: f.seed, births: f.births, boundary: boundary,
-		tenure: f.naturalRunnerTenure(), cultivation: f.cultivationDisabled, mechanism: f.mechanism, steps: f.steps, time: at}
+		tenure: f.naturalRunnerTenure(), cultivation: f.cultivationDisabled, mechanism: f.mechanism,
+		founders: f.declaredFounders(), steps: f.steps, time: at}
 	return f.saveBundle(path, fresh, boundary, m)
 }
 
@@ -2183,7 +2253,7 @@ func (f *Natural) saveBundle(path string, fresh *Natural, boundary bool, m natur
 	snap := f.sched.Snapshot()
 	hour := int(snap.Time / sim.SimTime(NaturalHour))
 	if m.time == 0 {
-		if err := verifyNaturalNeutralScheduler(f.k, f.journal, snap, f.births, f.patches); err != nil {
+		if err := verifyNaturalNeutralScheduler(f.k, f.journal, snap, f.births, f.patches, f.founders); err != nil {
 			return [32]byte{}, err
 		}
 	} else {
@@ -2258,7 +2328,7 @@ func restoreNaturalSections(sections []checkpoint.Section, m naturalManifest, ex
 	}
 	fresh, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: m.patches, R: m.r, Seed: m.seed,
 		Workers: expected.Workers, Births: m.births, FounderTenure: m.tenure, CultivationDisabled: m.cultivation,
-		PolicyRef: manifestRef, Mechanism: m.mechanism})
+		PolicyRef: manifestRef, Mechanism: m.mechanism, Founders: m.founders})
 	if err != nil {
 		return fail(err)
 	}
@@ -2291,7 +2361,7 @@ func restoreNaturalSections(sections []checkpoint.Section, m naturalManifest, ex
 	// (the v5 h0 pulse is births-asymmetric by frozen design).
 	identityConfig := NaturalJournalConfig{Patches: m.patches, R: m.r, Seed: m.seed,
 		Births: m.births, Boundary: m.boundary, FounderTenure: m.tenure,
-		CultivationDisabled: m.cultivation, Mechanism: m.mechanism, Policy: fresh.ref}
+		CultivationDisabled: m.cultivation, Mechanism: m.mechanism, Policy: fresh.ref, Founders: m.founders}
 	fingerprint, err := naturalJournalFingerprint(fresh.ref)
 	if err != nil {
 		return fail(err)
@@ -2321,7 +2391,7 @@ func restoreNaturalSections(sections []checkpoint.Section, m naturalManifest, ex
 	snap := sched.Snapshot()
 	hour := int(m.time / sim.SimTime(NaturalHour))
 	if m.time == 0 {
-		if err := verifyNaturalNeutralScheduler(k, journal, snap, m.boundary, m.patches); err != nil {
+		if err := verifyNaturalNeutralScheduler(k, journal, snap, m.boundary, m.patches, naturalFoundersResolved(m.patches, m.founders)); err != nil {
 			return fail(err)
 		}
 	} else {
@@ -2376,7 +2446,7 @@ func restoreNaturalSections(sections []checkpoint.Section, m naturalManifest, ex
 	// Re-bind every roster entity (founders and newborns) to the carried
 	// frozen policy ref; the genome, not the ref, carries heredity.
 	for _, id := range reference.roster {
-		if id <= sim.EntityID(mustNaturalFounderCount(m.patches)) {
+		if id <= sim.EntityID(naturalFoundersResolved(m.patches, m.founders)) {
 			continue // bound by the fresh constructor
 		}
 		bound, err := fresh.policies.Bind(strategy.NaturalBinding{Actor: id, Ref: fresh.ref})
@@ -2443,14 +2513,6 @@ func copyCeilingMap(src map[NaturalCeiling]uint64) map[NaturalCeiling]uint64 {
 	return out
 }
 
-func mustNaturalFounderCount(patches int) int {
-	founders, err := NaturalFounderCount(patches)
-	if err != nil {
-		return 0
-	}
-	return founders
-}
-
 func naturalCheckedSections(path string) ([]checkpoint.Section, [32]byte, naturalManifest, error) {
 	sections, digest, err := checkpoint.ReadFile(path)
 	if err != nil {
@@ -2482,6 +2544,12 @@ func naturalManifestMatches(m naturalManifest, expected NaturalRestoreOptions) b
 		return false
 	}
 	if m.mechanism != expected.mechanism() {
+		return false
+	}
+	// The founding band is the same bidirectional rule (ticket 18): a
+	// default (8P) bundle refuses an explicit-band expectation and vice
+	// versa; both default spellings match each other.
+	if naturalFoundersResolved(m.patches, m.founders) != naturalFoundersResolved(expected.Patches, expected.Founders) {
 		return false
 	}
 	return m.patches == expected.Patches && m.r == expected.R && m.seed == expected.Seed &&
@@ -2564,7 +2632,8 @@ func BranchNaturalCheckpoint(path string, expected NaturalRestoreOptions, births
 		return [32]byte{}, err
 	}
 	parent, err := restoreNaturalSections(sections, m, NaturalRestoreOptions{Patches: m.patches, R: m.r,
-		Seed: m.seed, Workers: 1, Births: m.births, FounderTenure: m.tenure, PolicyRef: manifestRef, Mechanism: m.mechanism})
+		Seed: m.seed, Workers: 1, Births: m.births, FounderTenure: m.tenure, PolicyRef: manifestRef,
+		Mechanism: m.mechanism, Founders: m.founders})
 	if err != nil {
 		return [32]byte{}, err
 	}

@@ -991,7 +991,7 @@ func TestNaturalCheckpointRejectsWakeTopology(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			changed, wire := naturalAlterPortable(t, f, tc.change)
-			if err := verifyNaturalNeutralScheduler(f.k, f.Journal(), changed.Snapshot(), f.births, f.patches); !errors.Is(err, ErrNaturalCheckpoint) {
+			if err := verifyNaturalNeutralScheduler(f.k, f.Journal(), changed.Snapshot(), f.births, f.patches, f.founders); !errors.Is(err, ErrNaturalCheckpoint) {
 				t.Fatalf("neutral topology validator did not reject test state: %v", err)
 			}
 			forged := naturalRewriteBundle(t, path, func(s []checkpoint.Section) {
