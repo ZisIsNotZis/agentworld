@@ -775,6 +775,11 @@ func TestNaturalCheckpointRejectsForgedScenarioFlagAndPolicy(t *testing.T) {
 		"depth-huge":  func(m *naturalManifest) { m.depth = naturalMaxBranchDepth + 1 },
 		"fingerprint": func(m *naturalManifest) { m.policyFingerprint[0] ^= 1 },
 		"boundary":    func(m *naturalManifest) { m.boundary = true },
+		// Review P2 (ticket-18 L1): the founders axis must be forged-refused
+		// too, so the decode-side check is exercised, not merely the
+		// restore-side resolved-band comparison.
+		"founders-out-of-band": func(m *naturalManifest) { m.founders = 12 },
+		"founders-over":        func(m *naturalManifest) { m.founders = 8*2 + 1 },
 	} {
 		forged := naturalRewriteBundle(t, rootPath, func(s []checkpoint.Section) {
 			naturalEditManifest(t, s, edit)
@@ -1220,5 +1225,41 @@ func TestNaturalExpectedBoundaryWakesAtHorizonIsEmpty(t *testing.T) {
 	}
 	if len(set) != 0 {
 		t.Fatalf("horizon expectation set not empty: %v", set)
+	}
+}
+
+// Review P2 (ticket-18 L1): isolate the decode-side founders guard. A band
+// value that keeps the manifest WIDTH valid but is out of range (17 on P=2)
+// must be refused by decodeNaturalManifest itself, so the guard is bound by a
+// test rather than merely duplicated by the width check.
+func TestNaturalManifestFoundersBandDecodeGuard(t *testing.T) {
+	_, rootPath, _ := naturalCaptureRoot(t, 0, false, 1)
+	sections, _, err := checkpoint.ReadFile(rootPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := sections[2].Data
+	if _, err := decodeNaturalManifest(bytes.Clone(base)); err != nil {
+		t.Fatalf("captured manifest does not decode: %v", err)
+	}
+	// Rebuild a manifest with a non-default founders band of the canonical
+	// width (+8 bytes) and an out-of-range value.
+	m, err := decodeNaturalManifest(bytes.Clone(base))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.founders = 8*2 + 1
+	forged := encodeNaturalManifest(m)
+	if len(forged) != len(base)+8 {
+		t.Fatalf("forged width %d, want %d", len(forged), len(base)+8)
+	}
+	if _, err := decodeNaturalManifest(forged); !errors.Is(err, ErrNaturalCheckpoint) {
+		t.Fatalf("out-of-range founders band decoded: %v", err)
+	}
+	// The same width with a legitimate value decodes, proving the rejection
+	// above is the value check and not the width.
+	m.founders = 12
+	if _, err := decodeNaturalManifest(encodeNaturalManifest(m)); err != nil {
+		t.Fatalf("in-band founders band refused: %v", err)
 	}
 }
