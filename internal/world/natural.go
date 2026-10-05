@@ -110,6 +110,12 @@ const naturalPairIntentTLow int64 = 5
 // retries next hour, deterministically.
 const naturalLostCollision = "allocation-collision"
 
+// naturalProvisionRefusalNote is the typed journal note on a refused
+// rule-515 provision at the claim (zero mutation, nothing converted, no
+// fallback): the world-side precondition revalidation disagreed with the
+// policy's claim-time view.
+const naturalProvisionRefusalNote = "provision-refused"
+
 // naturalBuildRefusalNotes are the typed journal notes of a refused build
 // completion (zero mutation, bag kept).
 func naturalBuildRefusalNote(reason NaturalBuildRefusalReason) string {
@@ -378,17 +384,21 @@ type NaturalBirthEvidence struct {
 type NaturalAttempt struct {
 	Actor     sim.EntityID
 	Time      sim.SimTime
-	Kind      string // gather | eat-stored | wait | eat | build | build-denied-eat | paired-meal | fallback-eatstored | rest | birth-request | birth-reply
+	Kind      string // gather | eat-stored | provision | wait | eat | build | build-denied-eat | paired-meal | fallback-eatstored | rest | birth-request | birth-reply
 	Key       string
 	Target    sim.EntityID
 	Rejection FoodFlowGatherRejection
 	NoMeal    string
 	Lost      string
 	Refused   string // typed build-refusal note; empty otherwise
-	BirthWake bool
-	Birth     NaturalBirthEvidence
-	Accepted  bool
-	EventID   sim.EventID
+	// ProvisionRefused is the typed note on a refused rule-515 provision
+	// (zero mutation, nothing converted, no fallback). It is omitted when
+	// empty so every recorded v5 attempt keeps its journal bytes.
+	ProvisionRefused string `json:"ProvisionRefused,omitempty"`
+	BirthWake        bool
+	Birth            NaturalBirthEvidence
+	Accepted         bool
+	EventID          sim.EventID
 }
 
 // NaturalBatch is one committed timestamp's journal evidence.
@@ -476,11 +486,26 @@ type NaturalOptions struct {
 
 	// PolicyRef is the declared policy identity (ticket 16 D1 seam): the
 	// single binding site resolves it through the frozen natural ref set
-	// {natural/5, natural/6} and binds every roster entity by it. The zero
-	// value is exactly natural/5, so every recorded v5 scenario keeps its
-	// bytes; the ref is run identity end to end (journal config, checkpoint
-	// manifest, bidirectional mismatch rejection).
+	// {natural/5, natural/6, natural/7, natural/7b} and binds every roster
+	// entity by it. The zero value is exactly natural/5, so every recorded
+	// v5 scenario keeps its bytes; the ref is run identity end to end
+	// (journal config, checkpoint manifest, bidirectional mismatch
+	// rejection).
 	PolicyRef strategy.NaturalRef
+
+	// Mechanism is the declared mechanism-version axis (ticket 17 v7
+	// design): the world version the runner runs on. The zero value is
+	// exactly NaturalMechanismV5 — the frozen v5 world — so every recorded
+	// v5 scenario keeps its bytes; NaturalMechanismV6 additively carries
+	// rule 515 "provision" and the granary provisioned ledger. The axis is
+	// run identity end to end (checkpoint manifest version block, journal
+	// config, bidirectional {5,6} mismatch rejection) and is resolved and
+	// validated at construction together with the ref/mechanism consistency
+	// rule: natural/5 and natural/6 are legal under either mechanism, while
+	// natural/7 and natural/7b require mechanism v6 and are refused under
+	// the v5 zero value (fail closed) — the provision affordance does not
+	// exist there.
+	Mechanism NaturalMechanism
 
 	// CultivationDisabled is the declared cultivation ablation of the frozen
 	// matrix (cell D): an experiment intervention, never a mechanism or
@@ -510,12 +535,48 @@ func (o NaturalOptions) policyRef() strategy.NaturalRef {
 	return o.PolicyRef
 }
 
+// mechanism resolves the declared mechanism axis: the zero value is the
+// frozen v5 mechanism (default-preservation); literal 5 is not a second v5
+// spelling and fails validation with every other non-admitted value.
+func (o NaturalOptions) mechanism() NaturalMechanism {
+	if o.Mechanism == 0 {
+		return NaturalMechanismV5
+	}
+	return o.Mechanism
+}
+
+// naturalRefLegalUnderMechanism is the ref/mechanism consistency rule of
+// the frozen v7 design: the v5 zero value admits exactly the recorded ref
+// set {natural/5, natural/6}; mechanism v6 additionally admits the
+// provision policies natural/7 and natural/7b, which are refused under v5
+// (fail closed) because the rule-515 affordance they select does not exist
+// there. An unknown ref fails for every mechanism.
+func naturalRefLegalUnderMechanism(m NaturalMechanism, ref strategy.NaturalRef) bool {
+	if !NaturalMechanismValid(m) {
+		return false
+	}
+	policy, err := strategy.FrozenNaturalPolicyForRef(ref)
+	if err != nil {
+		return false
+	}
+	if m == NaturalMechanismV6 {
+		return true
+	}
+	return policy.Ref == strategy.FrozenNaturalPolicy().Ref || policy.Ref == strategy.FrozenNaturalPolicyV6().Ref
+}
+
 func (o NaturalOptions) validate() error {
 	if !NaturalPatchCountValid(o.Patches) {
 		return fmt.Errorf("%w: patches %d outside the derived ID-space precondition", ErrNaturalRunner, o.Patches)
 	}
 	if _, err := strategy.FrozenNaturalPolicyForRef(o.policyRef()); err != nil {
-		return fmt.Errorf("%w: policy ref %+v is not in the frozen natural ref set {natural/5, natural/6}: %v", ErrNaturalRunner, o.PolicyRef, err)
+		return fmt.Errorf("%w: policy ref %+v is not in the frozen natural ref set {natural/5, natural/6, natural/7, natural/7b}: %v", ErrNaturalRunner, o.PolicyRef, err)
+	}
+	if !NaturalMechanismValid(o.mechanism()) {
+		return fmt.Errorf("%w: mechanism %d is not an admitted mechanism version", ErrNaturalRunner, uint16(o.Mechanism))
+	}
+	if !naturalRefLegalUnderMechanism(o.mechanism(), o.policyRef()) {
+		return fmt.Errorf("%w: policy ref %+v is not legal under mechanism %d (natural/7 and natural/7b require mechanism v6)", ErrNaturalRunner, o.policyRef(), uint16(o.mechanism()))
 	}
 	if o.R < 0 || o.R > NaturalSlotsPerPatch {
 		return fmt.Errorf("%w: R %d outside [0,%d]", ErrNaturalRunner, o.R, NaturalSlotsPerPatch)
@@ -568,6 +629,7 @@ type Natural struct {
 	registry            component.Registry
 	policies            *strategy.NaturalRegistry
 	ref                 strategy.NaturalRef
+	mechanism           NaturalMechanism // the declared mechanism axis; zero ≡ v5
 	bound               map[sim.EntityID]*strategy.NaturalBound
 	patches             int
 	seed                uint64
@@ -606,22 +668,41 @@ func naturalField(field sim.FieldID, n int64) component.FieldSeed {
 	return component.FieldSeed{Field: field, Value: sim.IntegerValue(n)}
 }
 
-func naturalNumber(entity sim.EntityID, typ sim.ComponentTypeID, field sim.FieldID, n int64) component.Patch {
-	return component.Patch{Entity: entity, Component: typ, SchemaVersion: NaturalSchemaVersion, Field: field, Value: sim.IntegerValue(n)}
+// granaryProvisionedSeed is the mechanism-v6-only genesis seed of the
+// provisioned ledger: the v5 zero value returns nothing (the frozen v5
+// granary seeds keep exactly their six fields).
+func granaryProvisionedSeed(mechanism NaturalMechanism, provisioned int64) []component.FieldSeed {
+	if mechanism != NaturalMechanismV6 {
+		return nil
+	}
+	return []component.FieldSeed{{Field: NaturalGranaryProvisionedField, Value: sim.IntegerValue(provisioned)}}
+}
+
+// naturalNumber writes one integer field patch at the runner's mechanism
+// schema version: the v5 zero value writes the frozen NaturalSchemaVersion,
+// so the frozen v5 bytes are unchanged; mechanism v6 writes version 6.
+func (f *Natural) naturalNumber(entity sim.EntityID, typ sim.ComponentTypeID, field sim.FieldID, n int64) component.Patch {
+	return component.Patch{Entity: entity, Component: typ, SchemaVersion: f.mechanism.SchemaVersion(), Field: field, Value: sim.IntegerValue(n)}
 }
 
 func naturalKey(kind string, at sim.SimTime, actor sim.EntityID) string {
 	return fmt.Sprintf("natural/%s/%016x/%04x", kind, uint64(at), uint64(actor))
 }
 
-func naturalProposal(kind string, at sim.SimTime, actor sim.EntityID, rule sim.RuleID, patches ...component.Patch) kernel.Proposal {
-	return kernel.Proposal{Key: naturalKey(kind, at, actor), Time: at, Cause: kernel.Cause{Actor: actor, World: actor == 0}, Rule: rule, RuleVersion: NaturalRuleVersion, Patches: patches}
+// naturalProposal frames one runner proposal at the runner's mechanism rule
+// version: the v5 zero value writes the frozen NaturalRuleVersion; mechanism
+// v6 writes version 6.
+func (f *Natural) naturalProposal(kind string, at sim.SimTime, actor sim.EntityID, rule sim.RuleID, patches ...component.Patch) kernel.Proposal {
+	return kernel.Proposal{Key: naturalKey(kind, at, actor), Time: at, Cause: kernel.Cause{Actor: actor, World: actor == 0}, Rule: rule, RuleVersion: f.mechanism.RuleVersion(), Patches: patches}
 }
 
 // naturalGenesisSeeds builds the neutral h0 world: P patches with budget R,
 // every slot wild and empty (present patch ref, absent owner), and the 8P
-// founders in the v3/v4 initial state with founder-stream lifetimes.
-func naturalGenesisSeeds(patches int, r int64, seed uint64) ([]component.ComponentSeed, []NaturalActorState, error) {
+// founders in the v3/v4 initial state with founder-stream lifetimes. The
+// mechanism selects the granary seed field list: the v5 zero value keeps the
+// frozen six fields; mechanism v6 requires the provisioned ledger (field 7,
+// complete-row seeds at genesis), seeded 0.
+func naturalGenesisSeeds(mechanism NaturalMechanism, patches int, r int64, seed uint64) ([]component.ComponentSeed, []NaturalActorState, error) {
 	var seeds []component.ComponentSeed
 	founders, err := NaturalFounderCount(patches)
 	if err != nil {
@@ -695,10 +776,11 @@ func naturalGenesisSeeds(patches int, r int64, seed uint64) ([]component.Compone
 				naturalField(NaturalWorksiteWearDebtField, a.Worksite.WearDebt), naturalField(NaturalWorksiteInvestedUnitsField, a.Worksite.InvestedUnits),
 				naturalField(NaturalWorksitePointsCreatedField, a.Worksite.PointsCreated), naturalField(NaturalWorksitePointsDecayedField, a.Worksite.PointsDecayed),
 				naturalField(NaturalWorksiteLastBuildHourField, a.Worksite.LastBuildHour)}},
-			component.ComponentSeed{Entity: actor, Component: NaturalGranaryTypeID, Fields: []component.FieldSeed{
+			component.ComponentSeed{Entity: actor, Component: NaturalGranaryTypeID, Fields: append([]component.FieldSeed{
 				naturalField(NaturalGranaryStockField, a.Granary.Stock), naturalField(NaturalGranaryCultivatedTotalField, a.Granary.CultivatedTotal),
 				naturalField(NaturalGranaryStoredMealsField, a.Granary.StoredMeals), naturalField(NaturalGranaryLastStoredMealHourField, a.Granary.LastStoredMealHour),
-				naturalField(NaturalGranarySpoilDebtField, a.Granary.SpoilDebt), naturalField(NaturalGranarySpoiledField, a.Granary.Spoiled)}},
+				naturalField(NaturalGranarySpoilDebtField, a.Granary.SpoilDebt), naturalField(NaturalGranarySpoiledField, a.Granary.Spoiled)},
+				granaryProvisionedSeed(mechanism, a.Granary.Provisioned)...)},
 			component.ComponentSeed{Entity: actor, Component: NaturalGenomeTypeID, Fields: []component.FieldSeed{
 				naturalField(NaturalGenomeLocusMField, a.Genome.LocusM), naturalField(NaturalGenomeLocusYField, a.Genome.LocusY),
 				naturalField(NaturalGenomeLocusWField, a.Genome.LocusW),
@@ -733,7 +815,7 @@ func NewNatural(o NaturalOptions) (*Natural, error) {
 	for ceiling, value := range ledger.thresholds {
 		thresholds[ceiling] = value
 	}
-	reg, err := NaturalRegistry()
+	reg, err := NaturalRegistryFor(o.mechanism())
 	if err != nil {
 		return nil, err
 	}
@@ -749,7 +831,7 @@ func NewNatural(o NaturalOptions) (*Natural, error) {
 	if err = policies.RegisterFrozenNatural(policy); err != nil {
 		return nil, err
 	}
-	seeds, actors, err := naturalGenesisSeeds(o.Patches, o.R, o.Seed)
+	seeds, actors, err := naturalGenesisSeeds(o.mechanism(), o.Patches, o.R, o.Seed)
 	if err != nil {
 		return nil, err
 	}
@@ -762,10 +844,10 @@ func NewNatural(o NaturalOptions) (*Natural, error) {
 	for i := range slots {
 		slots[i] = make([]NaturalSlotState, NaturalSlotsPerPatch)
 	}
-	if _, err = NaturalCheckConservation(o.Patches, make([]NaturalPatchState, o.Patches), slots, actors, nil, genesisLast); err != nil {
+	if _, err = NaturalCheckConservationFor(o.mechanism(), o.Patches, make([]NaturalPatchState, o.Patches), slots, actors, nil, genesisLast); err != nil {
 		return nil, fmt.Errorf("%w: neutral h0 world breaks frozen conservation: %v", ErrNaturalRunner, err)
 	}
-	f := &Natural{registry: reg, policies: policies, ref: policy.Ref, patches: o.Patches, seed: o.Seed, r: o.R, births: o.Births,
+	f := &Natural{registry: reg, policies: policies, ref: policy.Ref, mechanism: o.mechanism(), patches: o.Patches, seed: o.Seed, r: o.R, births: o.Births,
 		cultivationDisabled: o.CultivationDisabled,
 		bound:               make(map[sim.EntityID]*strategy.NaturalBound), allocator: allocator, ledger: ledger, thresholds: thresholds,
 		pulseLifecycle: make(map[sim.EntityID]scheduler.Lifecycle), current: make(map[sim.EntityID]strategy.NaturalAction),
@@ -801,51 +883,64 @@ func NewNatural(o NaturalOptions) (*Natural, error) {
 	return f, nil
 }
 
-// # The policy cascade dispatch (ticket 16 D1 seam)
+// # The policy cascade dispatch (ticket 16 D1 seam, extended by ticket 17)
 //
 // The frozen v5 cascade bytes cannot detect a v6 bound: their only ref check
 // is obs.Ref against the bound's own ref, which a v6 bound satisfies. The
 // ref discipline therefore lives in the dispatch, not the cascade — every
 // evaluation site routes through these helpers, which call the matching
-// cascade for the runner's bound ref (the v6 cascade's own bound-identity
-// guard fails closed under any other bound content).
-func naturalDispatchesV6(ref strategy.NaturalRef) bool {
-	frozen, err := strategy.FrozenNaturalPolicyForRef(ref)
-	return err == nil && frozen.Ref == strategy.FrozenNaturalPolicyV6().Ref
-}
-
-// naturalEvaluate dispatches the frozen hourly decision cascade matching the
-// runner's bound policy ref: natural/5 bound → the frozen v5 Evaluate,
-// natural/6 bound → EvaluateV6.
+// cascade for the runner's bound ref: the frozen v5 Evaluate for
+// {natural,5}, EvaluateV6 for {natural,6}, and — ticket 17 — Evaluate7 for
+// {natural,7} and Evaluate7b for {natural,8} (the v6/v7 cascades' own
+// bound-identity guards fail closed under any other bound content). Every
+// dispatch site still re-pins choice.Ref == f.ref.
 func (f *Natural) naturalEvaluate(id sim.EntityID, obs strategy.NaturalObservation) (strategy.NaturalChoice, error) {
-	if naturalDispatchesV6(f.ref) {
+	switch f.ref {
+	case strategy.FrozenNaturalPolicyV6().Ref:
 		return f.bound[id].EvaluateV6(obs)
+	case strategy.FrozenNaturalPolicy7().Ref:
+		return f.bound[id].Evaluate7(obs)
+	case strategy.FrozenNaturalPolicy7b().Ref:
+		return f.bound[id].Evaluate7b(obs)
 	}
 	return f.bound[id].Evaluate(obs)
 }
 
 // naturalEvaluateBirthRequest dispatches the frozen proposer decision at
-// h+40m+5µs for the bound ref (EvaluateBirthRequestV6 files only at own
-// energy ≥ 4).
+// h+40m+5µs for the bound ref (EvaluateBirthRequestV6 and its natural/7 and
+// natural/7b twins file only at own energy ≥ 4).
 func (f *Natural) naturalEvaluateBirthRequest(id sim.EntityID, obs strategy.NaturalRequestObservation) (strategy.NaturalRequestChoice, error) {
-	if naturalDispatchesV6(f.ref) {
+	switch f.ref {
+	case strategy.FrozenNaturalPolicyV6().Ref:
 		return f.bound[id].EvaluateBirthRequestV6(obs)
+	case strategy.FrozenNaturalPolicy7().Ref:
+		return f.bound[id].EvaluateBirthRequest7(obs)
+	case strategy.FrozenNaturalPolicy7b().Ref:
+		return f.bound[id].EvaluateBirthRequest7b(obs)
 	}
 	return f.bound[id].EvaluateBirthRequest(obs)
 }
 
 // naturalEvaluateBirthReply dispatches the frozen consenter decision at
-// h+40m+6µs for the bound ref (EvaluateBirthReplyV6 accepts only at own
-// energy ≥ 4).
+// h+40m+6µs for the bound ref (EvaluateBirthReplyV6 and its natural/7 and
+// natural/7b twins accept only at own energy ≥ 4).
 func (f *Natural) naturalEvaluateBirthReply(id sim.EntityID, obs strategy.NaturalReplyObservation) (strategy.NaturalReplyChoice, error) {
-	if naturalDispatchesV6(f.ref) {
+	switch f.ref {
+	case strategy.FrozenNaturalPolicyV6().Ref:
 		return f.bound[id].EvaluateBirthReplyV6(obs)
+	case strategy.FrozenNaturalPolicy7().Ref:
+		return f.bound[id].EvaluateBirthReply7(obs)
+	case strategy.FrozenNaturalPolicy7b().Ref:
+		return f.bound[id].EvaluateBirthReply7b(obs)
 	}
 	return f.bound[id].EvaluateBirthReply(obs)
 }
 
 // naturalActorState reads one actor's six component rows at one version.
-func naturalActorState(view scheduler.SnapshotView, actor sim.EntityID) (NaturalActorState, error) {
+// The mechanism selects the granary field list: the v5 zero value reads the
+// frozen six fields; mechanism v6 additionally reads the provisioned ledger
+// (field 7), so G2a′ and the balance carry the real counter.
+func naturalActorState(view scheduler.SnapshotView, mechanism NaturalMechanism, actor sim.EntityID) (NaturalActorState, error) {
 	body, err := capacityInts(view, actor, NaturalBodyTypeID,
 		NaturalBodyEnergyField, NaturalBodyHungerField, NaturalBodyBasalSpentField, NaturalBodyCapLostField, NaturalBodyConsumedField, NaturalBodyLastGatherHourField, NaturalBodyBasalDebtField)
 	if err != nil {
@@ -868,10 +963,18 @@ func naturalActorState(view scheduler.SnapshotView, actor sim.EntityID) (Natural
 	if err != nil {
 		return NaturalActorState{}, err
 	}
-	granary, err := capacityInts(view, actor, NaturalGranaryTypeID,
-		NaturalGranaryStockField, NaturalGranaryCultivatedTotalField, NaturalGranaryStoredMealsField, NaturalGranaryLastStoredMealHourField, NaturalGranarySpoilDebtField, NaturalGranarySpoiledField)
+	granaryFields := []sim.FieldID{NaturalGranaryStockField, NaturalGranaryCultivatedTotalField, NaturalGranaryStoredMealsField,
+		NaturalGranaryLastStoredMealHourField, NaturalGranarySpoilDebtField, NaturalGranarySpoiledField}
+	if mechanism == NaturalMechanismV6 {
+		granaryFields = append(granaryFields, NaturalGranaryProvisionedField)
+	}
+	granary, err := capacityInts(view, actor, NaturalGranaryTypeID, granaryFields...)
 	if err != nil {
 		return NaturalActorState{}, err
+	}
+	provisioned := int64(0) // the ledger does not exist under the v5 zero value
+	if mechanism == NaturalMechanismV6 {
+		provisioned = granary[6]
 	}
 	genomeValues, err := capacityRead(view, actor, NaturalGenomeTypeID,
 		NaturalGenomeLocusMField, NaturalGenomeLocusYField, NaturalGenomeLocusWField, NaturalGenomeParentAField, NaturalGenomeParentBField,
@@ -919,7 +1022,7 @@ func naturalActorState(view scheduler.SnapshotView, actor sim.EntityID) (Natural
 		Body:     NaturalBodyState{Energy: body[0], Hunger: body[1], BasalSpent: body[2], CapLost: body[3], Consumed: body[4], LastGatherHour: body[5], BasalDebt: body[6]},
 		Bag:      NaturalBagState{Units: units, Source: source},
 		Worksite: NaturalWorksiteState{Capital: worksite[0], Wip: worksite[1], WearDebt: worksite[2], InvestedUnits: worksite[3], PointsCreated: worksite[4], PointsDecayed: worksite[5], LastBuildHour: worksite[6]},
-		Granary:  NaturalGranaryState{Stock: granary[0], CultivatedTotal: granary[1], StoredMeals: granary[2], LastStoredMealHour: granary[3], SpoilDebt: granary[4], Spoiled: granary[5]},
+		Granary:  NaturalGranaryState{Stock: granary[0], CultivatedTotal: granary[1], StoredMeals: granary[2], LastStoredMealHour: granary[3], SpoilDebt: granary[4], Spoiled: granary[5], Provisioned: provisioned},
 		Genome:   NaturalGenomeState{LocusM: genomeInts[0], LocusY: genomeInts[1], LocusW: genomeInts[2], ParentA: parentA, ParentB: parentB, BirthHour: genomeInts[5], DeathHour: genomeInts[6], DiedHour: genomeInts[7], BirthGranaryPaid: genomeInts[8]},
 		Request:  NaturalBirthRequestState{Hour: requestInts[0], Addressee: addressee, ReportedCapital: requestInts[2], ReportedGranary: requestInts[3], Status: NaturalRequestStatus(requestInts[4]), LastRequestHour: requestInts[5], LastReplyHour: requestInts[6]},
 	}
@@ -940,9 +1043,16 @@ type naturalWorld struct {
 // ID order plus the registered newborns; the allocator cross-check at the
 // checkpoint fails closed on any divergence).
 func (f *Natural) worldState(view scheduler.SnapshotView) (naturalWorld, error) {
-	w := naturalWorld{patches: make([]NaturalPatchState, f.patches), slots: make([][]NaturalSlotState, f.patches), actors: make(map[sim.EntityID]NaturalActorState, len(f.roster))}
-	for i := 0; i < f.patches; i++ {
-		patch, err := NaturalPatchID(f.patches, i)
+	return worldStateFor(view, f.mechanism, f.patches, f.roster)
+}
+
+// worldStateFor reads the full state for one roster at one version with one
+// mechanism's granary field list (the runner's own worldState, generalized
+// to an explicit mechanism and roster).
+func worldStateFor(view scheduler.SnapshotView, mechanism NaturalMechanism, patches int, roster []sim.EntityID) (naturalWorld, error) {
+	w := naturalWorld{patches: make([]NaturalPatchState, patches), slots: make([][]NaturalSlotState, patches), actors: make(map[sim.EntityID]NaturalActorState, len(roster))}
+	for i := 0; i < patches; i++ {
+		patch, err := NaturalPatchID(patches, i)
 		if err != nil {
 			return naturalWorld{}, err
 		}
@@ -953,7 +1063,7 @@ func (f *Natural) worldState(view scheduler.SnapshotView) (naturalWorld, error) 
 		w.patches[i] = NaturalPatchState{Yield: n[0], Pulses: n[1], Produced: n[2], Granted: n[3], Unrealized: n[4]}
 		w.slots[i] = make([]NaturalSlotState, NaturalSlotsPerPatch)
 		for j := range w.slots[i] {
-			slot, err := NaturalSlotID(f.patches, i, j)
+			slot, err := NaturalSlotID(patches, i, j)
 			if err != nil {
 				return naturalWorld{}, err
 			}
@@ -972,8 +1082,8 @@ func (f *Natural) worldState(view scheduler.SnapshotView) (naturalWorld, error) 
 			w.slots[i][j] = NaturalSlotState{Stock: ints[0], Gathered: ints[1], Mode: NaturalTenureMode(ints[2]), Owner: owner, Cultivated: ints[3]}
 		}
 	}
-	for _, id := range f.roster {
-		a, err := naturalActorState(view, id)
+	for _, id := range roster {
+		a, err := naturalActorState(view, mechanism, id)
 		if err != nil {
 			return naturalWorld{}, err
 		}
@@ -987,7 +1097,7 @@ func (f *Natural) worldState(view scheduler.SnapshotView) (naturalWorld, error) 
 // spoilage counters, allocator state, R, and seeds have no field here at all
 // (frozen Q7); cultivated slots read exactly like empty wild slots.
 func (f *Natural) observe(view scheduler.SnapshotView, actor sim.EntityID, hour int, denial strategy.NaturalDenial) (strategy.NaturalObservation, error) {
-	a, err := naturalActorState(view, actor)
+	a, err := naturalActorState(view, f.mechanism, actor)
 	if err != nil {
 		return strategy.NaturalObservation{}, err
 	}
@@ -1036,11 +1146,13 @@ func (f *Natural) observe(view scheduler.SnapshotView, actor sim.EntityID, hour 
 // guard is the runner-side ownership duty: every natural proposal passes
 // NaturalCheckOwnership before it can be planned (the kernel validates
 // schema and rule admission only).
+// guard is mechanism-parameterized: the v5 zero value is exactly the frozen
+// guard; mechanism v6 admits the rule-515 provision writer set.
 func (f *Natural) guard(p kernel.Proposal) error {
-	if p.RuleVersion != NaturalRuleVersion {
+	if p.RuleVersion != f.mechanism.RuleVersion() {
 		return ErrNaturalRunner
 	}
-	return NaturalCheckOwnership(p, f.patches)
+	return NaturalCheckOwnershipFor(f.mechanism, p, f.patches)
 }
 
 func (f *Natural) rosterContains(id sim.EntityID) bool {
@@ -1103,8 +1215,8 @@ func (f *Natural) pulse(ready scheduler.ReadyFiber, view scheduler.SnapshotView)
 		if err != nil || !died {
 			return out, ErrNaturalRunner
 		}
-		proposal := naturalProposal("age-death", at, id, NaturalAgeDeathRule,
-			naturalNumber(id, NaturalGenomeTypeID, NaturalGenomeDiedHourField, genome.DiedHour))
+		proposal := f.naturalProposal("age-death", at, id, NaturalAgeDeathRule,
+			f.naturalNumber(id, NaturalGenomeTypeID, NaturalGenomeDiedHourField, genome.DiedHour))
 		proposal.Cause = kernel.Cause{World: true}
 		if err = f.guard(proposal); err != nil {
 			return out, err
@@ -1123,21 +1235,21 @@ func (f *Natural) pulse(ready scheduler.ReadyFiber, view scheduler.SnapshotView)
 				continue
 			}
 			a := w.actors[id]
-			next, _, starved, err := NaturalBasal(f.patches, h, id, a, 1)
+			next, _, starved, err := NaturalBasalFor(f.mechanism, f.patches, h, id, a, 1)
 			if err != nil {
 				return out, err
 			}
 			ps := []component.Patch{
-				naturalNumber(id, NaturalBodyTypeID, NaturalBodyEnergyField, next.Body.Energy),
-				naturalNumber(id, NaturalBodyTypeID, NaturalBodyHungerField, next.Body.Hunger),
-				naturalNumber(id, NaturalBodyTypeID, NaturalBodyBasalSpentField, next.Body.BasalSpent)}
+				f.naturalNumber(id, NaturalBodyTypeID, NaturalBodyEnergyField, next.Body.Energy),
+				f.naturalNumber(id, NaturalBodyTypeID, NaturalBodyHungerField, next.Body.Hunger),
+				f.naturalNumber(id, NaturalBodyTypeID, NaturalBodyBasalSpentField, next.Body.BasalSpent)}
 			if next.Body.BasalDebt != a.Body.BasalDebt {
-				ps = append(ps, naturalNumber(id, NaturalBodyTypeID, NaturalBodyBasalDebtField, next.Body.BasalDebt))
+				ps = append(ps, f.naturalNumber(id, NaturalBodyTypeID, NaturalBodyBasalDebtField, next.Body.BasalDebt))
 			}
 			if starved {
-				ps = append(ps, naturalNumber(id, NaturalGenomeTypeID, NaturalGenomeDiedHourField, next.Genome.DiedHour))
+				ps = append(ps, f.naturalNumber(id, NaturalGenomeTypeID, NaturalGenomeDiedHourField, next.Genome.DiedHour))
 			}
-			proposal := naturalProposal("basal", at, id, NaturalBasalRule, ps...)
+			proposal := f.naturalProposal("basal", at, id, NaturalBasalRule, ps...)
 			proposal.Cause = kernel.Cause{World: true}
 			if err = f.guard(proposal); err != nil {
 				return out, err
@@ -1172,23 +1284,23 @@ func (f *Natural) pulse(ready scheduler.ReadyFiber, view scheduler.SnapshotView)
 				return out, err
 			}
 			patch, _ := NaturalPatchID(f.patches, i)
-			ps := []component.Patch{naturalNumber(patch, NaturalPatchTypeID, NaturalPatchPulsesField, next.Pulses)}
+			ps := []component.Patch{f.naturalNumber(patch, NaturalPatchTypeID, NaturalPatchPulsesField, next.Pulses)}
 			if next.Produced != w.patches[i].Produced {
-				ps = append(ps, naturalNumber(patch, NaturalPatchTypeID, NaturalPatchProducedField, next.Produced))
+				ps = append(ps, f.naturalNumber(patch, NaturalPatchTypeID, NaturalPatchProducedField, next.Produced))
 			}
 			if next.Granted != w.patches[i].Granted {
-				ps = append(ps, naturalNumber(patch, NaturalPatchTypeID, NaturalPatchGrantedField, next.Granted))
+				ps = append(ps, f.naturalNumber(patch, NaturalPatchTypeID, NaturalPatchGrantedField, next.Granted))
 			}
 			if next.Unrealized != w.patches[i].Unrealized {
-				ps = append(ps, naturalNumber(patch, NaturalPatchTypeID, NaturalPatchUnrealizedField, next.Unrealized))
+				ps = append(ps, f.naturalNumber(patch, NaturalPatchTypeID, NaturalPatchUnrealizedField, next.Unrealized))
 			}
 			for j, s := range stock {
 				if s.Stock != w.slots[i][j].Stock {
 					slot, _ := NaturalSlotID(f.patches, i, j)
-					ps = append(ps, naturalNumber(slot, NaturalSlotTypeID, NaturalSlotStockField, s.Stock))
+					ps = append(ps, f.naturalNumber(slot, NaturalSlotTypeID, NaturalSlotStockField, s.Stock))
 				}
 			}
-			proposal := naturalProposal(fmt.Sprintf("regen-%d", i), at, 0, NaturalRegenSplitRule, ps...)
+			proposal := f.naturalProposal(fmt.Sprintf("regen-%d", i), at, 0, NaturalRegenSplitRule, ps...)
 			proposal.Cause = kernel.Cause{World: true}
 			if err = f.guard(proposal); err != nil {
 				return out, err
@@ -1201,7 +1313,7 @@ func (f *Natural) pulse(ready scheduler.ReadyFiber, view scheduler.SnapshotView)
 			// rule-508 proposal committing it is emitted in stage 4.
 			for _, grant := range grants {
 				owner := w.actors[grant.Owner]
-				granted, grantResult, err := NaturalCultivatedGrant(f.patches, grant.Owner, owner, grant.Units)
+				granted, grantResult, err := NaturalCultivatedGrantFor(f.mechanism, f.patches, grant.Owner, owner, grant.Units)
 				if err != nil || grantResult.Fallowed != 0 {
 					return out, fmt.Errorf("%w: fallow grant inside a live-filtered regen split: %v", ErrNaturalRunner, err)
 				}
@@ -1224,7 +1336,7 @@ func (f *Natural) pulse(ready scheduler.ReadyFiber, view scheduler.SnapshotView)
 			next := a
 			if h >= 1 {
 				var err error
-				next, _, err = NaturalSpoilage(f.patches, id, a)
+				next, _, err = NaturalSpoilageFor(f.mechanism, f.patches, id, a)
 				if err != nil {
 					return out, err
 				}
@@ -1233,27 +1345,27 @@ func (f *Natural) pulse(ready scheduler.ReadyFiber, view scheduler.SnapshotView)
 			var grantPatches, spoilPatches []component.Patch
 			if units > 0 {
 				grantPatches = append(grantPatches,
-					naturalNumber(id, NaturalGranaryTypeID, NaturalGranaryStockField, next.Granary.Stock),
-					naturalNumber(id, NaturalGranaryTypeID, NaturalGranaryCultivatedTotalField, next.Granary.CultivatedTotal))
+					f.naturalNumber(id, NaturalGranaryTypeID, NaturalGranaryStockField, next.Granary.Stock),
+					f.naturalNumber(id, NaturalGranaryTypeID, NaturalGranaryCultivatedTotalField, next.Granary.CultivatedTotal))
 				if next.Granary.SpoilDebt != a.Granary.SpoilDebt {
-					spoilPatches = append(spoilPatches, naturalNumber(id, NaturalGranaryTypeID, NaturalGranarySpoilDebtField, next.Granary.SpoilDebt))
+					spoilPatches = append(spoilPatches, f.naturalNumber(id, NaturalGranaryTypeID, NaturalGranarySpoilDebtField, next.Granary.SpoilDebt))
 				}
 				if next.Granary.Spoiled != a.Granary.Spoiled {
-					spoilPatches = append(spoilPatches, naturalNumber(id, NaturalGranaryTypeID, NaturalGranarySpoiledField, next.Granary.Spoiled))
+					spoilPatches = append(spoilPatches, f.naturalNumber(id, NaturalGranaryTypeID, NaturalGranarySpoiledField, next.Granary.Spoiled))
 				}
 			} else {
 				if next.Granary.SpoilDebt != a.Granary.SpoilDebt {
-					spoilPatches = append(spoilPatches, naturalNumber(id, NaturalGranaryTypeID, NaturalGranarySpoilDebtField, next.Granary.SpoilDebt))
+					spoilPatches = append(spoilPatches, f.naturalNumber(id, NaturalGranaryTypeID, NaturalGranarySpoilDebtField, next.Granary.SpoilDebt))
 				}
 				if next.Granary.Stock != a.Granary.Stock {
-					spoilPatches = append(spoilPatches, naturalNumber(id, NaturalGranaryTypeID, NaturalGranaryStockField, next.Granary.Stock))
+					spoilPatches = append(spoilPatches, f.naturalNumber(id, NaturalGranaryTypeID, NaturalGranaryStockField, next.Granary.Stock))
 				}
 				if next.Granary.Spoiled != a.Granary.Spoiled {
-					spoilPatches = append(spoilPatches, naturalNumber(id, NaturalGranaryTypeID, NaturalGranarySpoiledField, next.Granary.Spoiled))
+					spoilPatches = append(spoilPatches, f.naturalNumber(id, NaturalGranaryTypeID, NaturalGranarySpoiledField, next.Granary.Spoiled))
 				}
 			}
 			if len(grantPatches) > 0 {
-				gProposal := naturalProposal("grant", at, id, NaturalGrantRule, grantPatches...)
+				gProposal := f.naturalProposal("grant", at, id, NaturalGrantRule, grantPatches...)
 				gProposal.Cause = kernel.Cause{World: true}
 				if err = f.guard(gProposal); err != nil {
 					return out, err
@@ -1261,7 +1373,7 @@ func (f *Natural) pulse(ready scheduler.ReadyFiber, view scheduler.SnapshotView)
 				out.Proposals = append(out.Proposals, gProposal)
 			}
 			if len(spoilPatches) > 0 {
-				proposal := naturalProposal("spoil", at, id, NaturalSpoilageRule, spoilPatches...)
+				proposal := f.naturalProposal("spoil", at, id, NaturalSpoilageRule, spoilPatches...)
 				proposal.Cause = kernel.Cause{World: true}
 				if err = f.guard(proposal); err != nil {
 					return out, err
@@ -1284,16 +1396,16 @@ func (f *Natural) pulse(ready scheduler.ReadyFiber, view scheduler.SnapshotView)
 			if index < 0 || index >= f.patches {
 				return out, ErrNaturalRunner
 			}
-			next, nextSlots, result, err := NaturalWear(f.patches, id, a, a.Bag.Source, slotArray(w.slots[index]))
+			next, nextSlots, result, err := NaturalWearFor(f.mechanism, f.patches, id, a, a.Bag.Source, slotArray(w.slots[index]))
 			if err != nil {
 				return out, err
 			}
-			ps := []component.Patch{naturalNumber(id, NaturalWorksiteTypeID, NaturalWorksiteWearDebtField, next.Worksite.WearDebt)}
+			ps := []component.Patch{f.naturalNumber(id, NaturalWorksiteTypeID, NaturalWorksiteWearDebtField, next.Worksite.WearDebt)}
 			if next.Worksite.Capital != a.Worksite.Capital {
-				ps = append(ps, naturalNumber(id, NaturalWorksiteTypeID, NaturalWorksiteCapitalField, next.Worksite.Capital))
+				ps = append(ps, f.naturalNumber(id, NaturalWorksiteTypeID, NaturalWorksiteCapitalField, next.Worksite.Capital))
 			}
 			if next.Worksite.PointsDecayed != a.Worksite.PointsDecayed {
-				ps = append(ps, naturalNumber(id, NaturalWorksiteTypeID, NaturalWorksitePointsDecayedField, next.Worksite.PointsDecayed))
+				ps = append(ps, f.naturalNumber(id, NaturalWorksiteTypeID, NaturalWorksitePointsDecayedField, next.Worksite.PointsDecayed))
 			}
 			for _, slotIndex := range result.RevertedSlots {
 				slot, err := NaturalSlotID(f.patches, index, slotIndex)
@@ -1305,11 +1417,11 @@ func (f *Natural) pulse(ready scheduler.ReadyFiber, view scheduler.SnapshotView)
 					return out, err
 				}
 				ps = append(ps,
-					naturalNumber(slot, NaturalSlotTypeID, NaturalSlotTenureModeField, int64(NaturalTenureWild)),
-					component.Patch{Entity: slot, Component: NaturalSlotTypeID, SchemaVersion: NaturalSchemaVersion, Field: NaturalSlotTenureOwnerField, Value: owner},
-					naturalNumber(slot, NaturalSlotTypeID, NaturalSlotTenureCultivatedField, 0))
+					f.naturalNumber(slot, NaturalSlotTypeID, NaturalSlotTenureModeField, int64(NaturalTenureWild)),
+					component.Patch{Entity: slot, Component: NaturalSlotTypeID, SchemaVersion: f.mechanism.SchemaVersion(), Field: NaturalSlotTenureOwnerField, Value: owner},
+					f.naturalNumber(slot, NaturalSlotTypeID, NaturalSlotTenureCultivatedField, 0))
 			}
-			proposal := naturalProposal("wear", at, id, NaturalWearRule, ps...)
+			proposal := f.naturalProposal("wear", at, id, NaturalWearRule, ps...)
 			proposal.Cause = kernel.Cause{World: true}
 			if err = f.guard(proposal); err != nil {
 				return out, err
@@ -1331,8 +1443,8 @@ func (f *Natural) pulse(ready scheduler.ReadyFiber, view scheduler.SnapshotView)
 			if err != nil {
 				return out, err
 			}
-			proposal := naturalProposal("expiry", at, id, NaturalBirthExpireRule,
-				naturalNumber(id, NaturalBirthRequestTypeID, NaturalBirthRequestStatusField, int64(next.Status)))
+			proposal := f.naturalProposal("expiry", at, id, NaturalBirthExpireRule,
+				f.naturalNumber(id, NaturalBirthRequestTypeID, NaturalBirthRequestStatusField, int64(next.Status)))
 			proposal.Cause = kernel.Cause{World: true}
 			if err = f.guard(proposal); err != nil {
 				return out, err
@@ -1424,7 +1536,7 @@ func (f *Natural) pairedMealDecision(actor sim.EntityID, hour int, intent Natura
 		attempt.NoMeal = capacityNoStoredMealNote
 		return kernel.Proposal{}, attempt, nil
 	}
-	proposal, err := NaturalEatStoredProposal(naturalKey(kind, paired, actor), f.patches, hour, paired, actor, a)
+	proposal, err := NaturalEatStoredProposalFor(f.mechanism, naturalKey(kind, paired, actor), f.patches, hour, paired, actor, a)
 	if err != nil {
 		return kernel.Proposal{}, NaturalAttempt{}, err
 	}
@@ -1441,7 +1553,7 @@ func (f *Natural) pairedMealDecision(actor sim.EntityID, hour int, intent Natura
 // phase discipline places the rule-507 consume (the contract's exact patch
 // set) at the next frozen instant after the refused completion.
 func (f *Natural) naturalDenialEat(view scheduler.SnapshotView, hour int, at sim.SimTime, id sim.EntityID) (kernel.Proposal, NaturalAttempt, error) {
-	a, err := naturalActorState(view, id)
+	a, err := naturalActorState(view, f.mechanism, id)
 	if err != nil {
 		return kernel.Proposal{}, NaturalAttempt{}, err
 	}
@@ -1456,17 +1568,17 @@ func (f *Natural) naturalDenialEat(view scheduler.SnapshotView, hour int, at sim
 	if choice.Kind != strategy.NaturalEat {
 		return kernel.Proposal{}, NaturalAttempt{}, fmt.Errorf("%w: build-denied re-evaluation chose %d, want NaturalEat", ErrNaturalRunner, choice.Kind)
 	}
-	next, _, err := NaturalConsume(f.patches, id, a)
+	next, _, err := NaturalConsumeFor(f.mechanism, f.patches, id, a)
 	if err != nil {
 		return kernel.Proposal{}, NaturalAttempt{}, err
 	}
-	proposal := kernel.Proposal{Key: naturalKey("build-denied-eat", at, id), Time: at, Cause: kernel.Cause{Actor: id}, Rule: NaturalConsumeRule, RuleVersion: NaturalRuleVersion,
+	proposal := kernel.Proposal{Key: naturalKey("build-denied-eat", at, id), Time: at, Cause: kernel.Cause{Actor: id}, Rule: NaturalConsumeRule, RuleVersion: f.mechanism.RuleVersion(),
 		Patches: []component.Patch{
-			naturalNumber(id, NaturalBagTypeID, NaturalBagUnitsField, next.Bag.Units),
-			naturalNumber(id, NaturalBodyTypeID, NaturalBodyEnergyField, next.Body.Energy),
-			naturalNumber(id, NaturalBodyTypeID, NaturalBodyHungerField, next.Body.Hunger),
-			naturalNumber(id, NaturalBodyTypeID, NaturalBodyCapLostField, next.Body.CapLost),
-			naturalNumber(id, NaturalBodyTypeID, NaturalBodyConsumedField, next.Body.Consumed),
+			f.naturalNumber(id, NaturalBagTypeID, NaturalBagUnitsField, next.Bag.Units),
+			f.naturalNumber(id, NaturalBodyTypeID, NaturalBodyEnergyField, next.Body.Energy),
+			f.naturalNumber(id, NaturalBodyTypeID, NaturalBodyHungerField, next.Body.Hunger),
+			f.naturalNumber(id, NaturalBodyTypeID, NaturalBodyCapLostField, next.Body.CapLost),
+			f.naturalNumber(id, NaturalBodyTypeID, NaturalBodyConsumedField, next.Body.Consumed),
 		}}
 	if err = f.guard(proposal); err != nil {
 		return kernel.Proposal{}, NaturalAttempt{}, err
@@ -1555,7 +1667,7 @@ func (f *Natural) evaluate(_ context.Context, ready scheduler.ReadyFiber, view s
 					return out, ErrNaturalRunner
 				}
 				slotBefore := w.slots[index/NaturalSlotsPerPatch][index%NaturalSlotsPerPatch]
-				proposal, err := NaturalGatherProposal(naturalKey("gather", at, id), f.patches, h, id, admission.Slot, slotBefore, a)
+				proposal, err := NaturalGatherProposalFor(f.mechanism, naturalKey("gather", at, id), f.patches, h, id, admission.Slot, slotBefore, a)
 				if err != nil {
 					return out, err
 				}
@@ -1578,7 +1690,7 @@ func (f *Natural) evaluate(_ context.Context, ready scheduler.ReadyFiber, view s
 			}
 			record(attempt)
 		case strategy.NaturalEatStored:
-			proposal, err := NaturalEatStoredProposal(naturalKey("eat-stored", at, id), f.patches, h, at, id, a)
+			proposal, err := NaturalEatStoredProposalFor(f.mechanism, naturalKey("eat-stored", at, id), f.patches, h, at, id, a)
 			if err != nil {
 				return out, err
 			}
@@ -1587,6 +1699,33 @@ func (f *Natural) evaluate(_ context.Context, ready scheduler.ReadyFiber, view s
 			}
 			out.Proposals = append(out.Proposals, proposal)
 			record(NaturalAttempt{Actor: id, Time: at, Kind: "eat-stored", Key: proposal.Key, BirthWake: birthWake})
+		case strategy.NaturalProvision:
+			// Rule 515 "provision" (mechanism v6, natural/7): the claim-side
+			// conversion of exactly one granary stock unit into the bag at the
+			// frozen claim instant. The converted unit takes the normal
+			// bag-decision wake (mirror of the gather-completion path without
+			// an activity window; no new phase instant), so a build can follow
+			// in the same hour. A world-side refusal (typed contract
+			// precondition failure) is zero-mutation typed evidence: nothing
+			// stages, no bag-decision wake is scheduled, and no fallback
+			// choice is silently substituted — the refusal IS the hour's
+			// outcome for this actor. Under the v5 zero value the affordance
+			// cannot exist (the v5/v6 cascades never emit it and the proposal
+			// builder refuses the zero value), so this case is inert there.
+			proposal, err := NaturalProvisionProposal(f.mechanism, naturalKey("provision", at, id), f.patches, h, id, a)
+			if err != nil {
+				if !errors.Is(err, ErrNaturalContract) {
+					return out, err
+				}
+				record(NaturalAttempt{Actor: id, Time: at, Kind: "provision", ProvisionRefused: naturalProvisionRefusalNote, BirthWake: birthWake})
+				break
+			}
+			if err = f.guard(proposal); err != nil {
+				return out, err
+			}
+			out.Proposals = append(out.Proposals, proposal)
+			record(NaturalAttempt{Actor: id, Time: at, Kind: "provision", Key: proposal.Key, BirthWake: birthWake})
+			out.Effects = append(out.Effects, scheduler.Effect{Kind: scheduler.EffectSchedule, Actor: id, Wake: scheduler.Wake{Actor: id, At: bagDecision, Cause: scheduler.WakeAudit}})
 		case strategy.NaturalWait:
 			record(NaturalAttempt{Actor: id, Time: at, Kind: "wait", BirthWake: birthWake})
 		default:
@@ -1680,7 +1819,7 @@ func (f *Natural) evaluate(_ context.Context, ready scheduler.ReadyFiber, view s
 			f.pending.mu.Unlock()
 			out.Effects = append(out.Effects, scheduler.Effect{Kind: scheduler.EffectSchedule, Actor: id, Wake: scheduler.Wake{Actor: id, At: buildStart, Cause: scheduler.WakeAudit}})
 		case strategy.NaturalEat:
-			proposal, err := NaturalConsumeProposal(naturalKey("eat", at, id), f.patches, h, id, a)
+			proposal, err := NaturalConsumeProposalFor(f.mechanism, naturalKey("eat", at, id), f.patches, h, id, a)
 			if err != nil {
 				return out, err
 			}
@@ -1901,7 +2040,7 @@ func (f *Natural) birthRequestDecision(view scheduler.SnapshotView, hour int, at
 	if choice.Kind != strategy.NaturalRequestFile {
 		return kernel.Proposal{}, false, nil
 	}
-	proposal, err := NaturalBirthRequestProposal(naturalKey("birth-request", at, proposer), f.patches, hour, proposer, choice.Addressee, choice.ReportedCapital, choice.ReportedGranary, a)
+	proposal, err := NaturalBirthRequestProposalFor(f.mechanism, naturalKey("birth-request", at, proposer), f.patches, hour, proposer, choice.Addressee, choice.ReportedCapital, choice.ReportedGranary, a)
 	if err != nil {
 		return kernel.Proposal{}, false, err
 	}
@@ -1929,7 +2068,7 @@ func (f *Natural) birthReplyWake(view scheduler.SnapshotView, hour int, request 
 	if addressee == 0 {
 		return scheduler.Wake{}, ErrNaturalRunner
 	}
-	state, err := naturalActorState(view, addressee)
+	state, err := naturalActorState(view, f.mechanism, addressee)
 	if err != nil {
 		return scheduler.Wake{}, err
 	}
@@ -2043,7 +2182,7 @@ func (f *Natural) birthReplyDecision(view scheduler.SnapshotView, hour int, at s
 			draws[i] = stream.Uint64()
 		}
 	}
-	result, err := NaturalBirthReply(f.patches, hour, kinAllowed, draws, newbornID, requester, consenter, proposer, self)
+	result, err := NaturalBirthReplyFor(f.mechanism, f.patches, hour, kinAllowed, draws, newbornID, requester, consenter, proposer, self)
 	if err != nil {
 		return empty, NaturalAttempt{}, err
 	}
@@ -2097,7 +2236,7 @@ func (f *Natural) birthReplyDecision(view scheduler.SnapshotView, hour int, at s
 	if result.Decision != NaturalReplyRefuseSilent {
 		// A zero-mutation refusal (death between phases) has no proposal at
 		// all; accept and refuse commit their typed proposals.
-		proposal, err = NaturalBirthReplyProposal(naturalKey("birth-reply", at, consenter), f.patches, hour, requester, consenter, result)
+		proposal, err = NaturalBirthReplyProposalFor(f.mechanism, naturalKey("birth-reply", at, consenter), f.patches, hour, requester, consenter, result)
 		if err != nil {
 			return empty, NaturalAttempt{}, err
 		}
@@ -2284,8 +2423,10 @@ func (f *Natural) allocate(at sim.SimTime) error {
 				return ErrNaturalRunner
 			}
 			claims = append(claims, FoodFlowGatherClaim{Actor: id, TargetPatch: a.Bag.Source, TargetSlot: choice.TargetSlot, Energy: a.Body.Energy, BagUnits: a.Bag.Units, LastGatherHour: a.Body.LastGatherHour})
-		case strategy.NaturalEatStored, strategy.NaturalWait:
-			// No allocation needed; the worker re-evaluates and commits.
+		case strategy.NaturalEatStored, strategy.NaturalWait, strategy.NaturalProvision:
+			// No allocation needed; the worker re-evaluates and commits. A
+			// provision converts granary stock, not a slot; the slot rotation
+			// is untouched (and the v5/v6 cascades never emit it).
 		default:
 			return ErrNaturalRunner
 		}
@@ -2333,7 +2474,7 @@ func (f *Natural) arbitrateBuilds(view scheduler.SnapshotView, at sim.SimTime, c
 			return ErrNaturalRunner
 		}
 		before := slotArray(w.slots[index])
-		_, folded, _, err := NaturalBuild(f.patches, h, id, a, a.Bag.Source, before)
+		_, folded, _, err := NaturalBuildFor(f.mechanism, f.patches, h, id, a, a.Bag.Source, before)
 		outcome := naturalBuildOutcome{}
 		var refusal *NaturalBuildRefusalError
 		switch {
@@ -2345,7 +2486,7 @@ func (f *Natural) arbitrateBuilds(view scheduler.SnapshotView, at sim.SimTime, c
 			// The proposal builder re-runs the same pure claim; it must see
 			// the builder's PRE-claim slots, or the builder's own folded
 			// claim would refuse against itself.
-			proposal, err := NaturalBuildProposal(naturalKey("build", at, id), f.patches, h, id, a, before)
+			proposal, err := NaturalBuildProposalFor(f.mechanism, naturalKey("build", at, id), f.patches, h, id, a, before)
 			if err != nil {
 				return err
 			}
@@ -2793,7 +2934,7 @@ func (f *Natural) checkpoint(h int, snap scheduler.Snapshot) (NaturalCheckpoint,
 	}
 	// Gates G1/G2a/G2b/G3 extended, every row revalidated inside, and the
 	// allocator cross-check (mismatch fails closed).
-	balance, err := NaturalCheckConservation(f.patches, w.patches, w.slots, founders, newborns, f.allocator.Last())
+	balance, err := NaturalCheckConservationFor(f.mechanism, f.patches, w.patches, w.slots, founders, newborns, f.allocator.Last())
 	if err != nil {
 		return NaturalCheckpoint{}, err
 	}

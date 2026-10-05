@@ -98,7 +98,7 @@ func naturalAssertJournalClock(t *testing.T, f *Natural) {
 			}
 			var want sim.SimTime
 			switch a.Kind {
-			case "gather", "eat-stored", "wait":
+			case "gather", "eat-stored", "provision", "wait":
 				want, _ = NaturalPhaseTime(hour, NaturalPhaseClaim)
 			case "rest":
 				want, _ = NaturalPhaseTime(hour, NaturalPhaseGathered)
@@ -123,7 +123,11 @@ func naturalAssertJournalClock(t *testing.T, f *Natural) {
 				if a.EventID != 0 || a.Accepted || a.Lost != "" {
 					t.Fatalf("uncommitted attempt carries commit evidence: %+v", a)
 				}
-				if a.Refused == "" && a.NoMeal == "" && a.Kind != "wait" && a.Kind != "rest" && !a.BirthWake {
+				// Keyless key-carriers are legitimate only with their typed
+				// evidence: a denied gather carries its rejection reason, a
+				// refused build its note, a raced meal its no-meal note, a
+				// refused provision its note.
+				if a.Rejection == 0 && a.Refused == "" && a.NoMeal == "" && a.ProvisionRefused == "" && a.Kind != "wait" && a.Kind != "rest" && !a.BirthWake {
 					t.Fatalf("keyless attempt without typed evidence: %+v", a)
 				}
 				continue
@@ -420,7 +424,7 @@ func naturalHybridWorld(t *testing.T, f *Natural, births int64) (naturalWorld, k
 	}
 	founders := make([]NaturalActorState, 16)
 	for i := range founders {
-		a, err := naturalActorState(view, sim.EntityID(i+1))
+		a, err := naturalActorState(view, NaturalMechanismV5, sim.EntityID(i+1))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -432,7 +436,7 @@ func naturalHybridWorld(t *testing.T, f *Natural, births int64) (naturalWorld, k
 	}
 	var newborns []NaturalNewbornState
 	for id := last + 1; ; id++ {
-		a, err := naturalActorState(view, id)
+		a, err := naturalActorState(view, NaturalMechanismV5, id)
 		if err != nil {
 			break
 		}

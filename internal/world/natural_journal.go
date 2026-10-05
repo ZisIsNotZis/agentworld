@@ -29,11 +29,11 @@ import (
 // action, so the kernel history alone cannot authenticate these values.
 //
 // Attempt coverage: every runner-recorded v5 attempt kind (gather, wait,
-// eat-stored, eat, build with its typed slot-claim refusal notes,
-// build-denied-eat, rest, paired-meal, fallback-eatstored, birth-request,
-// birth-reply with its typed accept/refusal/silent evidence and the
-// allocator-collision lost-birth note) is journaled and replayed
-// attempt-for-attempt. The world-caused pulse rules (501 regen-split, 502
+// eat-stored, provision — the rule-515 claim attempt of mechanism v6 — eat,
+// build with its typed slot-claim refusal notes, build-denied-eat, rest,
+// paired-meal, fallback-eatstored, birth-request, birth-reply with its
+// typed accept/refusal/silent evidence and the allocator-collision
+// lost-birth note) is journaled and replayed attempt-for-attempt. The world-caused pulse rules (501 regen-split, 502
 // spoilage, 503 wear, 504 basal, 508 cultivated-grant, 513 birth-expiry, 514
 // age-death) commit no attempt rows — they are typed in the counts and
 // verified through the full accepted event partition, whose every byte must
@@ -73,10 +73,15 @@ type NaturalJournalConfig struct {
 	// CultivationDisabled declares the cultivation-ablation intervention
 	// (matrix cell D); it is run identity like the births flags. Policy is
 	// the declared ref from the frozen natural ref set {natural/5,
-	// natural/6} (ticket 16 D1 seam) and PolicyFingerprint its exact frozen
-	// content fingerprint; a ref/fingerprint disagreement fails closed.
+	// natural/6, natural/7, natural/7b} (ticket 16 D1 seam) and
+	// PolicyFingerprint its exact frozen content fingerprint; a
+	// ref/fingerprint disagreement fails closed. Mechanism is the declared
+	// mechanism axis (ticket 17, the world version the journal was produced
+	// under); it is omitted at the v5 zero value so every recorded v5
+	// journal keeps its bytes, and a {5,6} disagreement fails closed.
 	FounderTenure       bool
 	CultivationDisabled bool
+	Mechanism           NaturalMechanism `json:"Mechanism,omitempty"`
 	Policy              strategy.NaturalRef
 	PolicyFingerprint   [32]byte
 }
@@ -95,6 +100,9 @@ type NaturalJournalCounts struct {
 	BirthsAccepted, BirthRefusals  uint32
 	BirthRefusalsSilent            uint32
 	LostBirths, BirthWakeClaims    uint32
+	// Provisions counts the rule-515 claim attempts (ticket 17); it is
+	// omitted while zero so every recorded v5 journal keeps its bytes.
+	Provisions uint32 `json:"Provisions,omitempty"`
 
 	RegenSplits, Spoilage uint32
 	Wear, Basal           uint32
@@ -114,10 +122,12 @@ type naturalJournalWire struct {
 
 // validNaturalJournalConfig checks the declared run identity's shape before
 // any replay: a valid patch count, the budget inside the frozen range, the
-// fixture's declared budget coherence, and a policy ref inside the frozen
-// natural ref set {natural/5, natural/6} (ticket 16 D1 seam) — the exact
-// content match against the ref's frozen fingerprint happens in
-// verifyNaturalJournal, so a ref/fingerprint disagreement fails closed.
+// fixture's declared budget coherence, an admitted mechanism axis, and a
+// policy ref inside the frozen natural ref set (ticket 16 D1 seam) that is
+// legal under the declared mechanism (ticket 17: natural/7 and natural/7b
+// require mechanism v6) — the exact content match against the ref's frozen
+// fingerprint happens in verifyNaturalJournal, so a ref/fingerprint
+// disagreement fails closed.
 func validNaturalJournalConfig(config NaturalJournalConfig) bool {
 	if !NaturalPatchCountValid(config.Patches) || config.R < 0 || config.R > NaturalSlotsPerPatch {
 		return false
@@ -128,8 +138,11 @@ func validNaturalJournalConfig(config NaturalJournalConfig) bool {
 	if config.CultivationDisabled && config.FounderTenure {
 		return false
 	}
-	_, err := strategy.FrozenNaturalPolicyForRef(config.Policy)
-	return err == nil
+	mechanism := config.Mechanism
+	if mechanism == 0 {
+		mechanism = NaturalMechanismV5
+	}
+	return NaturalMechanismValid(mechanism) && naturalRefLegalUnderMechanism(mechanism, config.Policy)
 }
 
 // naturalJournalFingerprint resolves a frozen natural ref to the exact
@@ -157,7 +170,7 @@ func (f *Natural) journalConfig() NaturalJournalConfig {
 	}
 	return NaturalJournalConfig{Patches: f.patches, R: f.r, Seed: f.seed, Births: f.births, Boundary: f.births,
 		FounderTenure: f.naturalRunnerTenure(), CultivationDisabled: f.cultivationDisabled,
-		Policy: f.ref, PolicyFingerprint: fingerprint}
+		Mechanism: f.mechanism, Policy: f.ref, PolicyFingerprint: fingerprint}
 }
 
 // ExportJournal publishes committed evidence only, not a disk bundle. The
@@ -332,7 +345,7 @@ func decodeNaturalJournalWithScheduler(data []byte, k *kernel.Kernel, verified k
 func sameNaturalJournalConfig(a, b NaturalJournalConfig) bool {
 	return a.Patches == b.Patches && a.R == b.R && a.Seed == b.Seed &&
 		a.Births == b.Births && a.Boundary == b.Boundary && a.FounderTenure == b.FounderTenure &&
-		a.CultivationDisabled == b.CultivationDisabled &&
+		a.CultivationDisabled == b.CultivationDisabled && a.Mechanism == b.Mechanism &&
 		a.Policy == b.Policy && a.PolicyFingerprint == b.PolicyFingerprint
 }
 
@@ -353,6 +366,8 @@ func naturalJournalCounts(batches []NaturalBatch, events []kernel.Event) Natural
 				}
 			case "eat":
 				c.Eats++
+			case "provision":
+				c.Provisions++
 			case "eat-stored":
 				c.EatStored++
 			case "wait":
@@ -481,7 +496,7 @@ func replayNaturalJournal(batches []NaturalBatch, config NaturalJournalConfig) (
 	}
 	reference, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: config.Patches, R: config.R,
 		Seed: config.Seed, Workers: 1, Births: config.Boundary, FounderTenure: config.FounderTenure,
-		CultivationDisabled: config.CultivationDisabled, PolicyRef: config.Policy})
+		CultivationDisabled: config.CultivationDisabled, PolicyRef: config.Policy, Mechanism: config.Mechanism})
 	if err != nil {
 		return nil, ErrNaturalJournal
 	}

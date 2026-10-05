@@ -451,7 +451,7 @@ func TestNaturalJournalCountsPinTheTypedSet(t *testing.T) {
 		t.Fatalf("counts diverge: %+v", counts)
 	}
 	// The bounds-table helper rejects no legitimate projection field.
-	table, err := naturalBoundsTableForRegistry()
+	table, err := naturalBoundsTableForRegistry(NaturalMechanismV5)
 	if err != nil {
 		t.Fatal(err)
 	}
