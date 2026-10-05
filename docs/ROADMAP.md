@@ -40,7 +40,7 @@ Exit criteria:
 - CPU and memory profiles identify actual bottlenecks;
 - distinct strategies produce measurable and causally explainable population outcomes.
 
-The natural fixture records the first frozen strategy contrast for the last criterion: `natural/5` and `natural/6` (ticket 16) produce measurable, causally explainable — currently both sterile-null — population outcomes over the same world, with the surplus gap open and every falsification reported verbatim rather than tuned.
+The natural fixture records the first frozen strategy contrast for the last criterion: `natural/5`, `natural/6` (ticket 16) and the ticket-17 mechanism-v6 arms `natural/7`/`natural/7b` produce measurable, causally explainable — still all sterile-null organically — population outcomes over the same ecology, with the surplus gap now measured closed under the provision mechanism too (the predeclared honest null: reproduction or land economics, not capital timing, is the binding problem) and every falsification reported verbatim rather than tuned.
 
 ## P1 — Budgeted cognition
 

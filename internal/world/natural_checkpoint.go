@@ -248,11 +248,30 @@ func NewNaturalFixture(patches int, r int64, seed uint64, births bool, workers i
 // checkpoint manifest, restore, branch) with the existing bidirectional
 // mismatch rejection.
 func NewNaturalFixtureForPolicy(patches int, r int64, seed uint64, births bool, workers int, policyRef strategy.NaturalRef) (*Natural, error) {
+	return NewNaturalFixtureForMechanism(patches, r, seed, births, workers, policyRef, NaturalMechanismV5)
+}
+
+// NewNaturalFixtureForMechanism builds the declared founder-tenure fixture
+// world under one policy ref of the executable's frozen natural ref set and
+// one declared mechanism version — the ticket-17 experiment-lane seam
+// (supervisor-approved scoped extension of the ticket-16 fixture exception,
+// 2026-09-29, recorded in .scratch/17-surplus-mechanism/spec.md), so the
+// experiment lane can create the matrix cell E fixture genesis on world v6.
+// It is thin delegation to the internal mechanism-aware path: no state
+// injection, no caller-supplied slots, tenures, or ledgers; the ref/mechanism
+// legality is the frozen construction rule (naturalRefLegalUnderMechanism:
+// natural/7 and natural/7b are refused under the v5 zero value), unknown or
+// zero refs fail closed, and the natural/5 + v5 combination is
+// default-preserving — byte-identical bundles to NewNaturalFixture and to
+// NewNaturalFixtureForPolicy (pinned by test). The mechanism is run identity
+// everywhere (checkpoint manifest mechanism block, journal config,
+// bidirectional {5,6} mismatch rejection).
+func NewNaturalFixtureForMechanism(patches int, r int64, seed uint64, births bool, workers int, policyRef strategy.NaturalRef, mechanism NaturalMechanism) (*Natural, error) {
 	policy, err := strategy.FrozenNaturalPolicyForRef(policyRef)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrNaturalCheckpoint, err)
 	}
-	return newNaturalFixtureRunnerForPolicy(patches, r, seed, births, workers, policy, NaturalMechanismV5)
+	return newNaturalFixtureRunnerForPolicy(patches, r, seed, births, workers, policy, mechanism)
 }
 
 // newNaturalFixtureRunner builds the declared founder-tenure fixture world

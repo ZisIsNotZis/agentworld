@@ -51,6 +51,62 @@ func TestNaturalFixtureForPolicyV5DefaultPreserving(t *testing.T) {
 	}
 }
 
+// TestNaturalFixtureForMechanismV5DefaultPreserving proves the ticket-17
+// mechanism-aware wrapper (supervisor-approved scoped extension recorded in
+// .scratch/17-surplus-mechanism/spec.md) at the natural/5 + v5 combination is
+// exactly the legacy constructor: identical checkpoints and a digest-identical
+// published continuation bundle.
+func TestNaturalFixtureForMechanismV5DefaultPreserving(t *testing.T) {
+	const seed = uint64(5)
+	legacy, err := NewNaturalFixture(2, 8, seed, true, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrapped, err := NewNaturalFixtureForMechanism(2, 8, seed, true, 1, strategy.FrozenNaturalPolicy().Ref, NaturalMechanismV5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	naturalStepToBoundary(t, legacy, 3)
+	naturalStepToBoundary(t, wrapped, 3)
+	if !reflect.DeepEqual(legacy.Checkpoints(), wrapped.Checkpoints()) {
+		t.Fatal("mechanism-aware v5 fixture diverged from the legacy constructor")
+	}
+	legacyPath := filepath.Join(t.TempDir(), "legacy-fixture.bundle")
+	legacyDigest, err := legacy.SaveResumeCheckpoint(legacyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrappedPath := filepath.Join(t.TempDir(), "wrapped-fixture.bundle")
+	wrappedDigest, err := wrapped.SaveResumeCheckpoint(wrappedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legacyDigest != wrappedDigest {
+		t.Fatalf("mechanism-aware v5 wrapper is not default-preserving: digest %x vs %x", legacyDigest, wrappedDigest)
+	}
+}
+
+// TestNaturalFixtureForMechanismFailClosed pins the fail-closed surface of
+// the mechanism-aware wrapper: the provision policies natural/7 and 7b are
+// refused under the v5 mechanism (the affordance they select does not exist
+// there), and unknown mechanism versions are refused before any runner
+// exists.
+func TestNaturalFixtureForMechanismFailClosed(t *testing.T) {
+	for _, tc := range []struct {
+		ref       strategy.NaturalRef
+		mechanism NaturalMechanism
+	}{
+		{strategy.FrozenNaturalPolicy7().Ref, NaturalMechanismV5},
+		{strategy.FrozenNaturalPolicy7b().Ref, NaturalMechanismV5},
+		{strategy.FrozenNaturalPolicy().Ref, NaturalMechanism(5)},
+		{strategy.FrozenNaturalPolicy().Ref, NaturalMechanism(7)},
+	} {
+		if _, err := NewNaturalFixtureForMechanism(2, 8, 5, true, 1, tc.ref, tc.mechanism); !errors.Is(err, ErrNaturalCheckpoint) {
+			t.Fatalf("fixture for ref %+v mechanism %d accepted: %v", tc.ref, tc.mechanism, err)
+		}
+	}
+}
+
 // TestNaturalFixtureForPolicyV6RunIdentity proves the natural/6 fixture
 // carries ref 6 end to end: it restores only under the declared ref, a
 // natural/5 expectation (the zero ref included) is bidirectionally refused,
