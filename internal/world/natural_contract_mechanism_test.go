@@ -4,8 +4,11 @@ import (
 	"agentworld/internal/component"
 	"agentworld/internal/kernel"
 	"agentworld/internal/sim"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"reflect"
+	"sort"
 	"testing"
 )
 
@@ -320,6 +323,10 @@ func TestNaturalOwnershipGuardV6WriterSet(t *testing.T) {
 			p.Patches[0] = component.Patch{Entity: 2001, Component: NaturalSlotTypeID, SchemaVersion: 6, Field: NaturalSlotStockField, Value: sim.IntegerValue(0)}
 		}), NaturalMechanismV6},
 		{"granary-stock-under-v5", forged(func(p *kernel.Proposal) {}), NaturalMechanismV5},
+		// A 515 proposal forged to look v5-versioned must still be refused by
+		// the FIELD guard (not merely the version gate), so the v5 writer set
+		// is proven closed at field level too.
+		{"v5-versioned-515-field-write", forged(func(p *kernel.Proposal) { p.RuleVersion = 5 }), NaturalMechanismV5},
 	}
 	for _, negative := range negatives {
 		if err := NaturalCheckOwnershipFor(negative.m, negative.p, patches); !errors.Is(err, ErrNaturalContract) {
@@ -754,4 +761,67 @@ func mustNaturalGateRequest(t *testing.T, patches int) NaturalActorState {
 		t.Fatal(err)
 	}
 	return request
+}
+
+// Review P1: the zero-value ≡ v5 assertion must not be circular.
+// NaturalRegistry() IS NaturalRegistryFor(NaturalMechanismV5), so comparing the
+// two proves nothing about the shared builders. These literals were recorded
+// from the pre-ticket-17 revision (2e67e5f) by reading the frozen v5 registry
+// directly, so any drift in the v5 descriptor names, rule names/versions,
+// schema versions or field names now fails loudly instead of silently breaking
+// byte-identity with the recorded ticket-15/16 evidence.
+const naturalGoldenV5RegistryFingerprint = "81d28abd78e061c84bde3c364fcabcc35ac9d526bebc1449ba3d8942ab1cba2f"
+
+func TestNaturalV5RegistryMatchesPreTicket17Golden(t *testing.T) {
+	reg, err := NaturalRegistryFor(NaturalMechanismV5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := component.RegistryFingerprint(reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hex.EncodeToString(got[:]) != naturalGoldenV5RegistryFingerprint {
+		t.Fatalf("v5 registry fingerprint drifted: %s", hex.EncodeToString(got[:]))
+	}
+	type golden struct {
+		name   string
+		schema sim.SchemaVersion
+		rules  []string
+		fields []string
+	}
+	want := map[sim.ComponentTypeID]golden{
+		0x80000050: {"natural-patch-v5", 5, []string{"501:natural-regen-split-v5:v5"}, []string{"1:yield", "2:pulses", "3:produced", "4:granted", "5:unrealized"}},
+		0x80000051: {"natural-slot-v5", 5, []string{"501:natural-regen-split-v5:v5", "503:natural-wear-v5:v5", "505:natural-build-v5:v5", "506:natural-gather-v5:v5"}, []string{"1:stock", "2:patch", "3:gathered", "4:tenure-mode", "5:tenure-owner", "6:tenure-cultivated"}},
+		0x80000052: {"natural-bag-v5", 5, []string{"505:natural-build-v5:v5", "506:natural-gather-v5:v5", "507:natural-consume-v5:v5", "511:natural-birth-reply-v5:v5"}, []string{"1:units", "2:home-patch"}},
+		0x80000053: {"natural-body-v5", 5, []string{"504:natural-basal-v5:v5", "506:natural-gather-v5:v5", "507:natural-consume-v5:v5", "509:natural-eat-stored-v5:v5", "511:natural-birth-reply-v5:v5"}, []string{"1:energy", "2:hunger", "3:basal-spent", "4:cap-lost", "5:consumed-home-patch", "6:last-gather-hour", "7:basal-debt"}},
+		0x80000054: {"natural-worksite-v5", 5, []string{"503:natural-wear-v5:v5", "505:natural-build-v5:v5", "511:natural-birth-reply-v5:v5"}, []string{"1:capital", "2:wip", "3:wear-debt", "4:invested-units", "5:points-created", "6:points-decayed", "7:last-build-hour"}},
+		0x80000055: {"natural-granary-v5", 5, []string{"502:natural-spoilage-v5:v5", "508:natural-yield-grant-v5:v5", "509:natural-eat-stored-v5:v5", "511:natural-birth-reply-v5:v5"}, []string{"1:stock", "2:cultivated-total", "3:stored-meals", "4:last-stored-meal-hour", "5:spoil-debt", "6:spoiled"}},
+		0x80000056: {"natural-genome-v5", 5, []string{"504:natural-basal-v5:v5", "511:natural-birth-reply-v5:v5", "514:natural-age-death-v5:v5"}, []string{"1:locus-m", "2:locus-y", "3:locus-w", "4:parent-a", "5:parent-b", "6:birth-hour", "7:death-hour", "8:died-hour", "9:birth-granary-paid"}},
+		0x80000057: {"natural-birthrequest-v5", 5, []string{"510:natural-birth-request-v5:v5", "511:natural-birth-reply-v5:v5", "512:natural-birth-refusal-v5:v5", "513:natural-birth-expiry-v5:v5"}, []string{"1:hour", "2:addressee", "3:reported-capital", "4:reported-granary", "5:status", "6:last-request-hour", "7:last-reply-hour"}},
+	}
+	for id, g := range want {
+		d, err := reg.Describe(id)
+		if err != nil {
+			t.Fatalf("%#x: %v", uint32(id), err)
+		}
+		if d.Name != g.name || d.SchemaVersion != g.schema {
+			t.Fatalf("%#x: name/schema %q/%d, want %q/%d", uint32(id), d.Name, d.SchemaVersion, g.name, g.schema)
+		}
+		var rules []string
+		for _, r := range d.TransitionRules {
+			rules = append(rules, fmt.Sprintf("%d:%s:v%d", r.ID, r.Name, r.Version))
+		}
+		sort.Strings(rules)
+		if !reflect.DeepEqual(rules, g.rules) {
+			t.Fatalf("%#x rules %v, want %v", uint32(id), rules, g.rules)
+		}
+		var fields []string
+		for _, f := range d.Fields {
+			fields = append(fields, fmt.Sprintf("%d:%s", f.ID, f.Name))
+		}
+		if !reflect.DeepEqual(fields, g.fields) {
+			t.Fatalf("%#x fields %v, want %v", uint32(id), fields, g.fields)
+		}
+	}
 }

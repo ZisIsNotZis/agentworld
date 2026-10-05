@@ -717,14 +717,6 @@ func naturalSlotTenureField(field sim.FieldID) bool {
 	return field == NaturalSlotTenureModeField || field == NaturalSlotTenureOwnerField || field == NaturalSlotTenureCultivatedField
 }
 
-// naturalPatchFieldAllowed is the field-level half of the G5 ownership
-// guard: the (rule, component, field) triples any proposal may patch for
-// actor-owned components. Patch and slot ledgers are not actor-owned and are
-// checked at rule+entity level (v3/v4 guard parity).
-// Genome immutability is encoded here: only rules 504/514 may write
-// died-hour and only rule 511 may write birth-granary-paid; loci, hours,
-// and parent refs are never patchable after creation (parent refs are set
-// only by rule 511's newborn allocation).
 // naturalPatchFieldAllowedFor is the mechanism-parameterized field-level
 // half of the G5 ownership guard. The v5 zero value is exactly the frozen
 // v5 writer set. NaturalMechanismV6 additively admits rule 515's four
@@ -748,6 +740,14 @@ func naturalPatchFieldAllowedFor(m NaturalMechanism, rule sim.RuleID, componentT
 	return naturalPatchFieldAllowed(rule, componentType, field)
 }
 
+// naturalPatchFieldAllowed is the field-level half of the G5 ownership
+// guard: the (rule, component, field) triples any proposal may patch for
+// actor-owned components. Patch and slot ledgers are not actor-owned and are
+// checked at rule+entity level (v3/v4 guard parity).
+// Genome immutability is encoded here: only rules 504/514 may write
+// died-hour and only rule 511 may write birth-granary-paid; loci, hours,
+// and parent refs are never patchable after creation (parent refs are set
+// only by rule 511's newborn allocation).
 func naturalPatchFieldAllowed(rule sim.RuleID, componentType sim.ComponentTypeID, field sim.FieldID) bool {
 	switch rule {
 	case NaturalGatherRule:
