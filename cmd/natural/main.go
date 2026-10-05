@@ -96,7 +96,6 @@ type options struct {
 	cultivationDisabled bool
 	out                 string
 	checkpointDir       string
-	twinBundle          string // the bundle the running branch restored; the replay twin re-restores it
 }
 
 type checkpointInfo struct {
@@ -288,6 +287,7 @@ type costBudgetReport struct {
 	HistoryBytesPerHour float64 `json:"history_bytes_per_simulated_hour"`
 	BytesBudget         float64 `json:"bytes_budget_2x_v4"`
 	BytesWithinBudget   bool    `json:"bytes_within_budget"`
+	BytesEvaluable      bool    `json:"bytes_budget_evaluable"`
 	ActorHours          int64   `json:"actor_hours_extrapolation_only"`
 	BytesPerActorHour   float64 `json:"bytes_per_actor_hour"`
 	CPUPerActorHour     float64 `json:"cpu_seconds_per_actor_hour"`
@@ -1011,7 +1011,11 @@ func runBranch(ctx context.Context, o options, births bool, parentDigest string,
 			return br, err
 		}
 		hr.Verdict = classifyVerdict(o, hit, br.ConservationVerified, &twin.Identical, checks)
-		hr.Verdict.ReplayNote = fmt.Sprintf("workers-%d twin truncated at h%d: %d checkpoint hours and %d journal batches compared (%s)", twinWorkers, hit.Hour, twin.HoursCompared, twin.JournalCompared, twin.Note)
+		note := ""
+		if twin.Note != "" {
+			note = fmt.Sprintf(" (%s)", twin.Note)
+		}
+		hr.Verdict.ReplayNote = fmt.Sprintf("workers-%d twin truncated at h%d: %d checkpoint hours and %d journal batches compared%s", twinWorkers, hit.Hour, twin.HoursCompared, twin.JournalCompared, note)
 		br.CeilingHit = &hr
 		br.Events.WorldEventsNote = evidencePostHaltNote
 	} else {
@@ -1163,8 +1167,15 @@ func costBudget(o options, br *branchReport) costBudgetReport {
 	}
 	cpuPerHour := float64(br.CPUTimeNS) / 1e9 / float64(hours)
 	cpuBudget := cpuBudgetFactor * v4RecordedCPUSecondsPerSimulatedHour
+	// A fail-loud ceiling halt refuses accepted-history export, so the branch
+	// HistoryBytes is zero and a naive comparison would report the budget as
+	// satisfied vacuously. Record the bytes budget as not evaluable in that
+	// case and point at the ceiling ledger, whose trailing rate is the honest
+	// measurement.
+	bytesEvaluable := !br.HaltedByCeilingHit
 	historyBytesPerHour := float64(br.HistoryBytes) / float64(hours)
 	bytesBudget := bytesBudgetFactor * float64(v4RecordedHistoryBytes) / float64(v4RecordedHistoryHours)
+	bytesWithinBudget := bytesEvaluable && historyBytesPerHour <= bytesBudget
 	var actorHours int64
 	for _, alive := range br.Population.AliveByHour {
 		actorHours += int64(alive)
@@ -1177,7 +1188,7 @@ func costBudget(o options, br *branchReport) costBudgetReport {
 	}
 	return costBudgetReport{
 		CPUPerSimulatedHour: cpuPerHour, CPUBudget: cpuBudget, CPUWithinBudget: cpuPerHour <= cpuBudget,
-		HistoryBytesPerHour: historyBytesPerHour, BytesBudget: bytesBudget, BytesWithinBudget: historyBytesPerHour <= bytesBudget,
+		HistoryBytesPerHour: historyBytesPerHour, BytesBudget: bytesBudget, BytesWithinBudget: bytesWithinBudget, BytesEvaluable: bytesEvaluable,
 		ActorHours: actorHours, BytesPerActorHour: bytesPerActorHour, CPUPerActorHour: cpuPerActorHour,
 		ExtrapolationLabel: extrapolationOnlyLabel,
 	}
@@ -1290,7 +1301,6 @@ func run(ctx context.Context, o options) (report, error) {
 	}
 	rootBytes = stat.Size()
 	r.Root.Bytes = rootBytes
-	o.twinBundle = rootPath
 	type branchPlan struct {
 		births bool
 		name   string
