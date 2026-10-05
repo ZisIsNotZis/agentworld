@@ -1712,6 +1712,21 @@ func (f *Natural) evaluate(_ context.Context, ready scheduler.ReadyFiber, view s
 			// outcome for this actor. Under the v5 zero value the affordance
 			// cannot exist (the v5/v6 cascades never emit it and the proposal
 			// builder refuses the zero value), so this case is inert there.
+			//
+			// The refusal branch is unreachable in every live run, by
+			// construction rather than by luck: the policy floor (granary>=1
+			// and E>=4) is evaluated on the same snapshot the contract call
+			// reads; bag != 0 is runner-guarded before the cascade; claim
+			// wakes go only to live actors; the mechanism is v6 whenever
+			// natural/7 or natural/7b is bound (constructor legality); the
+			// shared draw guard cannot bind at a claim instant (one claim
+			// wake per actor-hour and every write of that field happens at
+			// instants at or after it); and the 168 envelope cannot bind
+			// because at most one provision per actor-hour means provisioned
+			// <= h <= 167 at the hour-h claim. It is kept as typed fail-closed
+			// evidence (the project's precedent for unreachable diagnostics)
+			// so that any future affordance change cannot silently stage a
+			// precondition-violating transfer.
 			proposal, err := NaturalProvisionProposal(f.mechanism, naturalKey("provision", at, id), f.patches, h, id, a)
 			if err != nil {
 				if !errors.Is(err, ErrNaturalContract) {

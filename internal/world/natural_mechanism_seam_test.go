@@ -25,7 +25,8 @@ import (
 // mechanism v6 for natural/7|7b; rule 515 "provision" commits at the frozen
 // claim instant and hands the converted unit to the normal bag decision; and
 // the v5 zero value publishes byte-identical bundles and journals to the
-// pre-L3 behaviour (digest pins captured at 0cca026, the L2 landing).
+// pre-L3 behaviour (digest pins captured at 0cca026, the post-L1-review
+// commit that already contained the L2 delivery).
 
 // Pre-L3 (0cca026) golden digests of the neutral v5 world, captured before
 // any L3 edit: the h0 root bundle and the hour-5 resume bundle of
@@ -648,6 +649,14 @@ func naturalAssertConservationForMechanism(t *testing.T, f *Natural, mechanism N
 // the one excluded pin: its byte-derived rows are version-bound by design,
 // digests identical only within each version) — with zero provisions on
 // both sides.
+//
+// Two deliberate properties of this gate, stated so a reader does not
+// mistake them for accidents: it is a LIVE-vs-LIVE comparison of two
+// independently constructed worlds rather than an anchor against recorded
+// bytes (the recorded-byte anchoring lives in the seven golden digest pins
+// above, which cover h0/h5/h9 plus the births root and the fixture h6); and
+// the two arms use different worker counts (v5 Workers 1, v6 Workers 2) on
+// purpose, so the gate doubles as a worker-count determinism check.
 func TestNaturalMechanismSeamControlGate2(t *testing.T) {
 	v5, err := NewNatural(NaturalOptions{Patches: 2, R: 8, Seed: 0, Workers: 1, Births: true})
 	if err != nil {
@@ -821,5 +830,41 @@ func TestNaturalMechanismSeamFixtureV6RoundTrip(t *testing.T) {
 	}
 	if !reflect.DeepEqual(restored.Journal(), f.Journal()) || !reflect.DeepEqual(restored.Checkpoints(), f.Checkpoints()) {
 		t.Fatal("v6 fixture restore diverged")
+	}
+}
+
+// Review P2 (L3 coverage gap): none of the seven golden pins above captures a
+// committed rule-505 build event's bytes, so a v5 drift that only affects the
+// build patch payload could pass every existing pin. This pin is a late-hour
+// resume bundle on a builds-bearing v5 cell.
+func TestNaturalMechanismSeamLateBuildsResumePinned(t *testing.T) {
+	f, err := NewNatural(NaturalOptions{Patches: 2, R: 8, Seed: 0, Workers: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	naturalRunTo(t, f, 100)
+	builds := int64(0)
+	for _, a := range f.Journal() {
+		for _, attempt := range a.Attempts {
+			if attempt.Kind == "build" && attempt.Key != "" {
+				builds++
+			}
+		}
+	}
+	if builds == 0 {
+		t.Fatal("fixture has no committed build events; the pin would be vacuous")
+	}
+	digest, err := f.SaveResumeCheckpoint(t.TempDir() + "/resume-h100.bundle")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Recorded independently at the pre-ticket-17 revision 0cca026 (in a
+	// throwaway worktree) and reproduced byte-identically at the current
+	// revision, so this pin both guards the committed build patch bytes
+	// against future drift and documents that the ticket-17 mechanism axis
+	// did not change the v5 builds-bearing resume bundle.
+	const pinned = "11484b23154072afae0235a2aaa09f00929757265636a97019ff38435dbbda51"
+	if got := naturalMechanismSeamDigest(t, digest); got != pinned {
+		t.Fatalf("late builds-bearing v5 resume digest drifted: got %s", got)
 	}
 }
