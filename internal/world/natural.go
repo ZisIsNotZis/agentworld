@@ -2233,8 +2233,22 @@ func (f *Natural) birthReplyDecision(view scheduler.SnapshotView, hour int, at s
 	}
 	distance, related := NaturalKinDistance(lookup, requester, consenter)
 	kinAllowed := !NaturalKinProhibited(distance, related)
-	var draws []uint64
+	// The heredity draws are a pure function of the birth ordinal
+	// (7 x (ordinal-1) on the frozen birth stream), so they are computed
+	// unconditionally: the contract's own truth gate can accept a pair whose
+	// POLICY floor refused it (the v6/v7 policy raises the consent energy
+	// floor to TFile=4 while the contract's frozen floor stays 3), and in
+	// that case the contract still needs the draws to build the child genome
+	// before the runner overrides the result with the policy's typed refusal.
+	// Computing them only on a policy accept left an empty slice on that path.
+	draws := make([]uint64, NaturalDrawsPerBirth)
 	var newbornID sim.EntityID
+	if position, err := NaturalBirthDrawPosition(births); err == nil {
+		stream := sim.NewRandomStream(sim.RandomState{Seed: f.seed, Stream: NaturalBirthStream, Position: position})
+		for i := range draws {
+			draws[i] = stream.Uint64()
+		}
+	}
 	if choice.Kind == strategy.NaturalReplyAccept {
 		// The consent formula accepted on claims and the PUBLIC kin
 		// distance; the runner's own kin walk must agree before any draw or
@@ -2258,15 +2272,6 @@ func (f *Natural) birthReplyDecision(view scheduler.SnapshotView, hour int, at s
 			f.pending.hits = append(f.pending.hits, hit)
 			f.pending.mu.Unlock()
 			return empty, NaturalAttempt{}, &NaturalCeilingHitError{Hit: hit}
-		}
-		position, err := NaturalBirthDrawPosition(births)
-		if err != nil {
-			return empty, NaturalAttempt{}, err
-		}
-		stream := sim.NewRandomStream(sim.RandomState{Seed: f.seed, Stream: NaturalBirthStream, Position: position})
-		draws = make([]uint64, NaturalDrawsPerBirth)
-		for i := range draws {
-			draws[i] = stream.Uint64()
 		}
 	}
 	result, err := NaturalBirthReplyFor(f.mechanism, f.patches, hour, kinAllowed, draws, newbornID, requester, consenter, proposer, self)
@@ -2297,6 +2302,23 @@ func (f *Natural) birthReplyDecision(view scheduler.SnapshotView, hour int, at s
 			return empty, NaturalAttempt{}, ErrNaturalRunner
 		}
 	case strategy.NaturalReplyRefuse:
+		// The policy's consent floor may be strictly STRONGER than the
+		// contract's frozen one (v6/v7 file/accept at own energy >= 4 versus
+		// the contract's NaturalConsentMinEnergy = 3), so the contract can
+		// derive an acceptance from the truth gate that the policy refused.
+		// A donor's refusal is always permissible and needs no truth
+		// verification, so the policy's decision wins here and the refusal is
+		// recorded with the policy's own typed reason (mapped into the
+		// contract's vocabulary, the exact inverse of the accept-side
+		// tolerance above). Without this, the earlier empty-draws path made
+		// this case fail closed with a contract error instead of a refusal.
+		if result.Decision == NaturalReplyAccept {
+			mapped, ok := naturalPolicyRefusalReason(choice.Reason)
+			if !ok {
+				return empty, NaturalAttempt{}, ErrNaturalRunner
+			}
+			result = NaturalReplyResult{Decision: NaturalReplyRefuse, Reason: mapped, Proposer: result.Proposer, Consenter: result.Consenter}
+		}
 		if result.Decision != NaturalReplyRefuse {
 			return empty, NaturalAttempt{}, ErrNaturalRunner
 		}
@@ -3232,4 +3254,21 @@ func (f *Natural) Handoff() (NaturalHandoff, error) {
 		out.CeilingThresholds[ceiling] = v
 	}
 	return out, nil
+}
+
+// naturalPolicyRefusalReason maps a policy-side consent refusal reason into the
+// contract's refusal vocabulary, so a policy refusal that the contract's
+// weaker truth gate would have accepted is recorded as the typed refusal the
+// policy actually made (the exact inverse of the accept-side tolerance).
+func naturalPolicyRefusalReason(reason strategy.NaturalReplyReason) (NaturalRefusalReason, bool) {
+	switch reason {
+	case strategy.NaturalReplyReasonConsentOwn:
+		return NaturalRefusalConsentOwn, true
+	case strategy.NaturalReplyReasonConsentClaims:
+		return NaturalRefusalConsentClaims, true
+	case strategy.NaturalReplyReasonKin:
+		return NaturalRefusalKin, true
+	default:
+		return 0, false
+	}
 }
