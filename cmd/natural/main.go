@@ -1674,11 +1674,9 @@ func v7BandsFor(o options, br *branchReport) []bandReport {
 			}
 		}
 		a2Within := deref.FirstPerActorSustainedHour >= 0 && deref.FirstPerActorSustainedHour <= v7FirstSustainedHourBound
-		descriptive := "≤48 descriptive:"
+		descriptive := "≤48 descriptive: not met"
 		if deref.FirstPerActorSustainedHour >= 0 && deref.FirstPerActorSustainedHour <= 48 {
 			descriptive = "≤48 descriptive: MET"
-		} else {
-			descriptive = "≤48 descriptive: not met"
 		}
 		bands = append(bands, bandReport{Name: "V7-A2: per-actor surplus band (gating)", Criterion: "the same actor holds k≥2 ∧ granary≥1 ∧ trailing-24h SF′>0 sustained ≥12 consecutive hours, first such hour ≤ 96 (≤ 48 reported descriptively), in all four A cells",
 			Observed:   fmt.Sprintf("first_per_actor_sustained_hour=%d (completion h%d, %s), actors_with_per_actor_sustained_runs=%d, union_reading: first=%d max_run=%d, surplus_bearing_actor_hours=%d, first_surplus_bearing_hour=%d, sf_prime_run_total=%d, provisions=%d", deref.FirstPerActorSustainedHour, deref.FirstPerActorSustainedCompletionHour, descriptive, deref.ActorsWithPerActorSustainedRuns, deref.FirstSustainedSurplusHourUnion, deref.MaxConsecutiveSurplusHoursUnion, deref.SurplusBearingActorHours, deref.FirstSurplusBearingHour, deref.SFPrimeRunTotal, br.Events.Provisions),

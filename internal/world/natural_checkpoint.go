@@ -284,8 +284,10 @@ func newNaturalFixtureRunner(patches int, r int64, seed uint64, births bool, wor
 // newNaturalFixtureRunnerForPolicy builds the declared founder-tenure fixture
 // world under one policy of the executable's frozen natural ref set — the
 // fixture genesis of the declared scenario at restore time. The policy must
-// be exactly the frozen content of a ref in {natural/5, natural/6}; anything
-// else fails closed. It is a deterministic ledger-coherent function of
+// be exactly the frozen content of a ref admitted for the requested
+// mechanism: {natural/5, natural/6} under the v5 zero value, plus natural/7
+// and natural/7b under mechanism v6 (the per-mechanism gate is
+// naturalRefLegalUnderMechanism); anything else fails closed. It is a deterministic ledger-coherent function of
 // exactly (P, R, seed) plus the continuation flags — not a genesis variant of
 // the ecology and not a state-injection point: no caller-supplied slots,
 // tenures, or ledgers exist. The fixture stays run identity everywhere
