@@ -52,6 +52,27 @@
 // (V7-A2/A3/A4/A5 and V7-B/C/D/E/F). A falsified band is reported verbatim,
 // never tuned.
 //
+// The optional -founders flag (ticket 18 v8 founding-band fixture axis,
+// .scratch/18-surplus-via-reproduction/spec.md) selects the declared
+// founding band: the number of founder rows the genesis materializes from
+// the frozen founder-stream prefix. The zero value is exactly the full
+// frozen block 8·P, so every recorded run keeps its bytes and its report
+// key set; an explicit band is range-checked through world.NaturalFoundersValid
+// before any publication (no output file, no checkpoint directory), the
+// founder-tenure fixture additionally refuses f=1 (its coherent pre-history
+// seats founders 1 and 2), and the band is run identity end to end (journal
+// config, checkpoint manifest, bidirectional mismatch rejection, threaded
+// through every construction, restore, branch and fixture call site). At a
+// non-default band the reporter adds, purely additively, the predeclared v8
+// density sections: the axis and density_world = f/(8P), per-patch seating
+// with hourly mouths and per-patch Σk, per-actor SF′ counters with true
+// running maxima and the home-patch attribution the V8-A2b band reads, the
+// generation index and birth-cohort table (birth hour, parents, filing kin
+// distance), the 8·births endowment ledger cross-checked inside G3, the
+// parent-death and paired-meal canaries, per-patch time-to-first fields,
+// and the predeclared v8 bands (V8-A2/A2b/A3/A4/A5/K and the cell bands
+// V8-B/C2/D/E12/F). A default-band report carries none of the new keys.
+//
 // Per branch the reporter re-verifies the extended frozen conservation
 // identities at every hour, classifies typed journal evidence, verifies
 // keyed attempts against the restored accepted history, and reports: the
@@ -156,6 +177,28 @@ const (
 	v6DDenialEatsSeed7 = 1963
 )
 
+// The predeclared ticket-18 v8 band constants (frozen design, quoted): the
+// V8-A2 per-actor band bound (first per-actor sustained hour ≤ 96, the
+// frozen v7 deadline carried over with its ≤ 48 descriptive companion), the
+// V8-A3 birth bounds (the frozen 48/96 numbers), the V8-K capital
+// persistence clauses (first tenured slot on the under-capacity patch ≤ h4;
+// Σk on that patch ≥ 6 by h24 — two founders at the derived melt equilibrium
+// k*=3; the first surplus-bearing actor's share of alive hours with k≥1
+// ≥ 0.5, below which the indicator would certify a windfall), and the
+// V8-A2b saturated-patch horizon (no saturated-patch actor reaches the
+// indicator before h168).
+const (
+	v8FirstSustainedHourBound   = v7FirstSustainedHourBound
+	v8FirstFilingHourBound      = v7FirstFilingHourBound
+	v8FirstBirthHourBound       = v7FirstBirthHourBound
+	v8SustainedSurplusHours     = v7SustainedSurplusHours
+	v8FirstTenuredSlotHourBound = 4
+	v8PatchKFloor               = 6
+	v8PatchKDeadlineHour        = 24
+	v8HolderShareKGE1Floor      = 0.5
+	v8A2bHorizonHour            = 168
+)
+
 // Recorded ticket-14 cost baselines (frozen spec budgets): v4 measured
 // 0.165 s CPU per simulated hour (27.8 s / 168 h, q8-enabled w1) and
 // 14,592,912 accepted-history bytes over 168 h. The predeclared v5 budgets
@@ -180,8 +223,30 @@ type options struct {
 	cultivationDisabled bool
 	policy              string
 	mechanism           string
-	out                 string
-	checkpointDir       string
+	// founders is the declared founding band (ticket 18 fixture axis): the
+	// zero value is the default spelling of the full frozen block 8·patches,
+	// anything else must satisfy world.NaturalFoundersValid.
+	founders      int
+	out           string
+	checkpointDir string
+}
+
+// foundersResolved resolves the declared founding band to the materialized
+// founder count, exactly the world-side rule: the zero spelling is the full
+// frozen block 8P.
+func (o options) foundersResolved() int {
+	if o.founders == 0 {
+		return 8 * o.patches
+	}
+	return o.founders
+}
+
+// v8Requested reports whether the run declared a non-default founding band
+// (the additive ticket-18 metric and band sections). The default spelling
+// keeps every recorded report byte-identical: a default report carries none
+// of the new keys (pinned by test).
+func v8Requested(o options) bool {
+	return o.founders != 0
 }
 
 // naturalPolicyName validates the declared --policy selection and returns
@@ -647,6 +712,128 @@ type v7MetricsReport struct {
 	ParentDeaths                      v6ParentDeathsReport    `json:"parent_deaths_within_24h_of_birth_payment"`
 }
 
+// v8PatchReport is one patch's founding-band column (ticket 18): the static
+// genesis seating, the hourly density series (mouths and Σk over the
+// patch's alive actors), and the patch-attributable time-to-first fields.
+// A patch with seating == slots is a closed saturated economy (supply
+// ≤ slots units/h against seating mouths at the frozen genesis) — the
+// V8-A2b internal control; a seated patch below that is the under-capacity
+// treatment the V8-A2/A3/C2/K bands read.
+type v8PatchReport struct {
+	Patch                      int     `json:"patch"`
+	FoundersSeated             int     `json:"founders_seated"`
+	Slots                      int     `json:"slots"`
+	Saturated                  bool    `json:"saturated"`
+	MouthsByHour               []int   `json:"mouths_by_hour"`
+	KTotalByHour               []int64 `json:"k_total_by_hour"`
+	FirstTenuredSlotHour       int     `json:"first_tenured_slot_hour"`
+	FirstBankedHour            int     `json:"first_banked_hour"`
+	FirstK2HoldHour            int     `json:"first_k2_hold_hour"`
+	FirstPerActorSustainedHour int     `json:"first_per_actor_sustained_hour"`
+	FirstBirthFilingHour       int     `json:"first_birth_filing_hour"`
+	FirstBirthHour             int     `json:"first_birth_hour"`
+}
+
+// v8ActorSurplusReport is one actor's ticket-18 surplus counters with the
+// home-patch attribution the V8-A2b band reads. MaxConsecutiveSurplusHours
+// is the actor's true running maximum over the whole run (the v7 GATING
+// semantics, immune to later resets), and the alive-hours counters feed the
+// V8-K windfall clause (share of alive hours with k≥1).
+type v8ActorSurplusReport struct {
+	ID                         int   `json:"id"`
+	HomePatch                  int   `json:"home_patch"`
+	Generation                 int   `json:"generation"`
+	MaxConsecutiveSurplusHours int   `json:"max_consecutive_surplus_hours"`
+	SurplusBearingHours        int   `json:"surplus_bearing_hours"`
+	FirstSurplusBearingHour    int   `json:"first_surplus_bearing_hour"`
+	FirstPerActorSustainedHour int   `json:"first_per_actor_sustained_hour"`
+	AliveHours                 int64 `json:"alive_hours"`
+	AliveHoursWithKGE1         int64 `json:"alive_hours_with_k_ge1"`
+}
+
+// v8BirthCohortRow is one newborn's cohort row of the frozen metric list:
+// birth hour, parents, generation index and the filing kin distance.
+type v8BirthCohortRow struct {
+	ID                int   `json:"id"`
+	BirthHour         int64 `json:"birth_hour"`
+	HomePatch         int   `json:"home_patch"`
+	ParentA           int   `json:"parent_a"`
+	ParentB           int   `json:"parent_b"`
+	Generation        int   `json:"generation"`
+	FilingKinDistance int   `json:"filing_kin_distance"`
+}
+
+// v8TimeToFirstReport is the ticket-18 whole-run time-to-first block, in
+// absolute hours (-1 = never): the six predeclared fields, each attributed
+// per patch in the v8PatchReport columns where attributable.
+type v8TimeToFirstReport struct {
+	Definition                 string `json:"definition"`
+	FirstTenuredSlotHour       int    `json:"first_tenured_slot_hour"`
+	FirstBankedHour            int    `json:"first_banked_hour"`
+	FirstK2HoldHour            int    `json:"first_k2_hold_hour"`
+	FirstPerActorSustainedHour int    `json:"first_per_actor_sustained_hour"`
+	FirstBirthFilingHour       int    `json:"first_birth_filing_hour"`
+	FirstBirthHour             int    `json:"first_birth_hour"`
+}
+
+// v8MetricsReport carries the additive ticket-18 v8 founding-band sections
+// of the frozen design: the density axis, per-patch seating and hourly
+// mouths/Σk, per-actor SF′ counters with home-patch attribution, the
+// generation index and birth-cohort table, the 8·births endowment ledger,
+// the parent-death and paired-meal canaries, and the V8-A5 non-universality
+// evidence. It exists only when a non-default founders band is declared; a
+// default-band report carries no such key (pinned by test).
+type v8MetricsReport struct {
+	Definition              string          `json:"definition"`
+	FoundersDeclared        int             `json:"founders_declared"`
+	FoundersResolved        int             `json:"founders_resolved"`
+	DensityWorld            float64         `json:"density_world"`
+	Patches                 []v8PatchReport `json:"patches"`
+	SFPrimeByHourTotal      []int64         `json:"sf_prime_by_hour_total"`
+	SFPrimeRunTotal         int64           `json:"sf_prime_run_total"`
+	FirstSurplusBearingHour int             `json:"first_surplus_bearing_hour"`
+	// GATING per-actor reading (V8-A2): the same actor holds the full
+	// conjunction k≥2 ∧ granary≥1 ∧ SF′>0 for ≥12 consecutive hours; entries
+	// carry the true running maximum.
+	FirstPerActorSustainedHour           int                    `json:"first_per_actor_sustained_hour"`
+	FirstPerActorSustainedCompletionHour int                    `json:"first_per_actor_sustained_completion_hour"`
+	ActorsWithPerActorSustainedRuns      int                    `json:"actors_with_per_actor_sustained_runs"`
+	SurplusBearingActorHours             int64                  `json:"surplus_bearing_actor_hours"`
+	PerActor                             []v8ActorSurplusReport `json:"per_actor_surplus"`
+	// Non-gating union reading (ticket 16's reading, labelled): an hour
+	// counts while at least one alive actor is surplus-bearing, with no
+	// requirement that it be the same actor.
+	FirstSustainedSurplusHourUnion  int                     `json:"first_sustained_surplus_hour_union"`
+	MaxConsecutiveSurplusHoursUnion int                     `json:"max_consecutive_surplus_hours_union"`
+	TimeToFirst                     v8TimeToFirstReport     `json:"time_to_first"`
+	GenerationCount                 int                     `json:"generation_count"`
+	BirthCohort                     []v8BirthCohortRow      `json:"birth_cohort"`
+	EndowmentLedgerUnits            int64                   `json:"endowment_ledger_units"`
+	EndowmentCrossCheckedInG3       bool                    `json:"endowment_cross_checked_in_g3"`
+	PairedMeals                     int64                   `json:"paired_meals"`
+	ParentDeaths                    v6ParentDeathsReport    `json:"parent_deaths_within_24h_of_birth_payment"`
+	NonUniversality                 v7NonUniversalityReport `json:"non_universality"`
+}
+
+// firstHolderBy returns the per-actor entry with the earliest recorded value
+// of the named first-hour field (lowest ID on ties); ok is false when no
+// actor ever recorded one.
+func (m *v8MetricsReport) firstHolderBy(get func(v8ActorSurplusReport) int) (v8ActorSurplusReport, bool) {
+	found := false
+	var out v8ActorSurplusReport
+	for _, a := range m.PerActor {
+		h := get(a)
+		if h < 0 {
+			continue
+		}
+		if !found || h < get(out) || (h == get(out) && a.ID < out.ID) {
+			found = true
+			out = a
+		}
+	}
+	return out, found
+}
+
 type branchReport struct {
 	Births               bool               `json:"births"`
 	Fixture              bool               `json:"founder_tenure_genesis"`
@@ -683,6 +870,8 @@ type branchReport struct {
 	V6Bands              []bandReport       `json:"v6_bands,omitempty"`
 	V7Metrics            *v7MetricsReport   `json:"v7_metrics,omitempty"`
 	V7Bands              []bandReport       `json:"v7_bands,omitempty"`
+	V8Metrics            *v8MetricsReport   `json:"v8_metrics,omitempty"`
+	V8Bands              []bandReport       `json:"v8_bands,omitempty"`
 }
 
 type report struct {
@@ -905,9 +1094,14 @@ func abs64(v int64) int64 {
 }
 
 // bandFor evaluates the frozen band of the cell verbatim. A falsified band
-// is reported, never tuned and never fatal. Under a v7 provision arm the
-// primary predeclared v7 band takes its place.
+// is reported, never tuned and never fatal. At a declared non-default
+// founding band the primary predeclared v8 band takes precedence (the
+// ticket-18 gating band of the cell); under a v7 provision arm the primary
+// predeclared v7 band otherwise takes its place.
 func bandFor(o options, br *branchReport) bandReport {
+	if v8Requested(o) {
+		return v8BandsFor(o, br)[0]
+	}
 	if name, err := naturalPolicyName(o.policy); err == nil && name == policy6Name {
 		return v6BandsFor(o, br)[0]
 	}
@@ -1733,6 +1927,669 @@ func v7BandsFor(o options, br *branchReport) []bandReport {
 	}
 }
 
+// --- ticket-18 v8 founding-band additive metrics (declared -founders != 0 only; never emitted at the default band) ---
+
+const (
+	v8DensityDefinition  = "founding-band density block (ticket 18 v8, purely additive; emitted only when a non-default -founders band is declared — a default report carries none of these keys): founders_declared is the -founders spelling, founders_resolved the materialized band (the zero spelling ≡ the full frozen block 8P), density_world = f/(8·P); per-patch columns carry the genesis seating, hourly mouths (alive actors per patch, each burning one energy unit per hour), per-patch Σk by hour (alive actors), and the patch-attributable time-to-first fields; per-actor surplus entries carry the SF′ counters with true running maxima and the home-patch attribution the V8-A2b band reads; a patch with seating == slots is a closed saturated economy (supply ≤ slots units/h against seating mouths at the frozen genesis), the saturation arithmetic's internal control"
+	v8TimeToFirstDef     = "time-to-first, absolute hours (-1 = never), whole run and per patch where attributable: first tenured slot = first hour with a cultivated slot (per patch: on that patch); first banked hour = first hour with aggregate granary stock ≥ 1 (per patch: Σ granary stock of the patch's alive actors ≥ 1); first k≥2 hold = first hour some alive actor holds k≥2 (per patch: an actor seated on that patch); first per-actor sustained = the GATING reading's first hour (per patch: attributed to the holder's home patch); birth filing = first birth-request journal attempt (per patch: the filing actor's home patch); birth = first committed birth (per patch: the newborn's home patch, which is the proposer's)"
+	v8CohortDefinition   = "birth cohort, one row per newborn ascending by ID (= registration order): birth hour, home patch (the proposer's), parents, generation index (founders are generation 0; a newborn's generation = max(parent generations) + 1), and the filing kin distance — the PUBLIC derived kin-walk distance (world.NaturalKinDistance, the frozen ≤10-ref walk the consent rule reads) between the two parents at the birth hour; -1 when unrelated beyond the walk"
+	v8NonUniversalityDef = "V8-A5 (gating): in every A12 cell hosting a sustained-surplus actor, ≥1 death before h168 ∧ the surplus-bearing set at the first per-actor sustained hour is a strict subset of the alive set; zero mortality with universal surplus would suspect accounting or a hidden subsidy"
+)
+
+// v8HomePatchIndex maps an actor's immutable home-patch entity to its patch
+// index; anything outside the declared patch space is a runner invariant
+// break the reporter refuses rather than mis-attributes.
+func v8HomePatchIndex(a world.NaturalActorState, patches int) (int, error) {
+	p := int(a.Bag.Source) - world.NaturalPatchIDBase
+	if p < 0 || p >= patches {
+		return -1, fmt.Errorf("actor home patch %d outside the declared patch space", int(a.Bag.Source))
+	}
+	return p, nil
+}
+
+// buildV8Metrics computes the additive ticket-18 metric sections from the
+// hourly checkpoints and the journal: the density axis and per-patch
+// columns, per-actor SF′ counters (the frozen v7 form, provisions disclosed
+// as withdrawals) with true running maxima and home-patch attribution, the
+// generation index and birth cohort with the filing kin distance, the
+// endowment ledger, the parent-death and paired-meal canaries, and the
+// V8-A5 non-universality evidence. Everything is derived from the same
+// frozen evidence the v5/v6/v7 reporters already use; no earlier report
+// field is touched, and the whole block exists only at a declared
+// non-default band.
+func buildV8Metrics(o options, br *branchReport, checks []world.NaturalCheckpoint, journal []world.NaturalBatch) (v8MetricsReport, error) {
+	m := v8MetricsReport{
+		Definition:                           v8DensityDefinition,
+		FoundersDeclared:                     o.founders,
+		FoundersResolved:                     o.foundersResolved(),
+		FirstSurplusBearingHour:              -1,
+		FirstPerActorSustainedHour:           -1,
+		FirstPerActorSustainedCompletionHour: -1,
+		FirstSustainedSurplusHourUnion:       -1,
+		NonUniversality:                      v7NonUniversalityReport{Definition: v8NonUniversalityDef, FirstSustainedHour: -1},
+		TimeToFirst: v8TimeToFirstReport{
+			Definition:                 v8TimeToFirstDef,
+			FirstTenuredSlotHour:       -1,
+			FirstBankedHour:            -1,
+			FirstK2HoldHour:            -1,
+			FirstPerActorSustainedHour: -1,
+			FirstBirthFilingHour:       -1,
+			FirstBirthHour:             firstBirthHour(br.Population, br.FirstHour),
+		},
+		PairedMeals:               br.Events.PairedMeals,
+		EndowmentLedgerUnits:      8 * br.Totals.Births,
+		EndowmentCrossCheckedInG3: br.ConservationVerified,
+	}
+	if len(checks) == 0 {
+		return m, errors.New("no hourly projection for v8 metrics")
+	}
+	patches := len(checks[0].Slots)
+	if patches == 0 || o.patches != patches {
+		return m, fmt.Errorf("declared patches %d disagree with the projection's %d", o.patches, patches)
+	}
+	m.DensityWorld = float64(m.FoundersResolved) / float64(world.NaturalSlotsPerPatch*patches)
+	m.ParentDeaths = parentDeathsReport(checks)
+
+	type patchFirsts struct{ tenured, banked, k2, sustained, filing, birth int }
+	firsts := make([]patchFirsts, patches)
+	for i := range firsts {
+		firsts[i] = patchFirsts{tenured: -1, banked: -1, k2: -1, sustained: -1, filing: -1, birth: -1}
+	}
+	// Static seating from the first projection: the founder rows are the
+	// declared genesis prefix, each ID-placed by the frozen founder geometry.
+	seated := make([]int, patches)
+	for j := range checks[0].Founders {
+		p, err := v8HomePatchIndex(checks[0].Founders[j], patches)
+		if err != nil {
+			return m, err
+		}
+		seated[p]++
+	}
+	m.Patches = make([]v8PatchReport, patches)
+	for i := range m.Patches {
+		m.Patches[i] = v8PatchReport{
+			Patch: world.NaturalPatchIDBase + i, FoundersSeated: seated[i],
+			Slots: world.NaturalSlotsPerPatch, Saturated: seated[i] == world.NaturalSlotsPerPatch,
+			FirstTenuredSlotHour: -1, FirstBankedHour: -1, FirstK2HoldHour: -1,
+			FirstPerActorSustainedHour: -1, FirstBirthFilingHour: -1, FirstBirthHour: -1,
+		}
+	}
+
+	type actorAcc struct {
+		entry  v8ActorSurplusReport
+		run    int
+		window []int64
+	}
+	acc := map[sim.EntityID]*actorAcc{}
+	var prev map[sim.EntityID]naturalActorLedger
+	unionRun := 0
+	delta := func(old, new int64, existed bool) int64 {
+		if !existed {
+			return new
+		}
+		return new - old
+	}
+	for _, c := range checks {
+		type idState struct {
+			id sim.EntityID
+			a  world.NaturalActorState
+		}
+		roster := make([]idState, 0, len(c.Founders)+len(c.Newborns))
+		for j := range c.Founders {
+			roster = append(roster, idState{sim.EntityID(j + 1), c.Founders[j]})
+		}
+		for _, nb := range c.Newborns {
+			roster = append(roster, idState{nb.ID, nb.State})
+		}
+		cur := make(map[sim.EntityID]naturalActorLedger, len(roster))
+		mouths := make([]int, patches)
+		kTotal := make([]int64, patches)
+		granary := make([]int64, patches)
+		var sfTotal int64
+		hourBearing := false
+		captureA5 := false
+		for _, rs := range roster {
+			a := rs.a
+			hp, err := v8HomePatchIndex(a, patches)
+			if err != nil {
+				return m, err
+			}
+			sn := naturalActorLedger{alive: naturalAlive(a), k: a.Worksite.Capital, granary: a.Granary.Stock,
+				cult: a.Granary.CultivatedTotal, stored: a.Granary.StoredMeals, provisioned: a.Granary.Provisioned,
+				spoiled: a.Granary.Spoiled, paid: a.Genome.BirthGranaryPaid}
+			cur[rs.id] = sn
+			p, had := prev[rs.id]
+			flow := delta(p.cult, sn.cult, had) - delta(p.stored, sn.stored, had) - delta(p.provisioned, sn.provisioned, had) -
+				delta(p.spoiled, sn.spoiled, had) - delta(p.paid, sn.paid, had)
+			ac := acc[rs.id]
+			if ac == nil {
+				ac = &actorAcc{entry: v8ActorSurplusReport{ID: int(rs.id), HomePatch: world.NaturalPatchIDBase + hp,
+					FirstSurplusBearingHour: -1, FirstPerActorSustainedHour: -1}}
+				acc[rs.id] = ac
+			}
+			ac.window = append(ac.window, flow)
+			var sf int64
+			for j := len(ac.window) - 1; j >= 0 && len(ac.window)-1-j < sfWindowHours; j-- {
+				sf += ac.window[j]
+			}
+			if sn.alive {
+				sfTotal += sf
+				mouths[hp]++
+				kTotal[hp] += sn.k
+				granary[hp] += sn.granary
+				ac.entry.AliveHours++
+				if sn.k >= 1 {
+					ac.entry.AliveHoursWithKGE1++
+				}
+				if sn.k >= 2 {
+					if firsts[hp].k2 < 0 {
+						firsts[hp].k2 = c.Hour
+					}
+					if m.TimeToFirst.FirstK2HoldHour < 0 {
+						m.TimeToFirst.FirstK2HoldHour = c.Hour
+					}
+				}
+			}
+			bearing := sn.alive && sn.k >= 2 && sn.granary >= 1 && sf > 0
+			if bearing {
+				hourBearing = true
+				m.SurplusBearingActorHours++
+				ac.entry.SurplusBearingHours++
+				if ac.entry.FirstSurplusBearingHour < 0 {
+					ac.entry.FirstSurplusBearingHour = c.Hour
+				}
+				if m.FirstSurplusBearingHour < 0 {
+					m.FirstSurplusBearingHour = c.Hour
+				}
+				// GATING per-actor counter with the true running maximum
+				// (the v7 semantics): the entry never loses a run to a later
+				// reset, and an actor's first sustained hour never moves.
+				ac.run++
+				if ac.run > ac.entry.MaxConsecutiveSurplusHours {
+					ac.entry.MaxConsecutiveSurplusHours = ac.run
+				}
+				if ac.run == v8SustainedSurplusHours {
+					first := c.Hour - (v8SustainedSurplusHours - 1)
+					if ac.entry.FirstPerActorSustainedHour < 0 {
+						ac.entry.FirstPerActorSustainedHour = first
+					}
+					if m.FirstPerActorSustainedHour < 0 {
+						m.FirstPerActorSustainedHour = first
+						m.FirstPerActorSustainedCompletionHour = c.Hour
+						// V8-A5 evidence is captured after the full roster's
+						// SF′ windows have advanced for this hour.
+						captureA5 = true
+					}
+					if firsts[hp].sustained < 0 {
+						firsts[hp].sustained = first
+					}
+				}
+			} else {
+				ac.run = 0
+			}
+		}
+		if captureA5 {
+			m.NonUniversality.FirstSustainedHour = m.FirstPerActorSustainedHour
+			m.NonUniversality.AliveAtFirstSustainedHour = c.Metrics.Alive
+			for _, rs := range roster {
+				win := acc[rs.id].window
+				var sf int64
+				for j := len(win) - 1; j >= 0 && len(win)-1-j < sfWindowHours; j-- {
+					sf += win[j]
+				}
+				oa := rs.a
+				if naturalAlive(oa) && oa.Worksite.Capital >= 2 && oa.Granary.Stock >= 1 && sf > 0 {
+					m.NonUniversality.SurplusBearingAtFirstSustainedHour = append(m.NonUniversality.SurplusBearingAtFirstSustainedHour, int(rs.id))
+				}
+			}
+			m.NonUniversality.StrictSubset = len(m.NonUniversality.SurplusBearingAtFirstSustainedHour) < c.Metrics.Alive
+		}
+		if hourBearing {
+			// Non-gating union reading (ticket 16's reading, labelled): an
+			// hour counts while at least one alive actor is surplus-bearing.
+			unionRun++
+			if unionRun == v8SustainedSurplusHours && m.FirstSustainedSurplusHourUnion < 0 {
+				m.FirstSustainedSurplusHourUnion = c.Hour - (v8SustainedSurplusHours - 1)
+			}
+			if unionRun > m.MaxConsecutiveSurplusHoursUnion {
+				m.MaxConsecutiveSurplusHoursUnion = unionRun
+			}
+		} else {
+			unionRun = 0
+		}
+		m.SFPrimeByHourTotal = append(m.SFPrimeByHourTotal, sfTotal)
+		for p := 0; p < patches; p++ {
+			m.Patches[p].MouthsByHour = append(m.Patches[p].MouthsByHour, mouths[p])
+			m.Patches[p].KTotalByHour = append(m.Patches[p].KTotalByHour, kTotal[p])
+			if granary[p] >= 1 && firsts[p].banked < 0 {
+				firsts[p].banked = c.Hour
+			}
+		}
+		if m.TimeToFirst.FirstBankedHour < 0 && c.Balance.GranaryStock >= 1 {
+			m.TimeToFirst.FirstBankedHour = c.Hour
+		}
+		for p, slots := range c.Slots {
+			for _, slot := range slots {
+				if slot.Mode == world.NaturalTenureCultivated && firsts[p].tenured < 0 {
+					firsts[p].tenured = c.Hour
+				}
+			}
+		}
+		prev = cur
+	}
+	if m.FirstPerActorSustainedHour >= 0 {
+		m.TimeToFirst.FirstPerActorSustainedHour = m.FirstPerActorSustainedHour
+	}
+	for p := range m.Patches {
+		m.Patches[p].FirstTenuredSlotHour = firsts[p].tenured
+		m.Patches[p].FirstBankedHour = firsts[p].banked
+		m.Patches[p].FirstK2HoldHour = firsts[p].k2
+		m.Patches[p].FirstPerActorSustainedHour = firsts[p].sustained
+		m.Patches[p].FirstBirthFilingHour = firsts[p].filing
+		m.Patches[p].FirstBirthHour = firsts[p].birth
+		if firsts[p].tenured >= 0 && (m.TimeToFirst.FirstTenuredSlotHour < 0 || firsts[p].tenured < m.TimeToFirst.FirstTenuredSlotHour) {
+			m.TimeToFirst.FirstTenuredSlotHour = firsts[p].tenured
+		}
+	}
+
+	final := checks[len(checks)-1]
+	m.SFPrimeRunTotal = final.Balance.CultivatedTotal - final.Balance.StoredMeals - final.Balance.Provisioned - final.Balance.Spoiled - final.Balance.BirthGranaryPaid
+	m.NonUniversality.DeathsToHorizon = final.Metrics.DeathsStarvation + final.Metrics.DeathsAge
+
+	// Generation index over the final roster: ascending ID is a
+	// parent-before-child order (a parent must exist to file, and founder
+	// IDs precede every newborn ID), founders are generation 0.
+	generation := make(map[sim.EntityID]int, len(final.Founders)+len(final.Newborns))
+	for j := range final.Founders {
+		generation[sim.EntityID(j+1)] = 0
+	}
+	nbs := append([]world.NaturalNewbornState(nil), final.Newborns...)
+	sort.Slice(nbs, func(i, j int) bool { return nbs[i].ID < nbs[j].ID })
+	for _, nb := range nbs {
+		ga, okA := generation[nb.State.Genome.ParentA]
+		gb, okB := generation[nb.State.Genome.ParentB]
+		if !okA || !okB {
+			return m, fmt.Errorf("newborn %d references a parent outside the roster", int(nb.ID))
+		}
+		g := ga
+		if gb > g {
+			g = gb
+		}
+		generation[nb.ID] = g + 1
+		if g+1 > m.GenerationCount {
+			m.GenerationCount = g + 1
+		}
+	}
+	for _, id := range sortedActorIDs(acc) {
+		entry := acc[id].entry
+		if entry.MaxConsecutiveSurplusHours >= v8SustainedSurplusHours {
+			m.ActorsWithPerActorSustainedRuns++
+		}
+		m.PerActor = append(m.PerActor, entry)
+	}
+	for i := range m.PerActor {
+		m.PerActor[i].Generation = generation[sim.EntityID(m.PerActor[i].ID)]
+	}
+
+	// Home patches over the final roster (every actor ever alive, dead
+	// included) for the journal filing attribution and the birth cohort.
+	homeByID := make(map[sim.EntityID]int, len(final.Founders)+len(final.Newborns))
+	for j := range final.Founders {
+		p, err := v8HomePatchIndex(final.Founders[j], patches)
+		if err != nil {
+			return m, err
+		}
+		homeByID[sim.EntityID(j+1)] = p
+	}
+	for _, nb := range nbs {
+		p, err := v8HomePatchIndex(nb.State, patches)
+		if err != nil {
+			return m, err
+		}
+		homeByID[nb.ID] = p
+		if firsts[p].birth < 0 || int(nb.State.Genome.BirthHour) < firsts[p].birth {
+			firsts[p].birth = int(nb.State.Genome.BirthHour)
+		}
+	}
+	// Birth cohort with the filing kin distance recomputed at each birth
+	// hour, and the per-patch birth firsts.
+	for _, nb := range nbs {
+		row := v8BirthCohortRow{
+			ID: int(nb.ID), BirthHour: nb.State.Genome.BirthHour,
+			HomePatch: world.NaturalPatchIDBase + homeByID[nb.ID],
+			ParentA:   int(nb.State.Genome.ParentA), ParentB: int(nb.State.Genome.ParentB),
+			Generation:        generation[nb.ID],
+			FilingKinDistance: -1,
+		}
+		if d, ok := v8FilingKinDistance(checks, nb); ok {
+			row.FilingKinDistance = d
+		}
+		m.BirthCohort = append(m.BirthCohort, row)
+	}
+	for p := range m.Patches {
+		m.Patches[p].FirstBirthHour = firsts[p].birth
+	}
+	// Time-to-first from the journal (available even after a typed halt).
+	for _, b := range journal {
+		for _, a := range b.Attempts {
+			if a.Kind != "birth-request" {
+				continue
+			}
+			h := journalHour(a.Time)
+			if m.TimeToFirst.FirstBirthFilingHour < 0 {
+				m.TimeToFirst.FirstBirthFilingHour = h
+			}
+			if p, ok := homeByID[a.Actor]; ok && firsts[p].filing < 0 {
+				firsts[p].filing = h
+			}
+		}
+	}
+	for p := range m.Patches {
+		m.Patches[p].FirstBirthFilingHour = firsts[p].filing
+	}
+	return m, nil
+}
+
+// v8FilingKinDistance recomputes the PUBLIC derived kin distance between a
+// newborn's parents at its birth hour — the same bounded ≤10-ref walk the
+// frozen consent rule reads. The parent graph is append-only and a newborn
+// is its own parents' child (never their ancestor), so the birth-hour
+// projection carries exactly the filing-time distance. ok is false when the
+// birth hour predates the recorded projection or a parent row is missing.
+func v8FilingKinDistance(checks []world.NaturalCheckpoint, nb world.NaturalNewbornState) (int, bool) {
+	if nb.State.Genome.ParentA == 0 || nb.State.Genome.ParentB == 0 {
+		return 0, false
+	}
+	idx := int(nb.State.Genome.BirthHour) - checks[0].Hour
+	if idx < 0 || idx >= len(checks) {
+		return 0, false
+	}
+	c := checks[idx]
+	states := make(map[sim.EntityID]world.NaturalActorState, len(c.Founders)+len(c.Newborns))
+	for j := range c.Founders {
+		states[sim.EntityID(j+1)] = c.Founders[j]
+	}
+	for _, other := range c.Newborns {
+		states[other.ID] = other.State
+	}
+	if _, ok := states[nb.State.Genome.ParentA]; !ok {
+		return 0, false
+	}
+	if _, ok := states[nb.State.Genome.ParentB]; !ok {
+		return 0, false
+	}
+	lookup := world.NaturalParentLookup(func(id sim.EntityID) (sim.EntityID, sim.EntityID, bool) {
+		a, ok := states[id]
+		if !ok {
+			return 0, 0, false
+		}
+		return a.Genome.ParentA, a.Genome.ParentB, true
+	})
+	distance, related := world.NaturalKinDistance(lookup, nb.State.Genome.ParentA, nb.State.Genome.ParentB)
+	if !related {
+		return -1, true
+	}
+	return distance, true
+}
+
+// v8BandsFor evaluates the predeclared ticket-18 v8 outcome bands of the
+// frozen design verbatim for this branch's cell. Band misses are outcomes:
+// reported, never tuned and never fatal. The organic A cells carry V8-A2
+// (the GATING per-actor surplus band), V8-A2b (the GATING saturated-patch
+// negative control), V8-A3, V8-A4 (descriptive), V8-A5 (the GATING
+// non-universality band) and V8-K (the GATING capital-persistence band) in
+// declared order; the frozen_band is the first. Cross-arm clauses (V8-B's
+// births-twin identity, V8-D's D12≡C12 hourly identity and the store
+// falsifier's natural/7-vs-7b contrast at f=12) are evaluated by the L3
+// control comparison across reports and noted in the criterion text.
+func v8BandsFor(o options, br *branchReport) []bandReport {
+	m := br.V8Metrics
+	if m == nil {
+		return []bandReport{{Name: "V8: metrics missing", Criterion: "the v8 bands require the v8 metric block", Observed: "v8_metrics absent while a non-default founding band is declared", WithinBand: false}}
+	}
+	pop := br.Population
+	builds := br.Events.Builds + br.Events.WorldEvents["build"]
+	provisions := br.Events.Provisions + br.Events.ProvisionRefused
+	underCap := func() []v8PatchReport {
+		out := []v8PatchReport{}
+		for _, p := range m.Patches {
+			if !p.Saturated && p.FoundersSeated > 0 {
+				out = append(out, p)
+			}
+		}
+		return out
+	}
+	saturated := func() []v8PatchReport {
+		out := []v8PatchReport{}
+		for _, p := range m.Patches {
+			if p.Saturated {
+				out = append(out, p)
+			}
+		}
+		return out
+	}
+	patchList := func(ps []v8PatchReport) string {
+		parts := make([]string, 0, len(ps))
+		for _, p := range ps {
+			parts = append(parts, fmt.Sprintf("%d(seats=%d/%d)", p.Patch, p.FoundersSeated, p.Slots))
+		}
+		if len(parts) == 0 {
+			return "none"
+		}
+		return strings.Join(parts, ", ")
+	}
+	switch {
+	case br.CultivationDisabled:
+		// V8-D: the denial loop is cultivation's sole signature; the frozen
+		// v6-D counts do not bind at f=12 (12 actors, not 16 — no equality
+		// claim to f=16), only the counts themselves are recorded verbatim.
+		within := br.Events.WorldEvents["build"] == 0 && builds == 0 && provisions == 0
+		return []bandReport{{Name: "V8-D: cultivation ablation at the founding band", Criterion: "zero rule-505 events ∧ zero builds ∧ zero provisions (any build/provision at the ablation = defect); D12 alive-trajectory hourly identity to C12 and the denial counts recorded verbatim (expected below the frozen 1,896/1,963 because 12 actors, not 16 — no equality claim to f=16) are the L3 cross-arm comparisons",
+			Observed:   fmt.Sprintf("rule-505 events=%d, builds=%d, provisions=%d (refused=%d), denial-eaten attempts=%d, granted=%d, stored_meals=%d", br.Events.WorldEvents["build"], builds, br.Events.Provisions, br.Events.ProvisionRefused, br.Events.BuildDenialEats, br.Totals.Granted, br.Totals.StoredMeals),
+			WithinBand: within}}
+	case o.r == 0:
+		within := pop.ExtinctionHour >= 0 && pop.ExtinctionHour <= 12 && br.Totals.Births == 0 && builds == 0 && provisions == 0
+		return []bandReport{{Name: "V8-B: R=0 extinction at the founding band", Criterion: "extinction ≤ h12 ∧ 0 births ∧ 0 builds ∧ 0 provisions (any build/provision at R=0 = defect); the births{on,off} B12 twin identity is the L3 cross-arm comparison",
+			Observed:   fmt.Sprintf("extinction_hour=%d, births=%d, builds=%d, provisions=%d (refused=%d)", pop.ExtinctionHour, br.Totals.Births, builds, br.Events.Provisions, br.Events.ProvisionRefused),
+			WithinBand: within}}
+	case br.Fixture:
+		// V8-E12 descriptive: the frozen-shape E cells (f=8P) are the v7-E
+		// control gate, not v8 cells; a declared-band fixture cell is
+		// recorded descriptively with its patch attribution.
+		holder, has := m.firstHolderBy(func(a v8ActorSurplusReport) int { return a.FirstPerActorSustainedHour })
+		holderText := "no per-actor sustained surplus run"
+		if has {
+			holderText = fmt.Sprintf("first per-actor sustained h%d on patch %d", holder.FirstPerActorSustainedHour, holder.HomePatch)
+		}
+		starved := sumHours(pop.DeathsStarvationByHour)
+		return []bandReport{{Name: "V8-E12: founder-tenure fixture at the founding band (descriptive, non-gating)", Criterion: "descriptive foothold record at the declared band: births, first birth, the first per-actor sustained surplus with its home-patch attribution, and starvation deaths reported verbatim",
+			Observed:   fmt.Sprintf("births=%d, first_birth_hour=%d, %s, starvation_deaths_total=%d, first_tenured_slot_hour=%d", br.Totals.Births, firstBirthHour(pop, br.FirstHour), holderText, starved, m.TimeToFirst.FirstTenuredSlotHour),
+			WithinBand: true}}
+	case !br.Births:
+		// V8-C2 (gating for the diagnosis, C12 × {n7}): surplus still flips
+		// on the under-capacity patch with first ≤ h96 — banking needs only
+		// slack, not births; missed ⇒ the actual lever was generational
+		// turnover, not slack, recorded verbatim.
+		holder, has := m.firstHolderBy(func(a v8ActorSurplusReport) int { return a.FirstPerActorSustainedHour })
+		uc := underCap()
+		onUnderCap := false
+		if has {
+			for _, p := range uc {
+				if holder.HomePatch == p.Patch {
+					onUnderCap = true
+				}
+			}
+		}
+		within := has && holder.FirstPerActorSustainedHour <= v8FirstSustainedHourBound && onUnderCap
+		note, hourText := "none", "-1"
+		if has {
+			note = fmt.Sprintf("holder actor %d on patch %d", holder.ID, holder.HomePatch)
+			hourText = fmt.Sprintf("%d", holder.FirstPerActorSustainedHour)
+		}
+		return []bandReport{{Name: "V8-C2: births-off surplus at the founding band (gating for the diagnosis)", Criterion: "per-actor sustained surplus (k≥2 ∧ granary≥1 ∧ trailing-24h SF′>0 ≥12 consecutive hours) with first such hour ≤ 96 held by an under-capacity-patch actor — banking needs only slack, not births; missed ⇒ the actual lever was generational turnover, recorded verbatim with the diagnosis corrected",
+			Observed:   fmt.Sprintf("first_per_actor_sustained_hour=%s, %s, under-capacity patches: %s, completed_hour=%d", hourText, note, patchList(uc), br.CompletedHour),
+			WithinBand: within}}
+	case br.HaltedByCeilingHit:
+		verdict, twin := "none", false
+		if br.CeilingHit != nil {
+			verdict = br.CeilingHit.Verdict.Verdict
+			twin = br.CeilingHit.Verdict.ReplayIdentical != nil && *br.CeilingHit.Verdict.ReplayIdentical
+		}
+		within := br.CeilingHit != nil && br.ConservationVerified && twin
+		hitHour, ceiling := -1, "none"
+		if br.CeilingHit != nil {
+			hitHour, ceiling = br.CeilingHit.Hour, br.CeilingHit.Ceiling
+		}
+		return []bandReport{{Name: "V8-F: compute-ceiling instrumentation", Criterion: "typed NaturalCeilingHit with green conservation to the hit hour ∧ workers-twin checkpoint/journal-identical; verdict per the frozen P15 table, reported verbatim (non-gating)",
+			Observed:   fmt.Sprintf("ceiling=%s hit_hour=%d p15_verdict=%s twin_identical=%t", ceiling, hitHour, verdict, twin),
+			WithinBand: within}}
+	default:
+		// A cells at the declared band: V8-A2, V8-A2b, V8-A3, V8-A4, V8-A5,
+		// V8-K, in declared order.
+		if br.CompletedHour != world.NaturalHorizonHours {
+			notEvaluable := fmt.Sprintf("not evaluable below h168 (completed_hour=%d)", br.CompletedHour)
+			return []bandReport{
+				{Name: "V8-A2: per-actor surplus band (gating)", Criterion: "the same actor holds k≥2 ∧ granary≥1 ∧ trailing-24h SF′>0 sustained ≥12 consecutive hours, first such hour ≤ 96 (≤ 48 reported descriptively)", Observed: notEvaluable, WithinBand: false},
+				{Name: "V8-A2b: saturated-patch negative control (gating)", Criterion: "no saturated-patch actor reaches the per-actor indicator before h168 — any that does falsifies the saturation arithmetic reading and triggers a full recorded re-examination (a positive shock, not a band relaxation)", Observed: notEvaluable, WithinBand: false},
+				{Name: "V8-A3: births band (gating)", Criterion: "first birth filing ≤ h48 ∧ first committed birth ≤ h96 on the under-capacity patch in ≥1 cell (zero filings = policy defect; filings with truth-met margins but zero births = mechanism suspicion, investigate never tune)", Observed: notEvaluable, WithinBand: false},
+				{Name: "V8-A4: dynamics classification (descriptive, non-gating)", Criterion: "takeoff-signal births≥8 ∧ ≥1 birth after h96 ∧ alive(168)≥8; stagnation births∈[1,7] ∨ alive(168)∈[1,7]; collapse-after-activity births≥1 ∧ alive(168)=0; sterile-null births=0; extinction ≤ h95 flagged collapse-faster-than-control", Observed: notEvaluable, WithinBand: false},
+				{Name: "V8-A5: non-universality (gating)", Criterion: "in every A12 cell hosting a sustained-surplus actor, ≥1 death before h168 ∧ the surplus-bearing set at the first sustained hour is a strict subset of the alive set", Observed: notEvaluable, WithinBand: false},
+				{Name: "V8-K: capital persistence on the under-capacity patch (gating)", Criterion: "first tenured slot on the under-capacity patch ≤ h4 ∧ max Σk over that patch's hours ≤ h24 ≥ 6 (two founders at the derived k*=3) ∧ the first surplus-bearing actor's share of alive hours with k≥1 ≥ 0.5", Observed: notEvaluable, WithinBand: false},
+			}
+		}
+		bands := make([]bandReport, 0, 6)
+		a2Within := m.FirstPerActorSustainedHour >= 0 && m.FirstPerActorSustainedHour <= v8FirstSustainedHourBound
+		descriptive := "≤48 descriptive: not met"
+		if m.FirstPerActorSustainedHour >= 0 && m.FirstPerActorSustainedHour <= 48 {
+			descriptive = "≤48 descriptive: MET"
+		}
+		holder, has := m.firstHolderBy(func(a v8ActorSurplusReport) int { return a.FirstPerActorSustainedHour })
+		holderText := "no per-actor sustained surplus run"
+		if has {
+			holderText = fmt.Sprintf("first holder actor %d on patch %d", holder.ID, holder.HomePatch)
+		}
+		bands = append(bands, bandReport{Name: "V8-A2: per-actor surplus band (gating)", Criterion: "the same actor holds k≥2 ∧ granary≥1 ∧ trailing-24h SF′>0 sustained ≥12 consecutive hours, first such hour ≤ 96 (≤ 48 reported descriptively)",
+			Observed:   fmt.Sprintf("first_per_actor_sustained_hour=%d (completion h%d, %s), %s, actors_with_per_actor_sustained_runs=%d, union_reading: first=%d max_run=%d, surplus_bearing_actor_hours=%d, first_surplus_bearing_hour=%d, sf_prime_run_total=%d", m.FirstPerActorSustainedHour, m.FirstPerActorSustainedCompletionHour, descriptive, holderText, m.ActorsWithPerActorSustainedRuns, m.FirstSustainedSurplusHourUnion, m.MaxConsecutiveSurplusHoursUnion, m.SurplusBearingActorHours, m.FirstSurplusBearingHour, m.SFPrimeRunTotal),
+			WithinBand: a2Within})
+		sat := saturated()
+		a2bFiring := []int{}
+		for _, a := range m.PerActor {
+			if a.FirstPerActorSustainedHour < 0 {
+				continue
+			}
+			for _, p := range sat {
+				if a.HomePatch == p.Patch {
+					a2bFiring = append(a2bFiring, a.ID)
+				}
+			}
+		}
+		a2bWithin, a2bObserved := true, "vacuous: no saturated patch at this band"
+		if len(sat) > 0 {
+			a2bWithin = len(a2bFiring) == 0
+			a2bObserved = fmt.Sprintf("saturated patches: %s; saturated-patch actors with a per-actor sustained run: %v (first through h%d)", patchList(sat), a2bFiring, v8A2bHorizonHour)
+		}
+		bands = append(bands, bandReport{Name: "V8-A2b: saturated-patch negative control (gating)", Criterion: "no saturated-patch actor reaches the per-actor indicator before h168 — any that does falsifies the saturation arithmetic reading and triggers a full recorded re-examination (a positive shock, not a band relaxation)",
+			Observed: a2bObserved, WithinBand: a2bWithin})
+		filing := m.TimeToFirst.FirstBirthFilingHour
+		uc := underCap()
+		firstUnderCapBirth := -1
+		for _, p := range uc {
+			if p.FirstBirthHour >= 0 && (firstUnderCapBirth < 0 || p.FirstBirthHour < firstUnderCapBirth) {
+				firstUnderCapBirth = p.FirstBirthHour
+			}
+		}
+		a3Within := filing >= 0 && filing <= v8FirstFilingHourBound && firstUnderCapBirth >= 0 && firstUnderCapBirth <= v8FirstBirthHourBound
+		bands = append(bands, bandReport{Name: "V8-A3: births band (gating)", Criterion: "first birth filing ≤ h48 ∧ first committed birth ≤ h96 on the under-capacity patch in ≥1 cell (zero filings = policy defect; filings with truth-met margins but zero births = mechanism suspicion, investigate never tune)",
+			Observed:   fmt.Sprintf("first_birth_filing_hour=%d, birth_requests=%d, first_birth_hour=%d, first under-capacity-patch birth_hour=%d, births=%d, under-capacity patches: %s", filing, br.Events.BirthRequests, m.TimeToFirst.FirstBirthHour, firstUnderCapBirth, br.Totals.Births, patchList(uc)),
+			WithinBand: a3Within})
+		alive168 := pop.AliveByHour[168-br.FirstHour]
+		extinction := pop.ExtinctionHour
+		var labels []string
+		birthAfter96 := false
+		for h := v8FirstBirthHourBound + 1; h <= world.NaturalHorizonHours; h++ {
+			if pop.BirthsByHour[h-br.FirstHour] > 0 {
+				birthAfter96 = true
+				break
+			}
+		}
+		if br.Totals.Births >= 8 && birthAfter96 && alive168 >= 8 {
+			labels = append(labels, "takeoff-signal")
+		}
+		if (br.Totals.Births >= 1 && br.Totals.Births <= 7) || (alive168 >= 1 && alive168 <= 7) {
+			labels = append(labels, "stagnation")
+		}
+		if br.Totals.Births >= 1 && alive168 == 0 {
+			labels = append(labels, "collapse-after-activity")
+		}
+		if br.Totals.Births == 0 {
+			labels = append(labels, "sterile-null")
+		}
+		if extinction >= 0 && extinction <= 95 {
+			labels = append(labels, "collapse faster than control (extinction ≤ h95)")
+		}
+		classification := "none fired"
+		if len(labels) > 0 {
+			classification = strings.Join(labels, " + ")
+		}
+		bands = append(bands, bandReport{Name: "V8-A4: dynamics classification (descriptive, non-gating)", Criterion: "takeoff-signal births≥8 ∧ ≥1 birth after h96 ∧ alive(168)≥8; stagnation births∈[1,7] ∨ alive(168)∈[1,7]; collapse-after-activity births≥1 ∧ alive(168)=0; sterile-null births=0; extinction ≤ h95 flagged collapse-faster-than-control",
+			Observed:   fmt.Sprintf("births=%d, alive(168)=%d, extinction_hour=%d → %s", br.Totals.Births, alive168, extinction, classification),
+			WithinBand: true})
+		a5Within := true
+		a5Observed := "no per-actor sustained surplus run — V8-A5 vacuous for this cell (V8-A2 already fails here)"
+		if m.ActorsWithPerActorSustainedRuns >= 1 {
+			a5Within = m.NonUniversality.DeathsToHorizon >= 1 && m.NonUniversality.StrictSubset
+			a5Observed = fmt.Sprintf("at first sustained hour h%d: alive=%d, surplus_bearing=%v, strict_subset=%t; deaths_to_horizon=%d (starvation=%d, age=%d)",
+				m.NonUniversality.FirstSustainedHour, m.NonUniversality.AliveAtFirstSustainedHour, m.NonUniversality.SurplusBearingAtFirstSustainedHour, m.NonUniversality.StrictSubset,
+				m.NonUniversality.DeathsToHorizon, pop.DeathsStarvationByHour[len(pop.DeathsStarvationByHour)-1], pop.DeathsAgeByHour[len(pop.DeathsAgeByHour)-1])
+		}
+		bands = append(bands, bandReport{Name: "V8-A5: non-universality (gating)", Criterion: "in every A12 cell hosting a sustained-surplus actor, ≥1 death before h168 ∧ the surplus-bearing set at the first sustained hour is a strict subset of the alive set (zero mortality with universal surplus ⇒ suspect accounting or hidden subsidy ⇒ defect investigation)",
+			Observed:   a5Observed,
+			WithinBand: a5Within})
+		kClauses := make([]string, 0, 3)
+		kWithin := true
+		if len(uc) == 0 {
+			kClauses = append(kClauses, "vacuous: no under-capacity patch at this band")
+		} else {
+			firstTenured := -1
+			for _, p := range uc {
+				if p.FirstTenuredSlotHour >= 0 && (firstTenured < 0 || p.FirstTenuredSlotHour < firstTenured) {
+					firstTenured = p.FirstTenuredSlotHour
+				}
+			}
+			tenuredOK := firstTenured >= 0 && firstTenured <= v8FirstTenuredSlotHourBound
+			kWithin = kWithin && tenuredOK
+			kClauses = append(kClauses, fmt.Sprintf("first_tenured_slot_hour_on_under_capacity=%d (≤ h%d: %t)", firstTenured, v8FirstTenuredSlotHourBound, tenuredOK))
+			kMax := int64(0)
+			deadline := v8PatchKDeadlineHour - br.FirstHour
+			if deadline >= len(pop.AliveByHour) {
+				deadline = len(pop.AliveByHour) - 1
+			}
+			for _, p := range uc {
+				for i := 0; i <= deadline && i < len(p.KTotalByHour); i++ {
+					if p.KTotalByHour[i] > kMax {
+						kMax = p.KTotalByHour[i]
+					}
+				}
+			}
+			kOK := kMax >= v8PatchKFloor
+			kWithin = kWithin && kOK
+			kClauses = append(kClauses, fmt.Sprintf("max_Σk_under_capacity_through_h%d=%d (≥ %d: %t)", v8PatchKDeadlineHour, kMax, v8PatchKFloor, kOK))
+		}
+		share := 0.0
+		shareOK := false
+		if fh, ok := m.firstHolderBy(func(a v8ActorSurplusReport) int { return a.FirstSurplusBearingHour }); ok && fh.AliveHours > 0 {
+			share = float64(fh.AliveHoursWithKGE1) / float64(fh.AliveHours)
+			shareOK = share >= v8HolderShareKGE1Floor
+		}
+		kWithin = kWithin && shareOK
+		kClauses = append(kClauses, fmt.Sprintf("first surplus-bearing actor's share of alive hours with k≥1 = %.3f (≥ %.2f: %t)", share, v8HolderShareKGE1Floor, shareOK))
+		bands = append(bands, bandReport{Name: "V8-K: capital persistence on the under-capacity patch (gating)", Criterion: "first tenured slot on the under-capacity patch ≤ h4 ∧ max Σk over that patch's hours ≤ h24 ≥ 6 (two founders at the derived k*=3) ∧ the first surplus-bearing actor's share of alive hours with k≥1 ≥ 0.5 (below that the indicator would certify a windfall, not sustained tenure)",
+			Observed:   fmt.Sprintf("under-capacity patches: %s; %s", patchList(uc), strings.Join(kClauses, "; ")),
+			WithinBand: kWithin})
+		return bands
+	}
+}
+
 // historyEvidence restores the accepted history to count events and verify
 // the journal link target set; the restored head must match the handoff head.
 func historyEvidence(br *branchReport, handoff world.NaturalHandoff, mech world.NaturalMechanism) (map[sim.EventID]kernel.Event, error) {
@@ -2103,7 +2960,8 @@ func runBranch(ctx context.Context, o options, births bool, parentDigest string,
 		return br, err
 	}
 	expected := world.NaturalRestoreOptions{Patches: o.patches, R: o.r, Seed: o.seed, Workers: o.workers,
-		Births: births, FounderTenure: fixture, CultivationDisabled: o.cultivationDisabled, PolicyRef: ref, Mechanism: mech}
+		Births: births, FounderTenure: fixture, CultivationDisabled: o.cultivationDisabled, PolicyRef: ref, Mechanism: mech,
+		Founders: o.founders}
 	f, restored, err := world.RestoreNaturalCheckpoint(childPath, expected)
 	if err != nil {
 		return br, err
@@ -2188,8 +3046,8 @@ func runBranch(ctx context.Context, o options, births bool, parentDigest string,
 		return br, err
 	}
 	br.WallTimeNS, br.CPUTimeNS, br.PeakRSSBytes = time.Since(start).Nanoseconds(), (cpuEnd - cpuStart).Nanoseconds(), rss
-	// The additive v6/v7 sections are computed after the cost clock stops: pure
-	// post-processing of the same frozen evidence, never a v5 field.
+	// The additive v6/v7/v8 sections are computed after the cost clock stops:
+	// pure post-processing of the same frozen evidence, never a v5 field.
 	if v6Requested(o) {
 		vm, err := buildV6Metrics(&br, checks, f.Journal())
 		if err != nil {
@@ -2204,6 +3062,13 @@ func runBranch(ctx context.Context, o options, births bool, parentDigest string,
 		}
 		br.V7Metrics = &vm
 	}
+	if v8Requested(o) {
+		vm, err := buildV8Metrics(o, &br, checks, f.Journal())
+		if err != nil {
+			return br, err
+		}
+		br.V8Metrics = &vm
+	}
 	br.Band = bandFor(o, &br)
 	br.CostBudget = costBudget(o, &br)
 	if v6Requested(o) {
@@ -2211,6 +3076,9 @@ func runBranch(ctx context.Context, o options, births bool, parentDigest string,
 	}
 	if v7Requested(o) {
 		br.V7Bands = v7BandsFor(o, &br)
+	}
+	if v8Requested(o) {
+		br.V8Bands = v8BandsFor(o, &br)
 	}
 	return br, nil
 }
@@ -2255,7 +3123,8 @@ func replayTwin(ctx context.Context, o options, bundlePath string, births, fixtu
 		return twin, err
 	}
 	expected := world.NaturalRestoreOptions{Patches: o.patches, R: o.r, Seed: o.seed, Workers: workers,
-		Births: births, FounderTenure: fixture, CultivationDisabled: o.cultivationDisabled, PolicyRef: ref, Mechanism: mech}
+		Births: births, FounderTenure: fixture, CultivationDisabled: o.cultivationDisabled, PolicyRef: ref, Mechanism: mech,
+		Founders: o.founders}
 	f, _, err := world.RestoreNaturalCheckpoint(bundlePath, expected)
 	if err != nil {
 		return twin, err
@@ -2407,11 +3276,20 @@ func run(ctx context.Context, o options) (report, error) {
 		Policy: policyName, Mechanism: mechanismReportName(mechanismName), BranchSelection: o.births, FounderTenure: o.fixture,
 		CultivationDisabled: o.cultivationDisabled, TokenCost: 0,
 	}
-	founders := 8 * o.patches
+	founders := o.foundersResolved()
 	r.Founders = founders
 	if o.workers < 1 || o.patches < 1 || o.patches > world.NaturalMaxPatchesFixedIDSpace ||
 		o.r < 0 || o.r > world.NaturalSlotsPerPatch || o.hours < 1 || o.hours > world.NaturalHorizonHours {
 		return r, errors.New("invalid fixture flags")
+	}
+	// The founding band is range-checked through the frozen world-side bound
+	// before any publication: an out-of-band -founders value leaves no output
+	// file and no checkpoint directory.
+	if !world.NaturalFoundersValid(o.patches, o.founders) {
+		return r, fmt.Errorf("invalid -founders value %d: the derived founding-band bound is [1,%d] at -patches=%d (0 = the default spelling of %d)", o.founders, world.NaturalSlotsPerPatch*o.patches, o.patches, world.NaturalSlotsPerPatch*o.patches)
+	}
+	if o.fixture && o.founders == 1 {
+		return r, errors.New("founder-tenure fixture at founders 1 is not a declared scenario (the fixture pre-history seats founders 1 and 2)")
 	}
 	switch o.births {
 	case enabledBranchFlag, disabledBranchFlag, bothBranchesFlag:
@@ -2455,16 +3333,13 @@ func run(ctx context.Context, o options) (report, error) {
 		// The declared founder-tenure fixture genesis: births-capable by
 		// construction, first pulse at h2, first publishable pulse boundary
 		// at h3. The fixture is run identity (journal config and manifest),
-		// so every continuation of this root is pinned to it. Under mechanism
-		// v6 the genesis is built through the ticket-17 mechanism-aware seam
-		// (NewNaturalFixtureForMechanism); the v5 path keeps the
-		// ticket-16 constructor, whose bytes are frozen.
-		var fx *world.Natural
-		if mech == world.NaturalMechanismV6 {
-			fx, err = world.NewNaturalFixtureForMechanism(o.patches, o.r, o.seed, true, 1, ref, mech)
-		} else {
-			fx, err = world.NewNaturalFixtureForPolicy(o.patches, o.r, o.seed, true, 1, ref)
-		}
+		// so every continuation of this root is pinned to it. The genesis is
+		// built through the ticket-18 general seam (NewNaturalFixtureForConfig),
+		// which carries the full declared identity — policy ref, mechanism
+		// and founding band; the earlier ticket-16/17 wrappers stay
+		// delegating shims over it with the default band, whose bytes are
+		// frozen and digest-pinned.
+		fx, err := world.NewNaturalFixtureForConfig(o.patches, o.r, o.seed, true, 1, ref, mech, o.founders)
 		if err != nil {
 			return r, err
 		}
@@ -2493,7 +3368,8 @@ func run(ctx context.Context, o options) (report, error) {
 		// the only legal branch parent and every births-enabled cell is the
 		// recorded enable intervention branching from this same root.
 		root, err := world.NewNatural(world.NaturalOptions{Patches: o.patches, R: o.r, Seed: o.seed,
-			Workers: 1, Births: false, CultivationDisabled: o.cultivationDisabled, PolicyRef: ref, Mechanism: mech})
+			Workers: 1, Births: false, CultivationDisabled: o.cultivationDisabled, PolicyRef: ref, Mechanism: mech,
+			Founders: o.founders})
 		if err != nil {
 			return r, err
 		}
@@ -2537,7 +3413,8 @@ func run(ctx context.Context, o options) (report, error) {
 		childBytes := rootBytes
 		if !o.fixture {
 			expected := world.NaturalRestoreOptions{Patches: o.patches, R: o.r, Seed: o.seed, Workers: 1,
-				Births: false, CultivationDisabled: o.cultivationDisabled, PolicyRef: ref, Mechanism: mech}
+				Births: false, CultivationDisabled: o.cultivationDisabled, PolicyRef: ref, Mechanism: mech,
+				Founders: o.founders}
 			digest, err = world.BranchNaturalCheckpoint(rootPath, expected, plan.births, childPath)
 			if err != nil {
 				return r, err
@@ -2582,6 +3459,7 @@ func main() {
 	cultivationDisabled := flag.Bool("cultivation-disabled", false, "declared cultivation ablation (births-disabled-only): the frozen policy is unchanged; any build event is a defect")
 	policy := flag.String("policy", policy5Name, "frozen policy ref (ticket-16 policy-selection seam): natural/5 (default, byte-compatible with every recorded run), natural/6, or the ticket-17 provision arms natural/7 and natural/7b (both require -mechanism=v6)")
 	mechanism := flag.String("mechanism", mechanismV5Name, "declared world mechanism axis (ticket-17): v5 (default, the frozen v5 world, byte-compatible with every recorded run) or v6 (the rule-515 provision world)")
+	founders := flag.Int("founders", 0, "declared founding band (ticket-18 fixture axis, run identity): founder rows materialized from the frozen founder-stream prefix; 0 = the default spelling of the full block 8·patches, otherwise 1..8·patches, range-checked before any publication")
 	out := flag.String("out", "", "new JSON report path; refused if it exists; the report also goes to stdout")
 	checkpointDir := flag.String("checkpoint-dir", "", "new directory for the root and branch bundles; must not exist; default creates a fresh temporary directory")
 	flag.Parse()
@@ -2591,7 +3469,7 @@ func main() {
 	}
 	rep, err := run(context.Background(), options{patches: *patches, r: *r, seed: *seed, workers: *workers, hours: *hours,
 		births: *births, fixture: *fixture, cultivationDisabled: *cultivationDisabled, policy: *policy, mechanism: *mechanism,
-		out: *out, checkpointDir: *checkpointDir})
+		founders: *founders, out: *out, checkpointDir: *checkpointDir})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

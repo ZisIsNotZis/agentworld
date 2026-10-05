@@ -40,7 +40,7 @@ Exit criteria:
 - CPU and memory profiles identify actual bottlenecks;
 - distinct strategies produce measurable and causally explainable population outcomes.
 
-The natural fixture records the first frozen strategy contrast for the last criterion: `natural/5`, `natural/6` (ticket 16) and the ticket-17 mechanism-v6 arms `natural/7`/`natural/7b` produce measurable, causally explainable — still all sterile-null organically — population outcomes over the same ecology, with the surplus gap now measured closed under the provision mechanism too (the predeclared honest null: reproduction or land economics, not capital timing, is the binding problem) and every falsification reported verbatim rather than tuned.
+The natural fixture records the first frozen strategy contrast for the last criterion: `natural/5`, `natural/6` (ticket 16) and the ticket-17 mechanism-v6 arms `natural/7`/`natural/7b` produce measurable, causally explainable — still all sterile-null organically — population outcomes over the same ecology, with the surplus gap now measured closed under the provision mechanism too (the predeclared honest null: reproduction or land economics, not capital timing, is the binding problem) and every falsification reported verbatim rather than tuned. Ticket 18 turns the diagnosed Malthusian saturation into a measured density curve: the founding band becomes a declared fixture axis (`-founders`, zero ≡ 8·P, byte-frozen at the default) whose non-default cells carry per-patch density economics with the saturated patch as a built-in control, so the ecology — not a design cap — decides whether the surplus indicator becomes reachable.
 
 ## P1 — Budgeted cognition
 
