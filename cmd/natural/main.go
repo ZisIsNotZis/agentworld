@@ -1098,7 +1098,7 @@ func v6BandsFor(o options, br *branchReport) []bandReport {
 				bandReport{Name: "A3: v6 births band", Criterion: "filings > 0 by h48 ∧ births ≥ 1 by h96",
 					Observed: fmt.Sprintf("not evaluable below h168 (completed_hour=%d)", br.CompletedHour), WithinBand: false},
 				bandReport{Name: "A4: v6 dynamics classification (descriptive, non-gating)", Criterion: "takeoff-signal births≥8 ∧ ≥1 birth after h96 ∧ alive(168)≥8; stagnation births∈[1,7] ∨ alive(168)∈[1,7]; collapse-after-activity births≥1 ∧ alive(168)=0; sterile-null births=0; extinction ≤ h95 flagged collapse-faster-than-control",
-					Observed: fmt.Sprintf("truncated at h%d — not evaluable", br.CompletedHour), WithinBand: true})
+					Observed: fmt.Sprintf("truncated at h%d — not evaluable", br.CompletedHour), WithinBand: false})
 			return bands
 		}
 		a2Within := deref.FirstSustainedSurplusHour >= 0 && deref.FirstSustainedSurplusHour <= v6FirstSustainedHourBound
