@@ -2062,10 +2062,14 @@ func buildV8Metrics(o options, br *branchReport, checks []world.NaturalCheckpoin
 			if err != nil {
 				return m, err
 			}
-			// Falsifier-(ii) column: a death with died_hour set but short of
-			// the scheduled death hour is a starvation death for this patch.
+			// Falsifier-(ii) column: count each starvation death exactly once,
+			// at its own death hour (a death with died_hour set but short of
+			// the scheduled death hour is a starvation death). Review fix: the
+			// first version incremented inside this per-hour loop over the
+			// roster, so every already-dead actor was re-counted on every
+			// later hour (458 versus an exact roster count of 3).
 			if a.Genome.DiedHour != world.NaturalNeverHour && a.Genome.DiedHour != a.Genome.DeathHour &&
-				hp >= 0 && hp < len(m.Patches) {
+				a.Genome.DiedHour == int64(c.Hour) && hp >= 0 && hp < len(m.Patches) {
 				m.Patches[hp].StarvationDeaths++
 			}
 			sn := naturalActorLedger{alive: naturalAlive(a), k: a.Worksite.Capital, granary: a.Granary.Stock,

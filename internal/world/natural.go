@@ -2167,12 +2167,20 @@ func (f *Natural) birthReplyWake(view scheduler.SnapshotView, hour int, request 
 
 // birthReplyDecision is the trusted reply-phase decision for one consenter
 // at h+40m+6µs: fresh full state, the derived pending views (claims plus the
-// PUBLIC kin walk), the frozen policy cascade, then the contract's own
-// consent + surplus-gate revalidation on truth. The newborn ID comes from
-// the runner-owned allocator as births-before + genesis: two same-instant
-// replies compute the SAME candidate, so the kernel's whole-proposal
-// collision rule keeps exactly one winner with typed lost-birth evidence for
-// the loser (the allocator advances only at committed registration).
+// PUBLIC kin walk), the frozen policy cascade. A policy refusal is final and
+// typed — a donor's refusal is always permissible and needs no truth
+// verification — so it resolves here from the policy's own reason and never
+// consults the contract's birth execution: the contract's frozen consent
+// floor is strictly WEAKER than the v6/v7 policy floor (energy >= 3 versus
+// TFile = 4), so a pair in that divergent band can pass the contract's
+// entire truth gate while the policy refused it, and evaluating the birth
+// anyway would execute — or crash building — a birth no decision committed.
+// Only a policy-accepted reply revalidates through the contract's consent +
+// surplus-gate on fresh truth; the newborn ID comes from the runner-owned
+// allocator as births-before + genesis: two same-instant replies compute the
+// SAME candidate, so the kernel's whole-proposal collision rule keeps
+// exactly one winner with typed lost-birth evidence for the loser (the
+// allocator advances only at committed registration).
 func (f *Natural) birthReplyDecision(view scheduler.SnapshotView, hour int, at sim.SimTime, consenter sim.EntityID) (kernel.Proposal, NaturalAttempt, error) {
 	var empty kernel.Proposal
 	w, err := f.worldState(view)
@@ -2183,11 +2191,6 @@ func (f *Natural) birthReplyDecision(view scheduler.SnapshotView, hour int, at s
 	if !ok {
 		return empty, NaturalAttempt{}, ErrNaturalRunner
 	}
-	genesisLast, err := NaturalHighestFixedEntityID(f.patches)
-	if err != nil {
-		return empty, NaturalAttempt{}, err
-	}
-	births := int64(f.allocator.Last() - genesisLast)
 	lookup := NaturalParentLookup(func(id sim.EntityID) (sim.EntityID, sim.EntityID, bool) {
 		a, ok := w.actors[id]
 		if !ok {
@@ -2233,29 +2236,51 @@ func (f *Natural) birthReplyDecision(view scheduler.SnapshotView, hour int, at s
 	}
 	distance, related := NaturalKinDistance(lookup, requester, consenter)
 	kinAllowed := !NaturalKinProhibited(distance, related)
-	// The heredity draws are a pure function of the birth ordinal
-	// (7 x (ordinal-1) on the frozen birth stream), so they are computed
-	// unconditionally: the contract's own truth gate can accept a pair whose
-	// POLICY floor refused it (the v6/v7 policy raises the consent energy
-	// floor to TFile=4 while the contract's frozen floor stays 3), and in
-	// that case the contract still needs the draws to build the child genome
-	// before the runner overrides the result with the policy's typed refusal.
-	// Computing them only on a policy accept left an empty slice on that path.
-	draws := make([]uint64, NaturalDrawsPerBirth)
-	var newbornID sim.EntityID
-	if position, err := NaturalBirthDrawPosition(births); err == nil {
-		stream := sim.NewRandomStream(sim.RandomState{Seed: f.seed, Stream: NaturalBirthStream, Position: position})
-		for i := range draws {
-			draws[i] = stream.Uint64()
+	var result NaturalReplyResult
+	switch choice.Kind {
+	case strategy.NaturalReplyRefuse:
+		// The policy's consent floor may be strictly STRONGER than the
+		// contract's frozen one (v6/v7 file/accept at own energy >= 4 versus
+		// the contract's NaturalConsentMinEnergy = 3), so the contract can
+		// derive an acceptance from its truth gate exactly where the policy
+		// refused. A donor's refusal is always permissible and needs no
+		// truth verification, so the policy's decision wins and the refusal
+		// is recorded with the policy's own typed reason (mapped into the
+		// contract's vocabulary). The structural guards stay exact: the
+		// pending views were built from exactly the request rows re-checked
+		// here, a duplicate reply returned None above, and a death between
+		// the request and reply phases — impossible within one hour, since
+		// deaths fire only at the pulse — is kept as the typed zero-mutation
+		// refusal with no recorded attempt (a dead consenter never acts).
+		if proposer.Request.Status != NaturalRequestPending || proposer.Request.Hour != int64(hour) || proposer.Request.Addressee != consenter {
+			return empty, NaturalAttempt{}, &NaturalRefusalError{Reason: NaturalRefusalNotPending}
 		}
-	}
-	if choice.Kind == strategy.NaturalReplyAccept {
+		switch {
+		case !naturalAlive(self):
+			return empty, NaturalAttempt{}, nil
+		case !naturalAlive(proposer):
+			return empty, NaturalAttempt{}, nil
+		default:
+			mapped, ok := naturalPolicyRefusalReason(choice.Reason)
+			if !ok {
+				return empty, NaturalAttempt{}, ErrNaturalRunner
+			}
+			result = NaturalReplyResult{Decision: NaturalReplyRefuse, Reason: mapped, Proposer: proposer, Consenter: self}
+			result.Proposer.Request.Status = NaturalRequestRefused
+			result.Consenter.Request.LastReplyHour = int64(hour)
+		}
+	case strategy.NaturalReplyAccept:
 		// The consent formula accepted on claims and the PUBLIC kin
 		// distance; the runner's own kin walk must agree before any draw or
 		// ID is spent.
 		if !kinAllowed {
 			return empty, NaturalAttempt{}, ErrNaturalRunner
 		}
+		genesisLast, err := NaturalHighestFixedEntityID(f.patches)
+		if err != nil {
+			return empty, NaturalAttempt{}, err
+		}
+		births := int64(f.allocator.Last() - genesisLast)
 		candidate := f.allocator.Last() + 1
 		if threshold, ok := f.thresholds[NaturalCeilingAllocatorIDs]; ok && uint64(candidate) > threshold {
 			hit := f.ceilingHit(NaturalCeilingAllocatorIDs, threshold, uint64(candidate), hour, view.Version)
@@ -2265,6 +2290,7 @@ func (f *Natural) birthReplyDecision(view scheduler.SnapshotView, hour int, at s
 			return empty, NaturalAttempt{}, &NaturalCeilingHitError{Hit: hit}
 		}
 		scratch := sim.NewEntityAllocator(f.allocator.Last())
+		var newbornID sim.EntityID
 		newbornID, err = NaturalNextNewbornID(&scratch)
 		if err != nil {
 			hit := f.ceilingHit(NaturalCeilingAllocatorIDs, ^uint64(0), uint64(f.allocator.Last()), hour, view.Version)
@@ -2273,27 +2299,37 @@ func (f *Natural) birthReplyDecision(view scheduler.SnapshotView, hour int, at s
 			f.pending.mu.Unlock()
 			return empty, NaturalAttempt{}, &NaturalCeilingHitError{Hit: hit}
 		}
-	}
-	result, err := NaturalBirthReplyFor(f.mechanism, f.patches, hour, kinAllowed, draws, newbornID, requester, consenter, proposer, self)
-	if err != nil {
-		return empty, NaturalAttempt{}, err
-	}
-	// Decision-level agreement (v4 verbatim, no birth-cap reason): the
-	// policy may accept while the runner-side fresh-truth gate refuses
-	// (CrossPatch, GateThresholds), but a consent-phase disagreement is a
-	// linkage break.
-	switch choice.Kind {
-	case strategy.NaturalReplyAccept:
-		switch result.Decision {
+		// The heredity draws are a pure function of the birth ordinal
+		// (7 x (ordinal-1) on the frozen birth stream) and are drawn only for
+		// a policy-accepted reply: the contract's birth execution needs them,
+		// and a refused reply never reaches it.
+		position, err := NaturalBirthDrawPosition(births)
+		if err != nil {
+			return empty, NaturalAttempt{}, err
+		}
+		stream := sim.NewRandomStream(sim.RandomState{Seed: f.seed, Stream: NaturalBirthStream, Position: position})
+		draws := make([]uint64, NaturalDrawsPerBirth)
+		for i := range draws {
+			draws[i] = stream.Uint64()
+		}
+		accepted, err := NaturalBirthReplyFor(f.mechanism, f.patches, hour, kinAllowed, draws, newbornID, requester, consenter, proposer, self)
+		if err != nil {
+			return empty, NaturalAttempt{}, err
+		}
+		// Decision-level agreement (v4 verbatim, no birth-cap reason): the
+		// policy may accept while the runner-side fresh-truth gate refuses
+		// (CrossPatch, GateThresholds), but a consent-phase disagreement is a
+		// linkage break.
+		switch accepted.Decision {
 		case NaturalReplyAccept:
 		case NaturalReplyRefuse:
-			switch result.Reason {
+			switch accepted.Reason {
 			case NaturalRefusalCrossPatch, NaturalRefusalGateThresholds:
 			default:
 				return empty, NaturalAttempt{}, ErrNaturalRunner
 			}
 		case NaturalReplyRefuseSilent:
-			switch result.Reason {
+			switch accepted.Reason {
 			case NaturalRefusalProposerDead, NaturalRefusalAddresseeDead:
 			default:
 				return empty, NaturalAttempt{}, ErrNaturalRunner
@@ -2301,43 +2337,7 @@ func (f *Natural) birthReplyDecision(view scheduler.SnapshotView, hour int, at s
 		default:
 			return empty, NaturalAttempt{}, ErrNaturalRunner
 		}
-	case strategy.NaturalReplyRefuse:
-		// The policy's consent floor may be strictly STRONGER than the
-		// contract's frozen one (v6/v7 file/accept at own energy >= 4 versus
-		// the contract's NaturalConsentMinEnergy = 3), so the contract can
-		// derive an acceptance from the truth gate that the policy refused.
-		// A donor's refusal is always permissible and needs no truth
-		// verification, so the policy's decision wins here and the refusal is
-		// recorded with the policy's own typed reason (mapped into the
-		// contract's vocabulary, the exact inverse of the accept-side
-		// tolerance above). Without this, the earlier empty-draws path made
-		// this case fail closed with a contract error instead of a refusal.
-		if result.Decision == NaturalReplyAccept {
-			mapped, ok := naturalPolicyRefusalReason(choice.Reason)
-			if !ok {
-				return empty, NaturalAttempt{}, ErrNaturalRunner
-			}
-			result = NaturalReplyResult{Decision: NaturalReplyRefuse, Reason: mapped, Proposer: result.Proposer, Consenter: result.Consenter}
-		}
-		if result.Decision != NaturalReplyRefuse {
-			return empty, NaturalAttempt{}, ErrNaturalRunner
-		}
-		switch choice.Reason {
-		case strategy.NaturalReplyReasonConsentOwn:
-			if result.Reason != NaturalRefusalConsentOwn {
-				return empty, NaturalAttempt{}, ErrNaturalRunner
-			}
-		case strategy.NaturalReplyReasonConsentClaims:
-			if result.Reason != NaturalRefusalConsentClaims {
-				return empty, NaturalAttempt{}, ErrNaturalRunner
-			}
-		case strategy.NaturalReplyReasonKin:
-			if result.Reason != NaturalRefusalKin || kinAllowed {
-				return empty, NaturalAttempt{}, ErrNaturalRunner
-			}
-		default:
-			return empty, NaturalAttempt{}, ErrNaturalRunner
-		}
+		result = accepted
 	default:
 		return empty, NaturalAttempt{}, ErrNaturalRunner
 	}
