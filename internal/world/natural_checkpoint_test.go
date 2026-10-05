@@ -19,8 +19,16 @@ import (
 )
 
 // naturalManifestFlagOffset is the manifest offset of the raw births flag
-// byte: magic + 16 u32 constants + 31 u64 constants + patches + R + seed.
-const naturalManifestFlagOffset = 4 + 16*4 + 31*8 + 8 + 8 + 8
+// byte, derived from the encoder itself (magic + the u32/u64 constant blocks
+// + patches + R + seed) so it cannot go stale when the constant lists change.
+// A flag-forgery fixture that used a stale offset would silently edit some
+// other field and be rejected by an unrelated guard, leaving the flag-enum
+// negative untested (the same hollow-negative class found in earlier lanes).
+func naturalManifestFlagOffset(t *testing.T) int {
+	t.Helper()
+	u32s, u64s := naturalManifestConstants()
+	return len(naturalCheckpointMagic) + 4*len(u32s) + 8*len(u64s) + 3*8
+}
 
 func naturalCaptureRoot(t *testing.T, seed uint64, births bool, workers int) (*Natural, string, [32]byte) {
 	t.Helper()
@@ -735,10 +743,11 @@ func TestNaturalCheckpointRejectsForgedScenarioFlagAndPolicy(t *testing.T) {
 	expectRejection("forged-manifest-tenure", forgedTenure, opts)
 	rawFlag := naturalRewriteBundle(t, rootPath, func(s []checkpoint.Section) {
 		raw := s[2].Data
-		if len(raw) <= naturalManifestFlagOffset {
+		offset := naturalManifestFlagOffset(t)
+		if len(raw) <= offset {
 			t.Fatalf("manifest layout changed: len=%d", len(raw))
 		}
-		raw[naturalManifestFlagOffset] = 2
+		raw[offset] = 2
 		sum := sha256.Sum256(raw[:len(raw)-sha256.Size])
 		copy(raw[len(raw)-sha256.Size:], sum[:])
 	})
@@ -1126,5 +1135,90 @@ func TestNaturalCheckpointLedgerAndAllocatorRestore(t *testing.T) {
 	}
 	if _, err := lowered.SaveCheckpoint(filepath.Join(t.TempDir(), "lowered.bundle")); !errors.Is(err, ErrNaturalCheckpoint) {
 		t.Fatal("published a bundle from a lowered-threshold runner")
+	}
+}
+
+// Review P1: the flag-enum guard must be bound by a test that NOTHING else can
+// catch. A bundle-level flag forgery is always also caught by the journal
+// config match, and a zero-valued manifest is caught by other validations, so
+// the enum branch is exercised directly on the decoder using a REAL captured
+// manifest whose only change is a raw byte outside {0,1} at the derived offset.
+func TestNaturalManifestFlagEnumIsBound(t *testing.T) {
+	// Use an h0 BRANCH CHILD (depth 1, births=true, boundary=false): setting
+	// its births byte to the raw value 2 leaves the decoded semantics
+	// unchanged, so every other manifest rule still passes and only the
+	// flag-enum guard can reject the bundle. A neutral root cannot isolate
+	// the enum branch (its births flag must equal its boundary topology).
+	opts := NaturalRestoreOptions{Patches: 2, R: 8, Seed: 0, Workers: 1}
+	_, rootPath, _ := naturalCaptureRoot(t, 0, false, 1)
+	childPath := filepath.Join(t.TempDir(), "flag-enum-child.bundle")
+	if _, err := BranchNaturalCheckpoint(rootPath, opts, true, childPath); err != nil {
+		t.Fatal(err)
+	}
+	sections, _, err := checkpoint.ReadFile(childPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded := sections[2].Data
+	offset := naturalManifestFlagOffset(t)
+	if len(encoded) <= offset+sha256.Size || encoded[offset] != 1 {
+		t.Fatalf("unexpected child manifest layout: len=%d byte=%d", len(encoded), encoded[offset])
+	}
+	if _, err := decodeNaturalManifest(bytes.Clone(encoded)); err != nil {
+		t.Fatalf("captured child manifest does not decode: %v", err)
+	}
+	body := bytes.Clone(encoded[:len(encoded)-sha256.Size])
+	body[offset] = 2
+	sum := sha256.Sum256(body)
+	raw := append(body, sum[:]...)
+	if _, err := decodeNaturalManifest(raw); !errors.Is(err, ErrNaturalCheckpoint) {
+		t.Fatalf("manifest with flag byte 2 decoded: %v", err)
+	}
+	if _, _, err := RestoreNaturalCheckpoint(childPath, opts); !errors.Is(err, ErrNaturalCheckpoint) {
+		t.Fatalf("child restored under the wrong scenario: %v", err)
+	}
+}
+
+// Review P1: the flag-offset arithmetic must be self-checking — encoding two
+// manifests that differ only in the births flag must differ in exactly the
+// byte the raw-flag forgery fixture edits, so that negative can never go
+// vacuous again.
+func TestNaturalManifestFlagOffsetIsExact(t *testing.T) {
+	base := naturalManifest{}
+	flagged := naturalManifest{births: true}
+	full, fullFlagged := encodeNaturalManifest(base), encodeNaturalManifest(flagged)
+	if len(full) != len(fullFlagged) {
+		t.Fatalf("manifest length changed with the flag: %d vs %d", len(full), len(fullFlagged))
+	}
+	// Compare the authenticated body only: the trailing digest legitimately
+	// changes with the flag, so it is not part of the flag-offset check.
+	left, right := full[:len(full)-sha256.Size], fullFlagged[:len(fullFlagged)-sha256.Size]
+	diff := -1
+	for i := range left {
+		if left[i] != right[i] {
+			if diff >= 0 {
+				t.Fatalf("flag toggles more than one byte: %d and %d", diff, i)
+			}
+			diff = i
+		}
+	}
+	if diff != naturalManifestFlagOffset(t) {
+		t.Fatalf("derived flag offset %d does not match the encoded difference %d", naturalManifestFlagOffset(t), diff)
+	}
+	if left[diff] != 0 || right[diff] != 1 {
+		t.Fatalf("unexpected flag byte values %d/%d", left[diff], right[diff])
+	}
+}
+
+// Review P2: the final horizon boundary schedules nothing, so its expectation
+// set must be empty rather than surfacing a raw contract error from the claim
+// instant lookup.
+func TestNaturalExpectedBoundaryWakesAtHorizonIsEmpty(t *testing.T) {
+	set, err := naturalExpectedBoundaryWakes(true, NaturalHorizonHours, []sim.EntityID{1, 2}, nil)
+	if err != nil {
+		t.Fatalf("horizon expectation set errored: %v", err)
+	}
+	if len(set) != 0 {
+		t.Fatalf("horizon expectation set not empty: %v", set)
 	}
 }

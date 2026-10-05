@@ -77,15 +77,17 @@ const (
 
 // NaturalRestoreOptions is the declared scenario a bundle must match
 // exactly: the fixture shape of NaturalOptions (P, R, seed, workers, births)
-// plus the lane's declared founder-tenure fixture flag. The worker count is
-// the caller's choice, never the bundle's.
+// plus the lane's declared founder-tenure fixture flag and the declared
+// cultivation-ablation intervention flag. The worker count is the caller's
+// choice, never the bundle's.
 type NaturalRestoreOptions struct {
-	Patches       int
-	R             int64
-	Seed          uint64
-	Workers       int
-	Births        bool
-	FounderTenure bool
+	Patches             int
+	R                   int64
+	Seed                uint64
+	Workers             int
+	Births              bool
+	FounderTenure       bool
+	CultivationDisabled bool
 }
 
 func (o NaturalRestoreOptions) validate() error {
@@ -100,6 +102,11 @@ func (o NaturalRestoreOptions) validate() error {
 	}
 	if o.FounderTenure && o.R < naturalFixtureMinBudget {
 		return fmt.Errorf("%w: fixture R %d below the coherent pre-history bound %d", ErrNaturalCheckpoint, o.R, naturalFixtureMinBudget)
+	}
+	// The cultivation ablation is declared on the organic genesis only: no
+	// frozen matrix cell combines it with the founder-tenure fixture.
+	if o.CultivationDisabled && o.FounderTenure {
+		return fmt.Errorf("%w: cultivation ablation with the founder-tenure fixture is not a declared scenario", ErrNaturalCheckpoint)
 	}
 	return nil
 }
@@ -116,7 +123,21 @@ func newNaturalReferenceRunner(expected NaturalRestoreOptions) (*Natural, error)
 		return newNaturalFixtureRunner(expected.Patches, expected.R, expected.Seed, expected.Births, expected.Workers)
 	}
 	return NewNatural(NaturalOptions{Patches: expected.Patches, R: expected.R, Seed: expected.Seed,
-		Workers: expected.Workers, Births: expected.Births})
+		Workers: expected.Workers, Births: expected.Births, CultivationDisabled: expected.CultivationDisabled})
+}
+
+// NewNaturalFixture builds the declared founder-tenure fixture world for the
+// experiment lane (frozen matrix cell E and the persistence lane's
+// after-births bundles). It is a declared experiment fixture — a deterministic
+// ledger-coherent function of exactly (P, R, seed) plus the continuation
+// flags — not a genesis variant of the ecology and not a state-injection
+// point: no caller-supplied slots, tenures, or ledgers exist. The fixture
+// stays run identity everywhere (journal config, checkpoint manifest,
+// restore, branch) with the existing bidirectional mismatch rejection; its
+// first pulse is naturalFixtureStartHour, so its first committed checkpoint
+// is hour 2.
+func NewNaturalFixture(patches int, r int64, seed uint64, births bool, workers int) (*Natural, error) {
+	return newNaturalFixtureRunner(patches, r, seed, births, workers)
 }
 
 // newNaturalFixtureRunner builds the declared founder-tenure fixture world
@@ -363,6 +384,7 @@ type naturalManifest struct {
 	births            bool // the continuation flag: the recorded intervention on a branch child
 	boundary          bool // the births flag of the shared first-hour prefix
 	tenure            bool // the declared founder-tenure fixture genesis
+	cultivation       bool // the declared cultivation-ablation intervention (cell D)
 	steps             int
 	time              sim.SimTime
 	head              kernel.PortableHead
@@ -423,6 +445,7 @@ func encodeNaturalManifest(m naturalManifest) []byte {
 	out = append(out, naturalBundleFlag(m.births))
 	out = append(out, naturalBundleFlag(m.boundary))
 	out = append(out, naturalBundleFlag(m.tenure))
+	out = append(out, naturalBundleFlag(m.cultivation))
 	out = binary.BigEndian.AppendUint32(out, uint32(m.steps))
 	out = binary.BigEndian.AppendUint64(out, uint64(m.time))
 	out = appendJournalHead(out, m.head)
@@ -467,7 +490,7 @@ func decodeNaturalManifest(data []byte) (naturalManifest, error) {
 		}
 	}
 	m.patches, m.r, m.seed = int(r.u64()), int64(r.u64()), r.u64()
-	for _, flag := range []*bool{&m.births, &m.boundary, &m.tenure} {
+	for _, flag := range []*bool{&m.births, &m.boundary, &m.tenure, &m.cultivation} {
 		switch byte(r.u8()) {
 		case 0:
 			*flag = false
@@ -494,6 +517,7 @@ func decodeNaturalManifest(data []byte) (naturalManifest, error) {
 	if r.bad || r.remaining() != 0 ||
 		!NaturalPatchCountValid(m.patches) || m.r < 0 || m.r > NaturalSlotsPerPatch ||
 		(m.tenure && m.r < naturalFixtureMinBudget) ||
+		(m.cultivation && m.tenure) ||
 		m.steps < 1 || m.steps > NaturalStepCeiling ||
 		m.time < 0 || m.time > sim.SimTime(NaturalHorizonHours)*sim.SimTime(NaturalHour) ||
 		m.time%sim.SimTime(NaturalHour) != 0 {
@@ -685,6 +709,13 @@ func encodeNaturalStrategy(f *Natural) ([]byte, error) {
 // exact match. At the final horizon boundary the pulse schedules nothing and
 // the exact expectation set is empty.
 func naturalExpectedBoundaryWakes(births bool, hour int, living []sim.EntityID, reserved map[sim.EntityID]int64) (map[scheduler.Wake]bool, error) {
+	// At the final horizon boundary the pulse schedules nothing, so the exact
+	// expectation set is empty. NaturalPhaseTime refuses h >= NaturalHorizonHours
+	// (the horizon hour has no claim instant), so this must return before the
+	// claim lookup rather than surface a raw contract error.
+	if hour == NaturalHorizonHours {
+		return map[scheduler.Wake]bool{}, nil
+	}
 	claim, err := NaturalPhaseTime(hour, NaturalPhaseClaim)
 	if err != nil {
 		return nil, err
@@ -1806,7 +1837,7 @@ func (f *Natural) SaveCheckpoint(path string) ([32]byte, error) {
 	// Do not publish a same-ref altered policy that a fresh executable would
 	// reject later: the independent constructor pins the current policy contract.
 	fresh, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: f.patches, R: f.r, Seed: f.seed,
-		Workers: 1, Births: f.births})
+		Workers: 1, Births: f.births, CultivationDisabled: f.cultivationDisabled})
 	if err != nil {
 		return [32]byte{}, ErrNaturalCheckpoint
 	}
@@ -1814,7 +1845,7 @@ func (f *Natural) SaveCheckpoint(path string) ([32]byte, error) {
 		return [32]byte{}, ErrNaturalCheckpoint
 	}
 	return f.saveBundle(path, fresh, f.births, naturalManifest{patches: f.patches, r: f.r, seed: f.seed,
-		births: f.births, boundary: f.births, steps: f.steps, time: f.sched.Time()})
+		births: f.births, boundary: f.births, cultivation: f.cultivationDisabled, steps: f.steps, time: f.sched.Time()})
 }
 
 // SaveResumeCheckpoint publishes a pulse-boundary continuation bundle: the
@@ -1848,7 +1879,7 @@ func (f *Natural) SaveResumeCheckpoint(path string) ([32]byte, error) {
 		return [32]byte{}, ErrNaturalCheckpoint
 	}
 	fresh, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: f.patches, R: f.r, Seed: f.seed,
-		Workers: 1, Births: f.births, FounderTenure: f.naturalRunnerTenure()})
+		Workers: 1, Births: f.births, FounderTenure: f.naturalRunnerTenure(), CultivationDisabled: f.cultivationDisabled})
 	if err != nil {
 		return [32]byte{}, ErrNaturalCheckpoint
 	}
@@ -1861,7 +1892,7 @@ func (f *Natural) SaveResumeCheckpoint(path string) ([32]byte, error) {
 	// boundary flags.
 	boundary := naturalBoundaryBirths(f.journal, f.checkpoints[0].Hour)
 	m := naturalManifest{patches: f.patches, r: f.r, seed: f.seed, births: f.births, boundary: boundary,
-		tenure: f.naturalRunnerTenure(), steps: f.steps, time: at}
+		tenure: f.naturalRunnerTenure(), cultivation: f.cultivationDisabled, steps: f.steps, time: at}
 	return f.saveBundle(path, fresh, boundary, m)
 }
 
@@ -1946,7 +1977,7 @@ func restoreNaturalSections(sections []checkpoint.Section, m naturalManifest, ex
 		return nil, fmt.Errorf("%w: %v", ErrNaturalCheckpoint, err)
 	}
 	fresh, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: m.patches, R: m.r, Seed: m.seed,
-		Workers: expected.Workers, Births: m.births, FounderTenure: m.tenure})
+		Workers: expected.Workers, Births: m.births, FounderTenure: m.tenure, CultivationDisabled: m.cultivation})
 	if err != nil {
 		return fail(err)
 	}
@@ -1979,7 +2010,7 @@ func restoreNaturalSections(sections []checkpoint.Section, m naturalManifest, ex
 	// (the v5 h0 pulse is births-asymmetric by frozen design).
 	identityConfig := NaturalJournalConfig{Patches: m.patches, R: m.r, Seed: m.seed,
 		Births: m.births, Boundary: m.boundary, FounderTenure: m.tenure,
-		Policy: fresh.ref}
+		CultivationDisabled: m.cultivation, Policy: fresh.ref}
 	fingerprint, err := naturalJournalFingerprint()
 	if err != nil {
 		return fail(err)
@@ -2161,7 +2192,8 @@ func naturalCheckedSections(path string) ([]checkpoint.Section, [32]byte, natura
 // declared genesis kind (neutral or founder-tenure fixture).
 func naturalManifestMatches(m naturalManifest, expected NaturalRestoreOptions) bool {
 	return m.patches == expected.Patches && m.r == expected.R && m.seed == expected.Seed &&
-		m.births == expected.Births && m.tenure == expected.FounderTenure
+		m.births == expected.Births && m.tenure == expected.FounderTenure &&
+		m.cultivation == expected.CultivationDisabled
 }
 
 // RestoreNaturalCheckpoint rebuilds an independent executable runner from a

@@ -70,9 +70,12 @@ type NaturalJournalConfig struct {
 	// FounderTenure declares the births-capable founder-tenure fixture
 	// genesis (natural_checkpoint.go). A neutral world and a fixture world
 	// with the same P/R/seed are different runs; the flag keeps them apart.
-	FounderTenure     bool
-	Policy            strategy.NaturalRef
-	PolicyFingerprint [32]byte
+	// CultivationDisabled declares the cultivation-ablation intervention
+	// (matrix cell D); it is run identity like the births flags.
+	FounderTenure       bool
+	CultivationDisabled bool
+	Policy              strategy.NaturalRef
+	PolicyFingerprint   [32]byte
 }
 
 // NaturalJournalCounts is the typed coverage manifest of one journal: the
@@ -116,6 +119,9 @@ func validNaturalJournalConfig(config NaturalJournalConfig) bool {
 	if config.FounderTenure && config.R < naturalFixtureMinBudget {
 		return false
 	}
+	if config.CultivationDisabled && config.FounderTenure {
+		return false
+	}
 	return config.Policy == strategy.FrozenNaturalPolicy().Ref
 }
 
@@ -132,7 +138,8 @@ func (f *Natural) journalConfig() NaturalJournalConfig {
 		fingerprint = [32]byte{}
 	}
 	return NaturalJournalConfig{Patches: f.patches, R: f.r, Seed: f.seed, Births: f.births, Boundary: f.births,
-		FounderTenure: f.naturalRunnerTenure(), Policy: f.ref, PolicyFingerprint: fingerprint}
+		FounderTenure: f.naturalRunnerTenure(), CultivationDisabled: f.cultivationDisabled,
+		Policy: f.ref, PolicyFingerprint: fingerprint}
 }
 
 // ExportJournal publishes committed evidence only, not a disk bundle. The
@@ -307,6 +314,7 @@ func decodeNaturalJournalWithScheduler(data []byte, k *kernel.Kernel, verified k
 func sameNaturalJournalConfig(a, b NaturalJournalConfig) bool {
 	return a.Patches == b.Patches && a.R == b.R && a.Seed == b.Seed &&
 		a.Births == b.Births && a.Boundary == b.Boundary && a.FounderTenure == b.FounderTenure &&
+		a.CultivationDisabled == b.CultivationDisabled &&
 		a.Policy == b.Policy && a.PolicyFingerprint == b.PolicyFingerprint
 }
 
@@ -451,7 +459,8 @@ func replayNaturalJournal(batches []NaturalBatch, config NaturalJournalConfig) (
 		return nil, ErrNaturalJournal
 	}
 	reference, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: config.Patches, R: config.R,
-		Seed: config.Seed, Workers: 1, Births: config.Boundary, FounderTenure: config.FounderTenure})
+		Seed: config.Seed, Workers: 1, Births: config.Boundary, FounderTenure: config.FounderTenure,
+		CultivationDisabled: config.CultivationDisabled})
 	if err != nil {
 		return nil, ErrNaturalJournal
 	}

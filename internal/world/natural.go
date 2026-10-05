@@ -474,6 +474,18 @@ type NaturalOptions struct {
 	Workers int
 	Births  bool
 
+	// CultivationDisabled is the declared cultivation ablation of the frozen
+	// matrix (cell D): an experiment intervention, never a mechanism or
+	// policy change. The frozen policy bytes are unchanged — the runner
+	// routes every policy Build choice through the existing documented
+	// build-denial loop (zero mutation, bag kept, LastDenial =
+	// NaturalBuildDenied, same-hour denial-eat), so no rule-505 event and no
+	// committed build attempt can exist; a fail-loud guard turns either into
+	// a runner error. The flag is part of run identity (journal config and
+	// checkpoint manifest, bidirectionally mismatch-checked like the births
+	// flag).
+	CultivationDisabled bool
+
 	// CeilingThresholds lowers frozen ceiling thresholds for the typed
 	// CeilingHit path (declared run identity; carried by the handoff). Only
 	// lowering is valid; an unknown ceiling or a raise is refused.
@@ -529,43 +541,44 @@ type naturalPending struct {
 // roster and every table are maps/slices keyed by allocator-issued IDs and
 // iterated in ascending ID order.
 type Natural struct {
-	mu             sync.Mutex
-	k              *kernel.Kernel
-	sched          *scheduler.Scheduler
-	registry       component.Registry
-	policies       *strategy.NaturalRegistry
-	ref            strategy.NaturalRef
-	bound          map[sim.EntityID]*strategy.NaturalBound
-	patches        int
-	seed           uint64
-	r              int64
-	births         bool
-	roster         []sim.EntityID // founders 1..8P then newborns ascending (sorted invariant)
-	newborns       []sim.EntityID // registration (= birth) order == ascending IDs
-	pulseLifecycle map[sim.EntityID]scheduler.Lifecycle
-	current        map[sim.EntityID]strategy.NaturalAction // Gather|Build activity in flight
-	denied         map[sim.EntityID]int64                  // last denied-gather hour
-	deniedBuild    map[sim.EntityID]int64                  // last refused-build hour (same-hour re-eat)
-	meals          map[sim.EntityID]NaturalMealIntent      // deferred paired/fallback meals
-	birthWakes     map[sim.EntityID]int64                  // newborn -> hour of its reserved WakeBirth claim
-	admissions     map[sim.EntityID]FoodFlowGatherAdmission
-	builds         map[sim.EntityID]naturalBuildOutcome
-	allocator      sim.EntityAllocator // last-ID cross-checked against the max roster ID at restore
-	pending        *naturalPending
-	journal        []NaturalBatch
-	checkpoints    []NaturalCheckpoint
-	steps          int
-	deathsAge      int64
-	deathsStarve   int64
-	birthFiles     int64
-	divergences    int64
-	refusals       map[NaturalRefusalReason]int64
-	ledger         *naturalLedger
-	thresholds     map[NaturalCeiling]uint64 // declared copy for the handoff
-	hits           []NaturalCeilingHit
-	halted         error
-	flow           [24]naturalHourFlow // trailing-24-pulse inflow/consumption ring
-	hourMeals      int64               // meals committed during the running hour
+	mu                  sync.Mutex
+	k                   *kernel.Kernel
+	sched               *scheduler.Scheduler
+	registry            component.Registry
+	policies            *strategy.NaturalRegistry
+	ref                 strategy.NaturalRef
+	bound               map[sim.EntityID]*strategy.NaturalBound
+	patches             int
+	seed                uint64
+	r                   int64
+	births              bool
+	roster              []sim.EntityID // founders 1..8P then newborns ascending (sorted invariant)
+	newborns            []sim.EntityID // registration (= birth) order == ascending IDs
+	pulseLifecycle      map[sim.EntityID]scheduler.Lifecycle
+	current             map[sim.EntityID]strategy.NaturalAction // Gather|Build activity in flight
+	denied              map[sim.EntityID]int64                  // last denied-gather hour
+	deniedBuild         map[sim.EntityID]int64                  // last refused-build hour (same-hour re-eat)
+	meals               map[sim.EntityID]NaturalMealIntent      // deferred paired/fallback meals
+	birthWakes          map[sim.EntityID]int64                  // newborn -> hour of its reserved WakeBirth claim
+	admissions          map[sim.EntityID]FoodFlowGatherAdmission
+	builds              map[sim.EntityID]naturalBuildOutcome
+	allocator           sim.EntityAllocator // last-ID cross-checked against the max roster ID at restore
+	pending             *naturalPending
+	journal             []NaturalBatch
+	checkpoints         []NaturalCheckpoint
+	steps               int
+	deathsAge           int64
+	deathsStarve        int64
+	birthFiles          int64
+	divergences         int64
+	refusals            map[NaturalRefusalReason]int64
+	ledger              *naturalLedger
+	thresholds          map[NaturalCeiling]uint64 // declared copy for the handoff
+	hits                []NaturalCeilingHit
+	halted              error
+	cultivationDisabled bool
+	flow                [24]naturalHourFlow // trailing-24-pulse inflow/consumption ring
+	hourMeals           int64               // meals committed during the running hour
 }
 
 func naturalField(field sim.FieldID, n int64) component.FieldSeed {
@@ -725,7 +738,8 @@ func NewNatural(o NaturalOptions) (*Natural, error) {
 		return nil, fmt.Errorf("%w: neutral h0 world breaks frozen conservation: %v", ErrNaturalRunner, err)
 	}
 	f := &Natural{registry: reg, policies: policies, ref: policy.Ref, patches: o.Patches, seed: o.Seed, r: o.R, births: o.Births,
-		bound: make(map[sim.EntityID]*strategy.NaturalBound), allocator: allocator, ledger: ledger, thresholds: thresholds,
+		cultivationDisabled: o.CultivationDisabled,
+		bound:               make(map[sim.EntityID]*strategy.NaturalBound), allocator: allocator, ledger: ledger, thresholds: thresholds,
 		pulseLifecycle: make(map[sim.EntityID]scheduler.Lifecycle), current: make(map[sim.EntityID]strategy.NaturalAction),
 		denied: make(map[sim.EntityID]int64), deniedBuild: make(map[sim.EntityID]int64), meals: make(map[sim.EntityID]NaturalMealIntent),
 		birthWakes: make(map[sim.EntityID]int64), refusals: make(map[NaturalRefusalReason]int64)}
@@ -1572,6 +1586,22 @@ func (f *Natural) evaluate(_ context.Context, ready scheduler.ReadyFiber, view s
 		}
 		switch choice.Kind {
 		case strategy.NaturalBuild:
+			if f.cultivationDisabled {
+				// Declared cultivation ablation (frozen matrix cell D): the
+				// frozen policy is unchanged — it chose Build and the runner
+				// treats the choice as the documented unavailable case. Zero
+				// mutation, the bag kept, the hour's denial recorded, and the
+				// paired-instant audit wake so the documented denial loop
+				// (LastDenial = NaturalBuildDenied → policy emits Eat) decides
+				// the meal. No build-start wake exists, so no completion, no
+				// slot claim, and no rule-505 event can arise; the Step-level
+				// ablation guard fails loud if one ever does.
+				f.pending.mu.Lock()
+				f.pending.deniedBuild = append(f.pending.deniedBuild, id)
+				f.pending.mu.Unlock()
+				out.Effects = append(out.Effects, scheduler.Effect{Kind: scheduler.EffectSchedule, Actor: id, Wake: scheduler.Wake{Actor: id, At: paired, Cause: scheduler.WakeAudit}})
+				break
+			}
 			f.pending.mu.Lock()
 			if naturalPairIntent(a, h) {
 				f.pending.meals[id] = NaturalMealIntent{Hour: h, Paired: true}
@@ -2281,6 +2311,27 @@ func naturalLinkAttempt(a *NaturalAttempt, ids map[string]sim.EventID) error {
 
 // ceilingHit assembles the typed evidence with the runner's current
 // run-state context.
+// naturalAblationEventGuard fails loud on any rule-505 event while the
+// declared cultivation ablation is on (frozen matrix cell D): the ablation
+// routes every policy Build choice through the documented denial loop, so a
+// committed build event is a runner defect, never an ecology outcome.
+func (f *Natural) naturalAblationEventGuard(rule sim.RuleID) error {
+	if rule == NaturalBuildRule {
+		return fmt.Errorf("%w: cultivation ablation committed a rule-505 build event", ErrNaturalRunner)
+	}
+	return nil
+}
+
+// naturalAblationAttemptGuard is the attempt-level twin of
+// naturalAblationEventGuard: no committed build attempt may be recorded
+// while the ablation is on.
+func (f *Natural) naturalAblationAttemptGuard(kind string) error {
+	if kind == "build" {
+		return fmt.Errorf("%w: cultivation ablation recorded a committed build attempt", ErrNaturalRunner)
+	}
+	return nil
+}
+
 func (f *Natural) ceilingHit(ceiling NaturalCeiling, threshold, observed uint64, hour int, version sim.WorldVersion) NaturalCeilingHit {
 	hit := NaturalCeilingHit{Ceiling: ceiling, Threshold: threshold, Observed: observed, Hour: hour, WorldVersion: version}
 	hit.Births = int64(len(f.newborns))
@@ -2444,9 +2495,21 @@ func (f *Natural) Step(ctx context.Context) (bool, error) {
 	for _, ev := range events {
 		ids[ev.Key] = ev.ID
 	}
+	if f.cultivationDisabled {
+		for _, ev := range events {
+			if err := f.naturalAblationEventGuard(ev.Rule); err != nil {
+				return false, err
+			}
+		}
+	}
 	head := f.k.SnapshotHead()
 	batch := NaturalBatch{Time: at, Version: head.Version, TipID: head.TipID, TipHash: head.TipHash}
 	for _, a := range f.pending.attempts {
+		if f.cultivationDisabled {
+			if err := f.naturalAblationAttemptGuard(a.Kind); err != nil {
+				return false, err
+			}
+		}
 		if err := naturalLinkAttempt(&a, ids); err != nil {
 			return false, err
 		}
