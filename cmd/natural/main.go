@@ -1926,7 +1926,7 @@ func v7BandsFor(o options, br *branchReport) []bandReport {
 			a5Within = deref.NonUniversality.DeathsToHorizon >= 1 && deref.NonUniversality.StrictSubset
 			a5Observed = fmt.Sprintf("at first sustained hour h%d: alive=%d, surplus_bearing=%v, strict_subset=%t; deaths_to_horizon=%d (starvation=%d, age=%d)",
 				deref.NonUniversality.FirstSustainedHour, deref.NonUniversality.AliveAtFirstSustainedHour, deref.NonUniversality.SurplusBearingAtFirstSustainedHour, deref.NonUniversality.StrictSubset,
-				deref.NonUniversality.DeathsToHorizon, pop.DeathsStarvationByHour[len(pop.DeathsStarvationByHour)-1], pop.DeathsAgeByHour[len(pop.DeathsAgeByHour)-1])
+				deref.NonUniversality.DeathsToHorizon, sumHours(pop.DeathsStarvationByHour), sumHours(pop.DeathsAgeByHour))
 		}
 		bands = append(bands, bandReport{Name: "V7-A5: non-universality (gating)", Criterion: "in every A cell hosting a sustained-surplus actor, ≥1 death before h168 ∧ the surplus-bearing set at the first sustained hour is a strict subset of the alive set (zero mortality with universal surplus ⇒ suspect accounting or hidden subsidy ⇒ defect investigation)",
 			Observed:   a5Observed,
@@ -2580,7 +2580,7 @@ func v8BandsFor(o options, br *branchReport) []bandReport {
 			a5Within = m.NonUniversality.DeathsToHorizon >= 1 && m.NonUniversality.StrictSubset
 			a5Observed = fmt.Sprintf("at first sustained hour h%d: alive=%d, surplus_bearing=%v, strict_subset=%t; deaths_to_horizon=%d (starvation=%d, age=%d)",
 				m.NonUniversality.FirstSustainedHour, m.NonUniversality.AliveAtFirstSustainedHour, m.NonUniversality.SurplusBearingAtFirstSustainedHour, m.NonUniversality.StrictSubset,
-				m.NonUniversality.DeathsToHorizon, pop.DeathsStarvationByHour[len(pop.DeathsStarvationByHour)-1], pop.DeathsAgeByHour[len(pop.DeathsAgeByHour)-1])
+				m.NonUniversality.DeathsToHorizon, sumHours(pop.DeathsStarvationByHour), sumHours(pop.DeathsAgeByHour))
 		}
 		bands = append(bands, bandReport{Name: "V8-A5: non-universality (gating)", Criterion: "in every A12 cell hosting a sustained-surplus actor, ≥1 death before h168 ∧ the surplus-bearing set at the first sustained hour is a strict subset of the alive set (zero mortality with universal surplus ⇒ suspect accounting or hidden subsidy ⇒ defect investigation)",
 			Observed:   a5Observed,
@@ -2614,6 +2614,16 @@ func v8BandsFor(o options, br *branchReport) []bandReport {
 			kOK := kMax >= v8PatchKFloor
 			kWithin = kWithin && kOK
 			kClauses = append(kClauses, fmt.Sprintf("max_Σk_under_capacity_through_h%d=%d (≥ %d: %t)", v8PatchKDeadlineHour, kMax, v8PatchKFloor, kOK))
+		}
+		// Review P2 (ticket-18 final): on a cell with NO under-capacity patch
+		// (the saturated A16 control arm) every K clause is vacuous, so the
+		// band must report vacuous-true rather than letting the degenerate
+		// share clause (no surplus holder at all) record a false MISS. V8-K
+		// gates only on under-capacity cells by construction.
+		if len(uc) == 0 {
+			return append(bands, bandReport{Name: "V8-K: capital persistence on the under-capacity patch (gating)", Criterion: "first tenured slot on the under-capacity patch ≤ h4 ∧ max Σk over that patch's hours ≤ h24 ≥ 6 ∧ the first surplus-bearing actor's share of alive hours with k≥1 ≥ 0.5",
+				Observed:   "vacuous for this cell: no under-capacity patch exists (saturated control arm)",
+				WithinBand: true})
 		}
 		share := 0.0
 		shareOK := false

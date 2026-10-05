@@ -29,7 +29,7 @@ import (
 //	    land:           tenuredSlots(patch) = Σk over ALL tenure holders
 //	                    (dead included) ≤ 8, each tenured slot's owner an
 //	                    existing actor whose home patch is that patch
-//	G3  energy:         11·8P + 8·births + Σconsumed + ΣstoredMeals =
+//	G3  energy:         11·f + 8·births + Σconsumed + ΣstoredMeals =
 //	                    Σenergy + ΣbasalSpent + ΣcapLoss, and per newborn
 //	                    cohort 8 + consumed + stored = energy + basal + cap
 type NaturalPatchState struct{ Yield, Pulses, Produced, Granted, Unrealized int64 }
@@ -1312,7 +1312,7 @@ func NaturalAgeDeath(patches, hour int, actorID sim.EntityID, genome NaturalGeno
 //		    whose home is that patch. (During a dead owner's decay window the
 //		    alive-only equality is weaker by exactly the dead owner's standing
 //		    capital; the all-tenure-holders form is the exact invariant.)
-//		G3  11·8P + 8·births + Σconsumed + ΣstoredMeals = Σenergy + Σbasal +
+//		G3  11·f + 8·births + Σconsumed + ΣstoredMeals = Σenergy + Σbasal +
 //		    ΣcapLoss, with the per-newborn cohort identity 8 + consumed +
 //		    storedMeals = energy + basalSpent + capLoss.
 //
