@@ -1593,3 +1593,18 @@ func TestNaturalLabourSettleKernelAdmission(t *testing.T) {
 		t.Fatalf("518 staged against the v5 registry: %v", err)
 	}
 }
+
+// Review P2 (ticket-20 L1): the never-filed offer shape must pin the reply
+// hour too, so a row cannot carry a reply on an unfiled offer.
+func TestNaturalV7LabourOfferNeverFiledPinsAllFields(t *testing.T) {
+	patches := 2
+	state := NaturalIdleLabourOfferState()
+	if !validNaturalLabourOffer(patches, 1, state) {
+		t.Fatal("idle offer state rejected")
+	}
+	forged := state
+	forged.LastReplyHour = 7
+	if validNaturalLabourOffer(patches, 1, forged) {
+		t.Fatal("unfiled offer accepted a reply hour")
+	}
+}

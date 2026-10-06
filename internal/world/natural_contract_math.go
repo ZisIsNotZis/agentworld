@@ -394,7 +394,10 @@ func validNaturalLabourOffer(patches int, owner sim.EntityID, o NaturalLabourOff
 	switch o.Status {
 	case NaturalRequestIdle:
 		if o.Hour == NaturalNeverHour {
-			return o.Addressee == 0 && o.LastOfferHour == NaturalNeverHour
+			// Review P2 (ticket-20 L1): the never-filed shape must pin every
+			// touched field, symmetrically with the labour-book validator; an
+			// unfiled row can carry no reply hour either.
+			return o.Addressee == 0 && o.LastOfferHour == NaturalNeverHour && o.LastReplyHour == NaturalNeverHour
 		}
 		// Cleared-with-audit: the last filing is retained for the audit.
 		return o.Addressee != 0 && o.Addressee != owner && naturalActorEntity(patches, o.Addressee)
