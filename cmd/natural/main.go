@@ -161,15 +161,17 @@ const (
 	mechanismV5Name        = "v5"
 	mechanismV6Name        = "v6"
 	mechanismV7Name        = "v7"
-	// The frozen v9 verdict labels and the house fallback for the corner the
-	// three frozen implications do not partition (gates IN, settlements > 0,
-	// both descriptive channels null): labelled no-frozen-verdict-fired with
-	// the full rationale verbatim, the same convention as the v5 reporter's
-	// no-frozen-branch-fired. Never a fourth frozen label.
-	v9VerdictSupported     = "SUPPORTED"
-	v9VerdictNullTrade     = "NULL-TRADE"
-	v9VerdictFailed        = "FAILED"
-	v9VerdictNoBranchFired = "no-frozen-verdict-fired"
+	// The frozen v9 verdict labels plus the corner label the ticket-20 record
+	// DECLARED BEFORE THE MATRIX RAN (spec comment: "the corner is declared as
+	// its own outcome label, TRADE-INERT - trade occurred and was correctly
+	// recorded, but neither channel produced a measurable effect"). The
+	// reporter emits the declared label, so the report bytes and the recorded
+	// vocabulary agree; the frozen three branches are unchanged and this label
+	// is reachable only in that corner.
+	v9VerdictSupported  = "SUPPORTED"
+	v9VerdictNullTrade  = "NULL-TRADE"
+	v9VerdictFailed     = "FAILED"
+	v9VerdictTradeInert = "TRADE-INERT"
 )
 
 // The predeclared ticket-16 v6 gate constants (frozen design, quoted): the
@@ -2889,7 +2891,7 @@ type v9MetricsReport struct {
 // NULL-TRADE iff T2/T3/T6 IN with zero settlements; FAILED iff any gating
 // discipline band is OUT. The corner the three frozen implications do not
 // partition (gates IN, settlements > 0, both descriptive channels null) is
-// labelled no-frozen-verdict-fired with the rationale verbatim, the v5
+// labelled TRADE-INERT (declared pre-run) with the rationale verbatim, the v5
 // reporter's no-frozen-branch-fired convention — never a fourth frozen
 // verdict label.
 type v9VerdictReport struct {
@@ -3866,9 +3868,9 @@ func voidCauseSummary(causes map[string]int64) string {
 // branches: SUPPORTED iff T1∧T2∧T3∧T6 IN and (T4∨T5) observed; NULL-TRADE
 // iff T2/T3/T6 IN with zero settlements; FAILED iff any gating discipline
 // band is OUT. The corner the three frozen implications do not partition
-// (gates IN, settlements > 0, both descriptive channels null) is labelled
-// no-frozen-verdict-fired with the rationale verbatim — the v5 reporter's
-// no-frozen-branch-fired convention, never a fourth frozen label.
+// (gates IN, settlements > 0, both descriptive channels null) carries the
+// label the ticket-20 record declared pre-run, TRADE-INERT, with the
+// rationale verbatim.
 func v9VerdictFor(r report) *v9VerdictReport {
 	v := &v9VerdictReport{FirstSettlementHour: -1, T1In: true, T2In: true, T3In: true, T6In: true}
 	var missing []string
@@ -3913,8 +3915,8 @@ func v9VerdictFor(r report) *v9VerdictReport {
 		v.Verdict = v9VerdictSupported
 		v.Rationale = fmt.Sprintf("SUPPORTED: T1∧T2∧T3∧T6 IN with settlements=%d (first at h%d) and a channel observed (T4=%t, T5=%t)", v.Settlements, v.FirstSettlementHour, v.T4Observed, v.T5Observed)
 	default:
-		v.Verdict = v9VerdictNoBranchFired
-		v.Rationale = fmt.Sprintf("no frozen verdict fired: the gates are IN with settlements=%d (first at h%d) but neither descriptive channel observed evidence (T4=%t, T5=%t) — the frozen implications label this corner no-frozen-verdict-fired and the named nulls inside T4/T5 carry the outcome verbatim", v.Settlements, v.FirstSettlementHour, v.T4Observed, v.T5Observed)
+		v.Verdict = v9VerdictTradeInert
+		v.Rationale = fmt.Sprintf("TRADE-INERT (declared pre-run): the gates are IN with settlements=%d (first at h%d) but neither descriptive channel observed evidence (T4=%t, T5=%t) — trade occurred and was correctly recorded, yet neither channel produced a measurable effect; the named nulls inside T4/T5 carry the outcome verbatim", v.Settlements, v.FirstSettlementHour, v.T4Observed, v.T5Observed)
 	}
 	return v
 }

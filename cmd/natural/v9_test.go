@@ -321,7 +321,7 @@ func TestNaturalCLIV9ReportSchema(t *testing.T) {
 		t.Fatal("natural/9 report carries no v9_verdict")
 	}
 	switch verdict["verdict"] {
-	case v9VerdictSupported, v9VerdictNullTrade, v9VerdictFailed, v9VerdictNoBranchFired:
+	case v9VerdictSupported, v9VerdictNullTrade, v9VerdictFailed, v9VerdictTradeInert:
 	default:
 		t.Fatalf("verdict outside the frozen label set: %v", verdict["verdict"])
 	}
@@ -750,5 +750,21 @@ func TestNaturalCLIV9WageLedgerGenerationTable(t *testing.T) {
 		if strings.HasPrefix(b.Name, "V9-T3") && b.WithinBand {
 			t.Fatal("T3 must report OUT with a patch-hour wage imbalance")
 		}
+	}
+}
+
+// Review P1 (ticket-20 final): the reporter must emit the corner label the
+// ticket declared BEFORE the matrix ran (TRADE-INERT), not the superseded
+// placeholder, so the report bytes and the recorded vocabulary agree. The
+// three frozen branches must stay unchanged.
+func TestNaturalCLIV9TradeInertLabelIsTheDeclaredOne(t *testing.T) {
+	if v9VerdictTradeInert != "TRADE-INERT" {
+		t.Fatalf("declared corner label changed: %q", v9VerdictTradeInert)
+	}
+	if v9VerdictSupported != "SUPPORTED" || v9VerdictNullTrade != "NULL-TRADE" || v9VerdictFailed != "FAILED" {
+		t.Fatal("the three frozen verdict labels changed")
+	}
+	if strings.Contains(strings.Join([]string{v9VerdictSupported, v9VerdictNullTrade, v9VerdictFailed, v9VerdictTradeInert}, ","), "no-frozen") {
+		t.Fatal("the superseded placeholder is still among the labels")
 	}
 }
