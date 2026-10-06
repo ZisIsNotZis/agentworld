@@ -51,6 +51,18 @@ import (
 // version-gated granary field. No frozen constant and no frozen v5 field
 // list is mutated; if parameterization ever required that, the declared
 // stop condition is to split the world into a parallel file family instead.
+//
+// Ticket 20 (the frozen v9 wage-contract design,
+// .scratch/20-exchange-design/spec.md) declares NaturalMechanismV7 (world
+// axis version 7), strictly additive over v6: rules 516 labour-offer,
+// 517 labour-decision, 518 labour-settlement, and 519 labour-expiry/void,
+// the two recorded-block components 0x80000058 natural-labour-offer and
+// 0x80000059 natural-labour-book (0x8000005A stays spare in every
+// version), the granary wage ledgers 8 wages-paid / 9 wages-earned, the
+// G2a″ identity, and the enumerated G5 admissions. Everything the v5 and
+// v6 mechanisms produce stays byte-identical; the v5/v6 rule tables and
+// the frozen six-entry granary field list are pinned by the registry
+// fingerprint goldens captured from the pre-ticket-20 revision.
 var ErrNaturalContract = errors.New("invalid natural v5 contract")
 
 const (
@@ -142,6 +154,15 @@ const (
 	// stored-meal draw and the provision share the LastStoredMealHour
 	// guard — so provisions cannot exceed the horizon.
 	NaturalProvisionedMax int64 = NaturalHorizonHours // 168
+
+	// NaturalWagesMax is the mechanism-v7-only wage-ledger envelope (ticket
+	// 20): a worker earns at most one wage per hour (the bag discipline —
+	// one delivery per gathered unit per hour), and an employer pays at
+	// most one wage per settlement while every settlement invests exactly
+	// one worksite unit, so neither wage ledger can pass the horizon
+	// envelope. Like every ledger bound it is a horizon envelope that
+	// cannot bind behavior before h=168 (P15), never a behaviour cap.
+	NaturalWagesMax int64 = NaturalHorizonHours // 168
 )
 
 const (
@@ -155,7 +176,10 @@ const (
 
 	// The frozen v5 type-ID block. The eight components below occupy
 	// 0x80000050-0x80000057 contiguously; 0x80000058-0x8000005A stay inside
-	// the frozen block and are never used by any other world version.
+	// the frozen block. Under the v5 and v6 mechanisms all three remain
+	// unused; mechanism v7 registers the wage-contract rows on 0x80000058
+	// and 0x80000059 (ticket 20, inside the recorded free block), and
+	// 0x8000005A stays spare in every version forever.
 	NaturalTypeBlockFirst sim.ComponentTypeID = 0x80000050
 	NaturalTypeBlockLast  sim.ComponentTypeID = 0x8000005A
 
@@ -167,6 +191,13 @@ const (
 	NaturalGranaryTypeID      sim.ComponentTypeID = 0x80000055
 	NaturalGenomeTypeID       sim.ComponentTypeID = 0x80000056
 	NaturalBirthRequestTypeID sim.ComponentTypeID = 0x80000057
+
+	// The mechanism-v7-only wage-contract components (ticket 20). The offer
+	// row is the worker's addressed labour offer (the birth-request field
+	// set minus the self-reported claims); the book row is the employer's
+	// single engagement slot.
+	NaturalLabourOfferTypeID sim.ComponentTypeID = 0x80000058
+	NaturalLabourBookTypeID  sim.ComponentTypeID = 0x80000059
 
 	NaturalRegenSplitRule   sim.RuleID = 501 // regen-split (world, pulse)
 	NaturalSpoilageRule     sim.RuleID = 502 // spoilage (world, pulse)
@@ -188,6 +219,22 @@ const (
 	// granary stock unit into one bag unit (stock−1, provisioned+1,
 	// LastStoredMealHour = hour, bag+1). The v5 rule table stays 501-514.
 	NaturalProvisionRule sim.RuleID = 515 // provision (actor; claim instant; mechanism v6 only)
+
+	// The wage-contract rules (ticket 20) exist only under
+	// NaturalMechanismV7; the v5 and v6 rule tables stay exactly 501-515.
+	// Rule 516 labour-offer files the worker's addressed offer on its own
+	// labour-offer row at h+40m+5µs (the birth-request instant). Rule 517
+	// labour-decision is the addressed employer's accept/refuse at
+	// h+40m+6µs (the birth-reply instant), one decision per actor-hour.
+	// Rule 518 labour-settlement is the atomic wage settlement caused by
+	// the worker at h+40m+3µs (the build-completion instant), folded with
+	// the frozen point completion when wip reaches 2. Rule 519
+	// labour-expiry/void is the world-caused pulse rule: unanswered offers
+	// expire and void contracts clear (the 513 discipline verbatim).
+	NaturalLabourOfferRule      sim.RuleID = 516 // labour-offer (actor; h+40m+5µs; mechanism v7 only)
+	NaturalLabourDecisionRule   sim.RuleID = 517 // labour-decision (actor; h+40m+6µs; mechanism v7 only)
+	NaturalLabourSettlementRule sim.RuleID = 518 // labour-settlement (actor; h+40m+3µs; mechanism v7 only)
+	NaturalLabourExpireRule     sim.RuleID = 519 // labour-expiry/void (world, pulse; mechanism v7 only)
 )
 
 const (
@@ -240,6 +287,14 @@ const (
 	// after the frozen v5 fields so the frozen six identities never shift;
 	// the v5 granary schema keeps exactly fields 1-6.
 	NaturalGranaryProvisionedField
+
+	// NaturalGranaryWagesPaidField (8) and NaturalGranaryWagesEarnedField
+	// (9) are the mechanism-v7-only wage ledgers of rule 518 (ticket 20):
+	// units paid as wages by an employer and received as wages by a worker.
+	// They are appended after the provisioned field so the frozen six
+	// identities and the v6 seven-field list never shift.
+	NaturalGranaryWagesPaidField
+	NaturalGranaryWagesEarnedField
 )
 const (
 	NaturalGenomeLocusMField sim.FieldID = 1 + iota
@@ -261,13 +316,35 @@ const (
 	NaturalBirthRequestLastRequestHourField
 	NaturalBirthRequestLastReplyHourField
 )
+const (
+	// The mechanism-v7-only labour-offer row: the birth-request field set
+	// minus the self-reported claims, terms fixed by the frozen design —
+	// there is no claim field and no price field (the wage is derived 1:1).
+	NaturalLabourOfferHourField sim.FieldID = 1 + iota
+	NaturalLabourOfferAddresseeField
+	NaturalLabourOfferStatusField
+	NaturalLabourOfferLastOfferHourField
+	NaturalLabourOfferLastReplyHourField
+)
+const (
+	// The mechanism-v7-only labour-book row: the employer's single
+	// engagement slot (engaged worker and the hour of engagement) plus the
+	// one-decision-per-actor-hour bookkeeping.
+	NaturalLabourBookEngagedWorkerField sim.FieldID = 1 + iota
+	NaturalLabourBookEngagedHourField
+	NaturalLabourBookLastDecisionHourField
+)
 
 // Frozen pulse order inside hour h, byte-identical to v4's frozen phase
 // offsets: pulse stages (basal, regen-split, spoilage, wear) at the hour
 // boundary; claims at h+1µs; gather completion at h+20m+1µs; bag decision at
 // h+20m+2µs; build start at h+20m+3µs completing at h+40m+3µs with the
 // atomic bag→wip/k conversion and slot claim; paired EatStored at
-// h+40m+4µs; birth request at h+40m+5µs; birth reply at h+40m+6µs.
+// h+40m+4µs; birth request at h+40m+5µs; birth reply at h+40m+6µs. The
+// mechanism-v7 labour phases reuse the frozen instants additively — no new
+// phase instant exists (ticket 20): settlement at the h+40m+3µs build
+// completion, offer at the h+40m+5µs request instant, decision at the
+// h+40m+6µs reply instant.
 const (
 	NaturalPhasePulse int = iota
 	NaturalPhaseClaim
@@ -277,17 +354,25 @@ const (
 	NaturalPhasePairedMeal
 	NaturalPhaseBirthRequest
 	NaturalPhaseBirthReply
+	NaturalPhaseLabourSettle
+	NaturalPhaseLabourOffer
+	NaturalPhaseLabourDecision
 )
 
 // NaturalMechanism is the declared mechanism-version axis of the natural
-// world (ticket 17 v7 design). The zero value is exactly the frozen v5
-// mechanism: every descriptor, version field, and name it produces is
-// byte-identical to the frozen v5 bytes. NaturalMechanismV6 (world axis
-// version 6) is the only other admitted value and is strictly additive:
-// rule 515, the granary provisioned field, G2a′, and the widened writer
-// admissions exist only under it. Recording caution pinned by the design:
-// this is the WORLD axis, never to be conflated with the policy formats
-// natural/5 | natural/6 | natural/7.
+// world (ticket 17 v7 design; extended by ticket 20's frozen v9 wage
+// contract). The zero value is exactly the frozen v5 mechanism: every
+// descriptor, version field, and name it produces is byte-identical to the
+// frozen v5 bytes. NaturalMechanismV6 (world axis version 6) and
+// NaturalMechanismV7 (world axis version 7) are the only other admitted
+// values and are strictly additive: rule 515, the granary provisioned
+// field, G2a′, and the widened writer admissions exist only under v6 and
+// v7; the wage-contract rules 516-519, the two recorded-block components,
+// the granary wage ledgers, G2a″, and their G5 admissions exist only under
+// v7. Recording caution pinned by the design: this is the WORLD axis, never
+// to be conflated with the policy formats natural/5 | natural/6 |
+// natural/7 (world-axis 7 colliding typographically with policy natural/7
+// is the pinned ticket-17 naming caution).
 type NaturalMechanism uint16
 
 const (
@@ -295,21 +380,29 @@ const (
 	NaturalMechanismV5 NaturalMechanism = 0
 	// NaturalMechanismV6 adds rule 515 "provision" (world axis version 6).
 	NaturalMechanismV6 NaturalMechanism = 6
+	// NaturalMechanismV7 adds the wage contract (world axis version 7,
+	// ticket 20): rules 516-519, components 0x80000058/0x80000059, granary
+	// wage ledgers, G2a″, and the enumerated G5 admissions.
+	NaturalMechanismV7 NaturalMechanism = 7
 )
 
 // NaturalMechanismValid reports the admitted axis values: the zero value
-// (≡ v5) and 6. Literal 5 is not a second spelling of v5 — the zero value
-// is the one v5 spelling — and everything else fails closed.
+// (≡ v5), 6, and 7. Literal 5 is not a second spelling of v5 — the zero
+// value is the one v5 spelling — and everything else fails closed.
 func NaturalMechanismValid(m NaturalMechanism) bool {
-	return m == NaturalMechanismV5 || m == NaturalMechanismV6
+	return m == NaturalMechanismV5 || m == NaturalMechanismV6 || m == NaturalMechanismV7
 }
 
 // worldVersion is the world axis version number of the mechanism: 5 for the
-// zero value, 6 for NaturalMechanismV6. Anything else is unreachable
-// through NaturalRegistryFor and falls back to the frozen v5 identity.
+// zero value, 6 for NaturalMechanismV6, 7 for NaturalMechanismV7. Anything
+// else is unreachable through NaturalRegistryFor and falls back to the
+// frozen v5 identity.
 func (m NaturalMechanism) worldVersion() uint32 {
-	if m == NaturalMechanismV6 {
+	switch m {
+	case NaturalMechanismV6:
 		return 6
+	case NaturalMechanismV7:
+		return 7
 	}
 	return 5
 }
@@ -441,7 +534,7 @@ func NaturalHourTime(h int) (sim.SimTime, error) {
 }
 
 func NaturalPhaseTime(hour int, phase int) (sim.SimTime, error) {
-	if hour < 0 || hour >= NaturalHorizonHours || phase < NaturalPhasePulse || phase > NaturalPhaseBirthReply {
+	if hour < 0 || hour >= NaturalHorizonHours || phase < NaturalPhasePulse || phase > NaturalPhaseLabourDecision {
 		return 0, ErrNaturalContract
 	}
 	at, _ := NaturalHourTime(hour)
@@ -459,6 +552,15 @@ func NaturalPhaseTime(hour int, phase int) (sim.SimTime, error) {
 	case NaturalPhaseBirthRequest:
 		return at + sim.SimTime(NaturalGatherDuration+NaturalBuildDuration) + 5, nil
 	case NaturalPhaseBirthReply:
+		return at + sim.SimTime(NaturalGatherDuration+NaturalBuildDuration) + 6, nil
+	case NaturalPhaseLabourSettle:
+		// The frozen build-completion instant (h+40m+3µs): rule 518 shares
+		// it with rule 505 completions so the kernel's ascending-cause-ID
+		// fold arbitrates both deterministically.
+		return at + sim.SimTime(NaturalGatherDuration+NaturalBuildDuration) + 3, nil
+	case NaturalPhaseLabourOffer:
+		return at + sim.SimTime(NaturalGatherDuration+NaturalBuildDuration) + 5, nil
+	case NaturalPhaseLabourDecision:
 		return at + sim.SimTime(NaturalGatherDuration+NaturalBuildDuration) + 6, nil
 	}
 	return at, nil // pulse
@@ -539,7 +641,16 @@ func NaturalSlotDescriptorFor(m NaturalMechanism) component.ComponentDescriptor 
 	// Tenure is privileged (Q7): mode 0 wild / 1 cultivated, the owner ref
 	// present iff cultivated, and the redundant cultivated flag that must
 	// agree with the mode (G2b consistency). Only rules 503/505/514 may
-	// write tenure (G5); a cultivated slot never holds standing stock.
+	// write tenure (G5) — plus, under the v7 mechanism only, rule 518's
+	// point-completion claim when a settlement completes a capital point
+	// through the frozen 505 fold (the one enumerated settlement channel;
+	// ticket 20). A cultivated slot never holds standing stock.
+	rules := []component.TransitionRuleDescriptor{
+		naturalRuleFor(m, NaturalRegenSplitRule, "regen-split"), naturalRuleFor(m, NaturalWearRule, "wear"),
+		naturalRuleFor(m, NaturalBuildRule, "build"), naturalRuleFor(m, NaturalGatherRule, "gather")}
+	if m == NaturalMechanismV7 {
+		rules = append(rules, naturalRuleFor(m, NaturalLabourSettlementRule, "labour-settlement"))
+	}
 	return naturalDescriptorFor(m, NaturalSlotTypeID, "natural-slot-"+naturalNameSuffix(m), []component.FieldDescriptor{
 		naturalInteger(1, "stock", "food", 0, 1),
 		naturalRef(2, "patch"),
@@ -547,8 +658,7 @@ func NaturalSlotDescriptorFor(m NaturalMechanism) component.ComponentDescriptor 
 		naturalInteger(4, "tenure-mode", "state", 0, 1),
 		naturalRef(5, "tenure-owner"),
 		naturalInteger(6, "tenure-cultivated", "state", 0, 1)},
-		naturalRuleFor(m, NaturalRegenSplitRule, "regen-split"), naturalRuleFor(m, NaturalWearRule, "wear"),
-		naturalRuleFor(m, NaturalBuildRule, "build"), naturalRuleFor(m, NaturalGatherRule, "gather"))
+		rules...)
 }
 
 func NaturalSlotDescriptor() component.ComponentDescriptor {
@@ -560,12 +670,17 @@ func NaturalBagDescriptorFor(m NaturalMechanism) component.ComponentDescriptor {
 	// source-patch field is always present: the holder's home patch, which
 	// is where a newborn's placement lives (proposer's patch; founders are
 	// ID-placed) and where its cultivation must live. Under the v6
-	// mechanism the bag additionally admits rule 515's bag+1 write.
+	// mechanism the bag additionally admits rule 515's bag+1 write; under
+	// v7 also rule 518's worker delivery (bag−1).
 	rules := []component.TransitionRuleDescriptor{
 		naturalRuleFor(m, NaturalGatherRule, "gather"), naturalRuleFor(m, NaturalConsumeRule, "consume"),
 		naturalRuleFor(m, NaturalBuildRule, "build"), naturalRuleFor(m, NaturalBirthReplyRule, "birth-reply")}
 	if m == NaturalMechanismV6 {
 		rules = append(rules, naturalRuleFor(m, NaturalProvisionRule, "provision"))
+	}
+	if m == NaturalMechanismV7 {
+		rules = append(rules, naturalRuleFor(m, NaturalProvisionRule, "provision"),
+			naturalRuleFor(m, NaturalLabourSettlementRule, "labour-settlement"))
 	}
 	return naturalDescriptorFor(m, NaturalBagTypeID, "natural-bag-"+naturalNameSuffix(m), []component.FieldDescriptor{
 		naturalInteger(1, "units", "food", 0, float64(NaturalBagCapacity)), naturalRef(2, "home-patch", sim.Present)}, rules...)
@@ -594,6 +709,16 @@ func NaturalBodyDescriptor() component.ComponentDescriptor {
 }
 
 func NaturalWorksiteDescriptorFor(m NaturalMechanism) component.ComponentDescriptor {
+	rules := []component.TransitionRuleDescriptor{
+		naturalRuleFor(m, NaturalWearRule, "wear"), naturalRuleFor(m, NaturalBuildRule, "build"),
+		naturalRuleFor(m, NaturalBirthReplyRule, "birth-reply")}
+	// Under the v7 mechanism the settlement invests the employer's worksite
+	// (invested-units and wip on every settlement; capital and points-created
+	// only when the frozen point completion fires). LastBuildHour is never a
+	// settlement write: the employer spends no build-hour (ticket 20).
+	if m == NaturalMechanismV7 {
+		rules = append(rules, naturalRuleFor(m, NaturalLabourSettlementRule, "labour-settlement"))
+	}
 	return naturalDescriptorFor(m, NaturalWorksiteTypeID, "natural-worksite-"+naturalNameSuffix(m), []component.FieldDescriptor{
 		naturalInteger(1, "capital", "points", 0, float64(NaturalKMax)),
 		naturalInteger(2, "wip", "units", 0, float64(NaturalWipMax)),
@@ -602,8 +727,7 @@ func NaturalWorksiteDescriptorFor(m NaturalMechanism) component.ComponentDescrip
 		naturalInteger(5, "points-created", "points", 0, NaturalHorizonHours),
 		naturalInteger(6, "points-decayed", "points", 0, NaturalHorizonHours),
 		{ID: NaturalWorksiteLastBuildHourField, Name: "last-build-hour", Type: component.ValueType{Kind: sim.IntegerKind}, Unit: "hour", Bounds: naturalHourBounds(), PermittedStates: []sim.ValueState{sim.Present}, Uncertainty: component.UncertaintyForbidden}},
-		naturalRuleFor(m, NaturalWearRule, "wear"), naturalRuleFor(m, NaturalBuildRule, "build"),
-		naturalRuleFor(m, NaturalBirthReplyRule, "birth-reply"))
+		rules...)
 }
 
 func NaturalWorksiteDescriptor() component.ComponentDescriptor {
@@ -618,7 +742,9 @@ func NaturalGranaryDescriptorFor(m NaturalMechanism) component.ComponentDescript
 	// retired: grants are never lost to fullness and never lag the budget.
 	// Under the v6 mechanism the descriptor additively carries field 7
 	// "provisioned" (rule 515's withdrawal ledger) and admits rule 515;
-	// the v5 zero value keeps exactly the frozen six-field list.
+	// under the v7 mechanism it additionally carries the wage ledgers 8
+	// wages-paid / 9 wages-earned and admits rule 518. The v5 zero value
+	// keeps exactly the frozen six-field list.
 	fields := []component.FieldDescriptor{
 		naturalInteger(1, "stock", "food", 0, float64(NaturalGranaryStockMax)),
 		naturalInteger(2, "cultivated-total", "food", 0, float64(NaturalGranaryStockMax)),
@@ -632,6 +758,14 @@ func NaturalGranaryDescriptorFor(m NaturalMechanism) component.ComponentDescript
 	if m == NaturalMechanismV6 {
 		fields = append(fields, naturalInteger(NaturalGranaryProvisionedField, "provisioned", "meals", 0, float64(NaturalProvisionedMax)))
 		rules = append(rules, naturalRuleFor(m, NaturalProvisionRule, "provision"))
+	}
+	if m == NaturalMechanismV7 {
+		fields = append(fields,
+			naturalInteger(NaturalGranaryProvisionedField, "provisioned", "meals", 0, float64(NaturalProvisionedMax)),
+			naturalInteger(NaturalGranaryWagesPaidField, "wages-paid", "food", 0, float64(NaturalWagesMax)),
+			naturalInteger(NaturalGranaryWagesEarnedField, "wages-earned", "food", 0, float64(NaturalWagesMax)))
+		rules = append(rules, naturalRuleFor(m, NaturalProvisionRule, "provision"),
+			naturalRuleFor(m, NaturalLabourSettlementRule, "labour-settlement"))
 	}
 	return naturalDescriptorFor(m, NaturalGranaryTypeID, "natural-granary-"+naturalNameSuffix(m), fields, rules...)
 }
@@ -683,19 +817,58 @@ func NaturalBirthRequestDescriptor() component.ComponentDescriptor {
 	return NaturalBirthRequestDescriptorFor(NaturalMechanismV5)
 }
 
+// NaturalLabourOfferDescriptorFor builds the worker's addressed labour-offer
+// row (mechanism v7 only, ticket 20): the birth-request field set minus the
+// self-reported claims — hour, addressee, status, last-offer-hour,
+// last-reply-hour — with terms fixed (the wage is the derived 1:1 rate; no
+// claim and no price field exists). Rules: 516 files on the worker's own
+// row, 517 writes the enumerated decision fields (the 511 two-party
+// precedent), 519 expires and clears.
+func NaturalLabourOfferDescriptorFor(m NaturalMechanism) component.ComponentDescriptor {
+	return naturalDescriptorFor(m, NaturalLabourOfferTypeID, "natural-labour-offer-"+naturalNameSuffix(m), []component.FieldDescriptor{
+		naturalInteger(1, "hour", "hour", float64(NaturalNeverHour), NaturalHorizonHours-1),
+		naturalRef(2, "addressee"),
+		naturalInteger(3, "status", "state", 0, 4),
+		naturalInteger(4, "last-offer-hour", "hour", float64(NaturalNeverHour), NaturalHorizonHours-1),
+		naturalInteger(5, "last-reply-hour", "hour", float64(NaturalNeverHour), NaturalHorizonHours-1)},
+		naturalRuleFor(m, NaturalLabourOfferRule, "labour-offer"), naturalRuleFor(m, NaturalLabourDecisionRule, "labour-decision"),
+		naturalRuleFor(m, NaturalLabourExpireRule, "labour-expiry"))
+}
+
+// NaturalLabourBookDescriptorFor builds the employer's engagement row
+// (mechanism v7 only, ticket 20): the single engagement slot (engaged worker
+// ref present iff engaged) plus the one-decision-per-actor-hour bookkeeping.
+// Rules: 517 writes it (accept engages, refuse books the decision hour), 519
+// clears the engagement.
+func NaturalLabourBookDescriptorFor(m NaturalMechanism) component.ComponentDescriptor {
+	return naturalDescriptorFor(m, NaturalLabourBookTypeID, "natural-labour-book-"+naturalNameSuffix(m), []component.FieldDescriptor{
+		naturalRef(1, "engaged-worker"),
+		naturalInteger(2, "engaged-hour", "hour", float64(NaturalNeverHour), NaturalHorizonHours-1),
+		naturalInteger(3, "last-decision-hour", "hour", float64(NaturalNeverHour), NaturalHorizonHours-1)},
+		naturalRuleFor(m, NaturalLabourDecisionRule, "labour-decision"),
+		naturalRuleFor(m, NaturalLabourExpireRule, "labour-expiry"))
+}
+
 // NaturalRegistryFor builds the registry of the mechanism axis: the zero
 // value reproduces the frozen v5 registry byte-identically;
 // NaturalMechanismV6 additively carries rule 515 on the granary and bag
-// descriptors and the provisioned field on the granary. Any other value
-// fails closed. The registry stays intentionally disjoint from the v1, v2,
-// v3, v4, and S6 registries: type IDs, rule IDs, and versions never
-// collide, so no history can be replayed across world versions by accident.
+// descriptors and the provisioned field on the granary; NaturalMechanismV7
+// (ticket 20) additionally registers the wage-contract rows 0x80000058/
+// 0x80000059, the granary wage ledgers, and rules 516-519, while
+// 0x8000005A stays spare. Any other value fails closed. The registry stays
+// intentionally disjoint from the v1, v2, v3, v4, and S6 registries: type
+// IDs, rule IDs, and versions never collide, so no history can be replayed
+// across world versions by accident.
 func NaturalRegistryFor(m NaturalMechanism) (component.Registry, error) {
 	if !NaturalMechanismValid(m) {
 		return component.Registry{}, fmt.Errorf("%w: mechanism %d is not an admitted mechanism version", ErrNaturalContract, uint16(m))
 	}
+	descriptors := []component.ComponentDescriptor{NaturalPatchDescriptorFor(m), NaturalSlotDescriptorFor(m), NaturalBagDescriptorFor(m), NaturalBodyDescriptorFor(m), NaturalWorksiteDescriptorFor(m), NaturalGranaryDescriptorFor(m), NaturalGenomeDescriptorFor(m), NaturalBirthRequestDescriptorFor(m)}
+	if m == NaturalMechanismV7 {
+		descriptors = append(descriptors, NaturalLabourOfferDescriptorFor(m), NaturalLabourBookDescriptorFor(m))
+	}
 	b := component.NewRegistryBuilder()
-	for _, d := range []component.ComponentDescriptor{NaturalPatchDescriptorFor(m), NaturalSlotDescriptorFor(m), NaturalBagDescriptorFor(m), NaturalBodyDescriptorFor(m), NaturalWorksiteDescriptorFor(m), NaturalGranaryDescriptorFor(m), NaturalGenomeDescriptorFor(m), NaturalBirthRequestDescriptorFor(m)} {
+	for _, d := range descriptors {
 		if err := b.Register(d); err != nil {
 			return component.Registry{}, fmt.Errorf("%w: %v", ErrNaturalContract, err)
 		}
@@ -717,37 +890,18 @@ func naturalSlotTenureField(field sim.FieldID) bool {
 	return field == NaturalSlotTenureModeField || field == NaturalSlotTenureOwnerField || field == NaturalSlotTenureCultivatedField
 }
 
-// naturalPatchFieldAllowedFor is the mechanism-parameterized field-level
-// half of the G5 ownership guard. The v5 zero value is exactly the frozen
-// v5 writer set. NaturalMechanismV6 additively admits rule 515's four
-// (component, field) admissions — granary stock, granary provisioned,
-// granary last-stored-meal-hour, bag units — and nothing else; every 515
-// write under the v5 zero value is refused, so the widened writer set
-// exists only under the new mechanism version.
-func naturalPatchFieldAllowedFor(m NaturalMechanism, rule sim.RuleID, componentType sim.ComponentTypeID, field sim.FieldID) bool {
-	if rule == NaturalProvisionRule {
-		if m != NaturalMechanismV6 {
-			return false
-		}
-		switch componentType {
-		case NaturalGranaryTypeID:
-			return field == NaturalGranaryStockField || field == NaturalGranaryProvisionedField || field == NaturalGranaryLastStoredMealHourField
-		case NaturalBagTypeID:
-			return field == NaturalBagUnitsField
-		}
-		return false
+// naturalWorldRule reports the world-caused rules (the cause must be the
+// world, never an actor). Rule 519 labour-expiry/void joins under its own
+// mechanism gate: the field guard refuses every 519 patch outside v7, so
+// adding it here changes no v5/v6 admission.
+func naturalWorldRule(rule sim.RuleID) bool {
+	switch rule {
+	case NaturalRegenSplitRule, NaturalSpoilageRule, NaturalWearRule, NaturalBasalRule, NaturalGrantRule, NaturalBirthExpireRule, NaturalAgeDeathRule, NaturalLabourExpireRule:
+		return true
 	}
-	return naturalPatchFieldAllowed(rule, componentType, field)
+	return false
 }
 
-// naturalPatchFieldAllowed is the field-level half of the G5 ownership
-// guard: the (rule, component, field) triples any proposal may patch for
-// actor-owned components. Patch and slot ledgers are not actor-owned and are
-// checked at rule+entity level (v3/v4 guard parity).
-// Genome immutability is encoded here: only rules 504/514 may write
-// died-hour and only rule 511 may write birth-granary-paid; loci, hours,
-// and parent refs are never patchable after creation (parent refs are set
-// only by rule 511's newborn allocation).
 func naturalPatchFieldAllowed(rule sim.RuleID, componentType sim.ComponentTypeID, field sim.FieldID) bool {
 	switch rule {
 	case NaturalGatherRule:
@@ -828,12 +982,75 @@ func naturalPatchFieldAllowed(rule sim.RuleID, componentType sim.ComponentTypeID
 	return false
 }
 
-func naturalWorldRule(rule sim.RuleID) bool {
-	switch rule {
-	case NaturalRegenSplitRule, NaturalSpoilageRule, NaturalWearRule, NaturalBasalRule, NaturalGrantRule, NaturalBirthExpireRule, NaturalAgeDeathRule:
-		return true
+// naturalPatchFieldAllowedFor is the mechanism-parameterized field-level
+// half of the G5 ownership guard. The v5 zero value is exactly the frozen
+// v5 writer set. NaturalMechanismV6 additively admits rule 515's four
+// (component, field) admissions — granary stock, granary provisioned,
+// granary last-stored-meal-hour, bag units — and nothing else; every 515
+// write under the v5 zero value is refused, so the widened writer set
+// exists only under the new mechanism version. NaturalMechanismV7 admits
+// everything v6 admits plus exactly the enumerated wage-contract triples
+// (ticket 20): 516 files the worker's own offer row (no claim and no price
+// field exists on it); 517 writes the worker's enumerated decision fields
+// and the employer's own engagement row; 518 writes the enumerated
+// settlement fields (worker bag/granary stock/wages-earned, employer
+// granary stock/wages-paid, employer worksite invested/wip plus the
+// completion's capital/points-created — role binding happens at entity
+// level in NaturalCheckOwnershipFor, and last-build-hour is never a
+// settlement write); 519 clears status/engagement fields only. Tenure
+// fields are not actor-component fields and are handled in the slot branch
+// of NaturalCheckOwnershipFor.
+func naturalPatchFieldAllowedFor(m NaturalMechanism, rule sim.RuleID, componentType sim.ComponentTypeID, field sim.FieldID) bool {
+	if rule == NaturalProvisionRule {
+		if m != NaturalMechanismV6 && m != NaturalMechanismV7 {
+			return false
+		}
+		switch componentType {
+		case NaturalGranaryTypeID:
+			return field == NaturalGranaryStockField || field == NaturalGranaryProvisionedField || field == NaturalGranaryLastStoredMealHourField
+		case NaturalBagTypeID:
+			return field == NaturalBagUnitsField
+		}
+		return false
 	}
-	return false
+	if m == NaturalMechanismV7 {
+		switch rule {
+		case NaturalLabourOfferRule:
+			if componentType == NaturalLabourOfferTypeID {
+				return field == NaturalLabourOfferHourField || field == NaturalLabourOfferAddresseeField ||
+					field == NaturalLabourOfferStatusField || field == NaturalLabourOfferLastOfferHourField
+			}
+			return false
+		case NaturalLabourDecisionRule:
+			switch componentType {
+			case NaturalLabourOfferTypeID:
+				return field == NaturalLabourOfferStatusField || field == NaturalLabourOfferLastReplyHourField
+			case NaturalLabourBookTypeID:
+				return field == NaturalLabourBookEngagedWorkerField || field == NaturalLabourBookEngagedHourField || field == NaturalLabourBookLastDecisionHourField
+			}
+			return false
+		case NaturalLabourSettlementRule:
+			switch componentType {
+			case NaturalBagTypeID:
+				return field == NaturalBagUnitsField
+			case NaturalGranaryTypeID:
+				return field == NaturalGranaryStockField || field == NaturalGranaryWagesPaidField || field == NaturalGranaryWagesEarnedField
+			case NaturalWorksiteTypeID:
+				return field == NaturalWorksiteCapitalField || field == NaturalWorksiteWipField ||
+					field == NaturalWorksiteInvestedUnitsField || field == NaturalWorksitePointsCreatedField
+			}
+			return false
+		case NaturalLabourExpireRule:
+			switch componentType {
+			case NaturalLabourOfferTypeID:
+				return field == NaturalLabourOfferStatusField
+			case NaturalLabourBookTypeID:
+				return field == NaturalLabourBookEngagedWorkerField || field == NaturalLabourBookEngagedHourField
+			}
+			return false
+		}
+	}
+	return naturalPatchFieldAllowed(rule, componentType, field)
 }
 
 // NaturalCheckOwnership enforces frozen possession-by-identity (gate G5) at
@@ -857,7 +1074,26 @@ func NaturalCheckOwnership(p kernel.Proposal, patches int) error {
 // its widened admissions do not exist there); NaturalMechanismV6 admits the
 // provision rule 515 as an actor-caused own-rows rule over its four
 // enumerated (component, field) admissions and requires the v6 rule
-// version.
+// version. NaturalMechanismV7 (ticket 20) admits exactly the enumerated
+// wage-contract flows and nothing else:
+//
+//   - 516 is an own-rows rule: the worker patches only its own offer row,
+//     over the four filing fields (no claim and no price field exists).
+//   - 517 is the 511 two-party precedent: the addressed employer patches
+//     the single worker's enumerated status fields (status,
+//     last-reply-hour) plus its own engagement row, and the cause must be
+//     among the patched rows; a third party's row is refused.
+//   - 518 is the one sanctioned possession breach: the worker (cause) and
+//     exactly one employer patch the enumerated settlement fields — bag
+//     units / granary stock / wages-earned on the worker, granary stock /
+//     wages-paid / worksite invested-units / wip on the employer, with
+//     worksite capital and points-created admitted only together with the
+//     completion's slot-tenure claim (the frozen 505 fold; the coupling is
+//     exact in both directions). Tenure mode/owner otherwise remain
+//     writable only by rules 503/505/514, and last-build-hour is never a
+//     settlement write (the employer spends no build-hour).
+//   - 519 is world-caused status clearing only (offer status, engagement
+//     worker/hour) — never a resource or ledger field.
 func NaturalCheckOwnershipFor(m NaturalMechanism, p kernel.Proposal, patches int) error {
 	if p.RuleVersion != m.RuleVersion() {
 		return ErrNaturalContract
@@ -866,6 +1102,22 @@ func NaturalCheckOwnershipFor(m NaturalMechanism, p kernel.Proposal, patches int
 		return ErrNaturalContract
 	}
 	causeAmongPatched := false
+	// The wage-contract two-party discipline (v7 only): the single
+	// non-cause actor patched by rules 517/518 (the addressed worker, the
+	// paying employer) and rule 518's completion signature. All three stay
+	// untouched by every v5/v6 rule, so the v5/v6 behavior is unchanged.
+	secondParty := sim.EntityID(0)
+	slotTenurePatched, capitalPatched, createdPatched := false, false, false
+	bindSecondParty := func(entity sim.EntityID) error {
+		if secondParty == 0 {
+			secondParty = entity
+			return nil
+		}
+		if secondParty != entity {
+			return ErrNaturalContract
+		}
+		return nil
+	}
 	for _, patch := range p.Patches {
 		switch patch.Component {
 		case NaturalPatchTypeID:
@@ -896,6 +1148,14 @@ func NaturalCheckOwnershipFor(m NaturalMechanism, p kernel.Proposal, patches int
 				if patch.Field != NaturalSlotStockField && patch.Field != NaturalSlotGatheredField {
 					return ErrNaturalContract
 				}
+			case NaturalLabourSettlementRule:
+				// The v7-only completion claim: tenure fields on a slot,
+				// admitted only with the completion signature (enforced
+				// after the loop) and only under the v7 mechanism.
+				if m != NaturalMechanismV7 || !naturalSlotTenureField(patch.Field) {
+					return ErrNaturalContract
+				}
+				slotTenurePatched = true
 			default:
 				return ErrNaturalContract
 			}
@@ -922,10 +1182,83 @@ func NaturalCheckOwnershipFor(m NaturalMechanism, p kernel.Proposal, patches int
 				if patch.Entity == p.Cause.Actor {
 					causeAmongPatched = true
 				}
+			case NaturalLabourOfferRule:
+				// Own-rows filing: the worker patches only its own offer
+				// row (field-level admissions already exclude the reply
+				// hour and every foreign component).
+				if patch.Entity != p.Cause.Actor {
+					return ErrNaturalContract
+				}
+				causeAmongPatched = true
+			case NaturalLabourDecisionRule:
+				// The 511 two-party precedent: the enumerated status
+				// fields on the addressed worker's offer row plus the
+				// decider's own engagement row, one worker per decision.
+				switch patch.Component {
+				case NaturalLabourOfferTypeID:
+					if patch.Entity == p.Cause.Actor {
+						return ErrNaturalContract
+					}
+					if err := bindSecondParty(patch.Entity); err != nil {
+						return err
+					}
+				case NaturalLabourBookTypeID:
+					if patch.Entity != p.Cause.Actor {
+						return ErrNaturalContract
+					}
+					causeAmongPatched = true
+				}
+			case NaturalLabourSettlementRule:
+				// Role binding of the enumerated settlement set: bag units
+				// and wages-earned and granary stock on the worker (the
+				// cause); granary stock and wages-paid and worksite fields
+				// on exactly one other actor (the employer).
+				switch patch.Component {
+				case NaturalBagTypeID:
+					if patch.Entity != p.Cause.Actor {
+						return ErrNaturalContract
+					}
+					causeAmongPatched = true
+				case NaturalGranaryTypeID:
+					if patch.Field == NaturalGranaryWagesEarnedField && patch.Entity != p.Cause.Actor {
+						return ErrNaturalContract
+					}
+					if patch.Field == NaturalGranaryWagesPaidField && patch.Entity == p.Cause.Actor {
+						return ErrNaturalContract
+					}
+					if patch.Entity == p.Cause.Actor {
+						causeAmongPatched = true
+					} else if err := bindSecondParty(patch.Entity); err != nil {
+						return err
+					}
+				case NaturalWorksiteTypeID:
+					if patch.Entity == p.Cause.Actor {
+						return ErrNaturalContract
+					}
+					if err := bindSecondParty(patch.Entity); err != nil {
+						return err
+					}
+					if patch.Field == NaturalWorksiteCapitalField {
+						capitalPatched = true
+					}
+					if patch.Field == NaturalWorksitePointsCreatedField {
+						createdPatched = true
+					}
+				}
 			}
 		}
 	}
-	if (p.Rule == NaturalBirthReplyRule || p.Rule == NaturalBirthRefuseRule) && !causeAmongPatched {
+	if (p.Rule == NaturalBirthReplyRule || p.Rule == NaturalBirthRefuseRule || p.Rule == NaturalLabourOfferRule || p.Rule == NaturalLabourDecisionRule || p.Rule == NaturalLabourSettlementRule) && !causeAmongPatched {
+		return ErrNaturalContract
+	}
+	// The completion coupling is exact: rule 518 carries the slot-tenure
+	// claim if and only if it carries the frozen completion's capital and
+	// points-created writes. Tenure outside that channel is refused.
+	if p.Rule == NaturalLabourSettlementRule && slotTenurePatched != (capitalPatched && createdPatched) {
+		return ErrNaturalContract
+	}
+	// A decision addresses exactly one worker's offer row.
+	if p.Rule == NaturalLabourDecisionRule && secondParty == 0 {
 		return ErrNaturalContract
 	}
 	for _, seed := range p.Allocations {
@@ -1186,7 +1519,9 @@ func NaturalBirthReplyProposalFor(m NaturalMechanism, key string, patches, hour 
 // full-schema allocation shape. This is the entity-create proposal builder
 // for births; the newborn ID must be allocator-fresh (G5). Under the v6
 // mechanism the granary row carries the provisioned field (0 for every
-// newborn); the v5 zero value keeps the frozen six-field granary list.
+// newborn); the v5 zero value keeps the frozen six-field granary list. Under
+// the v7 mechanism the newborn additionally allocates its idle labour-offer
+// and labour-book rows (complete rows, like every v7 registry component).
 func naturalNewbornAllocationsFor(m NaturalMechanism, patches int, id, home sim.EntityID, n NaturalActorState) ([]component.ComponentSeed, error) {
 	if !naturalNewbornEntity(patches, id) || n.Bag.Source != home {
 		return nil, ErrNaturalContract
@@ -1217,7 +1552,13 @@ func naturalNewbornAllocationsFor(m NaturalMechanism, patches int, id, home sim.
 	if m == NaturalMechanismV6 {
 		granary = append(granary, component.FieldSeed{Field: NaturalGranaryProvisionedField, Value: sim.IntegerValue(n.Granary.Provisioned)})
 	}
-	return []component.ComponentSeed{
+	if m == NaturalMechanismV7 {
+		granary = append(granary,
+			component.FieldSeed{Field: NaturalGranaryProvisionedField, Value: sim.IntegerValue(n.Granary.Provisioned)},
+			component.FieldSeed{Field: NaturalGranaryWagesPaidField, Value: sim.IntegerValue(n.Granary.WagesPaid)},
+			component.FieldSeed{Field: NaturalGranaryWagesEarnedField, Value: sim.IntegerValue(n.Granary.WagesEarned)})
+	}
+	seeds := []component.ComponentSeed{
 		{Entity: id, Component: NaturalBagTypeID, Fields: []component.FieldSeed{
 			{Field: NaturalBagUnitsField, Value: sim.IntegerValue(n.Bag.Units)},
 			{Field: NaturalBagSourceField, Value: homeRef}}},
@@ -1256,7 +1597,29 @@ func naturalNewbornAllocationsFor(m NaturalMechanism, patches int, id, home sim.
 			{Field: NaturalBirthRequestStatusField, Value: sim.IntegerValue(int64(n.Request.Status))},
 			{Field: NaturalBirthRequestLastRequestHourField, Value: sim.IntegerValue(n.Request.LastRequestHour)},
 			{Field: NaturalBirthRequestLastReplyHourField, Value: sim.IntegerValue(n.Request.LastReplyHour)}}},
-	}, nil
+	}
+	if m == NaturalMechanismV7 {
+		offereeRef, err := genomeRefValue(n.Offer.Addressee)
+		if err != nil {
+			return nil, err
+		}
+		engagedRef, err := genomeRefValue(n.Book.EngagedWorker)
+		if err != nil {
+			return nil, err
+		}
+		seeds = append(seeds,
+			component.ComponentSeed{Entity: id, Component: NaturalLabourOfferTypeID, Fields: []component.FieldSeed{
+				{Field: NaturalLabourOfferHourField, Value: sim.IntegerValue(n.Offer.Hour)},
+				{Field: NaturalLabourOfferAddresseeField, Value: offereeRef},
+				{Field: NaturalLabourOfferStatusField, Value: sim.IntegerValue(int64(n.Offer.Status))},
+				{Field: NaturalLabourOfferLastOfferHourField, Value: sim.IntegerValue(n.Offer.LastOfferHour)},
+				{Field: NaturalLabourOfferLastReplyHourField, Value: sim.IntegerValue(n.Offer.LastReplyHour)}}},
+			component.ComponentSeed{Entity: id, Component: NaturalLabourBookTypeID, Fields: []component.FieldSeed{
+				{Field: NaturalLabourBookEngagedWorkerField, Value: engagedRef},
+				{Field: NaturalLabourBookEngagedHourField, Value: sim.IntegerValue(n.Book.EngagedHour)},
+				{Field: NaturalLabourBookLastDecisionHourField, Value: sim.IntegerValue(n.Book.LastDecisionHour)}}})
+	}
+	return seeds, nil
 }
 
 // NaturalBirthDrawPosition is the frozen birth-stream position of one
@@ -1270,3 +1633,134 @@ func NaturalBirthDrawPosition(births int64) (uint64, error) {
 	}
 	return uint64(NaturalDrawsPerBirth * births), nil
 }
+
+// NaturalLabourOfferProposal builds the rule-516 filing intention at the
+// frozen h+40m+5µs phase (the birth-request instant), mechanism v7 only
+// (every other mechanism refuses): the four filing fields of the worker's
+// own labour-offer row. addresseeHome is the trusted runner's fresh view of
+// the addressee's home patch; the same-patch filing precondition cannot be
+// checked from the filing row alone. Eligibility is delegated to
+// NaturalLabourOffer.
+func NaturalLabourOfferProposalFor(m NaturalMechanism, key string, patches, hour int, workerID, addressee, addresseeHome sim.EntityID, worker NaturalActorState) (kernel.Proposal, error) {
+	if m != NaturalMechanismV7 {
+		return kernel.Proposal{}, ErrNaturalContract
+	}
+	at, err := NaturalPhaseTime(hour, NaturalPhaseLabourOffer)
+	if err != nil {
+		return kernel.Proposal{}, ErrNaturalContract
+	}
+	next, err := NaturalLabourOffer(m, patches, hour, workerID, addressee, addresseeHome, worker)
+	if err != nil {
+		return kernel.Proposal{}, err
+	}
+	addresseeRef, err := sim.EntityRefValue(next.Offer.Addressee)
+	if err != nil {
+		return kernel.Proposal{}, ErrNaturalContract
+	}
+	return kernel.Proposal{Key: key, Time: at, Cause: kernel.Cause{Actor: workerID}, Rule: NaturalLabourOfferRule, RuleVersion: m.RuleVersion(),
+		Patches: []component.Patch{
+			{Entity: workerID, Component: NaturalLabourOfferTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalLabourOfferHourField, Value: sim.IntegerValue(next.Offer.Hour)},
+			{Entity: workerID, Component: NaturalLabourOfferTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalLabourOfferAddresseeField, Value: addresseeRef},
+			{Entity: workerID, Component: NaturalLabourOfferTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalLabourOfferStatusField, Value: sim.IntegerValue(int64(next.Offer.Status))},
+			{Entity: workerID, Component: NaturalLabourOfferTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalLabourOfferLastOfferHourField, Value: sim.IntegerValue(next.Offer.LastOfferHour)},
+		}}, nil
+}
+
+// NaturalLabourDecisionProposal builds the single rule-517 proposal of the
+// frozen h+40m+6µs decision phase (the birth-reply instant), mechanism v7
+// only: an accept patches the worker's enumerated status fields plus the
+// employer's own engagement row; a refusal patches the worker's status
+// fields plus only the employer's last-decision-hour (status rows only, the
+// 512 shape). Eligibility is delegated to NaturalLabourDecision.
+func NaturalLabourDecisionProposalFor(m NaturalMechanism, key string, patches, hour int, employerID, workerID sim.EntityID, accept bool, employer, worker NaturalActorState) (kernel.Proposal, error) {
+	if m != NaturalMechanismV7 {
+		return kernel.Proposal{}, ErrNaturalContract
+	}
+	at, err := NaturalPhaseTime(hour, NaturalPhaseLabourDecision)
+	if err != nil {
+		return kernel.Proposal{}, ErrNaturalContract
+	}
+	nextEmployer, nextWorker, decision, err := NaturalLabourDecision(m, patches, hour, employerID, workerID, accept, employer, worker)
+	if err != nil {
+		return kernel.Proposal{}, err
+	}
+	patchesList := []component.Patch{
+		{Entity: workerID, Component: NaturalLabourOfferTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalLabourOfferStatusField, Value: sim.IntegerValue(int64(nextWorker.Offer.Status))},
+		{Entity: workerID, Component: NaturalLabourOfferTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalLabourOfferLastReplyHourField, Value: sim.IntegerValue(nextWorker.Offer.LastReplyHour)},
+	}
+	if decision == NaturalReplyAccept {
+		workerRef, err := sim.EntityRefValue(nextEmployer.Book.EngagedWorker)
+		if err != nil {
+			return kernel.Proposal{}, ErrNaturalContract
+		}
+		patchesList = append(patchesList,
+			component.Patch{Entity: employerID, Component: NaturalLabourBookTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalLabourBookEngagedWorkerField, Value: workerRef},
+			component.Patch{Entity: employerID, Component: NaturalLabourBookTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalLabourBookEngagedHourField, Value: sim.IntegerValue(nextEmployer.Book.EngagedHour)})
+	}
+	patchesList = append(patchesList,
+		component.Patch{Entity: employerID, Component: NaturalLabourBookTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalLabourBookLastDecisionHourField, Value: sim.IntegerValue(nextEmployer.Book.LastDecisionHour)})
+	return kernel.Proposal{Key: key, Time: at, Cause: kernel.Cause{Actor: employerID}, Rule: NaturalLabourDecisionRule, RuleVersion: m.RuleVersion(),
+		Patches: patchesList}, nil
+}
+
+// NaturalLabourSettleProposal commits the rule-518 atomic wage settlement at
+// the frozen h+40m+3µs completion instant (the build-completion instant, so
+// the kernel's ascending-cause-ID fold arbitrates it with rule 505
+// completions), mechanism v7 only. The enumerated patch set: worker bag −1,
+// worker granary stock +1, worker wages-earned +1, employer granary stock
+// −1, employer wages-paid +1, employer worksite invested-units +1 and wip
+// +1 — and on point completion the frozen capital/points-created writes plus
+// the lowest-index free-wild-slot tenure claim, exactly as the frozen 505
+// completion does (the employer's LastBuildHour is never written: it spends
+// no build-hour). The caller's fresh snapshot is validated by
+// NaturalLabourSettle before any commit. A claimed slot's tenure patches ride
+// on the same proposal.
+func NaturalLabourSettleProposalFor(m NaturalMechanism, key string, patches, hour int, workerID, employerID sim.EntityID, worker, employer NaturalActorState, homeSlots [NaturalSlotsPerPatch]NaturalSlotState) (kernel.Proposal, error) {
+	if m != NaturalMechanismV7 {
+		return kernel.Proposal{}, ErrNaturalContract
+	}
+	at, err := NaturalPhaseTime(hour, NaturalPhaseLabourSettle)
+	if err != nil {
+		return kernel.Proposal{}, ErrNaturalContract
+	}
+	nextWorker, nextEmployer, slots, result, err := NaturalLabourSettle(m, patches, hour, workerID, employerID, worker, employer, homeSlots)
+	if err != nil {
+		return kernel.Proposal{}, err
+	}
+	patchList := []component.Patch{
+		{Entity: workerID, Component: NaturalBagTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalBagUnitsField, Value: sim.IntegerValue(nextWorker.Bag.Units)},
+		{Entity: workerID, Component: NaturalGranaryTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalGranaryStockField, Value: sim.IntegerValue(nextWorker.Granary.Stock)},
+		{Entity: workerID, Component: NaturalGranaryTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalGranaryWagesEarnedField, Value: sim.IntegerValue(nextWorker.Granary.WagesEarned)},
+		{Entity: employerID, Component: NaturalGranaryTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalGranaryStockField, Value: sim.IntegerValue(nextEmployer.Granary.Stock)},
+		{Entity: employerID, Component: NaturalGranaryTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalGranaryWagesPaidField, Value: sim.IntegerValue(nextEmployer.Granary.WagesPaid)},
+		{Entity: employerID, Component: NaturalWorksiteTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalWorksiteInvestedUnitsField, Value: sim.IntegerValue(nextEmployer.Worksite.InvestedUnits)},
+		{Entity: employerID, Component: NaturalWorksiteTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalWorksiteWipField, Value: sim.IntegerValue(nextEmployer.Worksite.Wip)},
+	}
+	if result.PointsCompleted == 1 {
+		if result.ClaimedSlotIndex < 0 || int(worker.Bag.Source)-NaturalPatchIDBase < 0 {
+			return kernel.Proposal{}, ErrNaturalContract
+		}
+		slotID, err := NaturalSlotID(patches, int(worker.Bag.Source)-NaturalPatchIDBase, result.ClaimedSlotIndex)
+		if err != nil {
+			return kernel.Proposal{}, ErrNaturalContract
+		}
+		tenure := slots[result.ClaimedSlotIndex]
+		ownerRef, err := sim.EntityRefValue(tenure.Owner)
+		if err != nil {
+			return kernel.Proposal{}, ErrNaturalContract
+		}
+		patchList = append(patchList,
+			component.Patch{Entity: employerID, Component: NaturalWorksiteTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalWorksiteCapitalField, Value: sim.IntegerValue(nextEmployer.Worksite.Capital)},
+			component.Patch{Entity: employerID, Component: NaturalWorksiteTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalWorksitePointsCreatedField, Value: sim.IntegerValue(nextEmployer.Worksite.PointsCreated)},
+			component.Patch{Entity: slotID, Component: NaturalSlotTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalSlotTenureModeField, Value: sim.IntegerValue(int64(tenure.Mode))},
+			component.Patch{Entity: slotID, Component: NaturalSlotTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalSlotTenureOwnerField, Value: ownerRef},
+			component.Patch{Entity: slotID, Component: NaturalSlotTypeID, SchemaVersion: m.SchemaVersion(), Field: NaturalSlotTenureCultivatedField, Value: sim.IntegerValue(tenure.Cultivated)})
+	}
+	return kernel.Proposal{Key: key, Time: at, Cause: kernel.Cause{Actor: workerID}, Rule: NaturalLabourSettlementRule, RuleVersion: m.RuleVersion(), Patches: patchList}, nil
+}
+
+// Rule 519 (labour-expiry/void) has no proposal builder here by the frozen
+// precedent: like rule 513, the world-caused pulse patches are assembled by
+// the runner's naturalProposal machinery from the pure after-states returned
+// by NaturalLabourOfferExpire and NaturalLabourBookClear in
+// natural_contract_math.go.

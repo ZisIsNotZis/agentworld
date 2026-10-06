@@ -50,7 +50,7 @@ func naturalMechanismSeeds(t *testing.T, m NaturalMechanism, patches int, R int6
 }
 
 func TestNaturalMechanismAxisZeroValueReproducesV5(t *testing.T) {
-	if NaturalMechanismV5 != 0 || NaturalMechanismV6 != 6 || NaturalProvisionRule != 515 || NaturalGranaryProvisionedField != 7 || NaturalProvisionedMax != 168 {
+	if NaturalMechanismV5 != 0 || NaturalMechanismV6 != 6 || NaturalMechanismV7 != 7 || NaturalProvisionRule != 515 || NaturalGranaryProvisionedField != 7 || NaturalProvisionedMax != 168 {
 		t.Fatal("mechanism axis constants")
 	}
 	m0 := NaturalMechanismV5
@@ -62,7 +62,11 @@ func TestNaturalMechanismAxisZeroValueReproducesV5(t *testing.T) {
 		NaturalMechanismV6.RuleVersion() != 6 || NaturalMechanismV6.ProjectionVersion() != 6 {
 		t.Fatal("v6 version fields")
 	}
-	for _, m := range []NaturalMechanism{1, 2, 4, 5, 7, 8, 65535} {
+	if NaturalMechanismV7.FormatVersion() != 7 || NaturalMechanismV7.SchemaVersion() != 7 ||
+		NaturalMechanismV7.RuleVersion() != 7 || NaturalMechanismV7.ProjectionVersion() != 7 {
+		t.Fatal("v7 version fields")
+	}
+	for _, m := range []NaturalMechanism{1, 2, 4, 5, 8, 65535} {
 		if NaturalMechanismValid(m) {
 			t.Fatalf("mechanism %d admitted", m)
 		}
@@ -70,7 +74,7 @@ func TestNaturalMechanismAxisZeroValueReproducesV5(t *testing.T) {
 			t.Fatalf("registry for mechanism %d admitted", m)
 		}
 	}
-	if !NaturalMechanismValid(NaturalMechanismV5) || !NaturalMechanismValid(NaturalMechanismV6) {
+	if !NaturalMechanismValid(NaturalMechanismV5) || !NaturalMechanismValid(NaturalMechanismV6) || !NaturalMechanismValid(NaturalMechanismV7) {
 		t.Fatal("admitted mechanisms refused")
 	}
 	// The zero-value registry and every zero-value descriptor are the

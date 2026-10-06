@@ -187,7 +187,26 @@ func TestNaturalConstantsClockRangesAndDistinctIDs(t *testing.T) {
 			t.Fatalf("phase %d drifts from v4: %d %v", phase.n, v4At, v4Err)
 		}
 	}
-	for _, bad := range []struct{ hour, phase int }{{-1, 0}, {168, 0}, {5, -1}, {5, 8}} {
+	// The mechanism-v7 labour phases (ticket 20) share the frozen instants
+	// additively — no new phase instant exists: the offer rides the birth-
+	// request instant, the decision the birth-reply instant, and the
+	// settlement the derived build-completion instant. The v4 cross-check
+	// above applies only to the frozen eight.
+	buildStart, buildErr := NaturalPhaseTime(5, NaturalPhaseBuildStart)
+	for _, phase := range []struct {
+		n    int
+		want sim.SimTime
+	}{
+		{NaturalPhaseLabourSettle, NaturalBuildCompletion(buildStart)},
+		{NaturalPhaseLabourOffer, base + sim.SimTime(NaturalGatherDuration+NaturalBuildDuration) + 5},
+		{NaturalPhaseLabourDecision, base + sim.SimTime(NaturalGatherDuration+NaturalBuildDuration) + 6},
+	} {
+		at, err := NaturalPhaseTime(5, phase.n)
+		if err != nil || buildErr != nil || at != phase.want {
+			t.Fatalf("labour phase %d: %d %v (want %d)", phase.n, at, err, phase.want)
+		}
+	}
+	for _, bad := range []struct{ hour, phase int }{{-1, 0}, {168, 0}, {5, -1}, {5, 11}} {
 		if _, err := NaturalPhaseTime(bad.hour, bad.phase); !errors.Is(err, ErrNaturalContract) {
 			t.Fatalf("bad phase %+v", bad)
 		}
