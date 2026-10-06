@@ -486,7 +486,7 @@ type NaturalOptions struct {
 
 	// PolicyRef is the declared policy identity (ticket 16 D1 seam): the
 	// single binding site resolves it through the frozen natural ref set
-	// {natural/5, natural/6, natural/7, natural/7b} and binds every roster
+	// {natural/5, natural/6, natural/7, natural/7b, natural/9} and binds every roster
 	// entity by it. The zero value is exactly natural/5, so every recorded
 	// v5 scenario keeps its bytes; the ref is run identity end to end
 	// (journal config, checkpoint manifest, bidirectional mismatch
@@ -634,7 +634,7 @@ func (o NaturalOptions) validate() error {
 		return fmt.Errorf("%w: patches %d outside the derived ID-space precondition", ErrNaturalRunner, o.Patches)
 	}
 	if _, err := strategy.FrozenNaturalPolicyForRef(o.policyRef()); err != nil {
-		return fmt.Errorf("%w: policy ref %+v is not in the frozen natural ref set {natural/5, natural/6, natural/7, natural/7b}: %v", ErrNaturalRunner, o.PolicyRef, err)
+		return fmt.Errorf("%w: policy ref %+v is not in the frozen natural ref set {natural/5, natural/6, natural/7, natural/7b, natural/9}: %v", ErrNaturalRunner, o.PolicyRef, err)
 	}
 	if !NaturalMechanismValid(o.mechanism()) {
 		return fmt.Errorf("%w: mechanism %d is not an admitted mechanism version", ErrNaturalRunner, uint16(o.Mechanism))

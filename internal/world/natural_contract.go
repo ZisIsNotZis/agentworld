@@ -832,7 +832,12 @@ func NaturalLabourOfferDescriptorFor(m NaturalMechanism) component.ComponentDesc
 		naturalInteger(4, "last-offer-hour", "hour", float64(NaturalNeverHour), NaturalHorizonHours-1),
 		naturalInteger(5, "last-reply-hour", "hour", float64(NaturalNeverHour), NaturalHorizonHours-1)},
 		naturalRuleFor(m, NaturalLabourOfferRule, "labour-offer"), naturalRuleFor(m, NaturalLabourDecisionRule, "labour-decision"),
-		naturalRuleFor(m, NaturalLabourExpireRule, "labour-expiry"))
+		naturalRuleFor(m, NaturalLabourExpireRule, "labour-expiry"),
+		// Ticket-20 fix: a newborn allocation writes this row under rule 511,
+		// and the allocation path requires the component descriptor to declare
+		// that writer (the frozen per-row discipline), so 511 must be listed
+		// here or every v7 birth fails the kernel's rule-admission check.
+		naturalRuleFor(m, NaturalBirthReplyRule, "birth-reply"))
 }
 
 // NaturalLabourBookDescriptorFor builds the employer's engagement row
@@ -846,7 +851,10 @@ func NaturalLabourBookDescriptorFor(m NaturalMechanism) component.ComponentDescr
 		naturalInteger(2, "engaged-hour", "hour", float64(NaturalNeverHour), NaturalHorizonHours-1),
 		naturalInteger(3, "last-decision-hour", "hour", float64(NaturalNeverHour), NaturalHorizonHours-1)},
 		naturalRuleFor(m, NaturalLabourDecisionRule, "labour-decision"),
-		naturalRuleFor(m, NaturalLabourExpireRule, "labour-expiry"))
+		naturalRuleFor(m, NaturalLabourExpireRule, "labour-expiry"),
+		// Ticket-20 fix: the labour book row is part of the newborn
+		// allocation set under rule 511 (see the offer descriptor).
+		naturalRuleFor(m, NaturalBirthReplyRule, "birth-reply"))
 }
 
 // NaturalRegistryFor builds the registry of the mechanism axis: the zero
@@ -1267,6 +1275,17 @@ func NaturalCheckOwnershipFor(m NaturalMechanism, p kernel.Proposal, patches int
 		}
 		switch seed.Component {
 		case NaturalBagTypeID, NaturalBodyTypeID, NaturalWorksiteTypeID, NaturalGranaryTypeID, NaturalGenomeTypeID, NaturalBirthRequestTypeID:
+		case NaturalLabourOfferTypeID, NaturalLabourBookTypeID:
+			// Ticket-20 fix (L4 escalation): under mechanism v7 a newborn is
+			// allocated eight rows — the six v5 per-actor components plus the
+			// idle labour-offer and labour-book rows that the v7 validators
+			// require. The allocation whitelist must admit them under v7 only,
+			// or every organic birth under v7 fails the guard and the world
+			// halts fail-loud (the L1 builder already emits eight rows; only
+			// the whitelist missed the two new ones).
+			if m != NaturalMechanismV7 {
+				return ErrNaturalContract
+			}
 		default:
 			return ErrNaturalContract
 		}

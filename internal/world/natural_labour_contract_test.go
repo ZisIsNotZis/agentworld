@@ -1,6 +1,7 @@
 package world
 
 import (
+	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"agentworld/internal/component"
 	"agentworld/internal/kernel"
 	"agentworld/internal/sim"
+	"agentworld/internal/strategy"
 )
 
 // The ticket-20 L1 wage-contract tests. The frozen v9 design
@@ -362,10 +364,15 @@ func TestNaturalV7RegistryAdditiveIdentity(t *testing.T) {
 			t.Fatalf("labour-offer rule version: %+v", rule)
 		}
 	}
-	for _, id := range []sim.RuleID{NaturalLabourOfferRule, NaturalLabourDecisionRule, NaturalLabourExpireRule} {
+	// Ticket-20 fix: the offer row is part of the newborn allocation set under
+	// rule 511, so 511 must be declared here too.
+	for _, id := range []sim.RuleID{NaturalLabourOfferRule, NaturalLabourDecisionRule, NaturalLabourExpireRule, NaturalBirthReplyRule} {
 		if !offerRules[id] {
 			t.Fatalf("labour-offer rule %d missing", id)
 		}
+	}
+	if len(offerRules) != 4 {
+		t.Fatalf("labour-offer rule count: %d", len(offerRules))
 	}
 	book7, err := reg7.Describe(NaturalLabourBookTypeID)
 	if err != nil {
@@ -385,9 +392,14 @@ func TestNaturalV7RegistryAdditiveIdentity(t *testing.T) {
 	for _, rule := range book7.TransitionRules {
 		bookRules[rule.ID] = true
 	}
-	if !bookRules[NaturalLabourDecisionRule] || !bookRules[NaturalLabourExpireRule] || len(bookRules) != 2 {
+	// Ticket-20 fix: the labour rows are part of the newborn allocation set
+	// under rule 511, and the allocation path requires the descriptor to
+	// declare that writer, so both labour components must list 511 at v7.
+	if !bookRules[NaturalLabourDecisionRule] || !bookRules[NaturalLabourExpireRule] ||
+		!bookRules[NaturalBirthReplyRule] || len(bookRules) != 3 {
 		t.Fatalf("labour-book rules: %+v", book7.TransitionRules)
 	}
+
 	// The v7 rule table is exactly the frozen 501-515 plus 516-519.
 	declared := map[sim.RuleID]bool{}
 	for _, id := range reg7.TypeIDs() {
@@ -1607,4 +1619,33 @@ func TestNaturalV7LabourOfferNeverFiledPinsAllFields(t *testing.T) {
 	if validNaturalLabourOffer(patches, 1, forged) {
 		t.Fatal("unfiled offer accepted a reply hour")
 	}
+}
+
+// Ticket-20 fix: the G5 allocation whitelist must admit the two labour rows
+// under mechanism v7 and refuse them under v5/v6. Driven through the real
+// allocation builder (a hand-made proposal lacks the rule-511 cause patches the
+// guard requires) with a scripted kernel-admissible accept birth, so the test
+// exercises the same path the runner uses.
+func TestNaturalV7NewbornAllocationWhitelist(t *testing.T) {
+	f, err := NewNatural(NaturalOptions{Patches: 2, R: 8, Seed: 0, Workers: 1, Births: true,
+		PolicyRef: strategy.FrozenNaturalPolicy9().Ref, Mechanism: NaturalMechanismV7, Founders: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 400; i++ {
+		ok, err := f.Step(context.Background())
+		if err != nil {
+			t.Fatalf("step %d: %v", i, err)
+		}
+		if !ok {
+			t.Fatal("run ended before an organic birth committed")
+		}
+		if checks := f.Checkpoints(); checks[len(checks)-1].Metrics.Births >= 1 {
+			// The committed birth carried the eight-row allocation through the
+			// guard and the kernel: conservation is re-verified hourly, and the
+			// newborn's labour rows are validated by the v7 row validators.
+			return
+		}
+	}
+	t.Fatal("no organic birth within the step budget")
 }

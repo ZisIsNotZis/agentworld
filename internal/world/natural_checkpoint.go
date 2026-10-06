@@ -203,7 +203,7 @@ func (o NaturalRestoreOptions) validate() error {
 		return fmt.Errorf("%w: founder-tenure fixture at founders 1 is not a declared scenario (the pre-history seats founders 1 and 2)", ErrNaturalCheckpoint)
 	}
 	if _, err := strategy.FrozenNaturalPolicyForRef(o.policyRef()); err != nil {
-		return fmt.Errorf("%w: policy ref %+v is not in the frozen natural ref set {natural/5, natural/6, natural/7, natural/7b}: %v", ErrNaturalCheckpoint, o.PolicyRef, err)
+		return fmt.Errorf("%w: policy ref %+v is not in the frozen natural ref set {natural/5, natural/6, natural/7, natural/7b, natural/9}: %v", ErrNaturalCheckpoint, o.PolicyRef, err)
 	}
 	if !NaturalMechanismValid(o.mechanism()) {
 		return fmt.Errorf("%w: mechanism %d is not an admitted mechanism version", ErrNaturalCheckpoint, uint16(o.Mechanism))
@@ -589,7 +589,7 @@ type naturalManifest struct {
 	time              sim.SimTime
 	mechanism         NaturalMechanism // the declared mechanism axis: zero ≡ v5, 6 = mechanism v6
 	founders          int              // the declared founding band: zero ≡ the full frozen block 8P
-	policyFormat      uint32           // the declared policy identity: 5..8 inside the frozen natural ref set
+	policyFormat      uint32           // the declared policy identity: 5, 6, 7, 8 and 9 inside the frozen natural ref set
 	head              kernel.PortableHead
 	policyFingerprint [32]byte // exact frozen policy content fingerprint
 	parent            [32]byte // parent bundle digest; zero only for a root capture

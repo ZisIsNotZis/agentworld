@@ -78,7 +78,8 @@ type NaturalJournalConfig struct {
 	// CultivationDisabled declares the cultivation-ablation intervention
 	// (matrix cell D); it is run identity like the births flags. Policy is
 	// the declared ref from the frozen natural ref set {natural/5,
-	// natural/6, natural/7, natural/7b} (ticket 16 D1 seam) and
+	// natural/6, natural/7, natural/7b, natural/9} (ticket 16 D1 seam,
+	// extended in ticket 20) and
 	// PolicyFingerprint its exact frozen content fingerprint; a
 	// ref/fingerprint disagreement fails closed. Mechanism is the declared
 	// mechanism axis (ticket 17, the world version the journal was produced
@@ -118,6 +119,7 @@ type NaturalJournalCounts struct {
 	LabourDecisions   uint32 `json:"LabourDecisions,omitempty"`
 	LabourSettlements uint32 `json:"LabourSettlements,omitempty"`
 	LabourVoids       uint32 `json:"LabourVoids,omitempty"`
+	LabourExpiries    uint32 `json:"LabourExpiries,omitempty"`
 
 	RegenSplits, Spoilage uint32
 	Wear, Basal           uint32
@@ -459,6 +461,8 @@ func naturalJournalCounts(batches []NaturalBatch, events []kernel.Event) Natural
 			c.Grants++
 		case NaturalBirthExpireRule:
 			c.Expiries++
+		case NaturalLabourExpireRule:
+			c.LabourExpiries++
 		case NaturalAgeDeathRule:
 			c.AgeDeaths++
 		}

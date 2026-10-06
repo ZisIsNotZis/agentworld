@@ -172,8 +172,8 @@ func TestNaturalFixtureForPolicyV6RunIdentity(t *testing.T) {
 // any runner is constructed.
 func TestNaturalFixtureForPolicyRefusals(t *testing.T) {
 	for _, ref := range []strategy.NaturalRef{
-		{},                          // the zero ref is not silently natural/5 here
-		{ID: "natural", Version: 9}, // outside the extended ref set {5,6,7,8}
+		{},                           // the zero ref is not silently natural/5 here
+		{ID: "natural", Version: 10}, // outside the extended ref set {5,6,7,8,9}
 		{ID: "social", Version: 5},
 	} {
 		if _, err := NewNaturalFixtureForPolicy(2, 8, 5, true, 1, ref); !errors.Is(err, ErrNaturalCheckpoint) {

@@ -278,6 +278,27 @@ func TestNaturalLabourWakeInstantsAndBudgets(t *testing.T) {
 	if err := f.Run(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+	// Review P2 (ticket-20 L3): the phase/budget pins below must not pass
+	// vacuously on an inert trajectory, so require the run to have produced
+	// at least one filing, one decision and one settlement first.
+	{
+		var filings, decisions, settlements int
+		for _, b := range f.Journal() {
+			for _, a := range b.Attempts {
+				switch a.Kind {
+				case "labour-offer":
+					filings++
+				case "labour-decision":
+					decisions++
+				case "labour-settlement":
+					settlements++
+				}
+			}
+		}
+		if filings == 0 || decisions == 0 || settlements == 0 {
+			t.Fatalf("inert labour trajectory: filings=%d decisions=%d settlements=%d", filings, decisions, settlements)
+		}
+	}
 	head := f.k.SnapshotHead()
 	type budgetKey struct {
 		actor sim.EntityID
@@ -540,6 +561,25 @@ func TestNaturalLabourLifecycle(t *testing.T) {
 	}
 	if err := f.Run(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+	// Review P2 (ticket-20 L3): the lifecycle pins must not pass vacuously,
+	// so require an actual filed offer and a decided one before checking the
+	// transitions.
+	{
+		var filed, decided int
+		for _, b := range f.Journal() {
+			for _, a := range b.Attempts {
+				switch a.Kind {
+				case "labour-offer":
+					filed++
+				case "labour-decision":
+					decided++
+				}
+			}
+		}
+		if filed == 0 || decided == 0 {
+			t.Fatalf("inert labour lifecycle: filed=%d decided=%d", filed, decided)
+		}
 	}
 	type offerKey struct {
 		worker sim.EntityID
@@ -1368,4 +1408,46 @@ func naturalFrameJournal(body []byte) []byte {
 	out = append(out, body...)
 	digest := sha256.Sum256(out)
 	return append(out, digest[:]...)
+}
+
+// Ticket-20 fix regression: an ORGANIC birth under mechanism v7 must run to
+// the horizon, which requires both (a) the G5 allocation whitelist to admit
+// the newborn's two labour rows under v7, and (b) the labour-offer and
+// labour-book descriptors to declare rule 511 as a writer (the allocation path
+// checks the per-row writer discipline). Both gaps were found by the
+// experiment lane when the designated cells halted at the first accepted
+// birth; this test pins the fixed path end to end.
+func TestNaturalV7OrganicBirthUnderWagePolicy(t *testing.T) {
+	for _, founders := range []int{10, 11} {
+		f, err := NewNatural(NaturalOptions{Patches: 2, R: 8, Seed: 0, Workers: 1, Births: true,
+			PolicyRef: strategy.FrozenNaturalPolicy9().Ref, Mechanism: NaturalMechanismV7, Founders: founders})
+		if err != nil {
+			t.Fatalf("founders=%d construct: %v", founders, err)
+		}
+		for i := 0; i < 400; i++ {
+			ok, err := f.Step(context.Background())
+			if err != nil {
+				t.Fatalf("founders=%d step %d: %v", founders, i, err)
+			}
+			if !ok {
+				break
+			}
+			if checks := f.Checkpoints(); checks[len(checks)-1].Hour >= 30 {
+				break
+			}
+		}
+		checks := f.Checkpoints()
+		if checks[len(checks)-1].Hour < 30 {
+			t.Fatalf("founders=%d stopped early at h%d", founders, checks[len(checks)-1].Hour)
+		}
+		// Conservation is re-verified hourly by the runner; assert at least one
+		// organic birth so the allocation path is genuinely exercised.
+		births := int64(0)
+		for _, c := range checks {
+			births = c.Metrics.Births
+		}
+		if births < 1 {
+			t.Fatalf("founders=%d produced no organic birth; the allocation path is untested", founders)
+		}
+	}
 }
