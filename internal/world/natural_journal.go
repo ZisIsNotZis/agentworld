@@ -33,9 +33,14 @@ import (
 // build with its typed slot-claim refusal notes, build-denied-eat, rest,
 // paired-meal, fallback-eatstored, birth-request, birth-reply with its
 // typed accept/refusal/silent evidence and the allocator-collision
-// lost-birth note) is journaled and replayed attempt-for-attempt. The world-caused pulse rules (501 regen-split, 502
+// lost-birth note) is journaled and replayed attempt-for-attempt, and —
+// ticket 20 — the wage-contract kinds: labour-offer (the rule-516 filing),
+// labour-decision (the rule-517 accept or refusal), labour-settlement (the
+// committed rule-518 proposal) and labour-void (the typed zero-mutation
+// settlement refusal, contract taxonomy or the fold's recorded
+// settlement-precedence note). The world-caused pulse rules (501 regen-split, 502
 // spoilage, 503 wear, 504 basal, 508 cultivated-grant, 513 birth-expiry, 514
-// age-death) commit no attempt rows — they are typed in the counts and
+// age-death, 519 labour-expiry) commit no attempt rows — they are typed in the counts and
 // verified through the full accepted event partition, whose every byte must
 // equal the trusted replay, including rule 512 refusals (recorded as typed
 // birth-reply evidence) and rule 511's entity-create births. There is no
@@ -107,6 +112,12 @@ type NaturalJournalCounts struct {
 	// Provisions counts the rule-515 claim attempts (ticket 17); it is
 	// omitted while zero so every recorded v5 journal keeps its bytes.
 	Provisions uint32 `json:"Provisions,omitempty"`
+	// The wage-contract attempt kinds (ticket 20); all four are omitted
+	// while zero so every recorded v5/v6 journal keeps its bytes.
+	LabourOffers      uint32 `json:"LabourOffers,omitempty"`
+	LabourDecisions   uint32 `json:"LabourDecisions,omitempty"`
+	LabourSettlements uint32 `json:"LabourSettlements,omitempty"`
+	LabourVoids       uint32 `json:"LabourVoids,omitempty"`
 
 	RegenSplits, Spoilage uint32
 	Wear, Basal           uint32
@@ -383,6 +394,14 @@ func naturalJournalCounts(batches []NaturalBatch, events []kernel.Event) Natural
 				c.Eats++
 			case "provision":
 				c.Provisions++
+			case "labour-offer":
+				c.LabourOffers++
+			case "labour-decision":
+				c.LabourDecisions++
+			case "labour-settlement":
+				c.LabourSettlements++
+			case "labour-void":
+				c.LabourVoids++
 			case "eat-stored":
 				c.EatStored++
 			case "wait":

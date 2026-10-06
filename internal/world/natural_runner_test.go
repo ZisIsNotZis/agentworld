@@ -821,7 +821,7 @@ func TestNaturalRunnerBuildClaimFoldAndDenialLoop(t *testing.T) {
 		}
 		at := NaturalBuildCompletion(start)
 		head := k.SnapshotHead()
-		if err := f.arbitrateBuilds(scheduler.SnapshotView{Reader: head.Reader, Authority: head.Authority, Version: head.Version}, at, []sim.EntityID{1}); err != nil {
+		if err := f.arbitrateCompletions(scheduler.SnapshotView{Reader: head.Reader, Authority: head.Authority, Version: head.Version}, at, []sim.EntityID{1}, nil); err != nil {
 			t.Fatal(err)
 		}
 		outcome, ok := f.builds[1]

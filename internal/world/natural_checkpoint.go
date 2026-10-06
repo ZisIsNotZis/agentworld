@@ -91,13 +91,14 @@ var naturalManifestMechanismSlots = []int{1, 3, 4, 5}
 // decoder accepts; anything else fails closed.
 func naturalPolicyFormats() map[uint32]bool {
 	return map[uint32]bool{strategy.NaturalPolicyFormatV5: true, strategy.NaturalPolicyFormatV6: true,
-		strategy.NaturalPolicyFormatV7: true, strategy.NaturalPolicyFormatV7b: true}
+		strategy.NaturalPolicyFormatV7: true, strategy.NaturalPolicyFormatV7b: true,
+		strategy.NaturalPolicyFormatV9: true}
 }
 
 // naturalManifestPolicyRef resolves the manifest's declared policy identity
 // from its policy-format slot: 5 is natural/5, 6 is natural/6, 7 is
-// natural/7, 8 is natural/7b, anything else fails closed (decode already
-// rejects foreign slots).
+// natural/7, 8 is natural/7b, 9 is natural/9 (ticket 20), anything else
+// fails closed (decode already rejects foreign slots).
 func (m naturalManifest) naturalManifestPolicyRef() (strategy.NaturalRef, error) {
 	switch m.policyFormat {
 	case strategy.NaturalPolicyFormatV5:
@@ -108,6 +109,8 @@ func (m naturalManifest) naturalManifestPolicyRef() (strategy.NaturalRef, error)
 		return strategy.FrozenNaturalPolicy7().Ref, nil
 	case strategy.NaturalPolicyFormatV7b:
 		return strategy.FrozenNaturalPolicy7b().Ref, nil
+	case strategy.NaturalPolicyFormatV9:
+		return strategy.FrozenNaturalPolicy9().Ref, nil
 	}
 	return strategy.NaturalRef{}, ErrNaturalCheckpoint
 }
@@ -206,7 +209,7 @@ func (o NaturalRestoreOptions) validate() error {
 		return fmt.Errorf("%w: mechanism %d is not an admitted mechanism version", ErrNaturalCheckpoint, uint16(o.Mechanism))
 	}
 	if !naturalRefLegalUnderMechanism(o.mechanism(), o.policyRef()) {
-		return fmt.Errorf("%w: policy ref %+v is not legal under mechanism %d (natural/7 and natural/7b require mechanism v6)", ErrNaturalCheckpoint, o.policyRef(), uint16(o.mechanism()))
+		return fmt.Errorf("%w: policy ref %+v is not legal under mechanism %d (natural/7 and natural/7b require mechanism >= v6; natural/9 requires mechanism v7)", ErrNaturalCheckpoint, o.policyRef(), uint16(o.mechanism()))
 	}
 	return nil
 }
@@ -347,7 +350,7 @@ func newNaturalFixtureRunnerForPolicy(patches int, r int64, seed uint64, births 
 	}
 	// The genesis gate reads the same declared projection mirror the journal
 	// reconstruction reads, so the seeds and the shadow cannot drift apart.
-	patchStates, slotStates, founderStates, err := naturalGenesisProjection(patches, r, seed, true, founders)
+	patchStates, slotStates, founderStates, err := naturalGenesisProjection(patches, r, seed, true, founders, mechanism)
 	if err != nil {
 		return nil, err
 	}
@@ -712,13 +715,17 @@ func decodeNaturalManifest(data []byte) (naturalManifest, error) {
 		case i == naturalManifestMechanismWorldFormatSlot:
 			// The mechanism block's world-format slot fixes the declared
 			// mechanism: 5 is the frozen v5 zero value, 6 is mechanism v6,
-			// anything else fails closed.
-			if v != uint32(NaturalMechanismV5.worldVersion()) && v != uint32(NaturalMechanismV6.worldVersion()) {
+			// 7 is mechanism v7 (ticket 20), anything else fails closed.
+			if v != uint32(NaturalMechanismV5.worldVersion()) && v != uint32(NaturalMechanismV6.worldVersion()) &&
+				v != uint32(NaturalMechanismV7.worldVersion()) {
 				return m, ErrNaturalCheckpoint
 			}
 			m.mechanism = NaturalMechanismV5
 			if v == uint32(NaturalMechanismV6.worldVersion()) {
 				m.mechanism = NaturalMechanismV6
+			}
+			if v == uint32(NaturalMechanismV7.worldVersion()) {
+				m.mechanism = NaturalMechanismV7
 			}
 			expected = v
 		case mechanismSlots[i]:
@@ -743,7 +750,8 @@ func decodeNaturalManifest(data []byte) (naturalManifest, error) {
 		}
 	}
 	// Ref/mechanism consistency at the byte level (fail closed): the
-	// provision policies exist only under mechanism v6.
+	// provision policies exist only under mechanism >= v6, and natural/9
+	// (the wage-contract policy) only under mechanism v7.
 	manifestRef, err := m.naturalManifestPolicyRef()
 	if err != nil || !naturalRefLegalUnderMechanism(m.mechanism, manifestRef) {
 		return naturalManifest{}, ErrNaturalCheckpoint
@@ -970,7 +978,7 @@ func encodeNaturalStrategy(f *Natural) ([]byte, error) {
 // expectation set, so a missing, extra, or mis-caused reservation fails the
 // exact match. At the final horizon boundary the pulse schedules nothing and
 // the exact expectation set is empty.
-func naturalExpectedBoundaryWakes(births bool, hour int, living []sim.EntityID, reserved map[sim.EntityID]int64) (map[scheduler.Wake]bool, error) {
+func naturalExpectedBoundaryWakes(births, labourLane bool, hour int, living []sim.EntityID, reserved map[sim.EntityID]int64) (map[scheduler.Wake]bool, error) {
 	// At the final horizon boundary the pulse schedules nothing, so the exact
 	// expectation set is empty. NaturalPhaseTime refuses h >= NaturalHorizonHours
 	// (the horizon hour has no claim instant), so this must return before the
@@ -982,8 +990,13 @@ func naturalExpectedBoundaryWakes(births bool, hour int, living []sim.EntityID, 
 	if err != nil {
 		return nil, err
 	}
+	// The shared negotiation-filing instant carries an audit wake when
+	// either lane can file at it: births enabled, or the wage-contract lane
+	// (ticket 20, natural/9 evaluates its rule-516 filing there even with
+	// births off). The decision and settle wakes are scheduled mid-hour and
+	// consumed mid-hour, so they are never pending at a pulse boundary.
 	var requestAt sim.SimTime
-	if births {
+	if births || labourLane {
 		requestAt, err = NaturalPhaseTime(hour, NaturalPhaseBirthRequest)
 		if err != nil {
 			return nil, err
@@ -1001,7 +1014,7 @@ func naturalExpectedBoundaryWakes(births bool, hour int, living []sim.EntityID, 
 		} else {
 			expected[scheduler.Wake{Actor: id, At: claim, Cause: scheduler.WakeNeedThreshold}] = true
 		}
-		if births {
+		if births || labourLane {
 			expected[scheduler.Wake{Actor: id, At: requestAt, Cause: scheduler.WakeAudit}] = true
 		}
 	}
@@ -1019,7 +1032,7 @@ func naturalExpectedBoundaryWakes(births bool, hour int, living []sim.EntityID, 
 // exactly the runner's own clock protocol: one idle fiber per roster entity
 // with the frozen alive invariant, plus the clock fiber, and the exact
 // expected wake set with no missing or extra wakes (no supersets).
-func verifyNaturalBoundaryTopology(snap scheduler.Snapshot, births bool, hour int, roster []sim.EntityID, lifecycle map[sim.EntityID]scheduler.Lifecycle, reserved map[sim.EntityID]int64) error {
+func verifyNaturalBoundaryTopology(snap scheduler.Snapshot, births, labourLane bool, hour int, roster []sim.EntityID, lifecycle map[sim.EntityID]scheduler.Lifecycle, reserved map[sim.EntityID]int64) error {
 	if snap.Time != sim.SimTime(hour)*sim.SimTime(NaturalHour) || len(snap.Fibers) != len(roster)+1 {
 		return ErrNaturalCheckpoint
 	}
@@ -1040,7 +1053,7 @@ func verifyNaturalBoundaryTopology(snap scheduler.Snapshot, births bool, hour in
 			living = append(living, id)
 		}
 	}
-	expected, err := naturalExpectedBoundaryWakes(births, hour, living, reserved)
+	expected, err := naturalExpectedBoundaryWakes(births, labourLane, hour, living, reserved)
 	if err != nil {
 		return err
 	}
@@ -1066,7 +1079,7 @@ func verifyNaturalBoundaryTopology(snap scheduler.Snapshot, births bool, hour in
 // fiber armed for the next pulse, one claim wake per founder, the
 // births-enabled request wakes exactly when the flag demands them, and no
 // WakeBirth reservation (no newborn exists at h0).
-func verifyNaturalNeutralScheduler(k *kernel.Kernel, journal []NaturalBatch, snap scheduler.Snapshot, births bool, patches, founders int) error {
+func verifyNaturalNeutralScheduler(k *kernel.Kernel, journal []NaturalBatch, snap scheduler.Snapshot, births, labourLane bool, patches, founders int) error {
 	if k == nil || len(journal) != 1 || len(journal[0].Attempts) != 0 || journal[0].Time != 0 {
 		return ErrNaturalCheckpoint
 	}
@@ -1082,7 +1095,7 @@ func verifyNaturalNeutralScheduler(k *kernel.Kernel, journal []NaturalBatch, sna
 		roster = append(roster, actor)
 		lifecycle[actor] = scheduler.Alive
 	}
-	if err := verifyNaturalBoundaryTopology(snap, births, 0, roster, lifecycle, nil); err != nil {
+	if err := verifyNaturalBoundaryTopology(snap, births, labourLane, 0, roster, lifecycle, nil); err != nil {
 		return err
 	}
 	for _, fiber := range snap.Fibers {
@@ -1337,7 +1350,7 @@ func (p *naturalProjection) applyPatchDelta(mechanism NaturalMechanism, patches 
 			}
 			v.Gathered = n
 		case NaturalSlotTenureModeField:
-			if rule != NaturalWearRule && rule != NaturalBuildRule {
+			if rule != NaturalWearRule && rule != NaturalBuildRule && !(rule == NaturalLabourSettlementRule && mechanism == NaturalMechanismV7) {
 				return ErrNaturalCheckpoint
 			}
 			n, err := integer()
@@ -1346,7 +1359,7 @@ func (p *naturalProjection) applyPatchDelta(mechanism NaturalMechanism, patches 
 			}
 			v.Mode = NaturalTenureMode(n)
 		case NaturalSlotTenureOwnerField:
-			if rule != NaturalWearRule && rule != NaturalBuildRule {
+			if rule != NaturalWearRule && rule != NaturalBuildRule && !(rule == NaturalLabourSettlementRule && mechanism == NaturalMechanismV7) {
 				return ErrNaturalCheckpoint
 			}
 			id, err := naturalDeltaRef(d.After)
@@ -1355,7 +1368,7 @@ func (p *naturalProjection) applyPatchDelta(mechanism NaturalMechanism, patches 
 			}
 			v.Owner = id
 		case NaturalSlotTenureCultivatedField:
-			if rule != NaturalWearRule && rule != NaturalBuildRule {
+			if rule != NaturalWearRule && rule != NaturalBuildRule && !(rule == NaturalLabourSettlementRule && mechanism == NaturalMechanismV7) {
 				return ErrNaturalCheckpoint
 			}
 			n, err := integer()
@@ -1373,14 +1386,20 @@ func (p *naturalProjection) applyPatchDelta(mechanism NaturalMechanism, patches 
 		}
 		switch d.Field {
 		case NaturalBagUnitsField:
-			// Rule 515 (mechanism v6 only) is the one draw rule that writes
-			// the bag besides gather/consume/build/birth: the provisioned
-			// unit enters the bag at the claim instant. The frozen v5 writer
-			// set refuses it, so the shadow refuses it there too.
+			// Rule 515 (mechanism v6 only) and rule 518's worker delivery
+			// (mechanism v7 only) are the draw rules that write the bag besides
+			// gather/consume/build/birth: the provisioned unit enters the bag at
+			// the claim instant, the wage delivery empties it at the settle
+			// instant. The frozen v5 writer set refuses both, so the shadow
+			// refuses them there too.
 			switch rule {
 			case NaturalGatherRule, NaturalConsumeRule, NaturalBuildRule, NaturalBirthReplyRule:
 			case NaturalProvisionRule:
 				if mechanism != NaturalMechanismV6 {
+					return ErrNaturalCheckpoint
+				}
+			case NaturalLabourSettlementRule:
+				if mechanism != NaturalMechanismV7 {
 					return ErrNaturalCheckpoint
 				}
 			default:
@@ -1428,7 +1447,11 @@ func (p *naturalProjection) applyPatchDelta(mechanism NaturalMechanism, patches 
 		if err != nil {
 			return err
 		}
-		if rule != NaturalWearRule && rule != NaturalBuildRule {
+		// Rule 503 wear and rule 505 build; mechanism v7 adds rule 518's
+		// enumerated settlement writes (invested/wip, plus capital and
+		// points-created when the wage completes a point) — the one sanctioned
+		// non-builder worksite writer, ticket 20.
+		if rule != NaturalWearRule && rule != NaturalBuildRule && !(rule == NaturalLabourSettlementRule && mechanism == NaturalMechanismV7) {
 			return ErrNaturalCheckpoint
 		}
 		n, err := integer()
@@ -1464,6 +1487,12 @@ func (p *naturalProjection) applyPatchDelta(mechanism NaturalMechanism, patches 
 			case NaturalSpoilageRule, NaturalGrantRule, NaturalEatStoredRule, NaturalBirthReplyRule:
 			case NaturalProvisionRule:
 				if mechanism != NaturalMechanismV6 {
+					return ErrNaturalCheckpoint
+				}
+			case NaturalLabourSettlementRule:
+				// The wage settlement moves one stock unit from the employer's
+				// granary to the worker's (mechanism v7 only, ticket 20).
+				if mechanism != NaturalMechanismV7 {
 					return ErrNaturalCheckpoint
 				}
 			default:
@@ -1504,6 +1533,22 @@ func (p *naturalProjection) applyPatchDelta(mechanism NaturalMechanism, patches 
 				return err
 			}
 			a.Granary.Provisioned = n
+		case NaturalGranaryWagesPaidField, NaturalGranaryWagesEarnedField:
+			// The rule-518 wage ledgers (ticket 20): only the settlement rule
+			// writes them, only under mechanism v7 (the v5/v6 granaries have no
+			// fields 8 or 9, so those replays refuse any write here).
+			if rule != NaturalLabourSettlementRule || mechanism != NaturalMechanismV7 {
+				return ErrNaturalCheckpoint
+			}
+			n, err := integer()
+			if err != nil {
+				return err
+			}
+			if d.Field == NaturalGranaryWagesPaidField {
+				a.Granary.WagesPaid = n
+			} else {
+				a.Granary.WagesEarned = n
+			}
 		case NaturalGranaryLastStoredMealHourField:
 			// Rule 509's stored meal and rule 515's provision share the
 			// once-per-actor-hour draw guard; the hour field is written by
@@ -1608,6 +1653,104 @@ func (p *naturalProjection) applyPatchDelta(mechanism NaturalMechanism, patches 
 				return ErrNaturalCheckpoint
 			}
 		}
+	case NaturalLabourOfferTypeID:
+		// The wage-contract offer row (ticket 20, mechanism v7 only): rule
+		// 516 files the four filing fields, rule 517 writes the enumerated
+		// decision fields, rule 519 expires and clears (status only) — the
+		// registry's G5 writer table mirrored exactly.
+		if mechanism != NaturalMechanismV7 {
+			return ErrNaturalCheckpoint
+		}
+		a, err := p.actor(d.Entity)
+		if err != nil {
+			return err
+		}
+		switch d.Field {
+		case NaturalLabourOfferHourField, NaturalLabourOfferLastOfferHourField:
+			if rule != NaturalLabourOfferRule {
+				return ErrNaturalCheckpoint
+			}
+			n, err := integer()
+			if err != nil {
+				return err
+			}
+			if d.Field == NaturalLabourOfferHourField {
+				a.Offer.Hour = n
+			} else {
+				a.Offer.LastOfferHour = n
+			}
+		case NaturalLabourOfferAddresseeField:
+			if rule != NaturalLabourOfferRule {
+				return ErrNaturalCheckpoint
+			}
+			id, err := naturalDeltaRef(d.After)
+			if err != nil {
+				return err
+			}
+			a.Offer.Addressee = id
+		case NaturalLabourOfferStatusField:
+			if rule != NaturalLabourOfferRule && rule != NaturalLabourDecisionRule && rule != NaturalLabourExpireRule {
+				return ErrNaturalCheckpoint
+			}
+			n, err := integer()
+			if err != nil {
+				return err
+			}
+			a.Offer.Status = NaturalRequestStatus(n)
+		case NaturalLabourOfferLastReplyHourField:
+			if rule != NaturalLabourDecisionRule {
+				return ErrNaturalCheckpoint
+			}
+			n, err := integer()
+			if err != nil {
+				return err
+			}
+			a.Offer.LastReplyHour = n
+		default:
+			return ErrNaturalCheckpoint
+		}
+	case NaturalLabourBookTypeID:
+		// The employer engagement row (ticket 20, mechanism v7 only): rule
+		// 517 writes the engagement slot and the decision audit, rule 519
+		// clears the engagement fields (the audit persists).
+		if mechanism != NaturalMechanismV7 {
+			return ErrNaturalCheckpoint
+		}
+		a, err := p.actor(d.Entity)
+		if err != nil {
+			return err
+		}
+		switch d.Field {
+		case NaturalLabourBookEngagedWorkerField:
+			if rule != NaturalLabourDecisionRule && rule != NaturalLabourExpireRule {
+				return ErrNaturalCheckpoint
+			}
+			id, err := naturalDeltaRef(d.After)
+			if err != nil {
+				return err
+			}
+			a.Book.EngagedWorker = id
+		case NaturalLabourBookEngagedHourField:
+			if rule != NaturalLabourDecisionRule && rule != NaturalLabourExpireRule {
+				return ErrNaturalCheckpoint
+			}
+			n, err := integer()
+			if err != nil {
+				return err
+			}
+			a.Book.EngagedHour = n
+		case NaturalLabourBookLastDecisionHourField:
+			if rule != NaturalLabourDecisionRule {
+				return ErrNaturalCheckpoint
+			}
+			n, err := integer()
+			if err != nil {
+				return err
+			}
+			a.Book.LastDecisionHour = n
+		default:
+			return ErrNaturalCheckpoint
+		}
 	default:
 		return ErrNaturalCheckpoint
 	}
@@ -1616,7 +1759,9 @@ func (p *naturalProjection) applyPatchDelta(mechanism NaturalMechanism, patches 
 
 // applyAllocationDelta mirrors one entity-create delta: a complete newborn
 // row written absent-before. The assembled newborn is validated and appended
-// by finishBirth.
+// by finishBirth. Under mechanism v7 the newborn additionally allocates its
+// nine-field granary (the wage ledgers, seeded 0) and its two idle
+// wage-contract rows.
 func (p *naturalProjection) applyAllocationDelta(mechanism NaturalMechanism, patches int, d component.FieldDelta) error {
 	if !naturalNewbornEntity(patches, d.Entity) {
 		return ErrNaturalCheckpoint
@@ -1700,12 +1845,23 @@ func (p *naturalProjection) applyAllocationDelta(mechanism NaturalMechanism, pat
 		case NaturalGranaryStoredMealsField:
 			return set(&state.Granary.StoredMeals)
 		case NaturalGranaryProvisionedField:
-			// Mechanism v6 only: every newborn granary row carries the
+			// Mechanism v6 and v7: every newborn granary row carries the
 			// provisioned ledger (seeded 0); the v5 allocation never does.
-			if mechanism != NaturalMechanismV6 {
+			if mechanism != NaturalMechanismV6 && mechanism != NaturalMechanismV7 {
 				return ErrNaturalCheckpoint
 			}
 			return set(&state.Granary.Provisioned)
+		case NaturalGranaryWagesPaidField:
+			// Mechanism v7 only (ticket 20): the wage ledgers are seeded 0.
+			if mechanism != NaturalMechanismV7 {
+				return ErrNaturalCheckpoint
+			}
+			return set(&state.Granary.WagesPaid)
+		case NaturalGranaryWagesEarnedField:
+			if mechanism != NaturalMechanismV7 {
+				return ErrNaturalCheckpoint
+			}
+			return set(&state.Granary.WagesEarned)
 		case NaturalGranaryLastStoredMealHourField:
 			return set(&state.Granary.LastStoredMealHour)
 		case NaturalGranarySpoilDebtField:
@@ -1771,6 +1927,51 @@ func (p *naturalProjection) applyAllocationDelta(mechanism NaturalMechanism, pat
 		case NaturalBirthRequestLastReplyHourField:
 			return set(&state.Request.LastReplyHour)
 		}
+	case NaturalLabourOfferTypeID:
+		// Mechanism v7 only (ticket 20): the newborn's idle offer row.
+		if mechanism != NaturalMechanismV7 {
+			return ErrNaturalCheckpoint
+		}
+		switch d.Field {
+		case NaturalLabourOfferHourField:
+			return set(&state.Offer.Hour)
+		case NaturalLabourOfferAddresseeField:
+			id, err := naturalDeltaRef(d.After)
+			if err != nil {
+				return err
+			}
+			state.Offer.Addressee = id
+			return nil
+		case NaturalLabourOfferStatusField:
+			n, err := integer()
+			if err != nil {
+				return err
+			}
+			state.Offer.Status = NaturalRequestStatus(n)
+			return nil
+		case NaturalLabourOfferLastOfferHourField:
+			return set(&state.Offer.LastOfferHour)
+		case NaturalLabourOfferLastReplyHourField:
+			return set(&state.Offer.LastReplyHour)
+		}
+	case NaturalLabourBookTypeID:
+		// Mechanism v7 only (ticket 20): the newborn's idle book row.
+		if mechanism != NaturalMechanismV7 {
+			return ErrNaturalCheckpoint
+		}
+		switch d.Field {
+		case NaturalLabourBookEngagedWorkerField:
+			id, err := naturalDeltaRef(d.After)
+			if err != nil {
+				return err
+			}
+			state.Book.EngagedWorker = id
+			return nil
+		case NaturalLabourBookEngagedHourField:
+			return set(&state.Book.EngagedHour)
+		case NaturalLabourBookLastDecisionHourField:
+			return set(&state.Book.LastDecisionHour)
+		}
 	default:
 		return ErrNaturalCheckpoint
 	}
@@ -1789,8 +1990,9 @@ func (p *naturalProjection) newbornIndex(id sim.EntityID) (int, bool) {
 // finishBirth validates the staged newborn of one entity-create event
 // against the allocator-derived next-ID rule (genesis base plus committed
 // births — no range and no cap), the frozen birth economics, and the actor
-// schema, then appends it in birth order.
-func (p *naturalProjection) finishBirth(patches int, hour int) error {
+// schema at the replay's mechanism (the mechanism-v7 newborn additionally
+// carries its two idle wage-contract rows), then appends it in birth order.
+func (p *naturalProjection) finishBirth(mechanism NaturalMechanism, patches int, hour int) error {
 	if len(p.staging) != 1 {
 		return ErrNaturalCheckpoint
 	}
@@ -1808,7 +2010,7 @@ func (p *naturalProjection) finishBirth(patches int, hour int) error {
 		!naturalPatchEntity(patches, state.Bag.Source) {
 		return ErrNaturalCheckpoint
 	}
-	if !validNaturalActor(patches, id, *state) {
+	if !validNaturalActorFor(mechanism, patches, id, *state) {
 		return ErrNaturalCheckpoint
 	}
 	p.newborns = append(p.newborns, NaturalNewbornState{ID: id, State: *state})
@@ -1820,9 +2022,13 @@ func (p *naturalProjection) finishBirth(patches int, hour int) error {
 // one scenario: the seed-derived founder rows (the founding-band prefix f of
 // the frozen block, stream positions 0..f−1), or the same rows lifted by
 // the declared founder-tenure fixture pre-history. tenure requires f ≥ 2 or
-// the default (f == 0): the pre-history seats founders 1 and 2.
-func naturalGenesisProjection(patches int, r int64, seed uint64, tenure bool, founders int) ([]NaturalPatchState, [][]NaturalSlotState, []NaturalActorState, error) {
-	if !NaturalFoundersValid(patches, founders) || (tenure && founders == 1) {
+// the default (f == 0): the pre-history seats founders 1 and 2. The
+// mechanism selects the wage-contract rows: under mechanism v7 every
+// founder's projection carries the same idle offer and book rows the seeds
+// carry, so the genesis conservation gate and the replay's authoritative
+// comparison read one declared state.
+func naturalGenesisProjection(patches int, r int64, seed uint64, tenure bool, founders int, mechanism NaturalMechanism) ([]NaturalPatchState, [][]NaturalSlotState, []NaturalActorState, error) {
+	if !NaturalFoundersValid(patches, founders) || (tenure && founders == 1) || !NaturalMechanismValid(mechanism) {
 		return nil, nil, nil, ErrNaturalCheckpoint
 	}
 	if founders == 0 {
@@ -1852,6 +2058,10 @@ func naturalGenesisProjection(patches int, r int64, seed uint64, tenure bool, fo
 			return nil, nil, nil, err
 		}
 		founderRows[i] = a
+		if mechanism == NaturalMechanismV7 {
+			founderRows[i].Offer = NaturalIdleLabourOfferState()
+			founderRows[i].Book = NaturalIdleLabourBookState()
+		}
 	}
 	if tenure {
 		// The fixture lift preserves every field the delta does not name
@@ -1891,7 +2101,7 @@ func naturalProjectionFromHistory(k *kernel.Kernel, journal []NaturalBatch, conf
 	if err != nil {
 		return nil, err
 	}
-	patchStates, slots, founderRows, err := naturalGenesisProjection(patches, config.R, config.Seed, config.FounderTenure, config.Founders)
+	patchStates, slots, founderRows, err := naturalGenesisProjection(patches, config.R, config.Seed, config.FounderTenure, config.Founders, mechanism)
 	if err != nil {
 		return nil, err
 	}
@@ -1929,7 +2139,7 @@ func naturalProjectionFromHistory(k *kernel.Kernel, journal []NaturalBatch, conf
 						}
 					}
 				}
-				if err := p.finishBirth(patches, hour); err != nil {
+				if err := p.finishBirth(mechanism, patches, hour); err != nil {
 					return nil, wrap(err)
 				}
 			case kernel.KindComponentPatch:
@@ -2253,11 +2463,11 @@ func (f *Natural) saveBundle(path string, fresh *Natural, boundary bool, m natur
 	snap := f.sched.Snapshot()
 	hour := int(snap.Time / sim.SimTime(NaturalHour))
 	if m.time == 0 {
-		if err := verifyNaturalNeutralScheduler(f.k, f.journal, snap, f.births, f.patches, f.founders); err != nil {
+		if err := verifyNaturalNeutralScheduler(f.k, f.journal, snap, f.births, f.naturalLabourLane(), f.patches, f.founders); err != nil {
 			return [32]byte{}, err
 		}
 	} else {
-		if err := verifyNaturalBoundaryTopology(snap, f.births, hour, f.roster, f.pulseLifecycle, f.birthWakes); err != nil {
+		if err := verifyNaturalBoundaryTopology(snap, f.births, f.naturalLabourLane(), hour, f.roster, f.pulseLifecycle, f.birthWakes); err != nil {
 			return [32]byte{}, err
 		}
 	}
@@ -2391,14 +2601,14 @@ func restoreNaturalSections(sections []checkpoint.Section, m naturalManifest, ex
 	snap := sched.Snapshot()
 	hour := int(m.time / sim.SimTime(NaturalHour))
 	if m.time == 0 {
-		if err := verifyNaturalNeutralScheduler(k, journal, snap, m.boundary, m.patches, naturalFoundersResolved(m.patches, m.founders)); err != nil {
+		if err := verifyNaturalNeutralScheduler(k, journal, snap, m.boundary, m.policyFormat == strategy.NaturalPolicyFormatV9, m.patches, naturalFoundersResolved(m.patches, m.founders)); err != nil {
 			return fail(err)
 		}
 	} else {
 		// A continuation's captured topology reflects the continuation flag:
 		// the pending wakes were scheduled by the latest pulse under it. Only
 		// the journal's shared first-hour batch replays under the boundary flag.
-		if err := verifyNaturalBoundaryTopology(snap, m.births, hour, reference.roster, reference.pulseLifecycle, reference.birthWakes); err != nil {
+		if err := verifyNaturalBoundaryTopology(snap, m.births, m.policyFormat == strategy.NaturalPolicyFormatV9, hour, reference.roster, reference.pulseLifecycle, reference.birthWakes); err != nil {
 			return fail(err)
 		}
 	}
