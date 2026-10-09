@@ -752,6 +752,15 @@ type Natural struct {
 	// empty map are the frozen path.
 	cognition      *NaturalCognition
 	claimDecisions map[sim.EntityID]strategy.NaturalChoice
+
+	// Optional Role B active generation (spec section 5). Nil is the frozen
+	// path; non-nil overrides the claim/bag and birth-request cascades for the
+	// actors it binds (see natural_cognitive_strategy.go).
+	cognitiveStrategy *NaturalCognitiveStrategy
+	// cognitiveCheckpoint is the caller-supplied cognition binding the next
+	// checkpoint manifest records (spec section 7.2). Nil leaves the manifest
+	// byte-unchanged.
+	cognitiveCheckpoint *NaturalCognitiveCheckpoint
 }
 
 func naturalField(field sim.FieldID, n int64) component.FieldSeed {
@@ -1059,6 +1068,11 @@ func NewNatural(o NaturalOptions) (*Natural, error) {
 // ticket 20 — Evaluate9 for {natural,9}. Every dispatch site still re-pins
 // choice.Ref == f.ref.
 func (f *Natural) naturalEvaluate(id sim.EntityID, obs strategy.NaturalObservation, ownOffer strategy.NaturalLabourOfferGuard) (strategy.NaturalChoice, error) {
+	if f.cognitiveStrategy != nil {
+		if choice, handled, err := f.cognitiveStrategy.evaluateClaim(f.patches, id, obs); handled || err != nil {
+			return choice, err
+		}
+	}
 	switch f.ref {
 	case strategy.FrozenNaturalPolicyV6().Ref:
 		return f.bound[id].EvaluateV6(obs)
@@ -1082,6 +1096,11 @@ func naturalLabourOfferGuard(a NaturalActorState) strategy.NaturalLabourOfferGua
 // h+40m+5µs for the bound ref (EvaluateBirthRequestV6 and its natural/7,
 // natural/7b and natural/9 twins file only at own energy ≥ 4).
 func (f *Natural) naturalEvaluateBirthRequest(id sim.EntityID, obs strategy.NaturalRequestObservation) (strategy.NaturalRequestChoice, error) {
+	if f.cognitiveStrategy != nil {
+		if choice, handled, err := f.cognitiveStrategy.evaluateBirthRequest(f.patches, id, obs); handled || err != nil {
+			return choice, err
+		}
+	}
 	switch f.ref {
 	case strategy.FrozenNaturalPolicyV6().Ref:
 		return f.bound[id].EvaluateBirthRequestV6(obs)

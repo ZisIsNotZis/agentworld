@@ -1,7 +1,6 @@
 package strategy
 
 import (
-	"agentworld/internal/sim"
 	"sort"
 )
 
@@ -156,115 +155,14 @@ func (b *NaturalBound) Evaluate7b(obs NaturalObservation) (NaturalChoice, error)
 	return natural7Claim(b, obs, false)
 }
 
-// natural7Claim is the shared natural/7 | natural/7b claim cascade. The
-// provision flag is fixed by the bound identity at the entry points above —
+// natural7Claim is the shared natural/7 | natural/7b claim cascade entry point.
+// The provision flag is fixed by the bound identity at the entry points above —
 // never by observation content — so each frozen ref has exactly one
-// deterministic cascade. The structure below is the frozen v6 Evaluate
-// verbatim up to the claim's bank legs.
+// deterministic cascade. The cascade body lives in natural_cognitive.go
+// (naturalClaimCascade); this entry passes the frozen thresholds, so the
+// frozen refs' behaviour is byte-identical.
 func natural7Claim(b *NaturalBound, obs NaturalObservation, provision bool) (NaturalChoice, error) {
-	if obs.Actor != b.actor || obs.Ref != b.policy.Ref ||
-		obs.Hour < 0 || obs.Hour >= naturalHorizonHours || obs.LastDenial > NaturalBuildDenied ||
-		len(obs.HomeSlots) > naturalSlotsPerPatch {
-		return NaturalChoice{}, ErrInvalidNaturalObservation
-	}
-	choice := NaturalChoice{Kind: NaturalWait, ObservedVersion: obs.WorldVersion, Ref: b.policy.Ref, Fallback: NaturalNoCandidate}
-	energy, energyOK := capacityInteger(obs.Energy, 0, naturalEnergyCapacity)
-	_, hungerOK := capacityInteger(obs.Hunger, 0, naturalHungerCapacity)
-	bag, bagOK := capacityInteger(obs.BagUnits, 0, naturalBagCapacity)
-	capital, capitalOK := capacityInteger(obs.Capital, 0, naturalKMax)
-	wip, wipOK := capacityInteger(obs.Wip, 0, naturalWipMax)
-	granary, granaryOK := capacityInteger(obs.GranaryStock, 0, naturalGranaryStockMax)
-	_, investedOK := capacityInteger(obs.InvestedUnits, 0, naturalHorizonHours)
-	lastBuild, lastBuildOK := capacityInteger(obs.LastBuildHour, naturalNeverHour, naturalHorizonHours-1)
-	lastMeal, lastMealOK := capacityInteger(obs.LastStoredMealHour, naturalNeverHour, naturalHorizonHours-1)
-	if !energyOK || !hungerOK || !bagOK || !capitalOK || !wipOK || !granaryOK || !investedOK || !lastBuildOK || !lastMealOK ||
-		lastBuild > int64(obs.Hour) || lastMeal > int64(obs.Hour) {
-		choice.Fallback = NaturalInvalidSelf
-		return choice, nil
-	}
-	// The bag names its holder's home patch whether empty or held; a founder
-	// must name its ID-placed patch, a newborn its proposer-placed patch.
-	home, err := obs.BagSource.EntityRef()
-	if err != nil || obs.BagSource.Kind() != sim.EntityRefKind || obs.BagSource.State() != sim.Present || !naturalPatchEntity(b.patches, home) {
-		choice.Fallback = NaturalInvalidSelf
-		return choice, nil
-	}
-	if expected, ok := naturalFounderHomePatch(b.patches, obs.Actor); ok && expected != home {
-		choice.Fallback = NaturalInvalidSelf
-		return choice, nil
-	}
-	// A recorded build denial implies the refused unit is still held.
-	if obs.LastDenial == NaturalBuildDenied && bag != 1 {
-		return NaturalChoice{}, ErrInvalidNaturalObservation
-	}
-	slots := append([]NaturalSlotView(nil), obs.HomeSlots...)
-	sort.Slice(slots, func(i, j int) bool { return slots[i].ID < slots[j].ID })
-	first := naturalFirstSlot(home)
-	for i, view := range slots {
-		if view.ID < first || view.ID >= first+naturalSlotsPerPatch || (i > 0 && slots[i-1].ID == view.ID) {
-			return NaturalChoice{}, ErrInvalidNaturalObservation
-		}
-		if _, ok := capacityInteger(view.Stock, 0, 1); !ok {
-			return NaturalChoice{}, ErrInvalidNaturalObservation
-		}
-	}
-	if energy == 0 {
-		return choice, nil // a dead actor never acts
-	}
-	if bag == 1 { // frozen v6 bag decision, verbatim: Build | Eat
-		if b.policy.Budget.Candidates < 1 || b.policy.Budget.Evaluations < 1 {
-			choice.Fallback = NaturalBudgetExhausted
-			return choice, nil
-		}
-		if obs.LastDenial == NaturalBuildDenied {
-			// The world refused this hour's build (no free wild slot with
-			// stock 0); report Build unavailable and fall back to the meal.
-			choice.Kind, choice.Evaluated, choice.Fallback = NaturalEat, 1, NaturalNoFallback
-			return choice, nil
-		}
-		if capital+wip < naturalKMax && energy >= naturalPolicyTFloorV6 &&
-			(granary >= 1 || (wip >= 1 && energy >= naturalPolicyTFinishV6) || energy >= naturalPolicyTStartV6) {
-			choice.Kind, choice.Evaluated, choice.Fallback = NaturalBuild, 1, NaturalNoFallback
-		} else {
-			choice.Kind, choice.Evaluated, choice.Fallback = NaturalEat, 1, NaturalNoFallback
-		}
-		return choice, nil
-	}
-	if obs.LastDenial == NaturalGatherDenied { // denied-gather fallback, verbatim v6
-		// Provisioning is deliberately absent from the denial path, and the
-		// denial fallback draws the bank at any energy exactly as v6 does.
-		if granary >= 1 && lastMeal < int64(obs.Hour) {
-			choice.Kind, choice.Evaluated, choice.Fallback = NaturalEatStored, 1, NaturalNoFallback
-		} else {
-			choice.Kind, choice.RestDuration, choice.Evaluated, choice.Fallback = NaturalRest, NaturalRestDuration, 1, NaturalNoFallback
-		}
-		return choice, nil
-	}
-	candidates := make([]sim.EntityID, 0, len(slots))
-	for _, view := range slots {
-		if stock, ok := capacityInteger(view.Stock, 0, 1); ok && stock == 1 {
-			candidates = append(candidates, view.ID)
-		}
-	}
-	if len(candidates) > b.policy.Budget.Candidates || len(candidates) > b.policy.Budget.Evaluations {
-		choice.Fallback = NaturalBudgetExhausted // all-or-nothing: never a sorted prefix
-		return choice, nil
-	}
-	if len(candidates) > 0 {
-		choice.Kind, choice.TargetSlot, choice.Evaluated, choice.Fallback = NaturalGather, candidates[0], len(candidates), NaturalNoFallback
-		return choice, nil
-	}
-	// The natural/7 banking floors, in frozen order. Provision converts one
-	// granary unit into the bag (rule 515; the world shares the once-per-
-	// hour draw discipline); the bank is food only at the survival floor.
-	if provision && granary >= 1 && energy >= naturalPolicyTProvisionV7 {
-		choice.Kind, choice.Evaluated, choice.Fallback = NaturalProvision, 1, NaturalNoFallback
-		return choice, nil
-	}
-	if granary >= 1 && energy <= naturalPolicyTBankV7 && lastMeal < int64(obs.Hour) { // one stored meal per actor-hour at most
-		choice.Kind, choice.Evaluated, choice.Fallback = NaturalEatStored, 1, NaturalNoFallback
-	}
-	return choice, nil
+	return naturalClaimCascade(naturalClaimIdentity{Actor: b.actor, Patches: b.patches, Ref: b.policy.Ref, Budget: b.policy.Budget}, obs, provision, frozenNaturalClaimThresholds)
 }
 
 // EvaluateBirthRequest7 is the frozen natural/7 proposer decision at
@@ -295,83 +193,7 @@ func (b *NaturalBound) EvaluateBirthRequest7b(obs NaturalRequestObservation) (Na
 // natural7BirthRequest is the shared v6-verbatim birth-request cascade for
 // both 7 identities (structure of EvaluateBirthRequestV6, same margins).
 func natural7BirthRequest(b *NaturalBound, obs NaturalRequestObservation) (NaturalRequestChoice, error) {
-	if obs.Actor != b.actor || obs.Ref != b.policy.Ref ||
-		obs.Hour < 0 || obs.Hour >= naturalHorizonHours ||
-		obs.OwnRequest.Status > NaturalRequestExpired ||
-		obs.OwnRequest.LastRequestHour < naturalNeverHour || obs.OwnRequest.LastRequestHour > int64(obs.Hour) ||
-		(obs.OwnRequest.Status == NaturalRequestIdle && obs.OwnRequest.LastRequestHour != naturalNeverHour) ||
-		(obs.OwnRequest.Status != NaturalRequestIdle && obs.OwnRequest.LastRequestHour < 0) ||
-		!naturalPatchEntity(b.patches, obs.HomePatch) ||
-		(obs.TestClaims != nil && (obs.TestClaims.Capital < 0 || obs.TestClaims.Capital > naturalKMax ||
-			obs.TestClaims.Granary < 0 || obs.TestClaims.Granary > naturalGranaryStockMax)) {
-		return NaturalRequestChoice{}, ErrInvalidNaturalObservation
-	}
-	choice := NaturalRequestChoice{Kind: NaturalRequestWait, ObservedVersion: obs.WorldVersion, Ref: b.policy.Ref, Fallback: NaturalNoCandidate}
-	energy, energyOK := capacityInteger(obs.Energy, 0, naturalEnergyCapacity)
-	capital, capitalOK := capacityInteger(obs.Capital, 0, naturalKMax)
-	granary, granaryOK := capacityInteger(obs.GranaryStock, 0, naturalGranaryStockMax)
-	if !energyOK || !capitalOK || !granaryOK {
-		choice.Fallback = NaturalInvalidSelf
-		return choice, nil
-	}
-	founderHome, isFounder := naturalFounderHomePatch(b.patches, obs.Actor)
-	if isFounder && founderHome != obs.HomePatch {
-		return NaturalRequestChoice{}, ErrInvalidNaturalObservation
-	}
-	mates := append([]sim.EntityID(nil), obs.PatchMates...)
-	sort.Slice(mates, func(i, j int) bool { return mates[i] < mates[j] })
-	for i, mate := range mates {
-		if !naturalRosterEntity(b.patches, mate) || mate == obs.Actor || (i > 0 && mates[i-1] == mate) {
-			return NaturalRequestChoice{}, ErrInvalidNaturalObservation
-		}
-		// Founder placement is public fixed geometry: a founder mate on a
-		// different patch than the observed home patch is a malformed roster.
-		// Newborn placement stays runner-supplied public data; the world
-		// re-gates same-patch on fresh truth at the reply.
-		if home, ok := naturalFounderHomePatch(b.patches, mate); ok && home != obs.HomePatch {
-			return NaturalRequestChoice{}, ErrInvalidNaturalObservation
-		}
-	}
-	if energy == 0 {
-		return choice, nil // a dead actor never acts
-	}
-	if obs.OwnRequest.Status == NaturalRequestPending || obs.OwnRequest.LastRequestHour >= int64(obs.Hour) {
-		return choice, nil // one request per actor-hour; a pending request resolves first
-	}
-	// The frozen v6 proposer condition: the v5 margins with the own-energy
-	// filing floor TFile = 4 — the actor's own state must already sit at the
-	// gate margins the runner will re-check on fresh truth. The capital and
-	// granary margins are verbatim v5 (world.NaturalConsentMinCapital/
-	// Granary); a reported claim never rescues own eligibility.
-	if capital < naturalConsentMinCapital || granary < naturalConsentMinGranary || energy < naturalPolicyTFileV6 {
-		return choice, nil
-	}
-	if b.policy.Budget.Candidates < 1 || b.policy.Budget.Evaluations < 1 ||
-		len(mates) > b.policy.Budget.Candidates || len(mates) > b.policy.Budget.Evaluations {
-		choice.Fallback = NaturalBudgetExhausted
-		return choice, nil
-	}
-	if len(mates) == 0 {
-		return choice, nil
-	}
-	addressee := mates[0] // wraparound successor of the highest same-patch ID
-	for _, mate := range mates {
-		if mate > obs.Actor {
-			addressee = mate
-			break
-		}
-	}
-	claims := NaturalClaimOverride{Capital: capital, Granary: granary} // honest self-report
-	if obs.TestClaims != nil {
-		claims = *obs.TestClaims
-	}
-	choice.Kind = NaturalRequestFile
-	choice.Addressee = addressee
-	choice.ReportedCapital = claims.Capital
-	choice.ReportedGranary = claims.Granary
-	choice.Evaluated = len(mates)
-	choice.Fallback = NaturalNoFallback
-	return choice, nil
+	return naturalBirthRequestCascade(naturalClaimIdentity{Actor: b.actor, Patches: b.patches, Ref: b.policy.Ref, Budget: b.policy.Budget}, obs, naturalPolicyTFileV6)
 }
 
 // EvaluateBirthReply7 is the frozen natural/7 consenter decision at

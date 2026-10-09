@@ -155,6 +155,12 @@ type NaturalRestoreOptions struct {
 	// restores unchanged); an explicit 8P is the same spelling of the same
 	// world.
 	Founders int
+
+	// CognitiveLedgerPath, when set for a cognitive bundle, is the
+	// recorded-call ledger the manifest cognition block binds: a missing,
+	// short, or mismatched ledger refuses the restore (spec section 7.2). The
+	// zero value performs no ledger check.
+	CognitiveLedgerPath string
 }
 
 // policyRef resolves the declared policy identity: the zero value is the
@@ -596,6 +602,13 @@ type naturalManifest struct {
 	parentHead        kernel.PortableHead
 	depth             uint32
 	sections          [4][32]byte // journal, history, scheduler, strategy
+
+	// cognitive is the trailing omitempty cognition block (spec section 7.2);
+	// nil for every non-cognitive manifest, which keeps its bytes unchanged.
+	// cognitiveWire is the canonical block bytes appended after the founders
+	// field.
+	cognitive     *naturalCognitiveBlock
+	cognitiveWire []byte
 }
 
 func naturalBundleFlag(flag bool) byte {
@@ -675,9 +688,14 @@ func encodeNaturalManifest(m naturalManifest) []byte {
 	// the declared default (the full frozen block 8P) writes nothing, so
 	// every recorded manifest keeps its bytes and both default spellings
 	// encode identically; a non-default band extends the digest-covered body
-	// by exactly one u64.
+	// by exactly one u64. The cognition block (spec section 7.2) is the
+	// trailing omitempty block after the founders field: absent for every
+	// non-cognitive manifest.
 	if m.founders != 0 {
 		out = binary.BigEndian.AppendUint64(out, uint64(m.founders))
+	}
+	if len(m.cognitiveWire) > 0 {
+		out = append(out, m.cognitiveWire...)
 	}
 	digest := sha256.Sum256(out)
 	return append(out, digest[:]...)
@@ -693,10 +711,11 @@ func decodeNaturalManifest(data []byte) (naturalManifest, error) {
 		return m, ErrNaturalCheckpoint
 	}
 	// The manifest is fixed-width at the declared default; a non-default
-	// founding band extends the body by exactly its omitempty u64 field.
-	// Exact consumption rejects truncation, padding, and trailing fields.
+	// founding band extends the body by exactly its omitempty u64 field and
+	// the trailing cognition block extends it further. Anything shorter is a
+	// truncation; exact consumption below rejects padding and trailing fields.
 	manifestBodyWidth := len(encodeNaturalManifest(naturalManifest{})) - sha256.Size
-	if len(body) != manifestBodyWidth && len(body) != manifestBodyWidth+8 {
+	if len(body) < manifestBodyWidth {
 		return m, ErrNaturalCheckpoint
 	}
 	r := journalReader{data: body}
@@ -777,8 +796,18 @@ func decodeNaturalManifest(data []byte) (naturalManifest, error) {
 		copy(m.sections[i][:], r.take(32))
 	}
 	// The omitempty founding band: absent at the default, one u64 otherwise.
-	if len(body) == manifestBodyWidth+8 {
+	// The trailing cognition block (spec 7.2) is self-describing via its magic,
+	// so a cognitive manifest with no founders is unambiguous.
+	if len(body) > manifestBodyWidth && !hasNaturalCognitiveBlock(body[manifestBodyWidth:]) {
 		m.founders = int(r.u64())
+	}
+	if r.remaining() > 0 {
+		block, consumed, err := decodeNaturalCognitiveBlock(body[len(body)-r.remaining():])
+		if err != nil || consumed != r.remaining() {
+			return m, ErrNaturalCheckpoint
+		}
+		r.take(consumed)
+		m.cognitive = &block
 	}
 	// Boundary and lineage rules. time == 0 ↔ steps == 1: the only zero-time
 	// bundle is the neutral h0 pulse capture (or a Branch child of one); any
@@ -2452,6 +2481,18 @@ func (f *Natural) saveBundle(path string, fresh *Natural, boundary bool, m natur
 	if err != nil {
 		return [32]byte{}, err
 	}
+	// The cognition block (spec 7.2) rides the manifest only for a runner with
+	// an active generation and an attached binding; a nil state writes nothing
+	// and every non-cognitive manifest keeps its bytes.
+	if block, err := f.cognitiveBlockFromState(); err != nil {
+		return [32]byte{}, err
+	} else if block != nil {
+		wire, err := encodeNaturalCognitiveBlock(*block)
+		if err != nil {
+			return [32]byte{}, err
+		}
+		m.cognitive, m.cognitiveWire = block, wire
+	}
 	history, head, err := f.k.ExportHistory()
 	if err != nil {
 		return [32]byte{}, err
@@ -2480,7 +2521,7 @@ func (f *Natural) saveBundle(path string, fresh *Natural, boundary bool, m natur
 	if err != nil {
 		return [32]byte{}, err
 	}
-	reference, err := replayNaturalJournal(f.journal, config)
+	reference, err := replayNaturalJournalWithCognitive(f.journal, config, f.cognitiveJournalReplay())
 	if err != nil {
 		return [32]byte{}, ErrNaturalCheckpoint
 	}
@@ -2585,8 +2626,14 @@ func restoreNaturalSections(sections []checkpoint.Section, m naturalManifest, ex
 		return nil, ErrNaturalCheckpoint
 	}
 	// The identity config already carries both flags: Boundary governs the
-	// shared first-hour batch, Births every later batch.
-	reference, err := replayNaturalJournal(journal, identityConfig)
+	// shared first-hour batch, Births every later batch. A cognitive manifest
+	// re-activates its recorded generation from the apply boundary so the
+	// reference replay reproduces the recorded decisions.
+	replay, err := cognitiveReplayFromBlock(m.cognitive)
+	if err != nil {
+		return fail(err)
+	}
+	reference, err := replayNaturalJournalWithCognitive(journal, identityConfig, replay)
 	if err != nil {
 		return fail(err)
 	}
@@ -2712,6 +2759,11 @@ func restoreNaturalSections(sections []checkpoint.Section, m naturalManifest, ex
 	if len(fresh.roster)+1 != len(snap.Fibers) {
 		return nil, ErrNaturalCheckpoint
 	}
+	// The manifest cognition block re-activates the recorded generation and its
+	// exact actor bindings (spec 5.4/7.2).
+	if err := restoreCognitiveState(fresh, m.cognitive); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrNaturalCheckpoint, err)
+	}
 	return fresh, nil
 }
 
@@ -2786,6 +2838,11 @@ func RestoreNaturalCheckpoint(path string, expected NaturalRestoreOptions) (*Nat
 	}
 	if !naturalManifestMatches(m, expected) {
 		return nil, [32]byte{}, ErrNaturalCheckpoint
+	}
+	if m.cognitive != nil && expected.CognitiveLedgerPath != "" {
+		if err := VerifyCognitiveLedger(m.cognitive, expected.CognitiveLedgerPath); err != nil {
+			return nil, [32]byte{}, err
+		}
 	}
 	fresh, err := restoreNaturalSections(sections, m, expected)
 	if err != nil {

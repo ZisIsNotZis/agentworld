@@ -529,6 +529,20 @@ func verifyNaturalJournal(batches []NaturalBatch, k *kernel.Kernel, verified ker
 // reproducible from genesis only under that two-flag schedule, and for every
 // other bundle boundary and continuation flag are equal.
 func replayNaturalJournal(batches []NaturalBatch, config NaturalJournalConfig) (*Natural, error) {
+	return replayNaturalJournalWithCognitive(batches, config, nil)
+}
+
+// cognitiveJournalReplay carries the active Role B generation a cognitive
+// journal was produced under, so the reference replay reproduces the recorded
+// decisions (spec section 5.4). applyHour is the boundary at/after which the
+// generation took effect; applyHour <= 0 means it was active from genesis.
+type cognitiveJournalReplay struct {
+	generation strategy.NaturalCognitiveGeneration
+	actors     []sim.EntityID
+	applyHour  int
+}
+
+func replayNaturalJournalWithCognitive(batches []NaturalBatch, config NaturalJournalConfig, cognitive *cognitiveJournalReplay) (*Natural, error) {
 	if len(batches) > MaxNaturalJournalBatches {
 		return nil, ErrNaturalJournal
 	}
@@ -539,7 +553,29 @@ func replayNaturalJournal(batches []NaturalBatch, config NaturalJournalConfig) (
 	if err != nil {
 		return nil, ErrNaturalJournal
 	}
+	activated := false
+	activate := func() error {
+		if activated {
+			return nil
+		}
+		if err := reference.activateCognitiveGenerationLocked(cognitive.generation, cognitive.actors, nil); err != nil {
+			return err
+		}
+		activated = true
+		return nil
+	}
+	if cognitive != nil && cognitive.applyHour <= 0 {
+		if err := activate(); err != nil {
+			return nil, ErrNaturalJournal
+		}
+	}
 	for i, b := range batches {
+		if cognitive != nil && cognitive.applyHour > 0 && !activated &&
+			int(reference.sched.Time()/sim.SimTime(NaturalHour)) >= cognitive.applyHour {
+			if err := activate(); err != nil {
+				return nil, ErrNaturalJournal
+			}
+		}
 		processed, stepErr := reference.Step(context.Background())
 		if stepErr != nil || !processed || !sameNaturalJournalBatch(b, reference.journal[i]) {
 			return nil, ErrNaturalJournal

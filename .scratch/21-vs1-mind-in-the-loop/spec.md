@@ -232,8 +232,10 @@ declared predicate with measured selection pressure.
 
 A patch is a **new versioned strategy** in the `natural/*` family per ADR 0002:
 
-- **New ref**: `{id: "natural", version: head.version + 1}`, strictly monotonic; versions are never
-  inferred, and a patch can never name a version that is not exactly `parent.version + 1`.
+- **New ref**: `{id: "natural-cog", version: parent.version + 1}` — a **distinct ref id and format
+  space** outside the frozen `natural/5..9` refs and formats, so no patched ref can ever collide with
+  a frozen one; strictly monotonic; versions are never inferred, and a patch can never name a version
+  that is not exactly `parent.version + 1`.
 - **Parent ref**: exact, must equal the current head ref (no implicit inheritance).
 - **Payload**: a bounded vector of **typed integer deltas** over the declared parameter contract of
   Appendix C. Each parameter has an id, a meaning, the decision point it modulates, the frozen parent
@@ -276,14 +278,19 @@ A patch is a **new versioned strategy** in the `natural/*` family per ADR 0002:
 ### 5.4 Effectiveness in the running world, durability, restart
 
 The binding is runner state (the strategy section already carries policy content and per-actor
-bindings; strategies are not kernel components). On apply the run's **strategy section** is extended —
-for cognitive runs only — with (a) the canonical wire and fingerprint of every registered cognitive
-generation, (b) the per-actor binding table, and (c) the lineage chain of proposal/validation/apply
-digests. A restart from a checkpoint at or after the apply boundary restores the generation and its
-bindings, and the next claim decision observes the new ref (ADR 0002's rule). A restart from an
-earlier checkpoint restores the parent ref; that is correct causality, and the ledger records which
-boundary took effect. The manifest binds the cognition block of §7.2 so a mismatched or missing
-ledger refuses the restore.
+bindings; strategies are not kernel components). On apply the run's **manifest cognition block**
+(§7.2) is extended — for cognitive runs only — with (a) the canonical wire and fingerprint of every
+registered cognitive generation, (b) the per-actor binding table, and (c) the lineage chain of
+proposal/validation/apply digests. A restart from a checkpoint at or after the apply boundary
+restores the generation and its bindings, and the next claim decision is made under the new
+generation (ADR 0002's rule): the runner's frozen base ref is not changed by a rebind — it remains the
+journal, genome, manifest policy-format-slot, and strategy-section identity, and the head generation
+rides the cognition block and the runner's cognitive state. A restart from an earlier checkpoint
+restores the parent generation; that is correct causality, and the ledger records which boundary took
+effect. The manifest binds the cognition block of §7.2 so a mismatched or missing ledger refuses the
+restore. The apply binds the living roster at the boundary; a newborn's first claim before the next
+rebind takes the frozen fallback (a declared VS1 reduction: the apply binds the roster present at the
+boundary, and later newborns are re-bound only at the next audit-hour rebind).
 
 ### 5.5 Lineage and attribution record
 
@@ -431,8 +438,9 @@ status, wall-clock start and latency (non-causal), and the hash chain.
 
 The checkpoint manifest gains an **omitempty trailing `cognition` block**, present only for lanes with
 a non-nil seam: ledger file digest and record count at the boundary, wake-policy identity and
-fingerprint, base/head ref fingerprints and lineage head, cognitive ceiling thresholds, and the
-model/sampling identity digest. Decode consumes the block exactly as the existing omitempty
+fingerprint, base/head ref fingerprints and lineage head, cognitive ceiling thresholds, the
+model/sampling identity digest, the canonical wire and fingerprint of every registered generation,
+the per-actor binding table, and the lineage chain. Decode consumes the block exactly as the existing omitempty
 `founders` field is consumed, so **every recorded non-cognitive manifest keeps its bytes**. Restore
 refuses a missing, short, or mismatched ledger.
 
@@ -721,7 +729,7 @@ Frozen before any run; a band miss is an outcome reported verbatim and is never 
 |---|---|---|
 | L1 client + ledger + replay + budget | `internal/cognition/{client,ledger,replay,budget,codec}.go` (+ tests) | — |
 | L2 seam, wake policy, observation encoder | `internal/cognition/{observation,wake,rolea,intervention}.go`; `internal/world/natural_cognition.go`; the claim-phase hunks of `internal/world/natural.go` | L1 |
-| L3 patch format + lifecycle + persistence | `internal/strategy/{natural_cognitive.go,natural_cognitive_codec.go}`; `internal/cognition/{patch,roleb,sandbox}.go`; `internal/world/natural_checkpoint.go` (manifest/strategy-section/restore hunks) | L1, L2 |
+| L3 patch format + lifecycle + persistence | `internal/strategy/{natural_cognitive.go,natural_cognitive_codec.go}`; `internal/cognition/{patch,roleb,sandbox}.go`; `internal/world/{natural_cognitive_strategy.go,natural_cognitive_checkpoint.go}`; the manifest/restore hunks of `internal/world/natural_checkpoint.go`; the cognitive journal-replay hunk of `internal/world/natural_journal.go`; and the state-driven dispatch hunks of `internal/world/natural.go` | L1, L2 |
 | L4 experiment runner + arms + metrics + report | `cmd/vs1/**` (new command); reporter sections and bands | L1–L3 |
 | L5 docs | this file's evidence record, the ADR, and (separate later pass) the reconciliation edits | L4 |
 | L6 review | two fresh reviewers, no shared context with the workers | L4 |

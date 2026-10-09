@@ -32,21 +32,21 @@ const (
 	SourceFallback = "fallback"
 )
 
-// ParamID names one declared strategy parameter (Appendix C). The parameter
-// contract and its domains are the patch lane's; this package carries the
-// identity and the declared frozen vector.
-type ParamID string
+// ParamID names one declared strategy parameter (Appendix C). The contract's
+// home is internal/strategy (the owner of the versioned behaviour data); this
+// package re-exports it so the protocol surface stays self-describing.
+type ParamID = strategy.CognitiveParamID
 
 // The declared Appendix C parameter ids (the patchable strategy-side threshold
 // vector).
 const (
-	ParamClaimProvisionEnergyFloor ParamID = "claim.provision_energy_floor"
-	ParamClaimBankEnergyCeiling    ParamID = "claim.bank_energy_ceiling"
-	ParamClaimGatherEnergyFloor    ParamID = "claim.gather_energy_floor"
-	ParamBagBuildEnergyFloor       ParamID = "bag.build_energy_floor"
-	ParamBagBuildStartEnergyFloor  ParamID = "bag.build_start_energy_floor"
-	ParamBagBuildFinishEnergyFloor ParamID = "bag.build_finish_energy_floor"
-	ParamBirthFilingEnergyFloor    ParamID = "birth.filing_energy_floor"
+	ParamClaimProvisionEnergyFloor = strategy.CognitiveParamClaimProvisionEnergyFloor
+	ParamClaimBankEnergyCeiling    = strategy.CognitiveParamClaimBankEnergyCeiling
+	ParamClaimGatherEnergyFloor    = strategy.CognitiveParamClaimGatherEnergyFloor
+	ParamBagBuildEnergyFloor       = strategy.CognitiveParamBagBuildEnergyFloor
+	ParamBagBuildStartEnergyFloor  = strategy.CognitiveParamBagBuildStartEnergyFloor
+	ParamBagBuildFinishEnergyFloor = strategy.CognitiveParamBagBuildFinishEnergyFloor
+	ParamBirthFilingEnergyFloor    = strategy.CognitiveParamBirthFilingEnergyFloor
 )
 
 // FixtureIdentity is the declared experiment fixture (spec section 6.2).
