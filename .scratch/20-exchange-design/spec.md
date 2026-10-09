@@ -1,6 +1,6 @@
 # Exchange and trade (design, v9)
 
-Status: claimed
+Status: v9 wage-exchange work complete and evaluated; matrix-level verdict FAILED on one falsified predeclared non-distortion clause; merged to master in `586757a`.
 
 ## Issue
 

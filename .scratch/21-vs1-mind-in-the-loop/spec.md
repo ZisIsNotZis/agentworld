@@ -1,7 +1,10 @@
 # VS1 — Mind in the loop (design, ticket 21)
 
-Status: design frozen; implementation lanes not started. This file is the single source of truth for
-VS1. It is edited in place when the design changes; it is never a running log.
+Status: design frozen; implementation complete, gated and merged. VS1's eleven frozen exit criteria
+(EC-1..EC-11) all PASS in the hermetic evidence, the full `make check` passed at the gated revision
+`ebe5fd1`, and the work landed on master as merge commit `586757a`; the real-model arm remains
+blocked on spend authorisation (no real model call has been made). This file is the single source of
+truth for VS1. It is edited in place when the design changes; it is never a running log.
 
 Authority: the product decisions fixed by the operator in `docs/VERTICAL-SLICES.md` (2026-09-29) and
 the founding documents (`docs/VISION.md`, `docs/PRINCIPLES.md`, `docs/ARCHITECTURE.md`,
