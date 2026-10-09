@@ -142,7 +142,6 @@ type CognitiveAccount struct {
 	prompt     uint64
 	completion uint64
 	costMicros int64
-	lastHour   int
 	lastTotals [4]uint64
 	rows       []CognitiveRow
 	hit        *CognitiveCeilingHit
@@ -153,7 +152,7 @@ func NewCognitiveAccount(budget CognitiveBudget) (*CognitiveAccount, error) {
 	if err := budget.Validate(); err != nil {
 		return nil, err
 	}
-	return &CognitiveAccount{budget: budget, lastHour: -1}, nil
+	return &CognitiveAccount{budget: budget}, nil
 }
 
 // Budget returns the declared ceiling.
@@ -238,7 +237,6 @@ func (a *CognitiveAccount) ObserveHour(hour int) []CognitiveRow {
 		})
 	}
 	a.lastTotals = current
-	a.lastHour = hour
 	a.rows = rows
 	return rows
 }
