@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"agentworld/internal/cognition"
 	"agentworld/internal/cognition/protocol"
@@ -67,9 +68,10 @@ func scriptedResponder(spec cellSpec) func(cognition.ModelRequest) (cognition.Mo
 			if err := json.Unmarshal(req.Request, &wire); err != nil {
 				return cognition.ModelResponse{}, fmt.Errorf("scripted responder: %w", err)
 			}
+			deltas, intent := patchedDeltasFor(spec.Arm)
 			content = []byte(fmt.Sprintf(
-				`{"schema_version":1,"propose":true,"parent_ref":{"id":%q,"version":%d},"deltas":[{"param":%q,"value":3}],"intent":"hermetic scripted lower the provision energy floor"}`,
-				wire.ParentRef.ID, wire.ParentRef.Version, protocol.ParamClaimProvisionEnergyFloor))
+				`{"schema_version":1,"propose":true,"parent_ref":{"id":%q,"version":%d},"deltas":%s,"intent":%q}`,
+				wire.ParentRef.ID, wire.ParentRef.Version, encodeScriptedDeltas(deltas), intent))
 		default:
 			return cognition.ModelResponse{}, fmt.Errorf("scripted responder: unknown role %q", envelope.Role)
 		}
@@ -79,6 +81,33 @@ func scriptedResponder(spec cellSpec) func(cognition.ModelRequest) (cognition.Mo
 			Status: cognition.CallStatusOK,
 		}, nil
 	}
+}
+
+// patchedDeltasFor returns the declared Role B script of an arm. The declared
+// arms propose the single provision-floor child (the hermetic honest-null
+// proposal the concrete sandbox declines at every declared cell). The
+// scripted-proposer fixture proposes the single build-floor delta measured to
+// pass the concrete sandbox admission rule at the fixture cell
+// (bag.build_energy_floor=2 over the parent's 3), so the apply/measure/rollback
+// path is reachable. It is a fixture, not a tuning of the declared arms (see
+// FixtureLabel).
+func patchedDeltasFor(arm string) ([]protocol.ParameterDelta, string) {
+	if arm == ArmA2f {
+		return []protocol.ParameterDelta{
+			{Param: protocol.ParamBagBuildEnergyFloor, Value: 2},
+		}, "scripted-proposer fixture: relax the bag build energy floor"
+	}
+	return []protocol.ParameterDelta{{Param: protocol.ParamClaimProvisionEnergyFloor, Value: 3}},
+		"hermetic scripted lower the provision energy floor"
+}
+
+// encodeScriptedDeltas renders a delta set as canonical response JSON.
+func encodeScriptedDeltas(deltas []protocol.ParameterDelta) string {
+	parts := make([]string, 0, len(deltas))
+	for _, d := range deltas {
+		parts = append(parts, fmt.Sprintf(`{"param":%q,"value":%d}`, d.Param, d.Value))
+	}
+	return "[" + strings.Join(parts, ",") + "]"
 }
 
 func scriptedActorAction(bag, granary, lastStoredMeal int64, hour int, slots []slotWire) string {

@@ -46,6 +46,25 @@ func renderText(ev evaluation) string {
 		fmt.Fprintf(&b, "  none (no A3 reference run)\n")
 	}
 
+	if len(ev.Fixtures) > 0 {
+		fmt.Fprintf(&b, "\nSCRIPTED-PROPOSER FIXTURE (labeled; not a declared arm)\n")
+		for _, f := range ev.Fixtures {
+			fmt.Fprintf(&b, "%s\n", f.Label)
+			fmt.Fprintf(&b, "%s f%d-s%d: proposed=%d admitted=%d applied=%d measured=%d rolled-back=%d measured_window=%dh\n",
+				f.Arm, f.F, f.Seed, f.Proposed, f.Admitted, f.Applied, f.Measured, f.RolledBack, f.MeasuredWindowHours)
+			fmt.Fprintf(&b, "unscripted A2 honest null (separate): proposed=%d validated=%d applied=%d rejected=%d rolled-back=%d\n",
+				f.UnscriptedA2Proposed, f.UnscriptedA2Validated, f.UnscriptedA2Applied, f.UnscriptedA2Rejected, f.UnscriptedA2Rolled)
+		}
+	}
+
+	if len(ev.Twins) > 0 {
+		fmt.Fprintf(&b, "\nDETERMINISM TWINS (EC-8; workers-4 vs workers-1)\n")
+		for _, tw := range ev.Twins {
+			fmt.Fprintf(&b, "%s f%d-s%d w%d vs w1: identical=%t w1_tip=%s w4_tip=%s w1_branch=%s w4_branch=%s %s\n",
+				tw.Arm, tw.F, tw.Seed, tw.Workers, tw.Identical, tw.W1TipHash, tw.W4TipHash, tw.W1BranchDigest, tw.W4BranchDigest, tw.Note)
+		}
+	}
+
 	if ev.Probe != nil {
 		fmt.Fprintf(&b, "\nSCALE/CEILING PROBE (descriptive)\n")
 		fmt.Fprintf(&b, "P=32 founders=%d max_calls=%d ceiling=%s threshold=%d observed=%d hour=%d ledger=%d replayable=%t\n",

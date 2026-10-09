@@ -23,10 +23,14 @@ func main() {
 		outText    = flag.String("out-txt", ".tmp/21-vs1-evaluation.txt", "evaluation text output path")
 		root       = flag.String("root", ".tmp/21-vs1-runs", "per-cell run directory root")
 		recorded   = flag.String("recorded", ".tmp", "recorded ticket-19 evidence directory")
+		srcRoot    = flag.String("src", ".", "module root for the EC-6 import-closure scan")
 		runProbeF  = flag.Bool("probe", true, "run the declared scale/ceiling probe")
 		probeCalls = flag.Uint64("probe-max-calls", 32, "lowered MaxCalls of the probe")
 		budgetMin  = flag.Int("budget-min", 60, "wall-clock budget for the matrix in minutes; unrun cells are declared skipped")
 		parallel   = flag.Int("parallel", 6, "cells to run concurrently (each cell is deterministic and writes its own directory)")
+		runTwins   = flag.Bool("twin", true, "run the declared workers-4 determinism twins (EC-8)")
+		runFixture = flag.Bool("fixture", true, "run the scripted-proposer fixture cell (EC-5a)")
+		reuse      = flag.String("reuse", "", "prior evaluation JSON: reuse its committed matrix cells (restore each final bundle) instead of re-simulating; A0 cells are re-run because the control keeps no final bundle")
 	)
 	flag.Parse()
 	if *parallel < 1 {
@@ -45,10 +49,23 @@ func main() {
 	}
 	total := len(armList) * len(cellList)
 
-	if err := os.RemoveAll(*root); err != nil {
+	var priorEval evaluation
+	priorCells := map[string]cellReport{}
+	if *reuse != "" {
+		pe, err := readEvaluation(*reuse)
+		if err != nil {
+			fail("read reuse evaluation %s: %v", *reuse, err)
+		}
+		priorEval = pe
+		for _, c := range pe.Cells {
+			priorCells[cellSpec{Arm: c.Arm, F: c.F, Seed: c.Seed, Workers: c.Workers}.String()] = c
+		}
+	} else if err := os.RemoveAll(*root); err != nil {
 		fail("clean run root: %v", err)
 	}
+
 	var runs []*cellRun
+	var extraRuns []*cellRun
 	var skipped []string
 	declared := make([]string, 0, total)
 	for _, arm := range armList {
@@ -82,7 +99,17 @@ func main() {
 				mu.Unlock()
 				return
 			}
-			cr, err := runCell(ctx, spec, declaredFixture(spec.F, spec.Seed), *root, nil)
+			fp := declaredFixture(spec.F, spec.Seed)
+			var cr *cellRun
+			var err error
+			if prior, ok := priorCells[label]; ok && *reuse != "" && hasFinalBundle(*root, spec) {
+				cr, err = loadCell(prior, spec, fp, *root)
+			} else {
+				if *reuse != "" {
+					_ = os.RemoveAll(filepath.Join(*root, spec.String()))
+				}
+				cr, err = runCell(ctx, spec, fp, *root, nil)
+			}
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
@@ -95,8 +122,35 @@ func main() {
 	wg.Wait()
 	sortRuns(runs)
 
+	var twins []twinReport
+	if *runTwins {
+		for _, arm := range []string{ArmA0, ArmA1} {
+			tr, trun, err := runTwin(ctx, arm, *root, runs)
+			if err != nil {
+				skipped = append(skipped, "twin-"+arm+":"+err.Error())
+				continue
+			}
+			extraRuns = append(extraRuns, trun)
+			twins = append(twins, tr)
+		}
+	}
+
+	var fixture *fixtureReport
+	if *runFixture {
+		fr, frun, err := runScriptedFixture(ctx, *root)
+		if err != nil {
+			skipped = append(skipped, "fixture:"+err.Error())
+		} else {
+			extraRuns = append(extraRuns, frun)
+			fixture = fr
+		}
+	}
+
 	var probe *probeReport
 	if *runProbeF {
+		if *reuse != "" {
+			_ = os.RemoveAll(filepath.Join(*root, "probe"))
+		}
 		p, err := runProbe(ctx, *root, *probeCalls)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "probe failed: %v\n", err)
@@ -105,19 +159,113 @@ func main() {
 		}
 	}
 
-	replay := runReplaySubset(ctx, runs, *root, armList)
-	eval := buildEvaluation(runs, *recorded, skipped, declared, probe, replay)
-	eval.Revision = revisionString()
+	var replay map[string]string
+	if *reuse != "" {
+		replay = reuseReplay(priorEval)
+	} else {
+		replay = runReplaySubset(ctx, runs, *root, armList)
+	}
+	eval := buildEvaluation(runs, extraRuns, *recorded, skipped, declared, probe, replay, *srcRoot, fixture, twins)
+	eval.Revision = revisionString(*reuse)
 	if err := writeEvaluation(eval, *outJSON, *outText); err != nil {
 		fail("write evaluation: %v", err)
 	}
 	fmt.Print(renderText(eval))
 }
 
-func buildEvaluation(runs []*cellRun, recordedDir string, skipped, declared []string, probe *probeReport, replay map[string]string) evaluation {
+// hasFinalBundle reports whether a cell directory carries a committed final
+// bundle, the precondition for the reuse load path.
+func hasFinalBundle(root string, spec cellSpec) bool {
+	_, err := os.Stat(filepath.Join(root, spec.String(), "natural-final.bundle"))
+	return err == nil
+}
+
+// readEvaluation reads a prior evaluation JSON.
+func readEvaluation(path string) (evaluation, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return evaluation{}, err
+	}
+	var ev evaluation
+	if err := json.Unmarshal(data, &ev); err != nil {
+		return evaluation{}, err
+	}
+	return ev, nil
+}
+
+// reuseReplay reconstructs the EC-3 replay map from a prior evaluation: the
+// replay of an unchanged cell is the prior result.
+func reuseReplay(prior evaluation) map[string]string {
+	out := map[string]string{}
+	for _, k := range prior.ReplaySubset {
+		out[k] = "identical"
+		for _, m := range prior.ReplayMismatches {
+			if strings.HasPrefix(m, k+":") {
+				out[k] = strings.TrimPrefix(m, k+":")
+			}
+		}
+	}
+	return out
+}
+
+// runTwin runs the declared workers-4 determinism twin of one arm and compares
+// it against the workers-1 matrix counterpart.
+func runTwin(ctx context.Context, arm, root string, runs []*cellRun) (twinReport, *cellRun, error) {
+	spec := cellSpec{Arm: arm, F: twinFounders, Seed: twinSeed, Workers: twinWorkers}
+	_ = os.RemoveAll(filepath.Join(root, spec.String()))
+	cr, err := runCell(ctx, spec, twinFixture(twinFounders, twinSeed), root, nil)
+	if err != nil {
+		return twinReport{}, nil, err
+	}
+	tr := twinReport{Ran: true, Arm: arm, F: twinFounders, Seed: twinSeed, Workers: twinWorkers,
+		W4TipHash: cr.accepted.TipHash, W4BranchDigest: cr.branchDigest}
+	w1 := findRun(runs, arm, twinFounders, twinSeed)
+	if w1 == nil || !w1.haveAccepted {
+		tr.Note = "workers-1 counterpart not in the matrix run"
+		return tr, cr, nil
+	}
+	tr.W1TipHash = w1.accepted.TipHash
+	tr.W1BranchDigest = w1.branchDigest
+	tr.Identical = w1.accepted.TipHash == cr.accepted.TipHash && w1.branchDigest == cr.branchDigest
+	return tr, cr, nil
+}
+
+func findRun(runs []*cellRun, arm string, f int, seed uint64) *cellRun {
+	for _, cr := range runs {
+		if cr.spec.Arm == arm && cr.spec.F == f && cr.spec.Seed == seed && cr.spec.Workers <= 1 {
+			return cr
+		}
+	}
+	return nil
+}
+
+// runScriptedFixture runs the scripted-proposer fixture cell through the live
+// lifecycle and reports its admitted/applied/measured/rolled-back counts.
+func runScriptedFixture(ctx context.Context, root string) (*fixtureReport, *cellRun, error) {
+	spec := cellSpec{Arm: ArmA2f, F: scriptedFixtureFounders, Seed: scriptedFixtureSeed, Workers: 1}
+	_ = os.RemoveAll(filepath.Join(root, spec.String()))
+	cr, err := runCell(ctx, spec, scriptedFixture(), root, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &fixtureReport{
+		Label: FixtureLabel, Arm: ArmA2f, F: spec.F, Seed: spec.Seed, Ran: true,
+		Proposed: cr.roleBProposed, Admitted: cr.roleBValidated, Applied: cr.roleBApplied,
+		Measured: cr.roleBMeasured, RolledBack: cr.roleBRollback, MeasuredWindowHours: cr.roleBMeasureHour,
+	}, cr, nil
+}
+
+// buildEvaluation assembles the report. runs are the declared matrix cells;
+// extraRuns are the labeled twin and fixture runs (kept out of the matrix
+// bands and the fidelity vector, but included in the EC-6 request scan).
+func buildEvaluation(runs, extraRuns []*cellRun, recordedDir string, skipped, declared []string, probe *probeReport, replay map[string]string, srcRoot string, fixture *fixtureReport, twins []twinReport) evaluation {
 	reports := make([]cellReport, 0, len(runs))
 	for _, cr := range runs {
 		reports = append(reports, cellReportOf(cr))
+	}
+	if fixture != nil {
+		fixture.UnscriptedA2Proposed, fixture.UnscriptedA2Applied, fixture.UnscriptedA2Rolled,
+			fixture.UnscriptedA2Rejected, fixture.UnscriptedA2Validated = unscriptedA2Counts(runs)
 	}
 	replayKeys := make([]string, 0, len(replay))
 	for k := range replay {
@@ -130,6 +278,7 @@ func buildEvaluation(runs []*cellRun, recordedDir string, skipped, declared []st
 		}
 	}
 	sortStrings(replayKeys)
+	allRuns := append(append([]*cellRun{}, runs...), extraRuns...)
 	ev := evaluation{
 		Status:           "synthetic/model-conditional",
 		Label:            evaluationLabel,
@@ -139,11 +288,31 @@ func buildEvaluation(runs []*cellRun, recordedDir string, skipped, declared []st
 		Cells:            reports,
 		Fidelity:         buildFidelity(runs),
 		Probe:            probe,
-		Bands:            evaluateBands(runs, recordedDir, replay, probe),
+		Bands:            evaluateBands(runs, allRuns, recordedDir, replay, probe, srcRoot, fixture, twins),
 		ReplaySubset:     replayKeys,
 		ReplayMismatches: mismatches,
 	}
+	if fixture != nil {
+		ev.Fixtures = []fixtureReport{*fixture}
+	}
+	ev.Twins = twins
 	return ev
+}
+
+// unscriptedA2Counts sums the honest-null Role B counts of the declared A2
+// cells, kept separately visible beside the scripted-proposer fixture.
+func unscriptedA2Counts(runs []*cellRun) (proposed, applied, rolledBack, rejected, validated int) {
+	for _, cr := range runs {
+		if cr.spec.Arm != ArmA2 {
+			continue
+		}
+		proposed += cr.roleBProposed
+		applied += cr.roleBApplied
+		rolledBack += cr.roleBRollback
+		rejected += cr.roleBRejected
+		validated += cr.roleBValidated
+	}
+	return
 }
 
 // runProbe runs the declared scale/ceiling probe (spec section 11.4): P=32,
@@ -213,8 +382,12 @@ func defaultFounders(fp fixture) int {
 	return fp.Founders
 }
 
-func revisionString() string {
-	return "vs1-hermetic-fake/1; base natural/7; mechanism v6; no authorised spend"
+func revisionString(reuse string) string {
+	base := "vs1-hermetic-fake/2; base natural/7; mechanism v6; no authorised spend"
+	if reuse != "" {
+		base += "; declared matrix cells reused from the prior evaluation revision (committed bundles reloaded and re-validated); EC-5 scripted-proposer fixture, EC-6 privacy evidence, and EC-8 determinism twin computed under this revision"
+	}
+	return base
 }
 
 func writeEvaluation(ev evaluation, jsonPath, textPath string) error {

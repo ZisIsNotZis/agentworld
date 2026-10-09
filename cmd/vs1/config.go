@@ -18,10 +18,58 @@ const (
 	ArmA1i = "A1i" // role-a-inert: model called and recorded, actions discarded
 	ArmA2  = "A2"  // role-a + role-b: the full VS1 mechanism
 	ArmA3  = "A3"  // reference: wake policy = full (period 1)
+	// ArmA2f is the scripted-proposer fixture (EC-5a): the full A2 mechanism
+	// driven by a Role B script whose one delta the concrete sandbox admits, so
+	// the live propose->validate->sandbox->apply->measure->rollback path runs
+	// end to end. It is a test fixture exercising the machinery, never a tuning
+	// of a declared arm, so it is NOT part of declaredArms: the declared 60-cell
+	// matrix and its honest-null A2 counts are untouched.
+	ArmA2f = "A2f"
 )
 
 // declaredArms is the arm order of the matrix.
 var declaredArms = []string{ArmA0, ArmA1, ArmA1i, ArmA2, ArmA3}
+
+// FixtureLabel labels the scripted-proposer fixture everywhere it appears: it
+// is a hand-authored script that makes the machinery's apply/measure/rollback
+// path reachable, not a model judgment and not a result tuned into the arms.
+const FixtureLabel = "scripted-proposer-fixture (hand-authored Role B script; exercises apply/measure/rollback; not a declared arm)"
+
+// scriptedFixtureFounders and scriptedFixtureSeed pin the one declared cell
+// (spec section 11.3) the scripted-proposer fixture runs in: f=10, s=0, whose
+// audit-hour trajectory lets the hand-authored delta pass the concrete sandbox
+// admission rule (measured offline against the cached audit bundles).
+const (
+	scriptedFixtureFounders = 10
+	scriptedFixtureSeed     = 0
+)
+
+// twinFounders, twinSeed, and twinWorkers pin the declared determinism twin
+// (spec section 11.3): f=12, s=0 at 4 workers, compared against its workers-1
+// matrix counterpart.
+const (
+	twinFounders = 12
+	twinSeed     = 0
+	twinWorkers  = 4
+)
+
+// scriptedFixture returns the fixture of the scripted-proposer fixture cell.
+// The horizon is the rollback boundary (h72): the mandatory rollback cannot be
+// followed by another reconcilable save because a single bundle does not yet
+// replay a journal segment produced under a rolled-back generation (spec
+// section 14.1 reduction 2), so the fixture ends where that path completes.
+func scriptedFixture() fixture {
+	fp := declaredFixture(scriptedFixtureFounders, scriptedFixtureSeed)
+	fp.Hours = cognition.VS1AuditHours[3] // h48 apply, h72 measure+rollback, stop before any post-rollback save
+	return fp
+}
+
+// twinFixture returns the workers-4 twin fixture of a cell.
+func twinFixture(f int, seed uint64) fixture {
+	fp := declaredFixture(f, seed)
+	fp.Workers = twinWorkers
+	return fp
+}
 
 // declaredFounders and declaredSeeds are the declared cells (spec section
 // 11.3): f in {10,11,12} x seeds {0,1,2,3} at -r 8, mechanism v6, policy
@@ -42,14 +90,22 @@ func VS1DeclaredCells() [][2]uint64 {
 	return out
 }
 
-// cellSpec names one declared cell plus the arm that ran in it.
+// cellSpec names one declared cell plus the arm that ran in it. Workers is the
+// declared worker count of the twin cells (1 for the matrix, so the spec
+// string of every matrix cell is unchanged).
 type cellSpec struct {
-	Arm  string
-	F    int
-	Seed uint64
+	Arm     string
+	F       int
+	Seed    uint64
+	Workers int
 }
 
-func (c cellSpec) String() string { return fmt.Sprintf("%s-f%d-s%d", c.Arm, c.F, c.Seed) }
+func (c cellSpec) String() string {
+	if c.Workers > 1 {
+		return fmt.Sprintf("%s-f%d-s%d-w%d", c.Arm, c.F, c.Seed, c.Workers)
+	}
+	return fmt.Sprintf("%s-f%d-s%d", c.Arm, c.F, c.Seed)
+}
 
 // fixture is the declared world shape of the VS1 cells.
 type fixture struct {
@@ -59,6 +115,15 @@ type fixture struct {
 	Seed     uint64
 	Hours    int
 	Workers  int
+}
+
+// effectiveWorkers is the declared worker count, defaulting to the matrix's 1
+// when a fixture leaves it unset.
+func (f fixture) effectiveWorkers() int {
+	if f.Workers < 1 {
+		return 1
+	}
+	return f.Workers
 }
 
 func declaredFixture(f int, seed uint64) fixture {
@@ -94,7 +159,12 @@ func wakeFor(arm string) protocol.WakePolicy {
 func usesModel(arm string) bool { return arm != ArmA0 }
 
 // usesRoleB reports whether an arm runs the Role B lifecycle.
-func usesRoleB(arm string) bool { return arm == ArmA2 || arm == ArmA3 }
+func usesRoleB(arm string) bool { return arm == ArmA2 || arm == ArmA3 || arm == ArmA2f }
+
+// isFixtureArm reports whether an arm is a labeled hand-authored fixture rather
+// than a declared matrix arm. Fixture runs are reported separately and never
+// enter the declared-arm counts or the fidelity vector.
+func isFixtureArm(arm string) bool { return arm == ArmA2f }
 
 // budgetFor returns the declared cognitive ceiling of an arm. The VS1 matrix
 // ceiling is a declared compute/authorised-spend bound (the hermetic fake

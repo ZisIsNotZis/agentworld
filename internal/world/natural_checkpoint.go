@@ -2537,7 +2537,7 @@ func (f *Natural) saveBundle(path string, fresh *Natural, boundary bool, m natur
 	}
 	config := f.journalGenesisKind()
 	config.Boundary = boundary
-	journalBytes, err := encodeNaturalJournalWithSeam(f.journal, f.k, head, snap.Time, config, seamReplay)
+	journalBytes, err := encodeNaturalJournalWithSeam(f.journal, f.k, head, snap.Time, config, seamReplay, f.cognitiveJournalReplay())
 	if err != nil {
 		return [32]byte{}, err
 	}
@@ -2639,7 +2639,16 @@ func restoreNaturalSections(sections []checkpoint.Section, m naturalManifest, ex
 	}
 	identityConfig.PolicyFingerprint = fingerprint
 	seamReplay := seamReplayOf(expected.CognitiveReplaySeam, expected.CognitiveReplayWake)
-	journal, err := decodeNaturalJournalWithSeam(sections[0].Data, k, head, sched.Time(), identityConfig, seamReplay)
+	// A cognitive manifest re-activates its recorded generation from the apply
+	// boundary before the journal reconciles, so a generation that changed the
+	// recorded decisions (spec section 5.4) still reproduces without a model
+	// call. The block is decoded before the journal so the reference replay
+	// carries the same generation the journal was produced under.
+	replay, err := cognitiveReplayFromBlock(m.cognitive)
+	if err != nil {
+		return fail(err)
+	}
+	journal, err := decodeNaturalJournalWithSeam(sections[0].Data, k, head, sched.Time(), identityConfig, seamReplay, replay)
 	if err != nil {
 		return fail(err)
 	}
@@ -2651,10 +2660,6 @@ func restoreNaturalSections(sections []checkpoint.Section, m naturalManifest, ex
 	// re-activates its recorded generation from the apply boundary, and the
 	// recorded Role A seam replays from the recorded-call ledger, so the
 	// reference replay reproduces the recorded decisions without a model call.
-	replay, err := cognitiveReplayFromBlock(m.cognitive)
-	if err != nil {
-		return fail(err)
-	}
 	reference, err := replayNaturalJournalWithCognitive(journal, identityConfig, replay, seamReplay)
 	if err != nil {
 		return fail(err)

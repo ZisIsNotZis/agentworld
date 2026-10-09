@@ -12,7 +12,7 @@ import (
 // roadmap's VS1 (a)-(f) from the gathered runs. A criterion L4 cannot decide
 // from its own artifacts is reported not-evaluable with the evidence pointer,
 // never silently PASS.
-func evaluateBands(runs []*cellRun, recordedDir string, replay map[string]string, probe *probeReport) []reportBand {
+func evaluateBands(runs, allRuns []*cellRun, recordedDir string, replay map[string]string, probe *probeReport, srcRoot string, fixture *fixtureReport, twins []twinReport) []reportBand {
 	byKey := map[string]*cellRun{}
 	byCell := map[string]map[string]*cellRun{}
 	for _, cr := range runs {
@@ -34,10 +34,10 @@ func evaluateBands(runs []*cellRun, recordedDir string, replay map[string]string
 	bands = append(bands, ec2(byCell, cellKeys))
 	bands = append(bands, ec3(replay, runs))
 	bands = append(bands, ec4(runs))
-	bands = append(bands, ec5(byCell, cellKeys))
-	bands = append(bands, ec6())
+	bands = append(bands, ec5(byCell, cellKeys, fixture))
+	bands = append(bands, privacyBand(srcRoot, allRuns))
 	bands = append(bands, ec7(runs, probe))
-	bands = append(bands, ec8(byCell, cellKeys))
+	bands = append(bands, ec8(byCell, cellKeys, twins))
 	bands = append(bands, ec9())
 	bands = append(bands, ec10(probe))
 	bands = append(bands, ec11(runs))
@@ -182,9 +182,9 @@ func ec4(runs []*cellRun) reportBand {
 		fmt.Sprintf("interventions=%d incomplete=%d orphan-calls=%d double-referenced=%d", records, incomplete, orphans, doubleRef))
 }
 
-func ec5(byCell map[string]map[string]*cellRun, cellKeys []string) reportBand {
-	const criterion = "EC-5 patch lifecycle (C9/C10): (a) scripted proposal fixture runs propose->validate->sandbox->apply->measure->rollback and replays byte-exact; (b) broken patches rejected at validation with zero mutation; (c) a regressing patch applied then rolled back with lineage retained; (d) live A2 cells report admitted/applied/measured/rolled-back counts."
-	applied, proposed, rejected, rolled, cells := 0, 0, 0, 0, 0
+func ec5(byCell map[string]map[string]*cellRun, cellKeys []string, fixture *fixtureReport) reportBand {
+	const criterion = "EC-5 patch lifecycle (C9/C10): (a) the declared scripted proposal fixture runs propose->validate->sandbox->apply->measure->rollback end to end; (b) broken patches rejected at validation with zero mutation; (c) a regressing patch applied then rolled back with lineage retained; (d) live A2 cells report admitted/applied/measured/rolled-back counts, the honest null valid."
+	applied, proposed, rejected, rolled, validated, measured, cells := 0, 0, 0, 0, 0, 0, 0
 	for _, key := range cellKeys {
 		cr := byCell[key][ArmA2]
 		if cr == nil {
@@ -195,19 +195,26 @@ func ec5(byCell map[string]map[string]*cellRun, cellKeys []string) reportBand {
 		proposed += cr.roleBProposed
 		rejected += cr.roleBRejected
 		rolled += cr.roleBRollback
+		validated += cr.roleBValidated
+		measured += cr.roleBMeasured
 	}
 	status := "PASS"
 	if cells == 0 {
 		status = "not-evaluable"
 	}
-	return band("EC-5", criterion, status,
-		fmt.Sprintf("A2 cells=%d proposed=%d applied=%d rejected-at-validation/sandbox=%d rolled-back=%d; (a)(b)(c) are the L3 scripted/broken/regressing fixtures (internal/cognition roleb_lifecycle_test.go)", cells, proposed, applied, rejected, rolled))
-}
-
-func ec6() reportBand {
-	const criterion = "EC-6 privacy boundary: every Role A request comes from the allow-list encoder over the frozen NaturalObservation; the request-builder package does not transitively import internal/world and the world does not import the client; the adversarial sentinel test finds no privileged marker; Role B packets carry only declared aggregate fields."
-	return band("EC-6", criterion, "not-evaluable",
-		"the structural import-graph and adversarial sentinel proofs are L1/L2 tests (internal/cognition/protocol/imports_test.go, internal/world/natural_cognition_imports_test.go); the matrix reuses the same allow-list encoder and does not re-derive them")
+	evidence := fmt.Sprintf("unscripted A2 cells=%d proposed=%d validated=%d applied=%d rejected-at-validation/sandbox=%d measured=%d rolled-back=%d", cells, proposed, validated, applied, rejected, measured, rolled)
+	if fixture != nil && fixture.Ran {
+		evidence += fmt.Sprintf("; SCRIPTED-PROPOSER FIXTURE %s (f%d-s%d): proposed=%d admitted=%d applied=%d measured=%d rolled-back=%d measured_window=%dh",
+			fixture.Label, fixture.F, fixture.Seed, fixture.Proposed, fixture.Admitted, fixture.Applied, fixture.Measured, fixture.RolledBack, fixture.MeasuredWindowHours)
+		if fixture.Admitted == 0 || fixture.Applied == 0 || fixture.Measured == 0 || fixture.RolledBack == 0 {
+			status = "FAIL"
+		}
+	} else {
+		evidence += "; SCRIPTED-PROPOSER FIXTURE not run"
+		status = "FAIL"
+	}
+	evidence += "; (b)(c) broken/regressing patch fixtures are the L3 unit fixtures (internal/cognition roleb_lifecycle_test.go)"
+	return band("EC-5", criterion, status, evidence)
 }
 
 func ec7(runs []*cellRun, probe *probeReport) reportBand {
@@ -239,7 +246,7 @@ func ec7(runs []*cellRun, probe *probeReport) reportBand {
 	return band("EC-7", criterion, status, evidence)
 }
 
-func ec8(byCell map[string]map[string]*cellRun, cellKeys []string) reportBand {
+func ec8(byCell map[string]map[string]*cellRun, cellKeys []string, twins []twinReport) reportBand {
 	const criterion = "EC-8 determinism and invariance: the escalation set is a pure function of (policy, hour, roster) and consumes no world random stream; the f=12 s=0 w=4 twin is digest-identical to its workers-1 twin."
 	inertOK := 0
 	for _, key := range cellKeys {
@@ -249,8 +256,32 @@ func ec8(byCell map[string]map[string]*cellRun, cellKeys []string) reportBand {
 			inertOK++
 		}
 	}
-	return band("EC-8", criterion, "not-evaluable",
-		fmt.Sprintf("escalation-policy purity is asserted by protocol.WakePolicy (pure function) and proven indirectly by inert==no-AI on %d/%d cells; the workers-4 twin is reported separately when run", inertOK, len(cellKeys)))
+	status := "PASS"
+	var parts []string
+	if inertOK != len(cellKeys) {
+		status = "FAIL"
+	}
+	parts = append(parts, fmt.Sprintf("escalation-set purity: inert==no-AI tip on %d/%d cells; protocol.WakePolicy is a pure function of (policy,hour,roster)", inertOK, len(cellKeys)))
+	if len(twins) == 0 {
+		status = "not-evaluable"
+		parts = append(parts, "workers-4 twin not run")
+	}
+	for _, tw := range twins {
+		if !tw.Ran || !tw.Identical {
+			status = "FAIL"
+		}
+		parts = append(parts, fmt.Sprintf("%s f%d-s%d w%d vs w1: tip %s==%s branch %s==%s identical=%t",
+			tw.Arm, tw.F, tw.Seed, tw.Workers, shortHash(tw.W4TipHash), shortHash(tw.W1TipHash),
+			shortHash(tw.W4BranchDigest), shortHash(tw.W1BranchDigest), tw.Identical))
+	}
+	return band("EC-8", criterion, status, strings.Join(parts, "; "))
+}
+
+func shortHash(h string) string {
+	if len(h) <= 12 {
+		return h
+	}
+	return h[:12]
 }
 
 func ec9() reportBand {

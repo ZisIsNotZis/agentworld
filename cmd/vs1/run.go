@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -17,42 +18,45 @@ import (
 
 // cellRun is one arm-in-cell execution and its gathered evidence.
 type cellRun struct {
-	spec            cellSpec
-	fp              fixture
-	dir             string
-	rootDigest      string
-	branchDigest    string
-	checks          []world.NaturalCheckpoint
-	journal         []world.NaturalBatch
-	proj            projections
-	accepted        acceptedEvidence
-	haveAccepted    bool
-	calls           []cognition.CallRecord
-	interventions   []cognition.InterventionRecord
-	totals          cognition.CognitiveTotals
-	ceilingHit      *cognition.CognitiveCeilingHit
-	halted          bool
-	runErr          error
-	durationMS      int64
-	ledgerPath      string
-	ledgerCount     uint64
-	ledgerDigest    string
-	finalDigest     string
-	sumAliveHours   int64
-	escalated       int
-	decisionErrors  int
-	appliedModel    int
-	frozenBase      strategy.NaturalRef
-	roleBApplied    int
-	roleBRollback   int
-	roleBProposed   int
-	roleBRejected   int
-	roleBNoTrigger  int
-	modelDigest     string
-	finalBundleName string
-	ceilingRows     []cognition.CognitiveRow
-	callAttempts    int
-	callLatencyUS   int64
+	spec             cellSpec
+	fp               fixture
+	dir              string
+	rootDigest       string
+	branchDigest     string
+	checks           []world.NaturalCheckpoint
+	journal          []world.NaturalBatch
+	proj             projections
+	accepted         acceptedEvidence
+	haveAccepted     bool
+	calls            []cognition.CallRecord
+	interventions    []cognition.InterventionRecord
+	totals           cognition.CognitiveTotals
+	ceilingHit       *cognition.CognitiveCeilingHit
+	halted           bool
+	runErr           error
+	durationMS       int64
+	ledgerPath       string
+	ledgerCount      uint64
+	ledgerDigest     string
+	finalDigest      string
+	sumAliveHours    int64
+	escalated        int
+	decisionErrors   int
+	appliedModel     int
+	frozenBase       strategy.NaturalRef
+	roleBApplied     int
+	roleBRollback    int
+	roleBProposed    int
+	roleBRejected    int
+	roleBValidated   int
+	roleBMeasured    int
+	roleBMeasureHour int
+	roleBNoTrigger   int
+	modelDigest      string
+	finalBundleName  string
+	ceilingRows      []cognition.CognitiveRow
+	callAttempts     int
+	callLatencyUS    int64
 }
 
 func isAuditHour(hour int) bool {
@@ -271,11 +275,28 @@ func (cr *cellRun) countInterventions() {
 		case cognition.InterventionPatchValidate:
 			if rec.Result.Status == "rejected" {
 				cr.roleBRejected++
+			} else if rec.Result.Status == "validated" {
+				cr.roleBValidated++
+			}
+		case cognition.InterventionPatchMeasure:
+			cr.roleBMeasured++
+			if rec.Result.WindowHours > 0 {
+				cr.roleBMeasureHour = rec.Result.WindowHours
 			}
 		case cognition.InterventionNoTriggerAudit:
 			cr.roleBNoTrigger++
 		}
 	}
+}
+
+// copyFile writes an immutable snapshot of a ledger file. The copy is
+// byte-exact, so the checkpoint's ledger binding verifies against it.
+func copyFile(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, 0o600)
 }
 
 // runAudit performs one Role B audit hour: save a committed audit-hour
@@ -310,15 +331,38 @@ func runAudit(ctx context.Context, f *world.Natural, stack *cognitionStack, dir 
 	if err := attachBinding(f, stack, session, spec); err != nil {
 		return fmt.Errorf("audit h%d binding: %w", hour, err)
 	}
+	// A seam-active run whose cognition block binds the recorded-call ledger
+	// must fork from the ledger the block was bound against. The live ledger
+	// keeps growing (this audit appends its own intervention records), so the
+	// sandbox restores an immutable snapshot taken at the binding instant; the
+	// whole-file ledger guard therefore still verifies, and the fork still
+	// resolves every recorded Role A decision. A run with no active generation
+	// writes no block, so no snapshot is needed.
+	sandboxSeam := seam
+	ledgerPath := stack.ledgerPath
+	if _, ok := f.ActiveCognitiveGeneration(); ok {
+		ledgerPath = filepath.Join(dir, fmt.Sprintf("audit-h%03d-ledger.jsonl", hour))
+		if err := copyFile(stack.ledgerPath, ledgerPath); err != nil {
+			return fmt.Errorf("audit h%d ledger snapshot: %w", hour, err)
+		}
+		snapshotReplay, err := cognition.OpenReplay(ledgerPath)
+		if err != nil {
+			return fmt.Errorf("audit h%d ledger snapshot open: %w", hour, err)
+		}
+		sandboxSeam, err = cognition.NewReplaySeam(snapshotReplay, wake)
+		if err != nil {
+			return fmt.Errorf("audit h%d ledger snapshot seam: %w", hour, err)
+		}
+	}
 	cpPath := filepath.Join(dir, fmt.Sprintf("audit-h%03d.bundle", hour))
 	if _, err := f.SaveResumeCheckpointWithReplay(cpPath, seam, wake); err != nil {
 		return fmt.Errorf("audit h%d save: %w", hour, err)
 	}
 	session.sandbox.checkpointPath = cpPath
 	session.sandbox.restore = restoreOptions(fp, true)
-	session.sandbox.restore.CognitiveReplaySeam = seam
+	session.sandbox.restore.CognitiveReplaySeam = sandboxSeam
 	session.sandbox.restore.CognitiveReplayWake = wake
-	session.sandbox.restore.CognitiveLedgerPath = stack.ledgerPath
+	session.sandbox.restore.CognitiveLedgerPath = ledgerPath
 	if session.pending {
 		session.sandbox.parentGeneration = session.pendingParent
 	} else {

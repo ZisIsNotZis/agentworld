@@ -29,7 +29,9 @@ type cellReport struct {
 	Arm            string `json:"arm"`
 	F              int    `json:"f"`
 	Seed           uint64 `json:"seed"`
+	Workers        int    `json:"workers"`
 	Ran            bool   `json:"ran"`
+	Fixture        string `json:"fixture,omitempty"`
 	RootDigest     string `json:"root_digest,omitempty"`
 	BranchDigest   string `json:"branch_digest,omitempty"`
 	TipHash        string `json:"tip_hash,omitempty"`
@@ -59,7 +61,10 @@ type cellReport struct {
 	RoleBRollback  int `json:"role_b_rolled_back"`
 	RoleBProposed  int `json:"role_b_proposed"`
 	RoleBRejected  int `json:"role_b_rejected"`
+	RoleBValidated int `json:"role_b_validated"`
+	RoleBMeasured  int `json:"role_b_measured"`
 	RoleBNoTrigger int `json:"role_b_no_trigger"`
+	RoleBWindowH   int `json:"role_b_measured_window_hours"`
 
 	CeilingHit string `json:"ceiling_hit,omitempty"`
 	Halted     bool   `json:"halted"`
@@ -105,26 +110,66 @@ type inventory struct {
 	Skipped  []string `json:"skipped"`
 }
 
+// twinReport is the EC-8 determinism twin evidence: the declared workers-4
+// run against its workers-1 matrix counterpart at the same cell and arm.
+type twinReport struct {
+	Ran            bool   `json:"ran"`
+	Arm            string `json:"arm"`
+	F              int    `json:"f"`
+	Seed           uint64 `json:"seed"`
+	Workers        int    `json:"workers"`
+	W1TipHash      string `json:"w1_tip_hash,omitempty"`
+	W4TipHash      string `json:"w4_tip_hash,omitempty"`
+	W1BranchDigest string `json:"w1_branch_digest,omitempty"`
+	W4BranchDigest string `json:"w4_branch_digest,omitempty"`
+	Identical      bool   `json:"identical"`
+	Note           string `json:"note,omitempty"`
+}
+
+// fixtureReport is the labeled scripted-proposer fixture evidence (EC-5a). It
+// carries the live lifecycle counts and, separately, the unscripted A2
+// honest-null counts so the fixture never masks the declared arms.
+type fixtureReport struct {
+	Label                 string `json:"label"`
+	Arm                   string `json:"arm"`
+	F                     int    `json:"f"`
+	Seed                  uint64 `json:"seed"`
+	Ran                   bool   `json:"ran"`
+	Proposed              int    `json:"proposed"`
+	Admitted              int    `json:"admitted"`
+	Applied               int    `json:"applied"`
+	Measured              int    `json:"measured"`
+	RolledBack            int    `json:"rolled_back"`
+	MeasuredWindowHours   int    `json:"measured_window_hours"`
+	UnscriptedA2Proposed  int    `json:"unscripted_a2_proposed"`
+	UnscriptedA2Applied   int    `json:"unscripted_a2_applied"`
+	UnscriptedA2Rolled    int    `json:"unscripted_a2_rolled_back"`
+	UnscriptedA2Rejected  int    `json:"unscripted_a2_rejected"`
+	UnscriptedA2Validated int    `json:"unscripted_a2_validated"`
+}
+
 type evaluation struct {
-	Status           string        `json:"status"`
-	Revision         string        `json:"revision"`
-	Label            string        `json:"label"`
-	HonestLimit      string        `json:"honest_limit"`
-	Arms             []string      `json:"arms"`
-	Inventory        inventory     `json:"inventory"`
-	Cells            []cellReport  `json:"cells"`
-	Fidelity         []fidelityRow `json:"fidelity"`
-	Probe            *probeReport  `json:"probe,omitempty"`
-	Bands            []reportBand  `json:"bands"`
-	ReplaySubset     []string      `json:"replay_subset"`
-	ReplayMismatches []string      `json:"replay_mismatches"`
+	Status           string          `json:"status"`
+	Revision         string          `json:"revision"`
+	Label            string          `json:"label"`
+	HonestLimit      string          `json:"honest_limit"`
+	Arms             []string        `json:"arms"`
+	Inventory        inventory       `json:"inventory"`
+	Cells            []cellReport    `json:"cells"`
+	Fixtures         []fixtureReport `json:"fixtures,omitempty"`
+	Twins            []twinReport    `json:"twins,omitempty"`
+	Fidelity         []fidelityRow   `json:"fidelity"`
+	Probe            *probeReport    `json:"probe,omitempty"`
+	Bands            []reportBand    `json:"bands"`
+	ReplaySubset     []string        `json:"replay_subset"`
+	ReplayMismatches []string        `json:"replay_mismatches"`
 }
 
 const evaluationLabel = "synthetic/model-conditional; hermetic FakeClient (no network, no authorised spend); cost fields are MODELLED price-table charges over the fake usage, not real spend; the run demonstrates the MECHANISM is load-bearing, never that a real model is load-bearing (spec section 16)"
 
 func cellReportOf(cr *cellRun) cellReport {
 	rep := cellReport{
-		Arm: cr.spec.Arm, F: cr.spec.F, Seed: cr.spec.Seed, Ran: true,
+		Arm: cr.spec.Arm, F: cr.spec.F, Seed: cr.spec.Seed, Workers: cr.fp.effectiveWorkers(), Ran: true,
 		RootDigest: cr.rootDigest, BranchDigest: cr.branchDigest,
 		HistoryBytes: cr.accepted.HistoryBytes, EventCount: cr.accepted.EventCount,
 		EventBodyBytes: cr.accepted.EventBodyBytes,
@@ -134,9 +179,13 @@ func cellReportOf(cr *cellRun) cellReport {
 		CompletionTokens: cr.totals.CompletionTokens, CostMicros: cr.totals.CostMicros,
 		ActorHours: cr.sumAliveHours, Escalated: cr.escalated, AppliedModel: cr.appliedModel,
 		DecisionErrors: cr.decisionErrors, RoleBApplied: cr.roleBApplied, RoleBRollback: cr.roleBRollback,
-		RoleBProposed: cr.roleBProposed, RoleBRejected: cr.roleBRejected, RoleBNoTrigger: cr.roleBNoTrigger,
+		RoleBProposed: cr.roleBProposed, RoleBRejected: cr.roleBRejected, RoleBValidated: cr.roleBValidated,
+		RoleBMeasured: cr.roleBMeasured, RoleBWindowH: cr.roleBMeasureHour, RoleBNoTrigger: cr.roleBNoTrigger,
 		Halted: cr.halted, TokenCost: cr.totals.CostMicros, DurationMS: cr.durationMS,
 		CeilingRows: cr.ceilingRows,
+	}
+	if isFixtureArm(cr.spec.Arm) {
+		rep.Fixture = FixtureLabel
 	}
 	if cr.haveAccepted {
 		rep.TipHash = cr.accepted.TipHash
@@ -210,7 +259,7 @@ func buildFidelity(runs []*cellRun) []fidelityRow {
 	}
 	var out []fidelityRow
 	for _, cr := range runs {
-		if cr.spec.Arm == ArmA3 || cr.spec.Arm == ArmA0 {
+		if cr.spec.Arm == ArmA3 || cr.spec.Arm == ArmA0 || isFixtureArm(cr.spec.Arm) {
 			continue
 		}
 		ref := referenceRun(runs, cr.spec)
@@ -379,6 +428,7 @@ func sortRuns(runs []*cellRun) {
 	for i, a := range declaredArms {
 		order[a] = i
 	}
+	order[ArmA2f] = len(declaredArms)
 	sort.Slice(runs, func(i, j int) bool {
 		if order[runs[i].spec.Arm] != order[runs[j].spec.Arm] {
 			return order[runs[i].spec.Arm] < order[runs[j].spec.Arm]

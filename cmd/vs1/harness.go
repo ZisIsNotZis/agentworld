@@ -31,14 +31,14 @@ func prepareRunDir(root string, spec cellSpec) (string, error) {
 
 func naturalOptions(fp fixture) world.NaturalOptions {
 	return world.NaturalOptions{
-		Patches: fp.Patches, R: fp.R, Seed: fp.Seed, Workers: 1, Births: false,
+		Patches: fp.Patches, R: fp.R, Seed: fp.Seed, Workers: fp.effectiveWorkers(), Births: false,
 		PolicyRef: basePolicy(), Mechanism: mechanism(), Founders: fp.Founders,
 	}
 }
 
 func restoreOptions(fp fixture, births bool) world.NaturalRestoreOptions {
 	return world.NaturalRestoreOptions{
-		Patches: fp.Patches, R: fp.R, Seed: fp.Seed, Workers: 1, Births: births,
+		Patches: fp.Patches, R: fp.R, Seed: fp.Seed, Workers: fp.effectiveWorkers(), Births: births,
 		PolicyRef: basePolicy(), Mechanism: mechanism(), Founders: fp.Founders,
 	}
 }

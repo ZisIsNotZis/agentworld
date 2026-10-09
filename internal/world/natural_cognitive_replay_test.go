@@ -140,3 +140,54 @@ func TestNaturalSeamRestoreWithoutReplayRefused(t *testing.T) {
 		t.Fatal("a seam-active bundle restored without the recorded-seam replay")
 	}
 }
+
+// TestNaturalCognitiveCheckpointDivergingJournalRoundTrip is the live-path
+// guard for the recorded-seam save: a generation whose parameter change
+// actually alters the recorded decisions must still reconcile, save, and
+// restore. Removing the cognitive context from the journal encode/decode makes
+// this fail (the reference replay falls back to the frozen base).
+func TestNaturalCognitiveCheckpointDivergingJournalRoundTrip(t *testing.T) {
+	frozen, err := NewNatural(naturalCognitionTestOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	naturalRunTo(t, frozen, 30)
+
+	f, err := NewNatural(naturalCognitionTestOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	naturalRunTo(t, f, 24)
+	params := strategy.FrozenCognitiveParams()
+	params.BagBuildEnergyFloor = 8
+	params.BagBuildStartEnergyFloor = 8
+	params.BagBuildFinishEnergyFloor = 8
+	gen, err := strategy.NewNaturalCognitiveGeneration(
+		strategy.FrozenNaturalPolicy7().Ref, [32]byte{}, strategy.FrozenNaturalPolicy7().Ref, true, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.ActivateCognitiveGeneration(gen, liveActors(t, f)); err != nil {
+		t.Fatal(err)
+	}
+	f.SetCognitiveCheckpoint(&NaturalCognitiveCheckpoint{WakePolicy: cognition.VS1WakePolicy(), ApplyHour: 24})
+	naturalRunTo(t, f, 30)
+	if reflect.DeepEqual(frozen.Checkpoints(), f.Checkpoints()) {
+		t.Fatal("the generation did not change the journal; the round trip would be vacuous")
+	}
+
+	bundle := filepath.Join(t.TempDir(), "cog-diverging.bundle")
+	if _, err := f.SaveResumeCheckpoint(bundle); err != nil {
+		t.Fatalf("save of a generation-diverged journal: %v", err)
+	}
+	restored, _, err := RestoreNaturalCheckpoint(bundle, NaturalRestoreOptions{
+		Patches: 2, R: 8, Seed: 0, Workers: 1, Births: true,
+		PolicyRef: strategy.FrozenNaturalPolicy7().Ref, Mechanism: NaturalMechanismV6, Founders: 10,
+	})
+	if err != nil {
+		t.Fatalf("restore of a generation-diverged journal: %v", err)
+	}
+	if !reflect.DeepEqual(f.Checkpoints(), restored.Checkpoints()) {
+		t.Fatal("restored diverging-generation run differs from its origin")
+	}
+}
