@@ -1,0 +1,121 @@
+package main
+
+import (
+	"fmt"
+
+	"agentworld/internal/cognition"
+	"agentworld/internal/cognition/protocol"
+	"agentworld/internal/strategy"
+	"agentworld/internal/world"
+)
+
+// The declared VS1 arms (spec section 11.2). The seam is L1's deterministic
+// FakeClient in every arm; the real gateway is not authorised (spec section
+// 16), so no AI arm claims real-model load-bearing.
+const (
+	ArmA0  = "A0"  // no-AI control: frozen cascade only
+	ArmA1  = "A1"  // role-a: model decides the claim instant
+	ArmA1i = "A1i" // role-a-inert: model called and recorded, actions discarded
+	ArmA2  = "A2"  // role-a + role-b: the full VS1 mechanism
+	ArmA3  = "A3"  // reference: wake policy = full (period 1)
+)
+
+// declaredArms is the arm order of the matrix.
+var declaredArms = []string{ArmA0, ArmA1, ArmA1i, ArmA2, ArmA3}
+
+// declaredFounders and declaredSeeds are the declared cells (spec section
+// 11.3): f in {10,11,12} x seeds {0,1,2,3} at -r 8, mechanism v6, policy
+// natural/7, births enabled, horizon 168.
+var (
+	declaredFounders = []int{10, 11, 12}
+	declaredSeeds    = []uint64{0, 1, 2, 3}
+)
+
+// VS1DeclaredCells is the frozen cell list.
+func VS1DeclaredCells() [][2]uint64 {
+	var out [][2]uint64
+	for _, f := range declaredFounders {
+		for _, s := range declaredSeeds {
+			out = append(out, [2]uint64{uint64(f), s})
+		}
+	}
+	return out
+}
+
+// cellSpec names one declared cell plus the arm that ran in it.
+type cellSpec struct {
+	Arm  string
+	F    int
+	Seed uint64
+}
+
+func (c cellSpec) String() string { return fmt.Sprintf("%s-f%d-s%d", c.Arm, c.F, c.Seed) }
+
+// fixture is the declared world shape of the VS1 cells.
+type fixture struct {
+	Patches  int
+	R        int64
+	Founders int
+	Seed     uint64
+	Hours    int
+	Workers  int
+}
+
+func declaredFixture(f int, seed uint64) fixture {
+	return fixture{Patches: 2, R: 8, Founders: f, Seed: seed, Hours: 168, Workers: 1}
+}
+
+// probeFixture is the declared scale/ceiling probe shape (spec section 11.4):
+// P=32, the full 256-founder block, workers 1.
+func probeFixture(seed uint64) fixture {
+	return fixture{Patches: 32, R: 8, Founders: 0, Seed: seed, Hours: 168, Workers: 1}
+}
+
+// basePolicy is the declared base policy natural/7 (spec section 11.3).
+func basePolicy() strategy.NaturalRef { return strategy.FrozenNaturalPolicy7().Ref }
+
+// mechanism is the declared world mechanism v6 (rule 515 present).
+func mechanism() world.NaturalMechanism { return world.NaturalMechanismV6 }
+
+// wakeFor returns the declared wake policy of an arm (spec section 11.2):
+// periodic(6) for A1/A1i/A2, full for A3, none for A0.
+func wakeFor(arm string) protocol.WakePolicy {
+	switch arm {
+	case ArmA3:
+		return cognition.FullWakePolicy()
+	case ArmA0:
+		return protocol.WakePolicy{}
+	default:
+		return cognition.VS1WakePolicy()
+	}
+}
+
+// usesModel reports whether an arm wires the recorded seam at all.
+func usesModel(arm string) bool { return arm != ArmA0 }
+
+// usesRoleB reports whether an arm runs the Role B lifecycle.
+func usesRoleB(arm string) bool { return arm == ArmA2 || arm == ArmA3 }
+
+// budgetFor returns the declared cognitive ceiling of an arm. The VS1 matrix
+// ceiling is a declared compute/authorised-spend bound (the hermetic fake
+// consumes no spend); it is high enough to fund the arm and is instrumented,
+// fail-loud, and reported (spec section 8).
+func budgetFor(arm string) cognition.CognitiveBudget {
+	b := cognition.CognitiveBudget{
+		MaxCalls:            4_000_000,
+		MaxPromptTokens:     4_000_000_000,
+		MaxCompletionTokens: 2_000_000_000,
+		MaxCostMicros:       1_000_000_000_000,
+	}
+	if arm == ArmA3 {
+		// The high-budget reference is the arm most likely to bind the
+		// ceiling; it shares the matrix ceiling (no arm is silently cheaper).
+		b = cognition.CognitiveBudget{
+			MaxCalls:            8_000_000,
+			MaxPromptTokens:     8_000_000_000,
+			MaxCompletionTokens: 4_000_000_000,
+			MaxCostMicros:       2_000_000_000_000,
+		}
+	}
+	return b
+}

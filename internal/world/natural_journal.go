@@ -1,6 +1,7 @@
 package world
 
 import (
+	"agentworld/internal/cognition/protocol"
 	"agentworld/internal/kernel"
 	"agentworld/internal/scheduler"
 	"agentworld/internal/sim"
@@ -209,6 +210,13 @@ func (f *Natural) journalConfig() NaturalJournalConfig {
 // its parent's boundary topology, so its journal verifies through the
 // history-aware decode and the checkpoint restore paths instead.
 func (f *Natural) ExportJournal() ([]byte, error) {
+	return f.ExportJournalWithReplay(nil, protocol.WakePolicy{})
+}
+
+// ExportJournalWithReplay is the recorded-seam reconciliation: a seam-active
+// run supplies the ledger-resolved Role A seam (ADR 0006 section 7.3) so the
+// trusted replay reproduces its escalated decisions without a model call.
+func (f *Natural) ExportJournalWithReplay(seam ClaimSeam, wake protocol.WakePolicy) ([]byte, error) {
 	if f == nil {
 		return nil, ErrNaturalJournal
 	}
@@ -225,11 +233,12 @@ func (f *Natural) ExportJournal() ([]byte, error) {
 	if err != nil || schedulerHead != head {
 		return nil, ErrNaturalJournal
 	}
-	data, err := encodeNaturalJournal(f.journal, f.k, head, f.sched.Time(), f.journalConfig())
+	seamReplay := seamReplayOf(seam, wake)
+	data, err := encodeNaturalJournalWithSeam(f.journal, f.k, head, f.sched.Time(), f.journalConfig(), seamReplay)
 	if err != nil {
 		return nil, err
 	}
-	reference, err := replayNaturalJournal(f.journal, f.journalConfig())
+	reference, err := replayNaturalJournalWithCognitive(f.journal, f.journalConfig(), f.cognitiveJournalReplay(), seamReplay)
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +287,11 @@ func EncodeNaturalJournal(batches []NaturalBatch, k *kernel.Kernel, verified ker
 }
 
 func encodeNaturalJournal(batches []NaturalBatch, k *kernel.Kernel, verified kernel.PortableHead, schedulerTime sim.SimTime, config NaturalJournalConfig) ([]byte, error) {
-	if err := verifyNaturalJournal(batches, k, verified, schedulerTime, config); err != nil {
+	return encodeNaturalJournalWithSeam(batches, k, verified, schedulerTime, config, nil)
+}
+
+func encodeNaturalJournalWithSeam(batches []NaturalBatch, k *kernel.Kernel, verified kernel.PortableHead, schedulerTime sim.SimTime, config NaturalJournalConfig, seamReplay *naturalSeamReplay) ([]byte, error) {
+	if err := verifyNaturalJournalWithSeam(batches, k, verified, schedulerTime, config, seamReplay); err != nil {
 		return nil, err
 	}
 	wire := naturalJournalWire{Format: NaturalJournalFormatVersion, Head: verified, SchedulerTime: schedulerTime,
@@ -307,6 +320,10 @@ func DecodeNaturalJournal(data []byte, k *kernel.Kernel, verified kernel.Portabl
 }
 
 func decodeNaturalJournal(data []byte, k *kernel.Kernel, verified kernel.PortableHead, schedulerTime sim.SimTime, config NaturalJournalConfig) ([]NaturalBatch, error) {
+	return decodeNaturalJournalWithSeam(data, k, verified, schedulerTime, config, nil)
+}
+
+func decodeNaturalJournalWithSeam(data []byte, k *kernel.Kernel, verified kernel.PortableHead, schedulerTime sim.SimTime, config NaturalJournalConfig, seamReplay *naturalSeamReplay) ([]NaturalBatch, error) {
 	if k == nil {
 		return nil, ErrNaturalJournal
 	}
@@ -327,7 +344,7 @@ func decodeNaturalJournal(data []byte, k *kernel.Kernel, verified kernel.Portabl
 		return nil, ErrNaturalJournal
 	}
 	canonical, err := json.Marshal(wire)
-	if err != nil || !bytes.Equal(canonical, data[12:len(body)]) || verifyNaturalJournal(wire.Batches, k, verified, schedulerTime, wire.Config) != nil {
+	if err != nil || !bytes.Equal(canonical, data[12:len(body)]) || verifyNaturalJournalWithSeam(wire.Batches, k, verified, schedulerTime, wire.Config, seamReplay) != nil {
 		return nil, ErrNaturalJournal
 	}
 	return wire.Batches, nil
@@ -343,6 +360,10 @@ func DecodeNaturalJournalWithScheduler(data []byte, k *kernel.Kernel, verified k
 }
 
 func decodeNaturalJournalWithScheduler(data []byte, k *kernel.Kernel, verified kernel.PortableHead, sched *scheduler.Scheduler, config NaturalJournalConfig) ([]NaturalBatch, error) {
+	return decodeNaturalJournalWithSchedulerAndSeam(data, k, verified, sched, config, nil)
+}
+
+func decodeNaturalJournalWithSchedulerAndSeam(data []byte, k *kernel.Kernel, verified kernel.PortableHead, sched *scheduler.Scheduler, config NaturalJournalConfig, seamReplay *naturalSeamReplay) ([]NaturalBatch, error) {
 	if sched == nil {
 		return nil, ErrNaturalJournal
 	}
@@ -350,11 +371,11 @@ func decodeNaturalJournalWithScheduler(data []byte, k *kernel.Kernel, verified k
 	if err != nil || head != verified {
 		return nil, ErrNaturalJournal
 	}
-	batches, err := decodeNaturalJournal(data, k, verified, sched.Time(), config)
+	batches, err := decodeNaturalJournalWithSeam(data, k, verified, sched.Time(), config, seamReplay)
 	if err != nil {
 		return nil, ErrNaturalJournal
 	}
-	reference, err := replayNaturalJournal(batches, config)
+	reference, err := replayNaturalJournalWithCognitive(batches, config, nil, seamReplay)
 	if err != nil {
 		return nil, ErrNaturalJournal
 	}
@@ -481,6 +502,10 @@ func VerifyNaturalJournal(batches []NaturalBatch, k *kernel.Kernel, verified ker
 }
 
 func verifyNaturalJournal(batches []NaturalBatch, k *kernel.Kernel, verified kernel.PortableHead, at sim.SimTime, config NaturalJournalConfig) error {
+	return verifyNaturalJournalWithSeam(batches, k, verified, at, config, nil)
+}
+
+func verifyNaturalJournalWithSeam(batches []NaturalBatch, k *kernel.Kernel, verified kernel.PortableHead, at sim.SimTime, config NaturalJournalConfig, seamReplay *naturalSeamReplay) error {
 	if k == nil || !validNaturalJournalConfig(config) ||
 		at < 0 || at > sim.SimTime(NaturalHorizonHours)*sim.SimTime(NaturalHour) || len(batches) > MaxNaturalJournalBatches {
 		return ErrNaturalJournal
@@ -496,7 +521,7 @@ func verifyNaturalJournal(batches []NaturalBatch, k *kernel.Kernel, verified ker
 	if err != nil || head != verified {
 		return ErrNaturalJournal
 	}
-	reference, err := replayNaturalJournal(batches, config)
+	reference, err := replayNaturalJournalWithCognitive(batches, config, nil, seamReplay)
 	if err != nil || reference.sched.Time() != at {
 		return ErrNaturalJournal
 	}
@@ -529,7 +554,23 @@ func verifyNaturalJournal(batches []NaturalBatch, k *kernel.Kernel, verified ker
 // reproducible from genesis only under that two-flag schedule, and for every
 // other bundle boundary and continuation flag are equal.
 func replayNaturalJournal(batches []NaturalBatch, config NaturalJournalConfig) (*Natural, error) {
-	return replayNaturalJournalWithCognitive(batches, config, nil)
+	return replayNaturalJournalWithCognitive(batches, config, nil, nil)
+}
+
+// naturalSeamReplay carries the recorded Role A seam a cognitive journal was
+// produced under (ADR 0006 section 7.3). The seam resolves each escalated
+// claim instant from the recorded-call ledger and never calls a model; the
+// reference replay wires it so a seam-active journal reproduces exactly.
+type naturalSeamReplay struct {
+	seam ClaimSeam
+	wake protocol.WakePolicy
+}
+
+func seamReplayOf(seam ClaimSeam, wake protocol.WakePolicy) *naturalSeamReplay {
+	if seam == nil {
+		return nil
+	}
+	return &naturalSeamReplay{seam: seam, wake: wake}
 }
 
 // cognitiveJournalReplay carries the active Role B generation a cognitive
@@ -542,7 +583,7 @@ type cognitiveJournalReplay struct {
 	applyHour  int
 }
 
-func replayNaturalJournalWithCognitive(batches []NaturalBatch, config NaturalJournalConfig, cognitive *cognitiveJournalReplay) (*Natural, error) {
+func replayNaturalJournalWithCognitive(batches []NaturalBatch, config NaturalJournalConfig, cognitive *cognitiveJournalReplay, seamReplay *naturalSeamReplay) (*Natural, error) {
 	if len(batches) > MaxNaturalJournalBatches {
 		return nil, ErrNaturalJournal
 	}
@@ -552,6 +593,14 @@ func replayNaturalJournalWithCognitive(batches []NaturalBatch, config NaturalJou
 		Founders: config.Founders})
 	if err != nil {
 		return nil, ErrNaturalJournal
+	}
+	// The recorded Role A seam, when present, is wired before the first step so
+	// the reference re-decides every escalated claim instant exactly as the
+	// live run did, with no model call (ADR 0006 section 7.3).
+	if seamReplay != nil && seamReplay.seam != nil {
+		if err := reference.SetCognition(&NaturalCognition{Seam: seamReplay.seam, WakePolicy: seamReplay.wake}); err != nil {
+			return nil, ErrNaturalJournal
+		}
 	}
 	activated := false
 	activate := func() error {

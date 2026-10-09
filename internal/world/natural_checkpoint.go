@@ -2,6 +2,7 @@ package world
 
 import (
 	"agentworld/internal/checkpoint"
+	"agentworld/internal/cognition/protocol"
 	"agentworld/internal/component"
 	"agentworld/internal/kernel"
 	"agentworld/internal/scheduler"
@@ -161,6 +162,14 @@ type NaturalRestoreOptions struct {
 	// short, or mismatched ledger refuses the restore (spec section 7.2). The
 	// zero value performs no ledger check.
 	CognitiveLedgerPath string
+
+	// CognitiveReplaySeam and CognitiveReplayWake, when set for a seam-active
+	// cognitive bundle, are the recorded Role A seam the reference replay
+	// wires so the recorded seam decisions reproduce from the recorded-call
+	// ledger without a model call (spec section 7.3). They are replay
+	// machinery, not live state: the returned runner carries no live seam.
+	CognitiveReplaySeam ClaimSeam
+	CognitiveReplayWake protocol.WakePolicy
 }
 
 // policyRef resolves the declared policy identity: the zero value is the
@@ -2420,7 +2429,7 @@ func (f *Natural) SaveCheckpoint(path string) ([32]byte, error) {
 	}
 	return f.saveBundle(path, fresh, f.births, naturalManifest{patches: f.patches, r: f.r, seed: f.seed,
 		births: f.births, boundary: f.births, cultivation: f.cultivationDisabled, mechanism: f.mechanism,
-		founders: f.declaredFounders(), steps: f.steps, time: f.sched.Time()})
+		founders: f.declaredFounders(), steps: f.steps, time: f.sched.Time()}, nil)
 }
 
 // SaveResumeCheckpoint publishes a pulse-boundary continuation bundle: the
@@ -2432,6 +2441,17 @@ func (f *Natural) SaveCheckpoint(path string) ([32]byte, error) {
 // replaces an existing destination. The boundary flag is recovered from the
 // journal itself, so a continued Branch lineage records both flags.
 func (f *Natural) SaveResumeCheckpoint(path string) ([32]byte, error) {
+	return f.SaveResumeCheckpointWithReplay(path, nil, protocol.WakePolicy{})
+}
+
+// SaveResumeCheckpointWithReplay is the recorded-seam save: a seam-active run
+// supplies the ledger-resolved Role A seam so its journal reconciles and the
+// published bundle can be restored (ADR 0006 section 7.3).
+func (f *Natural) SaveResumeCheckpointWithReplay(path string, seam ClaimSeam, wake protocol.WakePolicy) ([32]byte, error) {
+	return f.saveResumeCheckpoint(path, seamReplayOf(seam, wake))
+}
+
+func (f *Natural) saveResumeCheckpoint(path string, seamReplay *naturalSeamReplay) ([32]byte, error) {
 	if f == nil {
 		return [32]byte{}, ErrNaturalCheckpoint
 	}
@@ -2470,13 +2490,13 @@ func (f *Natural) SaveResumeCheckpoint(path string) ([32]byte, error) {
 	m := naturalManifest{patches: f.patches, r: f.r, seed: f.seed, births: f.births, boundary: boundary,
 		tenure: f.naturalRunnerTenure(), cultivation: f.cultivationDisabled, mechanism: f.mechanism,
 		founders: f.declaredFounders(), steps: f.steps, time: at}
-	return f.saveBundle(path, fresh, boundary, m)
+	return f.saveBundle(path, fresh, boundary, m, seamReplay)
 }
 
 // saveBundle captures the five sections under the coordinator lock, after
 // the wake-topology, strategy, journal-replay, and projection
 // reconstruction checks, and writes the bundle atomically.
-func (f *Natural) saveBundle(path string, fresh *Natural, boundary bool, m naturalManifest) ([32]byte, error) {
+func (f *Natural) saveBundle(path string, fresh *Natural, boundary bool, m naturalManifest, seamReplay *naturalSeamReplay) ([32]byte, error) {
 	strategyBytes, err := encodeNaturalStrategy(f)
 	if err != nil {
 		return [32]byte{}, err
@@ -2517,11 +2537,11 @@ func (f *Natural) saveBundle(path string, fresh *Natural, boundary bool, m natur
 	}
 	config := f.journalGenesisKind()
 	config.Boundary = boundary
-	journalBytes, err := encodeNaturalJournal(f.journal, f.k, head, snap.Time, config)
+	journalBytes, err := encodeNaturalJournalWithSeam(f.journal, f.k, head, snap.Time, config, seamReplay)
 	if err != nil {
 		return [32]byte{}, err
 	}
-	reference, err := replayNaturalJournalWithCognitive(f.journal, config, f.cognitiveJournalReplay())
+	reference, err := replayNaturalJournalWithCognitive(f.journal, config, f.cognitiveJournalReplay(), seamReplay)
 	if err != nil {
 		return [32]byte{}, ErrNaturalCheckpoint
 	}
@@ -2618,7 +2638,8 @@ func restoreNaturalSections(sections []checkpoint.Section, m naturalManifest, ex
 		return fail(err)
 	}
 	identityConfig.PolicyFingerprint = fingerprint
-	journal, err := decodeNaturalJournal(sections[0].Data, k, head, sched.Time(), identityConfig)
+	seamReplay := seamReplayOf(expected.CognitiveReplaySeam, expected.CognitiveReplayWake)
+	journal, err := decodeNaturalJournalWithSeam(sections[0].Data, k, head, sched.Time(), identityConfig, seamReplay)
 	if err != nil {
 		return fail(err)
 	}
@@ -2627,13 +2648,14 @@ func restoreNaturalSections(sections []checkpoint.Section, m naturalManifest, ex
 	}
 	// The identity config already carries both flags: Boundary governs the
 	// shared first-hour batch, Births every later batch. A cognitive manifest
-	// re-activates its recorded generation from the apply boundary so the
-	// reference replay reproduces the recorded decisions.
+	// re-activates its recorded generation from the apply boundary, and the
+	// recorded Role A seam replays from the recorded-call ledger, so the
+	// reference replay reproduces the recorded decisions without a model call.
 	replay, err := cognitiveReplayFromBlock(m.cognitive)
 	if err != nil {
 		return fail(err)
 	}
-	reference, err := replayNaturalJournalWithCognitive(journal, identityConfig, replay)
+	reference, err := replayNaturalJournalWithCognitive(journal, identityConfig, replay, seamReplay)
 	if err != nil {
 		return fail(err)
 	}

@@ -177,3 +177,26 @@ func (f *Natural) pulseLifecycleAlive(id sim.EntityID) bool {
 	state, ok := f.pulseLifecycle[id]
 	return ok && state == scheduler.Alive
 }
+
+// SetCognition attaches the optional Role A decision seam to a runner after
+// construction, or clears it when c is nil. It exists because a births-enabled
+// VS1 cell is restored from the recorded births-disabled root branch (spec
+// section 11.3), and a restored runner cannot carry construction-time options;
+// the seam is runner state like the active generation, wired before the first
+// step and only at a quiescent boundary. A half-wired seam is refused, exactly
+// as at construction, so a nil/valid seam leaves the frozen path unchanged.
+func (f *Natural) SetCognition(c *NaturalCognition) error {
+	if f == nil {
+		return ErrNaturalRunner
+	}
+	if err := c.validate(); err != nil {
+		return err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.pending != nil {
+		return fmt.Errorf("%w: cognitive seam wired outside a quiescent boundary", ErrNaturalRunner)
+	}
+	f.cognition = c
+	return nil
+}

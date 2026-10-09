@@ -208,7 +208,10 @@ behaviour strategy. It never emits code and never touches the world.
 The modification policy is a declared object, part of run identity. The VS1 instance:
 
 - **Moment**: at each declared **audit hour** `h ∈ {24, 48, 72, 96, 120, 144, 168}` — a pulse boundary,
-  i.e. a quiescent checkpoint boundary, so no running activity changes semantics (ADR 0002).
+  i.e. a quiescent checkpoint boundary, so no running activity changes semantics (ADR 0002). The live
+  loop audits `{24,48,72,96,120,144}`; `h168` is the terminal horizon, where a 24-hour sandbox fork
+  would exceed the frozen envelope, so it is the measurement boundary rather than a live audit
+  (§14.1 reduction 3).
 - **Evidence**: the runner assembles a **trajectory evidence packet** for the trailing 24-hour window
   from its own committed hourly checkpoints (the same rows the reporter already publishes):
   `alive(h)`, cumulative births and deaths by cause, per-actor capital and granary holdings, per-patch
@@ -266,8 +269,9 @@ A patch is a **new versioned strategy** in the `natural/*` family per ADR 0002:
    change only, on deterministic compute — an honest, cheap, single-variable comparison; it is not a
    prediction of the model's own future calls.
 4. **Apply**: at the same quiescent boundary, register the generation and rebind the whole living
-   roster to the new head ref atomically; newborns after the boundary inherit the head ref at birth.
-   Record the affected actor set.
+   roster to the new head ref atomically. A newborn after the boundary takes the frozen fallback
+   until the next audit-hour rebind (a declared VS1 reduction: inheritance at birth is not
+   implemented). Record the affected actor set.
 5. **Measure**: at the next audit hour, record the live window's declared indicator deltas for the
    applied generation (model-conditioned, labelled).
 6. **Rollback** (mandatory path, not optional): at that same audit hour, re-run the sandbox on the
@@ -290,7 +294,11 @@ restores the parent generation; that is correct causality, and the ledger record
 effect. The manifest binds the cognition block of §7.2 so a mismatched or missing ledger refuses the
 restore. The apply binds the living roster at the boundary; a newborn's first claim before the next
 rebind takes the frozen fallback (a declared VS1 reduction: the apply binds the roster present at the
-boundary, and later newborns are re-bound only at the next audit-hour rebind).
+boundary, and later newborns are re-bound only at the next audit-hour rebind). Journal replay keys the
+active generation on one `ApplyHour` per bundle, so the implemented path restores the generation that
+took effect at that boundary; an apply following a mid-run rollback within the same run is not yet
+replayed from a single bundle (a second declared VS1 reduction, closed by the verification lane's
+full-ledger replay).
 
 ### 5.5 Lineage and attribution record
 
@@ -451,6 +459,13 @@ Replay of a recorded lane reads the ledger and **never calls a model**:
 - Every escalated seam decision re-presents its exact request hash; a hit returns the recorded used
   attempt's response bytes, which are then re-validated deterministically. A miss (`ErrLedgerMiss`),
   a request-hash mismatch, or a hash-chain break is a hard error, never a live call.
+- The world's reference replay (`ExportJournalWithReplay`, `RestoreNaturalCheckpoint`) wires the
+  recorded Role A seam through `CognitiveReplaySeam`/`CognitiveReplayWake`: each escalated claim
+  instant is resolved from the ledger by request hash and never calls a model. The seam is injected
+  as a `world.ClaimSeam` (internal/cognition's `ReplaySeam`) so `internal/world` imports no client and
+  no ledger. A seam-active bundle whose replay seam is absent fails closed, so deleting the
+  ledger-resolution path is a restore failure, not a silent frozen re-run. This is what makes a
+  seam-active run's `ExportJournalWithReplay` reconciliation and its checkpoint restore exact.
 - The replay client is incapable of network access (a test-only sentinel client that fails on any
   request is wired during replay), and the replay asserts **zero gateway requests**.
 - The replay reproduces the accepted event chain, the hourly projections, the intervention ledger,
@@ -558,7 +573,10 @@ wrong-parent patches are rejected here with typed reasons and **zero world mutat
 
 The sandbox is a deterministic fork pair from the run's own committed checkpoint at the audit hour:
 (patched head) versus (unpatched parent), both run with the seam disabled, same seed, same mechanism,
-same horizon window. Admit iff the patched branch strictly improves the trigger indicator that fired
+same horizon window. The checkpoint is a seam-active bundle (the run's own), so the fork restores it
+through the recorded-seam replay of §7.3: the past escalated decisions are reproduced from the ledger
+with no model call, and the fork's own continuation is seam-disabled. Admit iff the patched branch
+strictly improves the trigger indicator that fired
 and no declared gating band or invariant regresses. The sandbox is not a model-conditioned
 prediction and does not depend on the model; its cost is deterministic engine compute, instrumented
 in the ceiling ledger like any other compute.
@@ -727,16 +745,38 @@ Frozen before any run; a band miss is an outcome reported verbatim and is never 
 
 | Lane | Scope (sole writer) | Depends on |
 |---|---|---|
-| L1 client + ledger + replay + budget | `internal/cognition/{client,ledger,replay,budget,codec}.go` (+ tests) | — |
-| L2 seam, wake policy, observation encoder | `internal/cognition/{observation,wake,rolea,intervention}.go`; `internal/world/natural_cognition.go`; the claim-phase hunks of `internal/world/natural.go` | L1 |
-| L3 patch format + lifecycle + persistence | `internal/strategy/{natural_cognitive.go,natural_cognitive_codec.go}`; `internal/cognition/{patch,roleb,sandbox}.go`; `internal/world/{natural_cognitive_strategy.go,natural_cognitive_checkpoint.go}`; the manifest/restore hunks of `internal/world/natural_checkpoint.go`; the cognitive journal-replay hunk of `internal/world/natural_journal.go`; and the state-driven dispatch hunks of `internal/world/natural.go` | L1, L2 |
-| L4 experiment runner + arms + metrics + report | `cmd/vs1/**` (new command); reporter sections and bands | L1–L3 |
+| L1 client + ledger + replay + budget | `internal/cognition/{client,ledger,replay,budget,codec}.go`; `internal/cognition/replay_seam.go` (the ledger-resolving Role A seam, added by L4 with the replay extension); `internal/cognition/protocol/**` (+ tests) | — |
+| L2 seam, wake policy, observation encoder | `internal/cognition/{observation,wake,rolea,intervention}.go` (+ tests); `internal/world/natural_cognition.go`; the claim-phase hunks of `internal/world/natural.go`; `internal/world/natural_cognition_imports_test.go` | L1 |
+| L3 patch format + lifecycle + persistence | `internal/strategy/{natural_cognitive.go,natural_cognitive_codec.go}` (and the `natural7.go` extraction of the shared claim/birth cascades into `natural_cognitive.go`); `internal/cognition/{patch,roleb,sandbox}.go` (+ tests); `internal/world/{natural_cognitive_strategy.go,natural_cognitive_checkpoint.go}` (+ tests); the manifest/restore hunks of `internal/world/natural_checkpoint.go`; the cognitive journal-replay hunk of `internal/world/natural_journal.go`; and the state-driven dispatch hunks of `internal/world/natural.go` | L1, L2 |
+| L4 experiment runner + arms + metrics + report | `cmd/vs1/**` (new command); reporter sections and bands; the recorded-seam replay/restore wiring of `internal/world/{natural_journal.go,natural_checkpoint.go}` (see §7.3), the `SetCognition` seam setter in `internal/world/natural_cognitive_strategy.go`, and `internal/world/natural_cognitive_replay_test.go` | L1–L3 |
 | L5 docs | this file's evidence record, the ADR, and (separate later pass) the reconciliation edits | L4 |
 | L6 review | two fresh reviewers, no shared context with the workers | L4 |
 
 No lane may touch `internal/kernel`, `internal/scheduler`, `internal/component`, `internal/sim`, the
 frozen `natural/5..9` policy bytes, the frozen v5–v9 evidence, or another lane's files. The seam is
 nil-tolerant: a nil seam leaves every code path and every recorded run byte-identical.
+
+### 14.1 Declared VS1 reductions (implemented-vs-designed gaps, current truth)
+
+The design above is the contract; these are the places the VS1 implementation is deliberately
+smaller, each carried honestly into the evidence rather than papered over.
+
+1. **Newborn inheritance.** The apply binds the living roster present at the audit boundary; a
+   newborn's first claim before the next rebind takes the frozen fallback. Inheritance at birth is
+   not implemented (§5.3 step 4, §5.4).
+2. **Generation-aware replay keys on one `ApplyHour`.** A bundle restores the generation that took
+   effect at its recorded boundary; an apply following a mid-run rollback within the same run is not
+   yet replayed from a single bundle (§5.4). The full-ledger replay is the verification lane's.
+3. **Live audit set.** The live Role B loop audits `{24,48,72,96,120,144}`; `h168` is the terminal
+   horizon, where a 24-hour sandbox fork would exceed the frozen 168-hour envelope, so it is the
+   measurement boundary rather than a live audit. §5.1's declared set records the design intent.
+4. **Extinct-roster audits are no-ops.** An audit hour with no living roster records a zero-cost
+   `no-effect` audit (`roster-extinct`) instead of a rebind; there is nothing to bind or measure.
+5. **A3 cells.** All 12 declared A3 reference cells were funded in the hermetic matrix; the §11.3
+   A3 reduction (f=12 x seeds 0–3) applies only to an authorised-spend live run.
+6. **Hermetic model.** Every arm runs L1's deterministic FakeClient: the mechanism is proven
+   load-bearing, while real-model load-bearing awaits spend authorisation (§13, §16). Costs are
+   modelled price-table charges over fake usage, never real spend.
 
 ## 15. Risks and stop conditions
 
