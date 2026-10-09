@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
+	"agentworld/internal/cognition/protocol"
 )
 
 // The Role A declared decision seam (spec section 4). The seam decides the
@@ -27,10 +29,11 @@ var (
 	ErrRoleASeamObservation = errors.New("role A seam observation")
 )
 
-// Source values recorded on ActorSeamDecision.Source.
+// Source values recorded on ActorSeamDecision.Source (the transport-free
+// protocol constants).
 const (
-	SourceModel    = "model"
-	SourceFallback = "fallback"
+	SourceModel    = protocol.SourceModel
+	SourceFallback = protocol.SourceFallback
 )
 
 // FallbackReason is the typed level-1 fallback reason (spec section 4.3).

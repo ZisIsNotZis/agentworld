@@ -5,10 +5,11 @@
 // ledger, the intervention-record shape, a fail-loud cognitive budget, and the
 // canonical codecs that pin their wire.
 //
-// The package is deliberately outside internal/world. The world package never
-// imports it and this package never imports the world: the actor-decision seam
-// is an interface typed with internal/sim and internal/strategy values only,
-// and the observation boundary is enforced structurally (see
+// The package is deliberately outside internal/world. The transport-free
+// protocol surface lives in internal/cognition/protocol, so the world package
+// consumes the Appendix A types without importing this package's model client,
+// gateway stub, or ledger (EC-6); this package imports protocol and never
+// imports the world. The observation boundary is enforced structurally (see
 // TestCognitionSourcesImportNoNetworkOrWorld). A nil seam therefore leaves
 // every existing world code path and every recorded run byte-identical.
 package cognition
@@ -22,8 +23,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"agentworld/internal/sim"
-	"agentworld/internal/strategy"
+	"agentworld/internal/cognition/protocol"
 )
 
 // Declared protocol identity. The gateway model and the sampling parameters
@@ -488,127 +488,22 @@ func splitEndpoint(raw string) (string, string, error) {
 	return host, path, nil
 }
 
-// ParamID names one declared strategy parameter (Appendix C). The parameter
-// contract and its domains are the patch lane's; this package only carries the
-// identity.
-type ParamID string
-
-// FixtureIdentity is the declared experiment fixture (spec 6.2).
-type FixtureIdentity struct {
-	Patches   int    `json:"patches"`
-	R         int    `json:"r"`
-	Founders  int    `json:"founders"`
-	Mechanism uint32 `json:"mechanism"`
-	Births    bool   `json:"births"`
-}
-
-// RunIdentity is the recorded run identity block. IdentityDigest binds it.
-type RunIdentity struct {
-	Fixture        FixtureIdentity     `json:"fixture"`
-	Seed           uint64              `json:"seed"`
-	BaseRef        strategy.NaturalRef `json:"-"`
-	HeadRef        strategy.NaturalRef `json:"-"`
-	IdentityDigest [32]byte            `json:"-"`
-}
-
-// ActorSeamRequest is the declared Role A request (Appendix A). It is built
-// only from strategy values; Observation is the frozen actor-visible value and
-// Strategy is the actor's own bound parameter vector.
-type ActorSeamRequest struct {
-	Seam        string
-	Actor       sim.EntityID
-	Hour        int
-	Version     sim.WorldVersion
-	Observation strategy.NaturalObservation
-	Strategy    map[ParamID]int64
-	Actions     []string
-	Identity    RunIdentity
-}
-
-// ActorSeamDecision is the declared Role A outcome (Appendix A). Source is
-// "model" or "fallback"; Reason is the typed fallback reason.
-type ActorSeamDecision struct {
-	Action     string
-	Rationale  string
-	Confidence float64
-	Source     string
-	CallRef    uint64
-	Reason     string
-}
-
-// TrajectoryEvidence is the Role B aggregate packet (spec 5.1). It carries only
-// world-level aggregate/state rows: no actor-private state and no other
-// actor's private state.
-type TrajectoryEvidence struct {
-	WindowStartHour int              `json:"window_start_hour"`
-	WindowHours     int              `json:"window_hours"`
-	AliveByHour     []int            `json:"alive_by_hour"`
-	BirthsTotal     int64            `json:"births_total"`
-	BirthsByCause   map[string]int64 `json:"births_by_cause"`
-	DeathsTotal     int64            `json:"deaths_total"`
-	DeathsByCause   map[string]int64 `json:"deaths_by_cause"`
-	Actors          []ActorEvidence  `json:"actors"`
-	Patches         []PatchEvidence  `json:"patches"`
-	BuildsCommitted int64            `json:"builds_committed"`
-	MealsCommitted  int64            `json:"meals_committed"`
-	MaxAlive        int              `json:"max_alive"`
-	MaxBirths       int64            `json:"max_births"`
-	MaxCapital      int64            `json:"max_capital"`
-}
-
-// ActorEvidence is one actor's published capital and granary holding.
-type ActorEvidence struct {
-	Actor        sim.EntityID `json:"actor"`
-	Capital      int64        `json:"capital"`
-	GranaryStock int64        `json:"granary_stock"`
-}
-
-// PatchEvidence is one patch's published mouths and total capital.
-type PatchEvidence struct {
-	Patch   sim.EntityID `json:"patch"`
-	Mouths  int64        `json:"mouths"`
-	Capital int64        `json:"capital"`
-}
-
-// ParameterSpec declares one patchable parameter (Appendix C).
-type ParameterSpec struct {
-	ID            ParamID `json:"id"`
-	Meaning       string  `json:"meaning"`
-	DecisionPoint string  `json:"decision_point"`
-	ParentValue   int64   `json:"parent_value"`
-	DomainMin     int64   `json:"domain_min"`
-	DomainMax     int64   `json:"domain_max"`
-}
-
-// ParameterDelta is one typed integer delta over the declared contract.
-type ParameterDelta struct {
-	Param ParamID `json:"param"`
-	Value int64   `json:"value"`
-}
-
-// PatchRequest is the declared Role B request (Appendix A).
-type PatchRequest struct {
-	Role       string
-	AuditHour  int
-	Evidence   TrajectoryEvidence
-	ParentRef  strategy.NaturalRef
-	Parameters []ParameterSpec
-	Identity   RunIdentity
-}
-
-// PatchProposal is the declared Role B outcome (Appendix A).
-type PatchProposal struct {
-	Propose   bool
-	ParentRef strategy.NaturalRef
-	Deltas    []ParameterDelta
-	Intent    string
-	CallRef   uint64
-}
-
-// SeamDecider is the model-call protocol interface (spec 6.1, Appendix A). It
-// is defined where it is consumed and implemented by the cognition client
-// stack; only internal/sim and internal/strategy types appear in its requests.
-type SeamDecider interface {
-	DecideActorSeam(ctx context.Context, req ActorSeamRequest) (ActorSeamDecision, error)
-	ProposeStrategyPatch(ctx context.Context, req PatchRequest) (PatchProposal, error)
-}
+// The Appendix A protocol types and the model-call interface are the
+// transport-free surface of internal/cognition/protocol; these aliases keep the
+// historical cognition spelling for the recorded seam, the codecs, and the
+// tests.
+type (
+	ParamID            = protocol.ParamID
+	FixtureIdentity    = protocol.FixtureIdentity
+	RunIdentity        = protocol.RunIdentity
+	ActorSeamRequest   = protocol.ActorSeamRequest
+	ActorSeamDecision  = protocol.ActorSeamDecision
+	TrajectoryEvidence = protocol.TrajectoryEvidence
+	ActorEvidence      = protocol.ActorEvidence
+	PatchEvidence      = protocol.PatchEvidence
+	ParameterSpec      = protocol.ParameterSpec
+	ParameterDelta     = protocol.ParameterDelta
+	PatchRequest       = protocol.PatchRequest
+	PatchProposal      = protocol.PatchProposal
+	SeamDecider        = protocol.SeamDecider
+)

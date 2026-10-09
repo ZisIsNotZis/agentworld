@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 
+	"agentworld/internal/cognition/protocol"
 	"agentworld/internal/sim"
 	"agentworld/internal/strategy"
 )
@@ -21,67 +22,36 @@ import (
 // second actor or the world holds privately (no tenure mode or owner, no
 // debts, no spoilage counter, no allocator state, no R, no seed, no kin, no
 // other actor's rows) because the observation type has no field for them.
+// The declared schema metadata and the Appendix C parameter ids are the
+// transport-free constants of internal/cognition/protocol; these aliases keep
+// the historical cognition spelling for the encoder and the tests.
 const (
-	// ActorSeamSchemaVersion is the declared canonical-request schema version.
-	ActorSeamSchemaVersion = 1
-	// SeamNaturalClaim is the one declared Role A seam.
-	SeamNaturalClaim = "natural.claim"
-	// NaturalClaimPromptTemplate is the versioned gateway prompt template.
-	NaturalClaimPromptTemplate = "natural-claim/v1"
+	ActorSeamSchemaVersion     = protocol.ActorSeamSchemaVersion
+	SeamNaturalClaim           = protocol.SeamNaturalClaim
+	NaturalClaimPromptTemplate = protocol.NaturalClaimPromptTemplate
 
 	// Role A declared metadata (spec section 6.2); part of run identity.
 	roleActorDecision = RoleActorDecision
 )
 
 // Declared Appendix C parameter ids (the patchable strategy-side threshold
-// vector). Only the identities live here; the patch contract and its
-// validation belong to the patch lane.
+// vector).
 const (
-	ParamClaimProvisionEnergyFloor ParamID = "claim.provision_energy_floor"
-	ParamClaimBankEnergyCeiling    ParamID = "claim.bank_energy_ceiling"
-	ParamClaimGatherEnergyFloor    ParamID = "claim.gather_energy_floor"
-	ParamBagBuildEnergyFloor       ParamID = "bag.build_energy_floor"
-	ParamBagBuildStartEnergyFloor  ParamID = "bag.build_start_energy_floor"
-	ParamBagBuildFinishEnergyFloor ParamID = "bag.build_finish_energy_floor"
-	ParamBirthFilingEnergyFloor    ParamID = "birth.filing_energy_floor"
+	ParamClaimProvisionEnergyFloor = protocol.ParamClaimProvisionEnergyFloor
+	ParamClaimBankEnergyCeiling    = protocol.ParamClaimBankEnergyCeiling
+	ParamClaimGatherEnergyFloor    = protocol.ParamClaimGatherEnergyFloor
+	ParamBagBuildEnergyFloor       = protocol.ParamBagBuildEnergyFloor
+	ParamBagBuildStartEnergyFloor  = protocol.ParamBagBuildStartEnergyFloor
+	ParamBagBuildFinishEnergyFloor = protocol.ParamBagBuildFinishEnergyFloor
+	ParamBirthFilingEnergyFloor    = protocol.ParamBirthFilingEnergyFloor
 )
 
-// The frozen Appendix C values for the VS1 base cascade natural/7 (v6) and
-// its natural/7b ablation, which share the same thresholds. These are the
-// declared frozen values of the bound cascade, not tunables: the patchable
-// generation (a later lane) substitutes them at the declared decision points.
-var frozenNatural7Parameters = map[ParamID]int64{
-	// The natural/7 claim cascade (strategy natural7.go): provision iff
-	// granary >= 1 and energy >= 4; the bank is food only at energy <= 3.
-	ParamClaimProvisionEnergyFloor: 4,
-	ParamClaimBankEnergyCeiling:    3,
-	// A living claimer gathers whenever a stocked home slot is visible
-	// (energy == 0 short-circuits before the claim), so the gather floor is 1.
-	ParamClaimGatherEnergyFloor: 1,
-	// The v6-verbatim bag decision (strategy natural6.go, 3/4/4): the shared
-	// investment guard (and finish leg), the re-pioneer leg, and the
-	// birth filing/accept floor.
-	ParamBagBuildEnergyFloor:       3,
-	ParamBagBuildStartEnergyFloor:  4,
-	ParamBagBuildFinishEnergyFloor: 3,
-	ParamBirthFilingEnergyFloor:    4,
-}
-
 // FrozenNaturalClaimParameters returns the declared Appendix C frozen
-// parameter vector of the actor's bound cascade. The VS1 seam's declared
-// base policy is natural/7 (spec section 11.3), whose ablation natural/7b
-// shares the same thresholds; every other bound ref returns an empty vector,
-// because the declared parameter contract is defined there and a seam bound
-// to another cascade is outside the VS1 base.
+// parameter vector of the actor's bound cascade (the transport-free protocol
+// function; the VS1 base policy is natural/7, whose ablation natural/7b shares
+// the same thresholds).
 func FrozenNaturalClaimParameters(ref strategy.NaturalRef) map[ParamID]int64 {
-	if ref != strategy.FrozenNaturalPolicy7().Ref && ref != strategy.FrozenNaturalPolicy7b().Ref {
-		return map[ParamID]int64{}
-	}
-	out := make(map[ParamID]int64, len(frozenNatural7Parameters))
-	for id, value := range frozenNatural7Parameters {
-		out[id] = value
-	}
-	return out
+	return protocol.FrozenNaturalClaimParameters(ref)
 }
 
 // RunIdentityDigest is the declared identity digest: SHA-256 over the

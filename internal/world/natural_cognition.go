@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"agentworld/internal/cognition"
+	"agentworld/internal/cognition/protocol"
 	"agentworld/internal/sim"
 	"agentworld/internal/strategy"
 )
@@ -28,10 +28,10 @@ import (
 // wired by the caller.
 //
 // ClaimSeam is the Role A half of the cognition protocol the runner consumes:
-// the subset of cognition.SeamDecider that decides the claim-instant action.
+// the subset of protocol.SeamDecider that decides the claim-instant action.
 // The Role B proposal method belongs to the patch lane.
 type ClaimSeam interface {
-	DecideActorSeam(ctx context.Context, req cognition.ActorSeamRequest) (cognition.ActorSeamDecision, error)
+	DecideActorSeam(ctx context.Context, req protocol.ActorSeamRequest) (protocol.ActorSeamDecision, error)
 }
 
 // NaturalCognition wires the optional Role A seam into the runner. Both fields
@@ -40,7 +40,7 @@ type ClaimSeam interface {
 // no world random stream.
 type NaturalCognition struct {
 	Seam       ClaimSeam
-	WakePolicy cognition.WakePolicy
+	WakePolicy protocol.WakePolicy
 }
 
 // validate refuses a half-wired seam: entering the seam without a decider or a
@@ -89,7 +89,7 @@ func (f *Natural) naturalSeamOverride(ctx context.Context, id sim.EntityID, hour
 	if err != nil {
 		return err
 	}
-	if decision.Source == cognition.SourceModel {
+	if decision.Source == protocol.SourceModel {
 		if err := naturalApplySeamAction(choice, decision.Action, obs); err != nil {
 			return err
 		}
@@ -142,14 +142,14 @@ func naturalLowestStockedSlot(obs strategy.NaturalObservation) sim.EntityID {
 
 // naturalActorSeamRequest builds the declared Role A request from the frozen
 // observation value only.
-func (f *Natural) naturalActorSeamRequest(id sim.EntityID, hour int, version sim.WorldVersion, obs strategy.NaturalObservation) cognition.ActorSeamRequest {
-	return cognition.ActorSeamRequest{
-		Seam:        cognition.SeamNaturalClaim,
+func (f *Natural) naturalActorSeamRequest(id sim.EntityID, hour int, version sim.WorldVersion, obs strategy.NaturalObservation) protocol.ActorSeamRequest {
+	return protocol.ActorSeamRequest{
+		Seam:        protocol.SeamNaturalClaim,
 		Actor:       id,
 		Hour:        hour,
 		Version:     version,
 		Observation: obs,
-		Strategy:    cognition.FrozenNaturalClaimParameters(f.ref),
+		Strategy:    protocol.FrozenNaturalClaimParameters(f.ref),
 		Actions:     naturalClaimActions(f.mechanism),
 		Identity:    f.naturalRunIdentity(),
 	}
@@ -158,9 +158,9 @@ func (f *Natural) naturalActorSeamRequest(id sim.EntityID, hour int, version sim
 // naturalRunIdentity is the declared run identity block. The base and head
 // refs coincide until the patch lane introduces a versioned generation; the
 // identity digest binds the block.
-func (f *Natural) naturalRunIdentity() cognition.RunIdentity {
-	return cognition.RunIdentity{
-		Fixture: cognition.FixtureIdentity{
+func (f *Natural) naturalRunIdentity() protocol.RunIdentity {
+	return protocol.RunIdentity{
+		Fixture: protocol.FixtureIdentity{
 			Patches: f.patches, R: int(f.r), Founders: f.founders,
 			Mechanism: uint32(f.mechanism), Births: f.births,
 		},
