@@ -541,6 +541,13 @@ type NaturalOptions struct {
 	// CeilingHit path (declared run identity; carried by the handoff). Only
 	// lowering is valid; an unknown ceiling or a raise is refused.
 	CeilingThresholds map[NaturalCeiling]int64
+
+	// Cognition is the optional Role A decision seam (spec section 4). The
+	// zero value (nil) leaves every code path and every recorded run
+	// byte-identical; when non-nil the declared wake policy selects the
+	// escalated claim decisions, which are decided by the model through the
+	// recorded-call path. It is not a mechanism or policy change.
+	Cognition *NaturalCognition
 }
 
 // policyRef resolves the declared policy identity: the zero value is the
@@ -651,6 +658,9 @@ func (o NaturalOptions) validate() error {
 	if o.Workers < 1 {
 		return fmt.Errorf("%w: workers %d", ErrNaturalRunner, o.Workers)
 	}
+	if err := o.Cognition.validate(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -736,6 +746,12 @@ type Natural struct {
 	cultivationDisabled bool
 	flow                [24]naturalHourFlow // trailing-24-pulse inflow/consumption ring
 	hourMeals           int64               // meals committed during the running hour
+
+	// Optional Role A decision seam (spec section 4) and the seam-overridden
+	// claim choice recorded for the evaluation phase. A nil cognition and an
+	// empty map are the frozen path.
+	cognition      *NaturalCognition
+	claimDecisions map[sim.EntityID]strategy.NaturalChoice
 }
 
 func naturalField(field sim.FieldID, n int64) component.FieldSeed {
@@ -993,8 +1009,9 @@ func NewNatural(o NaturalOptions) (*Natural, error) {
 		return nil, fmt.Errorf("%w: neutral h0 world breaks frozen conservation: %v", ErrNaturalRunner, err)
 	}
 	f := &Natural{registry: reg, policies: policies, ref: policy.Ref, mechanism: o.mechanism(), founders: naturalFoundersResolved(o.Patches, o.Founders), patches: o.Patches, seed: o.Seed, r: o.R, births: o.Births,
-		cultivationDisabled: o.CultivationDisabled,
-		bound:               make(map[sim.EntityID]*strategy.NaturalBound), allocator: allocator, ledger: ledger, thresholds: thresholds,
+		cultivationDisabled: o.CultivationDisabled, cognition: o.Cognition,
+		claimDecisions: make(map[sim.EntityID]strategy.NaturalChoice),
+		bound:          make(map[sim.EntityID]*strategy.NaturalBound), allocator: allocator, ledger: ledger, thresholds: thresholds,
 		pulseLifecycle: make(map[sim.EntityID]scheduler.Lifecycle), current: make(map[sim.EntityID]strategy.NaturalAction),
 		denied: make(map[sim.EntityID]int64), deniedBuild: make(map[sim.EntityID]int64), meals: make(map[sim.EntityID]NaturalMealIntent),
 		birthWakes: make(map[sim.EntityID]int64), refusals: make(map[NaturalRefusalReason]int64)}
@@ -1928,13 +1945,21 @@ func (f *Natural) evaluate(_ context.Context, ready scheduler.ReadyFiber, view s
 		if a.Bag.Units != 0 {
 			return out, ErrNaturalRunner
 		}
-		obs, err := f.observe(view, id, h, strategy.NaturalNoDenial)
-		if err != nil {
-			return out, err
-		}
-		choice, err := f.naturalEvaluate(id, obs, naturalLabourOfferGuard(a))
-		if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
-			return out, ErrNaturalRunner
+		var choice strategy.NaturalChoice
+		if stored, ok := f.claimDecisions[id]; ok {
+			// The seam decision recorded in the allocation phase decides; the
+			// evaluation phase never calls the model again and never re-derives
+			// the decision (spec section 4.4).
+			choice = stored
+		} else {
+			obs, err := f.observe(view, id, h, strategy.NaturalNoDenial)
+			if err != nil {
+				return out, err
+			}
+			choice, err = f.naturalEvaluate(id, obs, naturalLabourOfferGuard(a))
+			if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
+				return out, ErrNaturalRunner
+			}
 		}
 		switch choice.Kind {
 		case strategy.NaturalGather:
@@ -3188,8 +3213,9 @@ func naturalAllocateGathers(patches, hour int, seed uint64, stocked []FoodFlowSt
 // must be resolved before the claim step: the coordinator evaluates each
 // waking actor's frozen policy choice on the same authoritative head the
 // workers will see (pure, deterministic), then admits.
-func (f *Natural) allocate(at sim.SimTime) error {
+func (f *Natural) allocate(ctx context.Context, at sim.SimTime) error {
 	f.admissions = make(map[sim.EntityID]FoodFlowGatherAdmission)
+	f.claimDecisions = make(map[sim.EntityID]strategy.NaturalChoice)
 	h := int(at / sim.SimTime(NaturalHour))
 	claim, err := NaturalPhaseTime(h, NaturalPhaseClaim)
 	if err != nil || at != claim {
@@ -3231,6 +3257,9 @@ func (f *Natural) allocate(at sim.SimTime) error {
 		choice, err := f.naturalEvaluate(id, obs, naturalLabourOfferGuard(a))
 		if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
 			return ErrNaturalRunner
+		}
+		if err := f.naturalSeamOverride(ctx, id, h, view.Version, obs, &choice); err != nil {
+			return err
 		}
 		switch choice.Kind {
 		case strategy.NaturalGather:
@@ -3433,7 +3462,7 @@ func (f *Natural) Step(ctx context.Context) (bool, error) {
 			f.pulseLifecycle[id] = fiber.Lifecycle
 		}
 	}
-	if err := f.allocate(at); err != nil {
+	if err := f.allocate(ctx, at); err != nil {
 		return false, err
 	}
 	// Completion-instant arbitration before the workers run (same batch,
