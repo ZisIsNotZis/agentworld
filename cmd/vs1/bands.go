@@ -31,9 +31,14 @@ func evaluateBands(runs, allRuns []*cellRun, recordedDir string, replay map[stri
 	}
 	sort.Strings(cellKeys)
 
+	// The declared cell count is the frozen section 11.3 set, not the subset that
+	// happened to run: a band must never PASS on fewer cells than the criterion
+	// claims. An incomplete run degrades to not-evaluable/FAIL instead.
+	declaredCells := len(VS1DeclaredCells())
+
 	var bands []reportBand
-	bands = append(bands, ec1(runs, byCell, recordedDir))
-	bands = append(bands, ec2(byCell, cellKeys))
+	bands = append(bands, ec1(byCell, recordedDir, declaredCells))
+	bands = append(bands, ec2(byCell, cellKeys, declaredCells))
 	bands = append(bands, ec3(replay, runs))
 	bands = append(bands, ec4(runs))
 	bands = append(bands, ec5(byCell, cellKeys, fixtures))
@@ -46,7 +51,7 @@ func evaluateBands(runs, allRuns []*cellRun, recordedDir string, replay map[stri
 	return bands
 }
 
-func ec1(runs []*cellRun, byCell map[string]map[string]*cellRun, recordedDir string) reportBand {
+func ec1(byCell map[string]map[string]*cellRun, recordedDir string, declared int) reportBand {
 	const criterion = "EC-1 mechanism identity/continuity: the no-AI arm through the VS1 harness is byte-identical to the recorded .tmp/natural9-n7-* evidence at all 12 cells (accepted-history digests, hourly projections, event counts); non-cognitive checkpoint manifests are byte-unchanged."
 	checked, missing := 0, 0
 	var mismatches []string
@@ -82,19 +87,26 @@ func ec1(runs []*cellRun, byCell map[string]map[string]*cellRun, recordedDir str
 	switch {
 	case checked == 0:
 		status = "not-evaluable"
+	case missing > 0 || checked < declared:
+		// A dropped A0 cell (or a cell the run never produced) must never leave
+		// the all-12-cells criterion at PASS.
+		status = "FAIL"
 	case len(mismatches) > 0:
 		status = "FAIL"
 	}
-	return band("EC-1", criterion, status, fmt.Sprintf("cells checked=%d missing-A0=%d; mismatches=%s", checked, missing, joinOrNone(mismatches)))
+	return band("EC-1", criterion, status, fmt.Sprintf("cells checked=%d missing-A0=%d declared=%d; mismatches=%s", checked, missing, declared, joinOrNone(mismatches)))
 }
 
-func ec2(byCell map[string]map[string]*cellRun, cellKeys []string) reportBand {
+func ec2(byCell map[string]map[string]*cellRun, cellKeys []string, declared int) reportBand {
 	const criterion = "EC-2 load-bearing model, no hidden coupling: role-a-inert == no-AI byte-exact at all 12 cells; at every cell the role-a arm's trajectory differs from no-AI in >=1 declared indicator hour; and the ledger shows >=1 applied model decision per cell whose action differs from the frozen cascade's action at the same seam instant."
-	inertMismatch, noDivergence, noApplied, checked := 0, 0, 0, 0
+	inertMismatch, noDivergence, noApplied, checked, missing := 0, 0, 0, 0, 0
 	for _, key := range cellKeys {
 		cell := byCell[key]
 		a0, a1, a1i := cell[ArmA0], cell[ArmA1], cell[ArmA1i]
 		if a0 == nil || a1 == nil || a1i == nil {
+			// A cell present but missing one of the three arms is incomplete
+			// evidence; it must lower the checkable count, never be skipped.
+			missing++
 			continue
 		}
 		checked++
@@ -113,15 +125,19 @@ func ec2(byCell map[string]map[string]*cellRun, cellKeys []string) reportBand {
 	switch {
 	case checked == 0:
 		status = "not-evaluable"
+	case missing > 0 || checked < declared:
+		// A dropped arm or an unrun declared cell must never leave the
+		// all-12-cells criterion at PASS.
+		status = "FAIL"
 	case inertMismatch > 0 || noDivergence > 0 || noApplied > 0:
 		status = "FAIL"
 	}
 	return band("EC-2", criterion, status,
-		fmt.Sprintf("cells=%d inert!=no-AI=%d no-divergence=%d no-applied-diverging-model=%d (an applied model decision whose recorded action differs from the frozen cascade's own recorded action at the same seam; hermetic FakeClient content, not a real-model claim)", checked, inertMismatch, noDivergence, noApplied))
+		fmt.Sprintf("cells=%d missing=%d declared=%d inert!=no-AI=%d no-divergence=%d no-applied-diverging-model=%d (an applied model decision whose recorded action differs from the frozen cascade's own recorded action at the same seam; hermetic FakeClient content, not a real-model claim)", checked, missing, declared, inertMismatch, noDivergence, noApplied))
 }
 
 func ec3(replay map[string]string, runs []*cellRun) reportBand {
-	const criterion = "EC-3 byte-exact replay, zero model calls: every recorded AI cell whose generation state is empty replays byte-exact from its genesis with zero gateway requests -- A1, and the apply-free A2/A3 cells -- and a deliberately mutated ledger byte is detected by the committed ledger unit test (internal/cognition/ledger_test.go TestLedgerDetectsTamperedField, TestLedgerDetectsRehashedMiddleRecord). An AI cell carrying applied-generation state (an apply or a rollback) is not yet replayed from a single bundle: spec 14.1 reduction 2 covers an apply following a mid-run rollback, and those cells are declared, not silently omitted."
+	const criterion = "EC-3 byte-exact replay, zero model calls: every declared matrix AI cell whose generation state is empty replays byte-exact from its genesis with zero gateway requests -- A1, and the apply-free A2/A3 cells -- and a deliberately mutated ledger byte is detected by the committed ledger unit test (internal/cognition/ledger_test.go TestLedgerDetectsTamperedField, TestLedgerDetectsRehashedMiddleRecord). A matrix cell carrying applied-generation state (an apply or a rollback) is not yet replayed from a single bundle (spec 14.1 reduction 2), and the scripted-proposer fixtures A2f/A2g are outside the declared replay scope (spec 14.1 reduction 10); both are declared, not silently omitted."
 	if len(replay) == 0 {
 		return band("EC-3", criterion, "not-evaluable", "no replay subset was run; the ledger chain and mutation detection are reported under EC-7's ledger evidence")
 	}
@@ -145,7 +161,7 @@ func ec3(replay map[string]string, runs []*cellRun) reportBand {
 		status = "FAIL"
 	}
 	notReplayed := notReplayedSummary(runs)
-	return band("EC-3", criterion, status, fmt.Sprintf("replayed cells=%d mismatches=%d by-arm[A1=%d A2=%d A3=%d]; not replayed: %s, plus the generation-state fixtures A2f/A2g (spec 14.1 reduction 2: an apply following a mid-run rollback is not yet replayed from a single bundle); mutated-ledger detection: internal/cognition/ledger_test.go (unit)", len(replay), mismatch, perArm[ArmA1], perArm[ArmA2], perArm[ArmA3], notReplayed))
+	return band("EC-3", criterion, status, fmt.Sprintf("replayed cells=%d mismatches=%d by-arm[A1=%d A2=%d A3=%d]; not replayed matrix cells: %s (spec 14.1 reduction 2); scripted fixtures A2f/A2g are outside the declared replay scope (spec 14.1 reduction 10); mutated-ledger detection: internal/cognition/ledger_test.go (unit)", len(replay), mismatch, perArm[ArmA1], perArm[ArmA2], perArm[ArmA3], notReplayed))
 }
 
 // notReplayedSummary names the AI cells the declared replay subset omitted
@@ -235,7 +251,7 @@ func costComplete(rec cognition.InterventionRecord) bool {
 }
 
 func ec5(byCell map[string]map[string]*cellRun, cellKeys []string, fixtures []fixtureReport) reportBand {
-	const criterion = "EC-5 patch lifecycle (C9/C10): (a) the declared scripted proposal fixtures run propose->validate->sandbox->apply->measure->rollback (A2f) and propose->...->admitted-measurement->divergent-parent-sandbox (A2g) end to end; (b) broken patches rejected at validation with zero mutation; (c) a regressing patch applied then rolled back with lineage retained; (d) live A2 cells report admitted/applied/measured/rolled-back counts, the honest null valid."
+	const criterion = "EC-5 patch lifecycle (C9/C10): (a) the declared scripted proposal fixtures run propose->validate->sandbox->apply->measure->rollback (A2f) and propose->...->admitted-measurement->divergent-parent-sandbox (A2g) end to end (spec 12 EC-5(a)'s \"and replays byte-exact\" clause is deferred: the scripted fixtures are outside the declared replay scope, spec 14.1 reduction 10); (b) broken patches rejected at validation with zero mutation; (c) a regressing patch applied then rolled back with lineage retained; (d) live A2 cells report admitted/applied/measured/rolled-back counts, the honest null valid."
 	a2Applied, a2Proposed, a2Rejected, a2Rolled, a2Validated, a2Measured, a2Cells := 0, 0, 0, 0, 0, 0, 0
 	a3Applied, a3Proposed, a3Rejected, a3Rolled, a3Validated, a3Measured, a3Cells := 0, 0, 0, 0, 0, 0, 0
 	for _, key := range cellKeys {
@@ -440,7 +456,11 @@ func ec11(runs []*cellRun) reportBand {
 	}
 	labelled := strings.Contains(evaluationLabel, "synthetic/model-conditional")
 	status := "PASS"
-	if noAIViolations > 0 || aiViolations > 0 || !labelled {
+	switch {
+	case aiCells == 0:
+		// Nothing was labelled: the honest-label criterion is unchecked, not met.
+		status = "not-evaluable"
+	case noAIViolations > 0 || aiViolations > 0 || !labelled:
 		status = "FAIL"
 	}
 	return band("EC-11", criterion, status, fmt.Sprintf("label=%q labelled=%t; no-AI cells with a nonzero token_cost=%d; AI cells=%d, of which with a positive recorded token_cost (=cost_micros by construction)=%d; AI cells with zero recorded token_cost=%d", evaluationLabel, labelled, noAIViolations, aiCells, aiWithCost, aiViolations))

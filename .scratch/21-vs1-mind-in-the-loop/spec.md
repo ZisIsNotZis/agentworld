@@ -794,6 +794,27 @@ smaller, each carried honestly into the evidence rather than papered over.
    evaluation joins it to the escalated (hour, actor) set and counts level-2 refusals in fidelity
    indicator 7 and each cell report. Writing the verdict back onto the intervention record would
    require a post-commit ledger append and is left to a later lane.
+10. **Scripted-fixture replay is outside the declared replay scope.** EC-3's replay subset covers the
+    declared matrix AI cells whose generation state is empty — every A1 cell and the apply-free
+    A2/A3 cells — replayed from genesis with zero model calls. The two scripted-proposer fixtures
+    (A2f, A2g) are not replayed: the subset is the matrix's, and both fixtures are hand-authored
+    lifecycle harnesses, not declared matrix cells. Reduction 2's single-`ApplyHour` bundle boundary
+    is not the reason for their omission — neither fixture has an apply following a mid-run rollback
+    (A2f applies once at h48 and rolls back at h72; A2g applies once at h48 and keeps the head) — so
+    EC-3 attributes the fixtures to this scope boundary, not to reduction 2. With that boundary,
+    §12 EC-5(a)'s "and replays byte-exact" clause is likewise deferred: the fixtures run their
+    propose→validate→sandbox→apply→measure lifecycle end to end, and the byte-exact genesis replay of
+    a scripted fixture (and of a matrix cell carrying applied generation state) is left to the
+    full-ledger replay lane.
+
+Two further facts are declared rather than chased, because neither changes the delivered contract:
+
+- The `R2` commit message's numeric detail for the A2g h72 sandbox re-check ("observed 3 > 2 over
+  [72,96]") is not independently checkable from the regenerated evidence ledger: the ledger records
+  the admission verdict and the divergent-parent sandbox, not that raw window comparison.
+- The earlier reviews' numbered P2 finding lists are not stored as a single artifact in the
+  repository; the findings live in the review messages with their repairs in the commits, and items
+  7–9 above are the current-truth record of the ones that remain open.
 
 ## 15. Risks and stop conditions
 

@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"agentworld/internal/cognition"
@@ -119,11 +122,66 @@ func TestEC2RequiresDivergingAppliedModel(t *testing.T) {
 		}
 	}
 	keys := []string{"f10-s0"}
-	if got := ec2(byCell(3, 0), keys); got.Status != "FAIL" {
+	if got := ec2(byCell(3, 0), keys, 1); got.Status != "FAIL" {
 		t.Fatalf("EC-2 %s with applied-but-not-diverging decisions; evidence %q", got.Status, got.Evidence)
 	}
-	if got := ec2(byCell(3, 1), keys); got.Status != "PASS" {
+	if got := ec2(byCell(3, 1), keys, 1); got.Status != "PASS" {
 		t.Fatalf("EC-2 %s with a diverging applied decision; evidence %q", got.Status, got.Evidence)
+	}
+}
+
+// TestEC1RequiresAllDeclaredCells (P2-1) is the mutation check for the EC-1
+// completeness guard: one of the twelve declared A0 cells is present and
+// matches its recording, so the byte comparison itself passes, but the band
+// must not PASS on 1-of-12. Deleting the checked<declared / missing-A0 guard
+// leaves it PASS.
+func TestEC1RequiresAllDeclaredCells(t *testing.T) {
+	dir := t.TempDir()
+	writeRecordedA0(t, dir, 10, 0)
+	byCell := map[string]map[string]*cellRun{
+		"f10-s0": {ArmA0: {spec: cellSpec{Arm: ArmA0, F: 10, Seed: 0}, proj: projections{AliveByHour: []int{}}}},
+	}
+	if got := ec1(byCell, dir, len(VS1DeclaredCells())); got.Status == "PASS" {
+		t.Fatalf("EC-1 %s on 1/12 declared A0 cells; evidence %q", got.Status, got.Evidence)
+	}
+}
+
+// writeRecordedA0 writes the recorded ticket-19 facts for one cell with
+// zero/empty values matching a zero-valued A0 cellRun, so EC-1's byte
+// comparison passes and only the completeness guard can fail the band.
+func writeRecordedA0(t *testing.T, dir string, f int, seed uint64) {
+	t.Helper()
+	body := `{"branches":[{"births":false},{"births":true,"branch_digest":"","events":0,"event_body_bytes":0,"history_bytes":0,"population":{"alive_by_hour":[]}}]}`
+	path := filepath.Join(dir, fmt.Sprintf("natural9-n7-f%d-s%d-w1.json", f, seed))
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("write recording: %v", err)
+	}
+}
+
+// TestEC2RequiresAllDeclaredCells (P2-1) is the mutation check for the EC-2
+// completeness guard: a single complete cell (inert==no-AI, one diverging
+// applied model) must not PASS against the twelve declared cells. Deleting the
+// missing/checked<declared guard leaves it PASS on 1-of-12.
+func TestEC2RequiresAllDeclaredCells(t *testing.T) {
+	byCell := map[string]map[string]*cellRun{
+		"f10-s0": {
+			ArmA0:  {proj: projections{AliveByHour: []int{1}}},
+			ArmA1:  {appliedModel: 3, divergedModel: 3, proj: projections{AliveByHour: []int{2}}},
+			ArmA1i: {proj: projections{AliveByHour: []int{1}}},
+		},
+	}
+	keys := []string{"f10-s0"}
+	if got := ec2(byCell, keys, len(VS1DeclaredCells())); got.Status == "PASS" {
+		t.Fatalf("EC-2 %s on 1/12 declared cells; evidence %q", got.Status, got.Evidence)
+	}
+}
+
+// TestEC11RequiresAICells (P2-1) is the mutation check for the EC-11 guard: a
+// run with no AI cells must be not-evaluable, never PASS. Deleting the
+// aiCells==0 arm leaves the label-only check PASS on an empty run.
+func TestEC11RequiresAICells(t *testing.T) {
+	if got := ec11(nil); got.Status == "PASS" {
+		t.Fatalf("EC-11 %s with zero AI cells; evidence %q", got.Status, got.Evidence)
 	}
 }
 
