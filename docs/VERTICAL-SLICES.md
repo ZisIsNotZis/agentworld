@@ -13,10 +13,10 @@ language-model exclusion no longer binds planning. The dated running record of e
 
 ## Why this document exists
 
-The operator's raised drift concern is partially confirmed: the repository currently contains **no
-language-model call path at all**, no cognitive-value scheduler, no intervention ledger, no
-allocation-policy comparison, and no strategy mutation or rollout; `TokenCost` is hard-coded zero in
-every reporter and `WakeStrategyInvalidation` has no producer. `docs/VISION.md`'s central claim —
+The operator's raised drift concern is partially confirmed: at the pivot the repository contained
+**no language-model call path at all**, no cognitive-value scheduler, no intervention ledger, no
+allocation-policy comparison, and no strategy mutation or rollout; `TokenCost` was hard-coded zero in
+every reporter and `WakeStrategyInvalidation` had no producer. `docs/VISION.md`'s central claim —
 that *selective* spending of expensive reasoning preserves civilization-level fidelity better than
 *uniform* or *periodic* invocation at the same budget — has never been tested. Roughly 89% of
 post-foundation effort went to a 16-actor synthetic economy, and the last five tickets measured

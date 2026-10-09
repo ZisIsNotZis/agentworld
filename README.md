@@ -2,7 +2,7 @@
 
 Agent World is an experimental, event-driven civilization simulator.
 
-Its goal is to maximize civilization-level causal fidelity under finite compute and language-model budgets. Every person persists as an individual actor in the initial design, but most behavior runs through inexpensive executable strategies. The design reserves expensive reasoning for novel, uncertain, or potentially high-impact decisions; **no language-model call path exists yet** — building one is the subject of the first vertical slice of the active plan ([docs/VERTICAL-SLICES.md](docs/VERTICAL-SLICES.md), VS1).
+Its goal is to maximize civilization-level causal fidelity under finite compute and language-model budgets. Every person persists as an individual actor in the initial design, but most behavior runs through inexpensive executable strategies. The design reserves expensive reasoning for novel, uncertain, or potentially high-impact decisions; the language-model call path exists only inside the first vertical slice of the active plan ([docs/VERTICAL-SLICES.md](docs/VERTICAL-SLICES.md), VS1), whose implementation is complete with hermetic evidence PASS on all eleven frozen exit criteria and whose real-model arm is blocked on spend authorisation.
 
 The project does not aim to replay recorded history exactly. It aims to produce alternative histories whose individual behavior, institutions, technologies, and macro-level outcomes remain causally explainable under explicit human, material, and informational constraints.
 

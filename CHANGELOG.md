@@ -61,3 +61,4 @@ for anything: current truth lives in the authoritative documents — the active 
 - **Ticket 21 — VS1 terminal closure: band completeness guards, fixture replay scope, declared notes.** Revision `f5ff597`.
 - **Ticket 21 — VS1 documentation: current-truth evidence, status, changelog.** Revision `c1d7810`.
 - **P15 — derive the `race` timeout from measured compute (90m) and document the `test` bound.** Revision `1605820`.
+- **Merge — the VS1 vertical slice and the ticket-20 v9 wage exchange landed on `master`.** Merge commit `586757a` (parents `8ec0aa4` + `ebe5fd1`); the merged tree is identical to the gated revision `ebe5fd1`, whose clean full `make check` (60.27 minutes, no failures, no data races) therefore applies to it.
