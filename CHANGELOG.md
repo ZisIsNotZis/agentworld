@@ -59,3 +59,5 @@ for anything: current truth lives in the authoritative documents — the active 
 - **Ticket 21 — VS1 review-repair: active-generation seam identity, per-call sandbox parent, band evidence.** Revision `82549fc`.
 - **Ticket 21 — VS1 residual closure: A2/A3 replay, divergent-parent fixture, band guards.** Revision `3ee7bf5`.
 - **Ticket 21 — VS1 terminal closure: band completeness guards, fixture replay scope, declared notes.** Revision `f5ff597`.
+- **Ticket 21 — VS1 documentation: current-truth evidence, status, changelog.** Revision `c1d7810`.
+- **P15 — derive the `race` timeout from measured compute (90m) and document the `test` bound.** Revision `1605820`.
