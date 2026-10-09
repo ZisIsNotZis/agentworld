@@ -8,7 +8,7 @@ The project does not aim to replay recorded history exactly. It aims to produce 
 
 ## Status
 
-The project is in its P0 experimental phase. Go is the provisional implementation language. S0–S5 provide simulation primitives, immutable components, a kernel, scheduling and an actor-safe intention boundary. S6 adds a bounded autonomous survival demo. A single-machine P0 checkpoint now persists its accepted history, scheduler state and typed attempt journal. Full P0 survival is open. Language-model integration is **not** deferred future-phase work: it is the subject of the first slice (VS1) of the active plan ([docs/VERTICAL-SLICES.md](docs/VERTICAL-SLICES.md)).
+The P0 substrate is the experimental foundation, while the active plan is the vertical-slice roadmap ([docs/VERTICAL-SLICES.md](docs/VERTICAL-SLICES.md), VS1). Go is the provisional implementation language. S0–S5 provide simulation primitives, immutable components, a kernel, scheduling and an actor-safe intention boundary. S6 adds a bounded autonomous survival demo. A single-machine P0 checkpoint now persists its accepted history, scheduler state and typed attempt journal. Full P0 survival is open. Language-model integration is **not** deferred future-phase work: it is the subject of the first slice (VS1) of the active plan ([docs/VERTICAL-SLICES.md](docs/VERTICAL-SLICES.md)).
 
 ## Development
 
@@ -138,4 +138,4 @@ go run ./cmd/natural -patches=32 -r=8 -seed=0 -workers=1 -hours=168 -births=enab
 - A plausible simulated society is not evidence that the same policy will work in reality.
 - Historical calibration tests mechanisms and distributions, not exact event reproduction.
 - Unknown natural laws cannot be validated by language-model judgment alone.
-- Self-modification remains versioned, tested, auditable, and reversible.
+- Any self-modification must remain versioned, tested, auditable, and reversible.
