@@ -1,4 +1,4 @@
-# Vertical-slice roadmap (draft — pending operator confirmation)
+# Vertical-slice roadmap (operator-confirmed 2026-09-29)
 
 ## Why this document exists
 
@@ -24,6 +24,22 @@ ticket ever reached. This roadmap replaces that with vertical slices.
 A slice is accepted only when a single documented command produces a running world in which every
 concept in the inventory below is demonstrably exercised, with recorded evidence and a falsifiable
 exit criterion. Where verification requires subjective judgement, the uncertainty is stated.
+
+## Final target (operator-confirmed 2026-09-29)
+
+The last version is a **self-evolving universe scaled as high as our own compute allows** — the ceiling
+comes from the machine, never from an arbitrary design cap (P15) — in which:
+
+- **agents evolve themselves during the run.** Self-modification is not an offline authoring step: at
+  key moments the system kicks in, changes behaviour logic, and the change takes effect inside the
+  running world, with its measured effect reported (better or worse) rather than asserted.
+- **every modification is durable, attributed, and externally auditable.** A change survives restart,
+  names its proposer, parent, cause and validation, and can be verified by an outside party from the
+  recorded ledger and replay **without trusting any agent's account of it**.
+- **agents see things.** Every decision — model or cheap strategy — is made from the actor's own
+  observation boundary; the differentiator is reasoning *under* a boundary, not privileged insight.
+
+Milestones and slices are the same object: **M*n* = VS*n***, six of each.
 
 ## Concept inventory (must be present and runnable in every slice)
 
@@ -119,15 +135,16 @@ inspectable incentives, and rare innovations are not eliminated by scheduling or
 Calibration against bounded periods, conditional branches, sensitivity analysis, uncertainty
 reported rather than narrated.
 
-## Milestones
+## Milestones (= slices)
 
-- **M1 — "A mind in the loop" = VS1 accepted.** The project is no longer an LLM-free simulator: a real
-  model drives part of the world's decisions, its interventions are costed and replayed exactly, and
-  it can rewrite its own strategy under audit.
-- **M2 — "First evidence on the central claim" = VS2 accepted.** Selective allocation beats (or
-  decisively fails to beat) uniform and periodic spending at equal budget, across seeds.
-- **M3 — "Self-improving" = VS3 accepted.** Strategies measurably improve over generations under
-  audited mutation.
+| Milestone | Slice | Accepted when |
+|---|---|---|
+| **M1** | VS1 | **A mind in the loop.** The project is no longer an LLM-free simulator: a real model drives part of the world's decisions *and* modifies behaviour logic during the run, its interventions are costed and replayed exactly, and the modification is recorded with lineage and applied or rolled back under audit. |
+| **M2** | VS2 | **First evidence on the central claim.** Selective allocation beats — or decisively fails to beat — uniform and periodic spending at equal budget, across seeds, on the declared multi-indicator fidelity metric. |
+| **M3** | VS3 | **Self-improving.** Strategies measurably improve over generations under audited mutation, with provenance and rollback for every patch. |
+| **M4** | VS4 | **Stakes and scale.** The central-claim result survives heterogeneity and scale; the marginal value of reasoning is measured, not assumed. |
+| **M5** | VS5 | **Society.** Institutions and organizations arise and persist only through inspectable incentives and enforcement. |
+| **M6** | VS6 | **History.** Model-conditional calibration, conditional branches, sensitivity rather than one timeline. |
 
 ## Cross-cutting invariants (apply from VS1 onward)
 
@@ -144,6 +161,21 @@ reported rather than narrated.
    not real-world proof.
 6. **Honest nulls.** Frozen gates are never tuned after seeing data; nulls and falsifications are
    reported verbatim.
+7. **External auditability of every modification.** The record of a self-modification must be
+   sufficient for an outside party to verify it from the ledger and replay alone, without trusting the
+   proposing agent, the running world, or this project's own summary of what happened.
+8. **In-run kick-in.** Self-modification triggers from evidence available *during* the run, at declared
+   key moments; an offline-authoring-only mechanism does not satisfy the concept (C9/C10).
+
+## Confirmed product decisions (2026-09-29)
+
+- M1 scope is **VS1**, and milestones equal slices (M*n* = VS*n*), six of each.
+- VS1 carries **both** AI roles: Role A (an actor's mind at a declared decision seam) and Role B
+  (in-run behaviour-logic modification).
+- The **fidelity metric** is frozen as stated below (VS2's basis): divergence of a budgeted run's
+  civilization-level trajectory from the high-budget reference run, across several indicators, never a
+  single scalar.
+- Application model: **`zai/glm-5.3-flash`**; orchestration subagents: **`deepseek/deepseek-flash`**.
 
 ## What stops, and what stays
 
@@ -176,13 +208,12 @@ selectively" (no such mechanism exists yet).
    declared fidelity metric scaffolded for VS2.
 6. **Fresh independent review, gates, docs, merge.**
 
-## Open decisions for the operator
+## Decisions resolved (2026-09-29)
 
-1. **Scope of M1:** VS1 alone (a running model-in-the-loop world), or VS1+VS2 (through first evidence
-   on the central claim)?
-2. **Fidelity metric:** accept "divergence from the high-budget reference run, across several
-   civilization-level indicators, not one scalar"?
-3. **Both AI roles in VS1?** (Recommended yes — the operator's ideal names both intervention and
-   self-evolution; a VS1 with Role A only would not satisfy "all concepts present".)
-4. **Land ticket 20** (complete, reviewed, gate re-running) as the closing of the ecology arc, or
-   leave the branch unmerged?
+1. **M1 scope** — VS1 alone (a running model-in-the-loop world in which logic is modified during the
+   run), then continue to VS2.
+2. **Fidelity metric** — accepted as written: divergence from the high-budget reference run across
+   several civilization-level indicators, not one scalar.
+3. **Both AI roles in VS1** — yes, and Role B must kick in *during* the run.
+4. **Ticket 20** — lands to close the ecology arc once a clean race measurement exists; it is complete,
+   reviewed work and closing it cleanly preserves the substrate. No new ecology work follows it.
