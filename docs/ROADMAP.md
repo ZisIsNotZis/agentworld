@@ -69,8 +69,9 @@ verbatim in [VALIDATION.md](VALIDATION.md) and the per-ticket evidence:
 
 Measured decision-sensitivity map: **f=10/11 reliable, f=12 fragile, f=16 arithmetic null**. Decision
 quality changes outcomes exactly there — at f=12 the provision policy natural/7 reaches the surplus
-indicator in 2/8 runs against 7/8 for the banking-only natural/7b ablation. This substrate is what
-VS1/VS2 build on.
+indicator in 2/4 runs against 4/4 for the banking-only natural/7b ablation in ticket 18's four gating
+cells (seeds {0,7} × workers {1,4}), and in 2/8 runs against 7/8 across ticket 19's eight-seed phase
+map. This substrate is what VS1/VS2 build on.
 
 ## P1 — Budgeted cognition (historical)
 

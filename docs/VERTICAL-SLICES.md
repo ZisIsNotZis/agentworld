@@ -201,8 +201,9 @@ were answered remain answered; no new horizontal rung is opened.
 conservation-checked ledgers, byte-pinned versioned strategies, checkpoint branching, ceiling
 instrumentation, and above all the **ticket 18/19 artifacts**: the measured map of where decisions
 matter (f=10/11 reliable, f=12 fragile, f=16 arithmetic null) and the datum that decision quality
-changes outcomes exactly there (natural/7 2/8 vs natural/7b 7/8 at f=12). Those are the substrate the
-VS2 experiment stands on.
+changes outcomes exactly there — at f=12 ticket 18's four gating cells (seeds {0,7} × workers {1,4})
+split natural/7 2/4 versus natural/7b 4/4, while ticket 19's eight-seed phase map splits natural/7
+2/8 versus natural/7b 7/8. Those are the substrate the VS2 experiment stands on.
 
 ## Ticket sketch for VS1
 
