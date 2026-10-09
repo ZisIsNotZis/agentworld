@@ -1,19 +1,30 @@
-# Vertical-slice roadmap (operator-confirmed 2026-09-29)
+# Vertical-slice roadmap
+
+## Document status
+
+This is the active plan. `docs/ROADMAP.md`, `docs/P0-SPEC.md` and `docs/P0-IMPLEMENTATION-PLAN.md`
+are **HISTORICAL** for planning purposes: ROADMAP.md records the pre-pivot phase plan,
+P0-IMPLEMENTATION-PLAN.md the substrate implementation sequence, and P0-SPEC.md the survival-world
+design contract. The P0/P1 exclusion of **language-model strategy editing is superseded**: both
+language-model strategy editing and cognition are in this plan's FIRST slice (VS1), not deferred to a
+later phase. P0-SPEC.md remains the design contract for the survival-world substrate only, and its
+language-model exclusion no longer binds planning. The dated running record of events lives only in
+[CHANGELOG.md](../CHANGELOG.md), which is a record of events and never a source of truth.
 
 ## Why this document exists
 
-An independent adversarial audit (`.scratch/audit-vision-fidelity.md`, 2026-09-29) confirmed the
-operator's concern: after twenty tickets the repository contains **no language-model call path at
-all**, no cognitive-value scheduler, no intervention ledger, no allocation-policy comparison, and no
-strategy mutation or rollout, while `docs/VISION.md`'s central claim — that *selective* spending of
-expensive reasoning preserves civilization-level fidelity better than *uniform* or *periodic*
-invocation at the same budget — has never been tested. Roughly 89% of post-foundation effort went to a
-16-actor synthetic economy, and the last five tickets measured increasingly fine properties of
-constants the project had frozen itself.
+The operator's raised drift concern is partially confirmed: the repository currently contains **no
+language-model call path at all**, no cognitive-value scheduler, no intervention ledger, no
+allocation-policy comparison, and no strategy mutation or rollout; `TokenCost` is hard-coded zero in
+every reporter and `WakeStrategyInvalidation` has no producer. `docs/VISION.md`'s central claim —
+that *selective* spending of expensive reasoning preserves civilization-level fidelity better than
+*uniform* or *periodic* invocation at the same budget — has never been tested. Roughly 89% of
+post-foundation effort went to a 16-actor synthetic economy, and the last five tickets measured
+increasingly fine properties of constants the project had frozen itself. The independent adversarial
+audit behind this reading is `.scratch/audit-vision-fidelity.md`.
 
-The cause is not laziness but **horizontal development**: concepts were added one layer at a time
-world → economy → ecology → exchange, with the cognitive layer deferred to a future phase that no
-ticket ever reached. This roadmap replaces that with vertical slices.
+The plan is vertical slices: every released version runs every concept end-to-end, and each slice
+raises the fidelity ceiling of the hard concepts rather than adding one more concept layer at a time.
 
 ## The rule
 
@@ -25,7 +36,7 @@ A slice is accepted only when a single documented command produces a running wor
 concept in the inventory below is demonstrably exercised, with recorded evidence and a falsifiable
 exit criterion. Where verification requires subjective judgement, the uncertainty is stated.
 
-## Final target (operator-confirmed 2026-09-29)
+## Final target
 
 The last version is a **self-evolving universe scaled as high as our own compute allows** — the ceiling
 comes from the machine, never from an arbitrary design cap (P15) — in which:
@@ -107,10 +118,14 @@ and replay remain valid across strategy updates. A clean negative — no allocat
 differentiates — is an equally decisive and reportable outcome, because it would show the decision
 space does not yet reward reasoning.
 
-**Metric definition (needs operator confirmation).** Fidelity is measured as *divergence of the
-budgeted run's civilization-level trajectory from the high-budget reference run* (population,
-births/deaths, wealth distribution, exchange volume, and the recorded decision-error rate), not as a
-single scalar.
+**Metric definition (frozen).** Fidelity is measured as *divergence of the budgeted run's
+civilization-level trajectory from the high-budget reference run* (population, births/deaths, wealth
+distribution, exchange volume, and the recorded decision-error rate), not as a single scalar.
+
+**Limitation.** The high-budget reference is a comparative proxy, never ground truth: it is itself a
+model-conditional run, so a smaller divergence means "closer to the reference run", not "more
+faithful to reality". [VALIDATION.md](VALIDATION.md) states the same bound for higher-budget
+references.
 
 ### VS3 — Evolution
 Deepens C9/C10 and C8 into a sustained loop: a population of strategy variants, sandboxed
@@ -167,15 +182,15 @@ reported rather than narrated.
 8. **In-run kick-in.** Self-modification triggers from evidence available *during* the run, at declared
    key moments; an offline-authoring-only mechanism does not satisfy the concept (C9/C10).
 
-## Confirmed product decisions (2026-09-29)
+## Product decisions
 
-- M1 scope is **VS1**, and milestones equal slices (M*n* = VS*n*), six of each.
+- M1 scope is **VS1**; milestones equal slices (M*n* = VS*n*), six of each. VS2 follows VS1.
 - VS1 carries **both** AI roles: Role A (an actor's mind at a declared decision seam) and Role B
-  (in-run behaviour-logic modification).
-- The **fidelity metric** is frozen as stated below (VS2's basis): divergence of a budgeted run's
-  civilization-level trajectory from the high-budget reference run, across several indicators, never a
-  single scalar.
+  (in-run behaviour-logic modification); Role B must kick in *during* the run.
+- The fidelity metric is the frozen definition given in VS2.
 - Application model: **`zai/glm-5.3-flash`**; orchestration subagents: **`deepseek/deepseek-flash`**.
+- The ecology arc is closed: no new ecology work follows it. The substrate it produced is the
+  instrument VS1/VS2 build on.
 
 ## What stops, and what stays
 
@@ -189,12 +204,7 @@ matter (f=10/11 reliable, f=12 fragile, f=16 arithmetic null) and the datum that
 changes outcomes exactly there (natural/7 2/8 vs natural/7b 7/8 at f=12). Those are the substrate the
 VS2 experiment stands on.
 
-**Also required (audit corrective action 3), before or inside VS1:** docs reconciliation — mark the
-old phase plan as historical, record the honest verdict table, retire ticket 13's "productive forces
-emerged" overstatement, and correct `README.md`'s present-tense claim that language models "wake
-selectively" (no such mechanism exists yet).
-
-## Ticket sketch for VS1 (detailed by the worker; product decisions fixed here)
+## Ticket sketch for VS1
 
 1. **VS1 design ticket** — the cognitive layer contract and a new ADR: model-call protocol, the
    recorded-call ledger, replay semantics, cost accounting and ceiling, the observation-boundary
@@ -207,13 +217,3 @@ selectively" (no such mechanism exists yet).
 5. **Experiment runner and metrics** — paired arms, per-call/actor-hour/run cost reporting, the
    declared fidelity metric scaffolded for VS2.
 6. **Fresh independent review, gates, docs, merge.**
-
-## Decisions resolved (2026-09-29)
-
-1. **M1 scope** — VS1 alone (a running model-in-the-loop world in which logic is modified during the
-   run), then continue to VS2.
-2. **Fidelity metric** — accepted as written: divergence from the high-budget reference run across
-   several civilization-level indicators, not one scalar.
-3. **Both AI roles in VS1** — yes, and Role B must kick in *during* the run.
-4. **Ticket 20** — lands to close the ecology arc once a clean race measurement exists; it is complete,
-   reviewed work and closing it cleanly preserves the substrate. No new ecology work follows it.

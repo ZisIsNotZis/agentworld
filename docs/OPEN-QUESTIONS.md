@@ -2,6 +2,8 @@
 
 These questions are deliberate research work, not silently settled assumptions.
 
+Phase references name the active plan's slices (VS1–VS6, [VERTICAL-SLICES.md](VERTICAL-SLICES.md)); the pre-pivot P0–P4 phase plan ([ROADMAP.md](ROADMAP.md)) is historical.
+
 ## Q1 — Civilization-level distance
 
 **Question:** Which metric vector distinguishes materially different worlds without imposing one preferred civilization?
@@ -10,7 +12,7 @@ These questions are deliberate research work, not silently settled assumptions.
 
 **Experiment:** Compare expert judgments, causal interventions, and metric rankings across controlled branches.
 
-**Decision needed:** Before P1 beam pruning becomes authoritative.
+**Decision needed:** Before VS2 beam pruning becomes authoritative.
 
 ## Q2 — Cognitive intervention value
 
@@ -20,7 +22,7 @@ These questions are deliberate research work, not silently settled assumptions.
 
 **Experiment:** Evaluate competing scheduling policies from identical checkpoints and budgets.
 
-**Decision needed:** A provisional version for P1; permanent resolution is not expected.
+**Decision needed:** A provisional version for VS2; permanent resolution is not expected.
 
 ## Q3 — Human plausibility
 
@@ -30,7 +32,7 @@ These questions are deliberate research work, not silently settled assumptions.
 
 **Experiment:** Adversarial social scenarios, historical mechanism calibration, and blinded trajectory review.
 
-**Decision needed:** Minimal actor state before P0 strategy design.
+**Decision needed:** Minimal actor state for VS1 strategy design.
 
 ## Q4 — Strategy representation
 
@@ -40,7 +42,7 @@ These questions are deliberate research work, not silently settled assumptions.
 
 **Experiment:** Prototype common survival behaviors and measure expressiveness, execution cost, mutation validity, and explainability.
 
-**Decision needed:** Before P0 implementation.
+**Decision needed:** Before VS1 implementation.
 
 ## Q5 — Identity across fidelity changes
 
@@ -50,7 +52,7 @@ These questions are deliberate research work, not silently settled assumptions.
 
 **Experiment:** Hide long low-detail periods, reconstruct high-impact decisions, and compare against continuously detailed reference actors.
 
-**Decision needed:** Actor schema for P0; refined before any population compression.
+**Decision needed:** Actor schema for VS1; refined before any population compression.
 
 ## Q6 — Batched model isolation
 
@@ -60,7 +62,7 @@ These questions are deliberate research work, not silently settled assumptions.
 
 **Experiment:** Compare single-case and multiple batch sizes for leakage, omission, order effects, quality, and actual cost.
 
-**Decision needed:** During P1.
+**Decision needed:** During VS2.
 
 ## Q7 — Model-refinement authority
 
@@ -70,7 +72,7 @@ These questions are deliberate research work, not silently settled assumptions.
 
 **Experiment:** Attempt representative technology and institution proposals against an intentionally incomplete model.
 
-**Decision needed:** Minimal primitive registry before P0; extension protocol before P2.
+**Decision needed:** Minimal primitive registry before VS1; extension protocol before VS3.
 
 ## Q8 — Abstract physical fidelity
 
@@ -80,7 +82,7 @@ These questions are deliberate research work, not silently settled assumptions.
 
 **Experiment:** Reproduce known simple technology prerequisites, failure rates, and independent rediscovery without naming the technology to actors.
 
-**Decision needed:** Basic survival processes before P0; advanced production later.
+**Decision needed:** Basic survival processes are already implemented in the substrate; advanced production later.
 
 ## Q9 — Institution emergence
 
@@ -90,7 +92,7 @@ These questions are deliberate research work, not silently settled assumptions.
 
 **Experiment:** Compare explicit individual execution with compiled macros and test behavioral equivalence.
 
-**Decision needed:** During P2.
+**Decision needed:** During VS5.
 
 ## Q10 — Explicit fiber scaling limit
 
@@ -98,9 +100,9 @@ These questions are deliberate research work, not silently settled assumptions.
 
 **Current hypothesis:** Data-oriented dormant state plus bounded workers supports the prototype range; permanent goroutines and per-action database transactions do not.
 
-**Experiment:** Benchmark memory per actor, events per second, cache behavior, checkpoint throughput, and log volume from P0 onward.
+**Experiment:** Benchmark memory per actor, events per second, cache behavior, checkpoint throughput, and log volume from VS1 onward.
 
-**Decision needed:** At P4, based on measurements.
+**Decision needed:** Before VS4 scale-up, based on measurements.
 
 ## Q11 — Checkpoint causal compatibility
 
@@ -110,7 +112,7 @@ These questions are deliberate research work, not silently settled assumptions.
 
 **Experiment:** Create representative schema, scheduling, and rule changes and verify replay and divergence diagnostics.
 
-**Decision needed:** Before P0 checkpoint format is stable.
+**Decision needed:** Before the VS1 checkpoint format is frozen.
 
 ## Q12 — Scientific and policy claims
 
