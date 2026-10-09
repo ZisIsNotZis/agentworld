@@ -1,6 +1,7 @@
 package world
 
 import (
+	"agentworld/internal/cognition/protocol"
 	"agentworld/internal/kernel"
 	"agentworld/internal/scheduler"
 	"agentworld/internal/sim"
@@ -33,9 +34,14 @@ import (
 // build with its typed slot-claim refusal notes, build-denied-eat, rest,
 // paired-meal, fallback-eatstored, birth-request, birth-reply with its
 // typed accept/refusal/silent evidence and the allocator-collision
-// lost-birth note) is journaled and replayed attempt-for-attempt. The world-caused pulse rules (501 regen-split, 502
+// lost-birth note) is journaled and replayed attempt-for-attempt, and —
+// ticket 20 — the wage-contract kinds: labour-offer (the rule-516 filing),
+// labour-decision (the rule-517 accept or refusal), labour-settlement (the
+// committed rule-518 proposal) and labour-void (the typed zero-mutation
+// settlement refusal, contract taxonomy or the fold's recorded
+// settlement-precedence note). The world-caused pulse rules (501 regen-split, 502
 // spoilage, 503 wear, 504 basal, 508 cultivated-grant, 513 birth-expiry, 514
-// age-death) commit no attempt rows — they are typed in the counts and
+// age-death, 519 labour-expiry) commit no attempt rows — they are typed in the counts and
 // verified through the full accepted event partition, whose every byte must
 // equal the trusted replay, including rule 512 refusals (recorded as typed
 // birth-reply evidence) and rule 511's entity-create births. There is no
@@ -73,7 +79,8 @@ type NaturalJournalConfig struct {
 	// CultivationDisabled declares the cultivation-ablation intervention
 	// (matrix cell D); it is run identity like the births flags. Policy is
 	// the declared ref from the frozen natural ref set {natural/5,
-	// natural/6, natural/7, natural/7b} (ticket 16 D1 seam) and
+	// natural/6, natural/7, natural/7b, natural/9} (ticket 16 D1 seam,
+	// extended in ticket 20) and
 	// PolicyFingerprint its exact frozen content fingerprint; a
 	// ref/fingerprint disagreement fails closed. Mechanism is the declared
 	// mechanism axis (ticket 17, the world version the journal was produced
@@ -107,6 +114,13 @@ type NaturalJournalCounts struct {
 	// Provisions counts the rule-515 claim attempts (ticket 17); it is
 	// omitted while zero so every recorded v5 journal keeps its bytes.
 	Provisions uint32 `json:"Provisions,omitempty"`
+	// The wage-contract attempt kinds (ticket 20); all four are omitted
+	// while zero so every recorded v5/v6 journal keeps its bytes.
+	LabourOffers      uint32 `json:"LabourOffers,omitempty"`
+	LabourDecisions   uint32 `json:"LabourDecisions,omitempty"`
+	LabourSettlements uint32 `json:"LabourSettlements,omitempty"`
+	LabourVoids       uint32 `json:"LabourVoids,omitempty"`
+	LabourExpiries    uint32 `json:"LabourExpiries,omitempty"`
 
 	RegenSplits, Spoilage uint32
 	Wear, Basal           uint32
@@ -196,6 +210,13 @@ func (f *Natural) journalConfig() NaturalJournalConfig {
 // its parent's boundary topology, so its journal verifies through the
 // history-aware decode and the checkpoint restore paths instead.
 func (f *Natural) ExportJournal() ([]byte, error) {
+	return f.ExportJournalWithReplay(nil, protocol.WakePolicy{})
+}
+
+// ExportJournalWithReplay is the recorded-seam reconciliation: a seam-active
+// run supplies the ledger-resolved Role A seam (ADR 0006 section 7.3) so the
+// trusted replay reproduces its escalated decisions without a model call.
+func (f *Natural) ExportJournalWithReplay(seam ClaimSeam, wake protocol.WakePolicy) ([]byte, error) {
 	if f == nil {
 		return nil, ErrNaturalJournal
 	}
@@ -212,11 +233,13 @@ func (f *Natural) ExportJournal() ([]byte, error) {
 	if err != nil || schedulerHead != head {
 		return nil, ErrNaturalJournal
 	}
-	data, err := encodeNaturalJournal(f.journal, f.k, head, f.sched.Time(), f.journalConfig())
+	seamReplay := seamReplayOf(seam, wake)
+	cognitive := f.cognitiveJournalReplay()
+	data, err := encodeNaturalJournalWithSeam(f.journal, f.k, head, f.sched.Time(), f.journalConfig(), seamReplay, cognitive)
 	if err != nil {
 		return nil, err
 	}
-	reference, err := replayNaturalJournal(f.journal, f.journalConfig())
+	reference, err := replayNaturalJournalWithCognitive(f.journal, f.journalConfig(), cognitive, seamReplay)
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +288,11 @@ func EncodeNaturalJournal(batches []NaturalBatch, k *kernel.Kernel, verified ker
 }
 
 func encodeNaturalJournal(batches []NaturalBatch, k *kernel.Kernel, verified kernel.PortableHead, schedulerTime sim.SimTime, config NaturalJournalConfig) ([]byte, error) {
-	if err := verifyNaturalJournal(batches, k, verified, schedulerTime, config); err != nil {
+	return encodeNaturalJournalWithSeam(batches, k, verified, schedulerTime, config, nil, nil)
+}
+
+func encodeNaturalJournalWithSeam(batches []NaturalBatch, k *kernel.Kernel, verified kernel.PortableHead, schedulerTime sim.SimTime, config NaturalJournalConfig, seamReplay *naturalSeamReplay, cognitive *cognitiveJournalReplay) ([]byte, error) {
+	if err := verifyNaturalJournalWithSeam(batches, k, verified, schedulerTime, config, seamReplay, cognitive); err != nil {
 		return nil, err
 	}
 	wire := naturalJournalWire{Format: NaturalJournalFormatVersion, Head: verified, SchedulerTime: schedulerTime,
@@ -294,6 +321,10 @@ func DecodeNaturalJournal(data []byte, k *kernel.Kernel, verified kernel.Portabl
 }
 
 func decodeNaturalJournal(data []byte, k *kernel.Kernel, verified kernel.PortableHead, schedulerTime sim.SimTime, config NaturalJournalConfig) ([]NaturalBatch, error) {
+	return decodeNaturalJournalWithSeam(data, k, verified, schedulerTime, config, nil, nil)
+}
+
+func decodeNaturalJournalWithSeam(data []byte, k *kernel.Kernel, verified kernel.PortableHead, schedulerTime sim.SimTime, config NaturalJournalConfig, seamReplay *naturalSeamReplay, cognitive *cognitiveJournalReplay) ([]NaturalBatch, error) {
 	if k == nil {
 		return nil, ErrNaturalJournal
 	}
@@ -314,7 +345,7 @@ func decodeNaturalJournal(data []byte, k *kernel.Kernel, verified kernel.Portabl
 		return nil, ErrNaturalJournal
 	}
 	canonical, err := json.Marshal(wire)
-	if err != nil || !bytes.Equal(canonical, data[12:len(body)]) || verifyNaturalJournal(wire.Batches, k, verified, schedulerTime, wire.Config) != nil {
+	if err != nil || !bytes.Equal(canonical, data[12:len(body)]) || verifyNaturalJournalWithSeam(wire.Batches, k, verified, schedulerTime, wire.Config, seamReplay, cognitive) != nil {
 		return nil, ErrNaturalJournal
 	}
 	return wire.Batches, nil
@@ -330,6 +361,10 @@ func DecodeNaturalJournalWithScheduler(data []byte, k *kernel.Kernel, verified k
 }
 
 func decodeNaturalJournalWithScheduler(data []byte, k *kernel.Kernel, verified kernel.PortableHead, sched *scheduler.Scheduler, config NaturalJournalConfig) ([]NaturalBatch, error) {
+	return decodeNaturalJournalWithSchedulerAndSeam(data, k, verified, sched, config, nil, nil)
+}
+
+func decodeNaturalJournalWithSchedulerAndSeam(data []byte, k *kernel.Kernel, verified kernel.PortableHead, sched *scheduler.Scheduler, config NaturalJournalConfig, seamReplay *naturalSeamReplay, cognitive *cognitiveJournalReplay) ([]NaturalBatch, error) {
 	if sched == nil {
 		return nil, ErrNaturalJournal
 	}
@@ -337,11 +372,11 @@ func decodeNaturalJournalWithScheduler(data []byte, k *kernel.Kernel, verified k
 	if err != nil || head != verified {
 		return nil, ErrNaturalJournal
 	}
-	batches, err := decodeNaturalJournal(data, k, verified, sched.Time(), config)
+	batches, err := decodeNaturalJournalWithSeam(data, k, verified, sched.Time(), config, seamReplay, cognitive)
 	if err != nil {
 		return nil, ErrNaturalJournal
 	}
-	reference, err := replayNaturalJournal(batches, config)
+	reference, err := replayNaturalJournalWithCognitive(batches, config, cognitive, seamReplay)
 	if err != nil {
 		return nil, ErrNaturalJournal
 	}
@@ -383,6 +418,14 @@ func naturalJournalCounts(batches []NaturalBatch, events []kernel.Event) Natural
 				c.Eats++
 			case "provision":
 				c.Provisions++
+			case "labour-offer":
+				c.LabourOffers++
+			case "labour-decision":
+				c.LabourDecisions++
+			case "labour-settlement":
+				c.LabourSettlements++
+			case "labour-void":
+				c.LabourVoids++
 			case "eat-stored":
 				c.EatStored++
 			case "wait":
@@ -440,6 +483,8 @@ func naturalJournalCounts(batches []NaturalBatch, events []kernel.Event) Natural
 			c.Grants++
 		case NaturalBirthExpireRule:
 			c.Expiries++
+		case NaturalLabourExpireRule:
+			c.LabourExpiries++
 		case NaturalAgeDeathRule:
 			c.AgeDeaths++
 		}
@@ -458,6 +503,10 @@ func VerifyNaturalJournal(batches []NaturalBatch, k *kernel.Kernel, verified ker
 }
 
 func verifyNaturalJournal(batches []NaturalBatch, k *kernel.Kernel, verified kernel.PortableHead, at sim.SimTime, config NaturalJournalConfig) error {
+	return verifyNaturalJournalWithSeam(batches, k, verified, at, config, nil, nil)
+}
+
+func verifyNaturalJournalWithSeam(batches []NaturalBatch, k *kernel.Kernel, verified kernel.PortableHead, at sim.SimTime, config NaturalJournalConfig, seamReplay *naturalSeamReplay, cognitive *cognitiveJournalReplay) error {
 	if k == nil || !validNaturalJournalConfig(config) ||
 		at < 0 || at > sim.SimTime(NaturalHorizonHours)*sim.SimTime(NaturalHour) || len(batches) > MaxNaturalJournalBatches {
 		return ErrNaturalJournal
@@ -473,7 +522,7 @@ func verifyNaturalJournal(batches []NaturalBatch, k *kernel.Kernel, verified ker
 	if err != nil || head != verified {
 		return ErrNaturalJournal
 	}
-	reference, err := replayNaturalJournal(batches, config)
+	reference, err := replayNaturalJournalWithCognitive(batches, config, cognitive, seamReplay)
 	if err != nil || reference.sched.Time() != at {
 		return ErrNaturalJournal
 	}
@@ -506,6 +555,36 @@ func verifyNaturalJournal(batches []NaturalBatch, k *kernel.Kernel, verified ker
 // reproducible from genesis only under that two-flag schedule, and for every
 // other bundle boundary and continuation flag are equal.
 func replayNaturalJournal(batches []NaturalBatch, config NaturalJournalConfig) (*Natural, error) {
+	return replayNaturalJournalWithCognitive(batches, config, nil, nil)
+}
+
+// naturalSeamReplay carries the recorded Role A seam a cognitive journal was
+// produced under (ADR 0006 section 7.3). The seam resolves each escalated
+// claim instant from the recorded-call ledger and never calls a model; the
+// reference replay wires it so a seam-active journal reproduces exactly.
+type naturalSeamReplay struct {
+	seam ClaimSeam
+	wake protocol.WakePolicy
+}
+
+func seamReplayOf(seam ClaimSeam, wake protocol.WakePolicy) *naturalSeamReplay {
+	if seam == nil {
+		return nil
+	}
+	return &naturalSeamReplay{seam: seam, wake: wake}
+}
+
+// cognitiveJournalReplay carries the active Role B generation a cognitive
+// journal was produced under, so the reference replay reproduces the recorded
+// decisions (spec section 5.4). applyHour is the boundary at/after which the
+// generation took effect; applyHour <= 0 means it was active from genesis.
+type cognitiveJournalReplay struct {
+	generation strategy.NaturalCognitiveGeneration
+	actors     []sim.EntityID
+	applyHour  int
+}
+
+func replayNaturalJournalWithCognitive(batches []NaturalBatch, config NaturalJournalConfig, cognitive *cognitiveJournalReplay, seamReplay *naturalSeamReplay) (*Natural, error) {
 	if len(batches) > MaxNaturalJournalBatches {
 		return nil, ErrNaturalJournal
 	}
@@ -516,7 +595,37 @@ func replayNaturalJournal(batches []NaturalBatch, config NaturalJournalConfig) (
 	if err != nil {
 		return nil, ErrNaturalJournal
 	}
+	// The recorded Role A seam, when present, is wired before the first step so
+	// the reference re-decides every escalated claim instant exactly as the
+	// live run did, with no model call (ADR 0006 section 7.3).
+	if seamReplay != nil && seamReplay.seam != nil {
+		if err := reference.SetCognition(&NaturalCognition{Seam: seamReplay.seam, WakePolicy: seamReplay.wake}); err != nil {
+			return nil, ErrNaturalJournal
+		}
+	}
+	activated := false
+	activate := func() error {
+		if activated {
+			return nil
+		}
+		if err := reference.activateCognitiveGenerationLocked(cognitive.generation, cognitive.actors, nil); err != nil {
+			return err
+		}
+		activated = true
+		return nil
+	}
+	if cognitive != nil && cognitive.applyHour <= 0 {
+		if err := activate(); err != nil {
+			return nil, ErrNaturalJournal
+		}
+	}
 	for i, b := range batches {
+		if cognitive != nil && cognitive.applyHour > 0 && !activated &&
+			int(reference.sched.Time()/sim.SimTime(NaturalHour)) >= cognitive.applyHour {
+			if err := activate(); err != nil {
+				return nil, ErrNaturalJournal
+			}
+		}
 		processed, stepErr := reference.Step(context.Background())
 		if stepErr != nil || !processed || !sameNaturalJournalBatch(b, reference.journal[i]) {
 			return nil, ErrNaturalJournal

@@ -996,7 +996,7 @@ func TestNaturalCheckpointRejectsWakeTopology(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			changed, wire := naturalAlterPortable(t, f, tc.change)
-			if err := verifyNaturalNeutralScheduler(f.k, f.Journal(), changed.Snapshot(), f.births, f.patches, f.founders); !errors.Is(err, ErrNaturalCheckpoint) {
+			if err := verifyNaturalNeutralScheduler(f.k, f.Journal(), changed.Snapshot(), f.births, false, f.patches, f.founders); !errors.Is(err, ErrNaturalCheckpoint) {
 				t.Fatalf("neutral topology validator did not reject test state: %v", err)
 			}
 			forged := naturalRewriteBundle(t, path, func(s []checkpoint.Section) {
@@ -1219,7 +1219,7 @@ func TestNaturalManifestFlagOffsetIsExact(t *testing.T) {
 // set must be empty rather than surfacing a raw contract error from the claim
 // instant lookup.
 func TestNaturalExpectedBoundaryWakesAtHorizonIsEmpty(t *testing.T) {
-	set, err := naturalExpectedBoundaryWakes(true, NaturalHorizonHours, []sim.EntityID{1, 2}, nil)
+	set, err := naturalExpectedBoundaryWakes(true, false, NaturalHorizonHours, []sim.EntityID{1, 2}, nil)
 	if err != nil {
 		t.Fatalf("horizon expectation set errored: %v", err)
 	}

@@ -297,22 +297,26 @@ func TestNaturalCLIV7MetricsDetector(t *testing.T) {
 }
 
 // TestNaturalCLIMechanismRefusals pins the --mechanism refusal surface and
-// the policy/mechanism cross-legality: values outside {v5, v6} are refused,
-// natural/7 and natural/7b are refused under the v5 mechanism, all before any
-// publication (no output file, no checkpoint directory); stray arguments keep
-// exit status 2 with the flags present, and no-clobber holds under a v7 arm.
+// the policy/mechanism cross-legality: values outside {v5, v6, v7} are
+// refused, natural/7 and natural/7b are refused under the v5 mechanism,
+// natural/9 is refused under every mechanism but v7, all before any
+// publication (no output file, no checkpoint directory); natural/5 and
+// natural/6 stay legal under every mechanism including v7 (the ticket-20
+// zero-use control rung); stray arguments keep exit status 2 with the flags
+// present, and no-clobber holds under a v7 arm.
 func TestNaturalCLIMechanismRefusals(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	for _, tc := range []struct {
 		policy, mechanism string
 	}{
-		{policy5Name, "v7"},
 		{policy5Name, "V5"},
 		{policy6Name, "mechanism-v6"},
 		{policy7Name, mechanismV5Name},  // provision arm under the v5 world
 		{policy7bName, mechanismV5Name}, // ablation arm under the v5 world
 		{policy7Name, ""},               // zero mechanism is exactly v5
+		{policy9Name, mechanismV5Name},  // wage arm under the v5 world
+		{policy9Name, mechanismV6Name},  // wage arm needs rules 516-519 (v7 only)
 	} {
 		base := t.TempDir()
 		out := filepath.Join(base, "report.json")

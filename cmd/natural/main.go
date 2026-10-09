@@ -52,6 +52,26 @@
 // (V7-A2/A3/A4/A5 and V7-B/C/D/E/F). A falsified band is reported verbatim,
 // never tuned.
 //
+// The -mechanism v7 world (ticket 20, .scratch/20-exchange-design/spec.md)
+// and the -policy natural/9 arm carry the frozen v9 wage contract: the
+// natural/9 cascade files rule-516 labour offers, decides rule-517
+// engagements under the derived stock≥4 floor, settles rule-518 atomic wage
+// contracts and expires rule-519 leftovers. natural/9 is legal only under
+// mechanism v7; natural/5 and natural/6 stay legal under every mechanism and
+// natural/7 and natural/7b under v6 or v7 (the zero-use control arm). Under
+// natural/9 the reporter adds, purely additively, the predeclared ticket-20
+// metric sections (per cell/patch/actor offer/accept/refuse/expire/void/
+// settlement counts with typed void causes, the wage ledgers, the
+// file→accept→settle latencies with the journal-chain discipline counts, the
+// wage-banked firsts and wage-meal draws, the employer capital trajectory
+// with time-to-k=8, the counterparty generation table, the ticket-19
+// coexistence figure recomputed as a cross-check, and SF″ = SF′ − wagesPaid
+// + wagesEarned printed beside the frozen SF′, which is never redefined) and
+// the predeclared v9 bands (V9-T1..T6) with the frozen verdict logic
+// (SUPPORTED / NULL-TRADE / FAILED). Every natural/5, natural/6, natural/7,
+// natural/7b and default-band field stays byte-compatible: a report outside
+// natural/9 carries none of the new keys.
+//
 // The optional -founders flag (ticket 18 v8 founding-band fixture axis,
 // .scratch/18-surplus-via-reproduction/spec.md) selects the declared
 // founding band: the number of founder rows the genesis materializes from
@@ -109,6 +129,7 @@ import (
 	"time"
 
 	"agentworld/internal/checkpoint"
+	"agentworld/internal/component"
 	"agentworld/internal/kernel"
 	"agentworld/internal/sim"
 	"agentworld/internal/strategy"
@@ -136,8 +157,21 @@ const (
 	policy6Name            = "natural/6"
 	policy7Name            = "natural/7"
 	policy7bName           = "natural/7b"
+	policy9Name            = "natural/9"
 	mechanismV5Name        = "v5"
 	mechanismV6Name        = "v6"
+	mechanismV7Name        = "v7"
+	// The frozen v9 verdict labels plus the corner label the ticket-20 record
+	// DECLARED BEFORE THE MATRIX RAN (spec comment: "the corner is declared as
+	// its own outcome label, TRADE-INERT - trade occurred and was correctly
+	// recorded, but neither channel produced a measurable effect"). The
+	// reporter emits the declared label, so the report bytes and the recorded
+	// vocabulary agree; the frozen three branches are unchanged and this label
+	// is reachable only in that corner.
+	v9VerdictSupported  = "SUPPORTED"
+	v9VerdictNullTrade  = "NULL-TRADE"
+	v9VerdictFailed     = "FAILED"
+	v9VerdictTradeInert = "TRADE-INERT"
 )
 
 // The predeclared ticket-16 v6 gate constants (frozen design, quoted): the
@@ -175,6 +209,19 @@ const (
 	// / seed 7; worker-invariant) that the ablation band requires verbatim.
 	v6DDenialEatsSeed0 = 1896
 	v6DDenialEatsSeed7 = 1963
+)
+
+// The predeclared ticket-20 v9 band constants (frozen design, quoted): the
+// V9-T1 trade-occurrence bound (first settlement ≤ h96, ≤48 reported
+// descriptively) and the V9-T2 protocol-discipline chain window (every
+// settlement's journal chain 516→517-accept→518 within ≤2 h).
+const (
+	v9FirstSettlementHourBound = 96
+	v9DescriptiveHourBound     = 48
+	v9ChainWindowHours         = 2
+	// v9MaxRecordedViolations caps the per-band recorded violation lists; the
+	// counts themselves are uncapped.
+	v9MaxRecordedViolations = 4
 )
 
 // The predeclared ticket-18 v8 band constants (frozen design, quoted): the
@@ -253,7 +300,8 @@ func v8Requested(o options) bool {
 // its canonical name. The zero value is exactly natural/5 (the D1
 // default-preservation contract, held at the CLI layer too): every recorded
 // pre-ticket-16 invocation keeps its bytes. natural/7 and natural/7b are the
-// ticket-17 provision candidate and mechanism-necessity ablation.
+// ticket-17 provision candidate and mechanism-necessity ablation; natural/9
+// is the ticket-20 wage-contract arm.
 func naturalPolicyName(policy string) (string, error) {
 	switch policy {
 	case "", policy5Name:
@@ -264,23 +312,27 @@ func naturalPolicyName(policy string) (string, error) {
 		return policy7Name, nil
 	case policy7bName:
 		return policy7bName, nil
+	case policy9Name:
+		return policy9Name, nil
 	default:
-		return "", fmt.Errorf("invalid -policy value %q: the frozen natural ref set is {%s, %s, %s, %s}", policy, policy5Name, policy6Name, policy7Name, policy7bName)
+		return "", fmt.Errorf("invalid -policy value %q: the frozen natural ref set is {%s, %s, %s, %s, %s}", policy, policy5Name, policy6Name, policy7Name, policy7bName, policy9Name)
 	}
 }
 
 // naturalMechanismName validates the declared --mechanism selection and
 // returns its canonical name and world axis. The zero value is exactly v5
 // (the D1 default-preservation contract): every recorded pre-ticket-17
-// invocation keeps its bytes.
+// invocation keeps its bytes. v7 is the ticket-20 wage-contract world.
 func naturalMechanismName(mechanism string) (string, world.NaturalMechanism, error) {
 	switch mechanism {
 	case "", mechanismV5Name:
 		return mechanismV5Name, world.NaturalMechanismV5, nil
 	case mechanismV6Name:
 		return mechanismV6Name, world.NaturalMechanismV6, nil
+	case mechanismV7Name:
+		return mechanismV7Name, world.NaturalMechanismV7, nil
 	default:
-		return "", world.NaturalMechanismV5, fmt.Errorf("invalid -mechanism value %q: the declared mechanism axis is {%s, %s}", mechanism, mechanismV5Name, mechanismV6Name)
+		return "", world.NaturalMechanismV5, fmt.Errorf("invalid -mechanism value %q: the declared mechanism axis is {%s, %s, %s}", mechanism, mechanismV5Name, mechanismV6Name, mechanismV7Name)
 	}
 }
 
@@ -298,6 +350,8 @@ func (o options) policyRef() (strategy.NaturalRef, error) {
 		return strategy.FrozenNaturalPolicy7().Ref, nil
 	case policy7bName:
 		return strategy.FrozenNaturalPolicy7b().Ref, nil
+	case policy9Name:
+		return strategy.FrozenNaturalPolicy9().Ref, nil
 	}
 	return strategy.FrozenNaturalPolicy().Ref, nil
 }
@@ -311,14 +365,21 @@ func (o options) mechanismAxis() (world.NaturalMechanism, error) {
 }
 
 // legalPolicyUnderMechanism mirrors the frozen world-side ref/mechanism
-// consistency rule (naturalRefLegalUnderMechanism) at the CLI layer so an
+// consistency ladder (naturalRefLegalUnderMechanism) at the CLI layer so an
 // illegal combination is refused before any publication (no output file, no
-// checkpoint directory): natural/7 and natural/7b require mechanism v6.
+// checkpoint directory): natural/5 and natural/6 are legal under every
+// mechanism; natural/7 and natural/7b require v6 or v7 (the rule-515
+// affordance); natural/9 requires v7 (rules 516-519 and the wage fields).
 func legalPolicyUnderMechanism(policyName string, m world.NaturalMechanism) bool {
-	if m == world.NaturalMechanismV6 {
+	switch policyName {
+	case policy5Name, policy6Name:
 		return true
+	case policy7Name, policy7bName:
+		return m == world.NaturalMechanismV6 || m == world.NaturalMechanismV7
+	case policy9Name:
+		return m == world.NaturalMechanismV7
 	}
-	return policyName == policy5Name || policyName == policy6Name
+	return false
 }
 
 // v7Requested reports whether the run selected a v7 provision arm
@@ -326,6 +387,13 @@ func legalPolicyUnderMechanism(policyName string, m world.NaturalMechanism) bool
 func v7Requested(o options) bool {
 	name, err := naturalPolicyName(o.policy)
 	return err == nil && (name == policy7Name || name == policy7bName)
+}
+
+// v9Requested reports whether the run selected the wage-contract arm
+// (natural/9; the additive ticket-20 metric and band sections).
+func v9Requested(o options) bool {
+	name, err := naturalPolicyName(o.policy)
+	return err == nil && name == policy9Name
 }
 
 // mechanismReportName maps the mechanism to its report spelling: the v5 zero
@@ -482,11 +550,25 @@ type eventCounts struct {
 	// accepted provisions and typed provision-refused attempts. They are
 	// always zero outside mechanism v6, and zero under every arm except
 	// natural/7.
-	Provisions       int64            `json:"provisions,omitempty"`
-	ProvisionRefused int64            `json:"provision_refused,omitempty"`
-	Refusals         map[string]int64 `json:"refusals"`
-	WorldEvents      map[string]int64 `json:"world_rule_events"`
-	WorldEventsNote  string           `json:"world_rule_events_note,omitempty"`
+	Provisions       int64 `json:"provisions,omitempty"`
+	ProvisionRefused int64 `json:"provision_refused,omitempty"`
+	// The ticket-20 wage-contract counters (additive, omitted when zero so
+	// every report outside natural/9 keeps its bytes): rule-516 filings,
+	// rule-517 decisions with the accept/refuse split, committed rule-518
+	// settlements, and typed zero-mutation voids by cause. LabourAccepts and
+	// LabourRefusals read the accepted 517 events' engagement writes, so they
+	// are filled only when the accepted history was available; LabourExpiries
+	// is the rule-519 world-event count inside WorldEvents.
+	LabourOffers      int64            `json:"labour_offers,omitempty"`
+	LabourDecisions   int64            `json:"labour_decisions,omitempty"`
+	LabourAccepts     int64            `json:"labour_accepts,omitempty"`
+	LabourRefusals    int64            `json:"labour_refusals,omitempty"`
+	LabourSettlements int64            `json:"labour_settlements,omitempty"`
+	LabourVoids       int64            `json:"labour_voids,omitempty"`
+	LabourVoidCauses  map[string]int64 `json:"labour_void_causes,omitempty"`
+	Refusals          map[string]int64 `json:"refusals"`
+	WorldEvents       map[string]int64 `json:"world_rule_events"`
+	WorldEventsNote   string           `json:"world_rule_events_note,omitempty"`
 }
 
 type ceilingRowReport struct {
@@ -880,6 +962,8 @@ type branchReport struct {
 	V7Bands              []bandReport       `json:"v7_bands,omitempty"`
 	V8Metrics            *v8MetricsReport   `json:"v8_metrics,omitempty"`
 	V8Bands              []bandReport       `json:"v8_bands,omitempty"`
+	V9Metrics            *v9MetricsReport   `json:"v9_metrics,omitempty"`
+	V9Bands              []bandReport       `json:"v9_bands,omitempty"`
 }
 
 type report struct {
@@ -902,10 +986,13 @@ type report struct {
 	CheckpointDir       string         `json:"checkpoint_dir"`
 	Root                rootReport     `json:"root_checkpoint"`
 	Branches            []branchReport `json:"branches"`
-	WallTimeNS          int64          `json:"wall_time_ns"`
-	CPUTimeNS           int64          `json:"cpu_time_ns"`
-	PeakRSSBytes        int64          `json:"peak_rss_bytes"`
-	TokenCost           int            `json:"token_cost"`
+	// V9Verdict is the run-level frozen v9 verdict (ticket 20); present only
+	// under natural/9.
+	V9Verdict    *v9VerdictReport `json:"v9_verdict,omitempty"`
+	WallTimeNS   int64            `json:"wall_time_ns"`
+	CPUTimeNS    int64            `json:"cpu_time_ns"`
+	PeakRSSBytes int64            `json:"peak_rss_bytes"`
+	TokenCost    int              `json:"token_cost"`
 }
 
 // cpuTime returns accumulated process CPU time and the Linux high-water RSS.
@@ -982,6 +1069,12 @@ var worldRuleNames = map[sim.RuleID]string{
 	world.NaturalBirthExpireRule:  "birth_expiry",
 	world.NaturalAgeDeathRule:     "age_death",
 	world.NaturalProvisionRule:    "provision",
+	// The mechanism-v7 wage-contract rules (ticket 20): every accepted event
+	// of these rules must be named or historyEvidence refuses the run.
+	world.NaturalLabourOfferRule:      "labour_offer",
+	world.NaturalLabourDecisionRule:   "labour_decision",
+	world.NaturalLabourSettlementRule: "labour_settlement",
+	world.NaturalLabourExpireRule:     "labour_expiry",
 }
 
 // birthEvidenceKind reports whether a journal attempt kind is birth
@@ -1102,11 +1195,15 @@ func abs64(v int64) int64 {
 }
 
 // bandFor evaluates the frozen band of the cell verbatim. A falsified band
-// is reported, never tuned and never fatal. At a declared non-default
-// founding band the primary predeclared v8 band takes precedence (the
-// ticket-18 gating band of the cell); under a v7 provision arm the primary
-// predeclared v7 band otherwise takes its place.
+// is reported, never tuned and never fatal. Under the wage-contract arm the
+// primary predeclared V9-T1 band takes precedence (the ticket-20 gating band
+// of the cell); at a declared non-default founding band the primary
+// predeclared v8 band otherwise takes its place, and under a v7 provision
+// arm the primary predeclared v7 band.
 func bandFor(o options, br *branchReport) bandReport {
+	if v9Requested(o) {
+		return v9BandsFor(o, br)[0]
+	}
 	if v8Requested(o) {
 		return v8BandsFor(o, br)[0]
 	}
@@ -2640,11 +2737,1195 @@ func v8BandsFor(o options, br *branchReport) []bandReport {
 	}
 }
 
+// --- ticket-20 v9 wage-contract additive metrics, bands and verdict (natural/9 only; never emitted for any other arm) ---
+
+const (
+	v9TradeDefinition       = "ticket-20 wage-contract trade evidence: offers = rule-516 filings, decisions = rule-517 events with the accept/refuse split read from the accepted events' engagement-row writes, expiries = rule-519 world events, voids = typed zero-mutation settlement refusals by cause, settlements = committed rule-518 atomic wage contracts; per-actor and per-patch rows attribute by the immutable home patch. Accepts, refusals and expiries read the accepted history (-1 when unavailable after a typed ceiling halt; the journal attempt counts remain exact)"
+	v9ChainDefinition       = "V9-T2 discipline counters: chain_violations count settlements whose journal chain 516→517-accept→518 does not close within ≤2 h (offer and same-hour accept at the delivery hour minus one, engagement hour matching); accept_without_offer_violations count accepts with no filed offer addressed to that employer in the same hour; field_set_violations count any accepted 516/517/518/519 event delta outside the frozen enumerated field sets (the offer publishes no claim/price/terms fields, so claim-vs-truth divergence is structurally 0 under this pin)"
+	v9WageLedgerDefinition  = "wage ledgers: cumulative granary fields 8/9 (wages-paid, wages-earned) read from the final roster per actor and aggregated per patch, with run totals from the mechanism-v7 balance; patch_hour_checks × hour cells verify the per-patch-hour identity Σwages-paid = Σwages-earned on hourly ledger deltas (imbalances listed, capped). The ledger is a count: per-unit provenance is not recorded, and the patch-hour equality is the conservation cross-check"
+	v9LatencyDefinition     = "file→accept→settle latency per settlement, in hours: offer hour (the 516 filing) → accept hour (the same-hour 517 decision) → settle hour (the engaged-hour+1 518 delivery); latency_hours = settle − offer"
+	v9FirstsDefinition      = "wage-banked firsts, the V9-T4 reading of 'a worker whose first granary≥1 hour coincides with wagesEarned>0', read exactly: a worker with ≥1 settlement whose first settlement hour precedes every pulse-boundary sighting of that worker's granary stock ≥1 — the worker's first granary unit was the wage (a wage drawn at E≤3 in the same hour as its settlement is boundary-invisible, and the settlement row captures it; any pre-wage stock must appear at a pulse boundary, so the reading is exact, not a bracket)"
+	v9WageMealDefinition    = "worker meals drawn from wages: eat-stored journal attempts by actors whose lifetime cultivated inflow is 0 and cumulative wages earned >0 at the draw hour — for such actors every granary unit is wage-borne (the G2a″ inflow channels are cultivated grants and wages), so the draw is a wage meal by construction; unit-level provenance is not recorded, and tenured actors mixing grant and wage stock are disclosed out of the exact count. The prior_boundary_e_le_3 column is the strict subset of draws whose preceding pulse-boundary energy was ≤3: basal burns only at pulses, so a prior boundary ≤3 implies the mid-hour decision energy was ≤3 (the converse does not hold, so this is a subset, not the count)"
+	v9EmployerDefinition    = "employer channel (V9-T5): employers are actors with cumulative wages-paid >0; employer_k_by_hour is the Σk of alive employers per hour (the channel's capital trajectory), and time_to_k8_hour is the first hour any alive actor holds k ≥ 8 (KMax, -1 = never). The trajectory comparison against the (v7, natural/7b) control arm is the matrix lane's cross-arm step across reports, not a within-report computation"
+	v9CounterpartyDef       = "counterparty generation table: settlements and wage units (1:1 per settlement) by (employer generation, worker generation), generations from the derived parent map over the final roster (founders generation 0; a newborn = max(parent generations)+1); the table distinguishes wage transfers that reach newborns from those that only shift founder wealth (the ticket-19 premise evidence)"
+	v9CoexistenceDefinition = "ticket-19 exchange-precondition coexistence figure recomputed exactly from the hourly projections as a cross-check for the ticket-19 bracketed-bounds measurement: an hour counts when an alive surplus-bearing actor (k≥2 ∧ granary stock≥1 ∧ trailing-24h SF′>0, the frozen per-actor indicator) coexists with an alive actor holding k=0 ∧ granary stock=0; first_hour is the earliest such hour (-1 = none)"
+	v9SFDefinition          = "SF″ = SF′ − wagesPaid + wagesEarned: per-actor trailing-24h wage-ledger deltas applied beside the frozen SF′ (carried verbatim from the frozen v7 computation, never redefined); the frozen indicator text and SF′ definition are unchanged"
+)
+
+// v9SettlementRow is one committed rule-518 settlement's reconstructed
+// journal chain and ledgers.
+type v9SettlementRow struct {
+	Worker             int   `json:"worker"`
+	Employer           int   `json:"employer"`
+	Patch              int   `json:"patch"`
+	OfferHour          int   `json:"offer_hour"`
+	AcceptHour         int   `json:"accept_hour"`
+	SettleHour         int   `json:"settle_hour"`
+	LatencyHours       int   `json:"latency_hours"`
+	PointCompleted     bool  `json:"point_completed"`
+	FoodDelta          int64 `json:"food_delta"`
+	WorkerGeneration   int   `json:"worker_generation"`
+	EmployerGeneration int   `json:"employer_generation"`
+}
+
+// v9ActorTradeRow merges the per-actor trade counters and wage ledgers.
+// Accepts/Refusals/Expiries are -1 when the accepted history was unavailable.
+type v9ActorTradeRow struct {
+	ID          int   `json:"id"`
+	HomePatch   int   `json:"home_patch"`
+	Generation  int   `json:"generation"`
+	Offers      int64 `json:"offers"`
+	Accepts     int64 `json:"accepts"`
+	Refusals    int64 `json:"refusals"`
+	Expiries    int64 `json:"expiries"`
+	Voids       int64 `json:"voids"`
+	Settlements int64 `json:"settlements"`
+	WagesPaid   int64 `json:"wages_paid"`
+	WagesEarned int64 `json:"wages_earned"`
+}
+
+// v9PatchTradeRow aggregates the trade counters and wage ledgers per patch.
+type v9PatchTradeRow struct {
+	Patch       int   `json:"patch"`
+	Offers      int64 `json:"offers"`
+	Accepts     int64 `json:"accepts"`
+	Refusals    int64 `json:"refusals"`
+	Expiries    int64 `json:"expiries"`
+	Voids       int64 `json:"voids"`
+	Settlements int64 `json:"settlements"`
+	WagesPaid   int64 `json:"wages_paid"`
+	WagesEarned int64 `json:"wages_earned"`
+}
+
+// v9CounterpartyRow is one (employer generation, worker generation) cell of
+// the counterparty generation table.
+type v9CounterpartyRow struct {
+	EmployerGeneration int    `json:"employer_generation"`
+	WorkerGeneration   int    `json:"worker_generation"`
+	EmployerClass      string `json:"employer_class"`
+	WorkerClass        string `json:"worker_class"`
+	Settlements        int64  `json:"settlements"`
+	WageUnits          int64  `json:"wage_units"`
+}
+
+// v9LedgerImbalance is one per-patch-hour wage-ledger equality violation.
+type v9LedgerImbalance struct {
+	Hour        int   `json:"hour"`
+	Patch       int   `json:"patch"`
+	PaidDelta   int64 `json:"paid_delta"`
+	EarnedDelta int64 `json:"earned_delta"`
+}
+
+// v9WageLedgerReport is the wage-ledger block with its per-patch-hour
+// conservation cross-check.
+type v9WageLedgerReport struct {
+	Definition              string              `json:"definition"`
+	WagesPaidTotal          int64               `json:"wages_paid_total"`
+	WagesEarnedTotal        int64               `json:"wages_earned_total"`
+	PatchWagesPaidFinal     []int64             `json:"per_patch_wages_paid_final"`
+	PatchWagesEarnedFinal   []int64             `json:"per_patch_wages_earned_final"`
+	PatchHourChecks         int                 `json:"patch_hour_checks"`
+	PatchHourImbalanceCount int                 `json:"patch_hour_imbalance_count"`
+	PatchHourImbalances     []v9LedgerImbalance `json:"patch_hour_imbalances"`
+}
+
+// v9CoexistenceReport is the ticket-19 coexistence cross-check figure.
+type v9CoexistenceReport struct {
+	Definition string `json:"definition"`
+	Hours      int    `json:"hours"`
+	FirstHour  int    `json:"first_hour"`
+}
+
+// v9MetricsReport carries the additive ticket-20 metric sections. It exists
+// only under natural/9; every other report carries no such key.
+type v9MetricsReport struct {
+	Definition                    string              `json:"definition"`
+	LinkEvidenceAvailable         bool                `json:"link_evidence_available"`
+	Offers                        int64               `json:"offers"`
+	Decisions                     int64               `json:"decisions"`
+	Accepts                       int64               `json:"accepts"`
+	Refusals                      int64               `json:"refusals"`
+	Expiries                      int64               `json:"expiries"`
+	Voids                         int64               `json:"voids"`
+	VoidCauses                    map[string]int64    `json:"void_causes,omitempty"`
+	Settlements                   int64               `json:"settlements"`
+	FirstSettlementHour           int                 `json:"first_settlement_hour"`
+	SettlementRows                []v9SettlementRow   `json:"settlement_rows"`
+	LatencyDefinition             string              `json:"latency_definition"`
+	LatencyMinHours               int                 `json:"latency_min_hours"`
+	LatencyMaxHours               int                 `json:"latency_max_hours"`
+	LatencyTotalHours             int                 `json:"latency_total_hours"`
+	ChainDefinition               string              `json:"chain_discipline_definition"`
+	ChainViolations               int64               `json:"chain_violations"`
+	ChainViolationNote            string              `json:"chain_violation_note,omitempty"`
+	AcceptWithoutOfferViolations  int64               `json:"accept_without_offer_violations"`
+	AcceptWithoutOfferNote        string              `json:"accept_without_offer_note,omitempty"`
+	FieldSetViolations            int64               `json:"field_set_violations"`
+	FieldSetViolationNote         string              `json:"field_set_violation_note,omitempty"`
+	SettlementFoodDeltaViolations int64               `json:"settlement_food_delta_violations"`
+	SettlementFoodDeltaNote       string              `json:"settlement_food_delta_note,omitempty"`
+	PerActor                      []v9ActorTradeRow   `json:"per_actor_trade"`
+	PerPatch                      []v9PatchTradeRow   `json:"per_patch_trade"`
+	WageLedger                    v9WageLedgerReport  `json:"wage_ledger"`
+	WageBankedFirsts              int                 `json:"wage_banked_firsts"`
+	WageBankedFirstActors         []int               `json:"wage_banked_first_actors"`
+	WageBankedFirstDefinition     string              `json:"wage_banked_first_definition"`
+	WageMealDraws                 int64               `json:"wage_meal_draws"`
+	WageMealDrawsBoundaryE3       int64               `json:"wage_meal_draws_prior_boundary_e_le_3"`
+	WageMealDefinition            string              `json:"wage_meal_definition"`
+	EmployerKByHour               []int64             `json:"employer_k_by_hour"`
+	EmployerDefinition            string              `json:"employer_channel_definition"`
+	TimeToK8Hour                  int                 `json:"time_to_k8_hour"`
+	CounterpartyDefinition        string              `json:"counterparty_definition"`
+	Counterparties                []v9CounterpartyRow `json:"counterparties"`
+	Coexistence                   v9CoexistenceReport `json:"coexistence"`
+	SFPrimeByHourTotal            []int64             `json:"sf_prime_by_hour_total"`
+	SFDoublePrimeByHourTotal      []int64             `json:"sf_double_prime_by_hour_total"`
+	SFPrimeRunTotal               int64               `json:"sf_prime_run_total"`
+	SFDoublePrimeRunTotal         int64               `json:"sf_double_prime_run_total"`
+	SFDefinition                  string              `json:"sf_definition"`
+}
+
+// v9VerdictReport is the run-level frozen v9 verdict over the run's
+// branches (ticket 20): SUPPORTED iff T1∧T2∧T3∧T6 IN and (T4∨T5) observed;
+// NULL-TRADE iff T2/T3/T6 IN with zero settlements; FAILED iff any gating
+// discipline band is OUT. The corner the three frozen implications do not
+// partition (gates IN, settlements > 0, both descriptive channels null) is
+// labelled TRADE-INERT (declared pre-run) with the rationale verbatim, the v5
+// reporter's no-frozen-branch-fired convention — never a fourth frozen
+// verdict label.
+type v9VerdictReport struct {
+	Verdict             string `json:"verdict"`
+	T1In                bool   `json:"t1_trade_occurrence_in"`
+	T2In                bool   `json:"t2_protocol_discipline_in"`
+	T3In                bool   `json:"t3_conservation_in"`
+	T6In                bool   `json:"t6_non_distortion_in"`
+	T4Observed          bool   `json:"t4_worker_channel_observed"`
+	T5Observed          bool   `json:"t5_employer_channel_observed"`
+	Settlements         int64  `json:"settlements"`
+	FirstSettlementHour int    `json:"first_settlement_hour"`
+	Rationale           string `json:"rationale"`
+}
+
+// v9HourActor is one actor's per-hour reading used by the v9 checkpoint pass.
+type v9HourActor struct {
+	alive        bool
+	k            int64
+	stock        int64
+	cultivated   int64
+	wagesPaid    int64
+	wagesEarned  int64
+	energy       int64 // pulse-boundary energy of this hour
+	paidWindow   int64
+	earnedWindow int64
+	sfPrime      int64
+	sfDouble     int64
+}
+
+// v9RosterIndex builds the final-roster lookup tables (home patch, generation
+// via the derived parent map, full states) the v9 attribution reads. Every
+// actor ever alive is in the final roster, dead included, and ascending ID is
+// a parent-before-child order, so the generation walk is the v8 form.
+func v9RosterIndex(final world.NaturalCheckpoint, patches int) (map[sim.EntityID]int, map[sim.EntityID]int, map[sim.EntityID]world.NaturalActorState, error) {
+	home := make(map[sim.EntityID]int)
+	states := make(map[sim.EntityID]world.NaturalActorState)
+	for j := range final.Founders {
+		p, err := v8HomePatchIndex(final.Founders[j], patches)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		id := sim.EntityID(j + 1)
+		home[id] = p
+		states[id] = final.Founders[j]
+	}
+	nbs := append([]world.NaturalNewbornState(nil), final.Newborns...)
+	sort.Slice(nbs, func(i, j int) bool { return nbs[i].ID < nbs[j].ID })
+	for _, nb := range nbs {
+		p, err := v8HomePatchIndex(nb.State, patches)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		home[nb.ID] = p
+		states[nb.ID] = nb.State
+	}
+	generation := make(map[sim.EntityID]int, len(states))
+	for j := range final.Founders {
+		generation[sim.EntityID(j+1)] = 0
+	}
+	for _, nb := range nbs {
+		ga, okA := generation[nb.State.Genome.ParentA]
+		gb, okB := generation[nb.State.Genome.ParentB]
+		if !okA || !okB {
+			return nil, nil, nil, fmt.Errorf("newborn %d references a parent outside the roster", int(nb.ID))
+		}
+		g := ga
+		if gb > g {
+			g = gb
+		}
+		generation[nb.ID] = g + 1
+	}
+	return home, generation, states, nil
+}
+
+// v9LabourEvent is one accepted labour event's extracted evidence.
+type v9LabourEvent struct {
+	rule         sim.RuleID
+	hour         int
+	actor        sim.EntityID // the cause actor (516 worker, 517 employer, 518 worker)
+	counterparty sim.EntityID // 516 addressee; 517 decided worker; 518 paying employer
+	engagedHour  int          // 517 accept: the book's engaged-hour value (-1 otherwise)
+	accepted     bool         // 517: the decision engaged the worker
+	foodDelta    int64        // 518: aggregate food delta (worker bag + both granary stocks)
+	completed    bool         // 518: a point completion rode on the settlement
+}
+
+// v9ParseLabourEvents walks the accepted labour events in (time, ID) order,
+// extracts the frozen evidence, and pins every event's delta set against the
+// frozen enumerated field sets. Any unexpected component/field/entity role is
+// a recorded field-set violation (the first noted verbatim), never a silent
+// pass; a value that fails to decode is a hard integrity error.
+func v9ParseLabourEvents(byID map[sim.EventID]kernel.Event, patches int) ([]v9LabourEvent, int64, string, error) {
+	type evKey struct {
+		time sim.SimTime
+		id   sim.EventID
+	}
+	keys := make([]evKey, 0, len(byID))
+	for id, ev := range byID {
+		switch ev.Rule {
+		case world.NaturalLabourOfferRule, world.NaturalLabourDecisionRule, world.NaturalLabourSettlementRule, world.NaturalLabourExpireRule:
+			keys = append(keys, evKey{ev.Time, id})
+		}
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].time != keys[j].time {
+			return keys[i].time < keys[j].time
+		}
+		return keys[i].id < keys[j].id
+	})
+	out := make([]v9LabourEvent, 0, len(keys))
+	var violations int64
+	var firstNote string
+	note := func(kind string, hour int, actor sim.EntityID) {
+		violations++
+		if firstNote == "" {
+			firstNote = fmt.Sprintf("first field-set violation: %s at h%d actor %d", kind, hour, int(actor))
+		}
+	}
+	for _, k := range keys {
+		ev := byID[k.id]
+		hour := journalHour(ev.Time)
+		cause := ev.Cause.Actor
+		switch ev.Rule {
+		case world.NaturalLabourOfferRule:
+			row := v9LabourEvent{rule: ev.Rule, hour: hour, actor: cause, engagedHour: -1}
+			sawHour, sawAddressee, sawStatus, sawLastOffer := false, false, false, false
+			for _, d := range ev.Deltas {
+				if d.Component != world.NaturalLabourOfferTypeID || d.Entity != cause {
+					note("rule-516 delta outside the worker's own offer row", hour, cause)
+					continue
+				}
+				switch d.Field {
+				case world.NaturalLabourOfferHourField:
+					sawHour = true
+					v, err := d.After.Integer()
+					if err != nil {
+						return nil, 0, "", err
+					}
+					if v != int64(hour) {
+						note("rule-516 offer hour differs from the event hour", hour, cause)
+					}
+				case world.NaturalLabourOfferAddresseeField:
+					sawAddressee = true
+					v, err := d.After.EntityRef()
+					if err != nil {
+						return nil, 0, "", err
+					}
+					row.counterparty = v
+				case world.NaturalLabourOfferStatusField:
+					sawStatus = true
+				case world.NaturalLabourOfferLastOfferHourField:
+					sawLastOffer = true
+				default:
+					note("rule-516 undeclared offer field", hour, cause)
+				}
+			}
+			if !sawHour || !sawAddressee || !sawStatus || !sawLastOffer || len(ev.Deltas) != 4 {
+				note("rule-516 field set is not exactly {hour, addressee, status, last-offer-hour}", hour, cause)
+			}
+			out = append(out, row)
+		case world.NaturalLabourDecisionRule:
+			row := v9LabourEvent{rule: ev.Rule, hour: hour, actor: cause, engagedHour: -1}
+			for _, d := range ev.Deltas {
+				switch {
+				case d.Component == world.NaturalLabourOfferTypeID && d.Entity != cause:
+					switch d.Field {
+					case world.NaturalLabourOfferStatusField:
+						row.counterparty = d.Entity // the decided worker
+					case world.NaturalLabourOfferLastReplyHourField:
+					default:
+						note("rule-517 undeclared worker offer field", hour, cause)
+					}
+				case d.Component == world.NaturalLabourBookTypeID && d.Entity == cause:
+					switch d.Field {
+					case world.NaturalLabourBookEngagedWorkerField:
+						row.accepted = true
+						v, err := d.After.EntityRef()
+						if err != nil {
+							return nil, 0, "", err
+						}
+						row.counterparty = v
+					case world.NaturalLabourBookEngagedHourField:
+						v, err := d.After.Integer()
+						if err != nil {
+							return nil, 0, "", err
+						}
+						row.engagedHour = int(v)
+					case world.NaturalLabourBookLastDecisionHourField:
+					default:
+						note("rule-517 undeclared book field", hour, cause)
+					}
+				default:
+					note("rule-517 delta outside the two enumerated rows", hour, cause)
+				}
+			}
+			if row.accepted && row.engagedHour != hour {
+				note("rule-517 engaged hour differs from the decision hour", hour, cause)
+			}
+			out = append(out, row)
+		case world.NaturalLabourSettlementRule:
+			row := v9LabourEvent{rule: ev.Rule, hour: hour, actor: cause, engagedHour: -1}
+			sawBag, sawWorkerStock, sawWorkerWage, sawEmployerStock, sawEmployerWage, sawInvested, sawWip := false, false, false, false, false, false, false
+			// The food arithmetic decodes lazily: the completion's tenure
+			// deltas are entity refs, not integers.
+			foodDeltaOf := func(d component.FieldDelta) (int64, error) {
+				v, err := d.After.Integer()
+				if err != nil {
+					return 0, err
+				}
+				b, err := d.Before.Integer()
+				if err != nil {
+					return 0, err
+				}
+				return v - b, nil
+			}
+			for _, d := range ev.Deltas {
+				switch {
+				case d.Component == world.NaturalBagTypeID && d.Field == world.NaturalBagUnitsField && d.Entity == cause:
+					sawBag = true
+					diff, err := foodDeltaOf(d)
+					if err != nil {
+						return nil, 0, "", err
+					}
+					row.foodDelta += diff
+				case d.Component == world.NaturalGranaryTypeID && d.Field == world.NaturalGranaryStockField && d.Entity == cause:
+					sawWorkerStock = true
+					diff, err := foodDeltaOf(d)
+					if err != nil {
+						return nil, 0, "", err
+					}
+					row.foodDelta += diff
+				case d.Component == world.NaturalGranaryTypeID && d.Field == world.NaturalGranaryWagesEarnedField && d.Entity == cause:
+					sawWorkerWage = true
+				case d.Component == world.NaturalGranaryTypeID && d.Field == world.NaturalGranaryStockField && d.Entity != cause:
+					sawEmployerStock = true
+					if row.counterparty != 0 && row.counterparty != d.Entity {
+						note("rule-518 employer rows name two entities", hour, cause)
+					}
+					row.counterparty = d.Entity
+					diff, err := foodDeltaOf(d)
+					if err != nil {
+						return nil, 0, "", err
+					}
+					row.foodDelta += diff
+				case d.Component == world.NaturalGranaryTypeID && d.Field == world.NaturalGranaryWagesPaidField && d.Entity != cause:
+					sawEmployerWage = true
+					if row.counterparty != 0 && row.counterparty != d.Entity {
+						note("rule-518 employer rows name two entities", hour, cause)
+					}
+					row.counterparty = d.Entity
+				case d.Component == world.NaturalWorksiteTypeID && d.Entity != cause &&
+					(d.Field == world.NaturalWorksiteInvestedUnitsField || d.Field == world.NaturalWorksiteWipField):
+					if d.Field == world.NaturalWorksiteInvestedUnitsField {
+						sawInvested = true
+						// The invested unit is food (the G2b unit ledger): the
+						// employer's granary stock −1 lands here, so the
+						// settlement's aggregate food delta reads bag −1 +
+						// worker stock +1 + employer stock −1 + invested +1.
+						diff, err := foodDeltaOf(d)
+						if err != nil {
+							return nil, 0, "", err
+						}
+						row.foodDelta += diff
+					} else {
+						sawWip = true
+					}
+					if row.counterparty != 0 && row.counterparty != d.Entity {
+						note("rule-518 employer rows name two entities", hour, cause)
+					}
+					row.counterparty = d.Entity
+				case d.Component == world.NaturalWorksiteTypeID && d.Entity != cause &&
+					(d.Field == world.NaturalWorksiteCapitalField || d.Field == world.NaturalWorksitePointsCreatedField):
+					row.completed = true
+				case d.Component == world.NaturalSlotTypeID &&
+					(d.Field == world.NaturalSlotTenureModeField || d.Field == world.NaturalSlotTenureOwnerField || d.Field == world.NaturalSlotTenureCultivatedField):
+					idx := int(d.Entity) - world.NaturalSlotIDBase
+					if idx < 0 || idx >= patches*world.NaturalSlotsPerPatch {
+						note("rule-518 completion slot outside the declared slot space", hour, cause)
+					}
+					row.completed = true
+				default:
+					note("rule-518 delta outside the enumerated settlement field set", hour, cause)
+				}
+			}
+			if !sawBag || !sawWorkerStock || !sawWorkerWage || !sawEmployerStock || !sawEmployerWage || !sawInvested || !sawWip {
+				note("rule-518 enumerated settlement field set incomplete", hour, cause)
+			}
+			out = append(out, row)
+		case world.NaturalLabourExpireRule:
+			// Rule 519 expiry/book-clear rows: one row per expired worker
+			// offer; the book-clear deltas are validated but not rows.
+			for _, d := range ev.Deltas {
+				switch {
+				case d.Component == world.NaturalLabourOfferTypeID && d.Field == world.NaturalLabourOfferStatusField:
+					v, err := d.After.Integer()
+					if err != nil {
+						return nil, 0, "", err
+					}
+					if v == int64(world.NaturalRequestExpired) {
+						out = append(out, v9LabourEvent{rule: ev.Rule, hour: hour, actor: d.Entity, engagedHour: -1})
+					}
+				case d.Component == world.NaturalLabourBookTypeID &&
+					(d.Field == world.NaturalLabourBookEngagedWorkerField || d.Field == world.NaturalLabourBookEngagedHourField):
+				default:
+					note("rule-519 delta outside the expiry/book-clear rows", hour, cause)
+				}
+			}
+		}
+	}
+	return out, violations, firstNote, nil
+}
+
+// v9CounterpartyKey is one (employer generation, worker generation) cell of
+// the counterparty generation table.
+type v9CounterpartyKey struct {
+	employerGen int
+	workerGen   int
+}
+
+// v9GenerationClass names a generation index the frozen way: founders are
+// generation 0, everything derived is newborn.
+func v9GenerationClass(generation int) string {
+	if generation == 0 {
+		return "founder"
+	}
+	return "newborn"
+}
+
+// buildV9Metrics computes the additive ticket-20 metric sections from the
+// hourly checkpoints, the journal and the accepted events. Everything is
+// derived from the same frozen evidence the earlier reporters use (hourly
+// projections, journal attempts, accepted event deltas); no earlier report
+// field is touched, and the block exists only under natural/9. byID == nil
+// means the accepted history was unavailable (post-halt): the attempt-derived
+// counters stay exact and the event-derived evidence degrades to -1 with the
+// band not evaluable, never to a fabricated count.
+func buildV9Metrics(o options, br *branchReport, checks []world.NaturalCheckpoint, journal []world.NaturalBatch, byID map[sim.EventID]kernel.Event) (v9MetricsReport, error) {
+	m := v9MetricsReport{
+		Definition:                v9TradeDefinition,
+		LinkEvidenceAvailable:     byID != nil,
+		Accepts:                   -1,
+		Refusals:                  -1,
+		Expiries:                  -1,
+		FirstSettlementHour:       -1,
+		LatencyDefinition:         v9LatencyDefinition,
+		LatencyMinHours:           -1,
+		LatencyMaxHours:           -1,
+		ChainDefinition:           v9ChainDefinition,
+		TimeToK8Hour:              -1,
+		WageLedger:                v9WageLedgerReport{Definition: v9WageLedgerDefinition},
+		WageBankedFirstDefinition: v9FirstsDefinition,
+		WageMealDefinition:        v9WageMealDefinition,
+		EmployerDefinition:        v9EmployerDefinition,
+		CounterpartyDefinition:    v9CounterpartyDef,
+		Coexistence:               v9CoexistenceReport{Definition: v9CoexistenceDefinition, FirstHour: -1},
+		SFDefinition:              v9SFDefinition,
+	}
+	if len(checks) == 0 {
+		return m, errors.New("no hourly projection for v9 metrics")
+	}
+	patches := len(checks[0].Slots)
+	if patches == 0 || o.patches != patches {
+		return m, fmt.Errorf("declared patches %d disagree with the projection's %d", o.patches, patches)
+	}
+	// SF′ is carried verbatim from the frozen v7 computation; SF″ prints
+	// beside it and never redefines it.
+	v7, err := buildV7Metrics(br, checks, journal)
+	if err != nil {
+		return m, err
+	}
+	m.SFPrimeByHourTotal = v7.SFPrimeByHourTotal
+	m.SFPrimeRunTotal = v7.SFPrimeRunTotal
+	final := checks[len(checks)-1]
+	home, generation, states, err := v9RosterIndex(final, patches)
+	if err != nil {
+		return m, err
+	}
+	// --- journal attempt pass: the attempt-derived evidence is exact even
+	// post-halt (settlement hours for the firsts and the wage-meal reads). ---
+	type v9SettleAttempt struct {
+		worker sim.EntityID
+		hour   int
+	}
+	type v9EatAttempt struct {
+		actor sim.EntityID
+		hour  int
+	}
+	var settleAttempts []v9SettleAttempt
+	var eatAttempts []v9EatAttempt
+	for _, batch := range journal {
+		for _, a := range batch.Attempts {
+			switch a.Kind {
+			case "labour-settlement":
+				settleAttempts = append(settleAttempts, v9SettleAttempt{worker: a.Actor, hour: journalHour(a.Time)})
+			case "eat-stored":
+				eatAttempts = append(eatAttempts, v9EatAttempt{actor: a.Actor, hour: journalHour(a.Time)})
+			}
+		}
+	}
+	m.Offers = br.Events.LabourOffers
+	m.Decisions = br.Events.LabourDecisions
+	m.Settlements = br.Events.LabourSettlements
+	m.Voids = br.Events.LabourVoids
+	m.VoidCauses = br.Events.LabourVoidCauses
+	// --- checkpoint pass: per-actor wage windows (SF″), the per-patch-hour
+	// ledger equality, stock sightings (wage-banked firsts), the employer
+	// trajectory, time-to-k=8, and the ticket-19 coexistence cross-check. ---
+	type wageWindow struct{ paid, earned []int64 }
+	windows := map[sim.EntityID]*wageWindow{}
+	sfWindows := map[sim.EntityID][]int64{}
+	firstStockSighting := map[sim.EntityID]int{}
+	hourActors := make([]map[sim.EntityID]v9HourActor, len(checks))
+	var prev map[sim.EntityID]world.NaturalActorState
+	delta := func(old, new int64, existed bool) int64 {
+		if !existed {
+			return new
+		}
+		return new - old
+	}
+	trailing := func(win []int64) int64 {
+		var sum int64
+		for j := len(win) - 1; j >= 0 && len(win)-1-j < sfWindowHours; j-- {
+			sum += win[j]
+		}
+		return sum
+	}
+	roster := func(c world.NaturalCheckpoint) []struct {
+		id sim.EntityID
+		a  world.NaturalActorState
+	} {
+		out := make([]struct {
+			id sim.EntityID
+			a  world.NaturalActorState
+		}, 0, len(c.Founders)+len(c.Newborns))
+		for j := range c.Founders {
+			out = append(out, struct {
+				id sim.EntityID
+				a  world.NaturalActorState
+			}{sim.EntityID(j + 1), c.Founders[j]})
+		}
+		for _, nb := range c.Newborns {
+			out = append(out, struct {
+				id sim.EntityID
+				a  world.NaturalActorState
+			}{nb.ID, nb.State})
+		}
+		return out
+	}
+	m.WageLedger.PatchWagesPaidFinal = make([]int64, patches)
+	m.WageLedger.PatchWagesEarnedFinal = make([]int64, patches)
+	for _, rs := range roster(final) {
+		if home[rs.id] < 0 || home[rs.id] >= patches {
+			return m, fmt.Errorf("actor %d home patch outside the declared patch space", int(rs.id))
+		}
+		m.WageLedger.PatchWagesPaidFinal[home[rs.id]] += rs.a.Granary.WagesPaid
+		m.WageLedger.PatchWagesEarnedFinal[home[rs.id]] += rs.a.Granary.WagesEarned
+	}
+	patchPaidDelta := make([]int64, patches)
+	patchEarnedDelta := make([]int64, patches)
+	for i, c := range checks {
+		actors := make(map[sim.EntityID]v9HourActor, len(c.Founders)+len(c.Newborns))
+		for p := range patchPaidDelta {
+			patchPaidDelta[p], patchEarnedDelta[p] = 0, 0
+		}
+		hourBearing, hourPoor := false, false
+		var sfDoubleTotal, employerK int64
+		for _, rs := range roster(c) {
+			a := rs.a
+			ha := v9HourActor{alive: naturalAlive(a), k: a.Worksite.Capital, stock: a.Granary.Stock,
+				cultivated: a.Granary.CultivatedTotal, wagesPaid: a.Granary.WagesPaid, wagesEarned: a.Granary.WagesEarned,
+				energy: a.Body.Energy}
+			if home[rs.id] < 0 || home[rs.id] >= patches {
+				return m, fmt.Errorf("actor %d home patch outside the declared patch space", int(rs.id))
+			}
+			p, had := prev[rs.id]
+			// The SF′ flow is the frozen v7 form, recomputed here only for
+			// the coexistence reading; the reported SF′ series above is the
+			// frozen builder's own output.
+			cultDelta := delta(p.Granary.CultivatedTotal, a.Granary.CultivatedTotal, had)
+			storedDelta := delta(p.Granary.StoredMeals, a.Granary.StoredMeals, had)
+			provDelta := delta(p.Granary.Provisioned, a.Granary.Provisioned, had)
+			spoilDelta := delta(p.Granary.Spoiled, a.Granary.Spoiled, had)
+			paidBirthDelta := delta(p.Genome.BirthGranaryPaid, a.Genome.BirthGranaryPaid, had)
+			win := windows[rs.id]
+			if win == nil {
+				win = &wageWindow{}
+				windows[rs.id] = win
+			}
+			win.paid = append(win.paid, delta(p.Granary.WagesPaid, a.Granary.WagesPaid, had))
+			win.earned = append(win.earned, delta(p.Granary.WagesEarned, a.Granary.WagesEarned, had))
+			ha.paidWindow = trailing(win.paid)
+			ha.earnedWindow = trailing(win.earned)
+			sfWin := append(sfWindows[rs.id], cultDelta-storedDelta-provDelta-spoilDelta-paidBirthDelta)
+			sfWindows[rs.id] = sfWin
+			ha.sfPrime = trailing(sfWin)
+			// SF″ = SF′ − wagesPaid + wagesEarned, the same trailing window.
+			ha.sfDouble = ha.sfPrime - ha.paidWindow + ha.earnedWindow
+			bearing := ha.alive && ha.k >= 2 && ha.stock >= 1 && ha.sfPrime > 0
+			poor := ha.alive && ha.k == 0 && ha.stock == 0
+			hourBearing = hourBearing || bearing
+			hourPoor = hourPoor || poor
+			if ha.alive {
+				sfDoubleTotal += ha.sfDouble
+				if ha.wagesPaid > 0 {
+					employerK += ha.k
+				}
+				if ha.k >= world.NaturalKMax && m.TimeToK8Hour < 0 {
+					m.TimeToK8Hour = c.Hour
+				}
+			}
+			if ha.stock >= 1 {
+				if _, seen := firstStockSighting[rs.id]; !seen {
+					firstStockSighting[rs.id] = c.Hour
+				}
+			}
+			patchPaidDelta[home[rs.id]] += delta(p.Granary.WagesPaid, a.Granary.WagesPaid, had)
+			patchEarnedDelta[home[rs.id]] += delta(p.Granary.WagesEarned, a.Granary.WagesEarned, had)
+			actors[rs.id] = ha
+		}
+		hourActors[i] = actors
+		for p := 0; p < patches; p++ {
+			m.WageLedger.PatchHourChecks++
+			if patchPaidDelta[p] != patchEarnedDelta[p] {
+				m.WageLedger.PatchHourImbalanceCount++
+				if len(m.WageLedger.PatchHourImbalances) < v9MaxRecordedViolations {
+					m.WageLedger.PatchHourImbalances = append(m.WageLedger.PatchHourImbalances,
+						v9LedgerImbalance{Hour: c.Hour, Patch: world.NaturalPatchIDBase + p, PaidDelta: patchPaidDelta[p], EarnedDelta: patchEarnedDelta[p]})
+				}
+			}
+		}
+		if hourBearing && hourPoor {
+			m.Coexistence.Hours++
+			if m.Coexistence.FirstHour < 0 {
+				m.Coexistence.FirstHour = c.Hour
+			}
+		}
+		m.SFDoublePrimeByHourTotal = append(m.SFDoublePrimeByHourTotal, sfDoubleTotal)
+		m.EmployerKByHour = append(m.EmployerKByHour, employerK)
+		cur := make(map[sim.EntityID]world.NaturalActorState, len(c.Founders)+len(c.Newborns))
+		for j := range c.Founders {
+			cur[sim.EntityID(j+1)] = c.Founders[j]
+		}
+		for _, nb := range c.Newborns {
+			cur[nb.ID] = nb.State
+		}
+		prev = cur
+	}
+	m.SFDoublePrimeRunTotal = m.SFPrimeRunTotal - final.Balance.WagesPaid + final.Balance.WagesEarned
+	m.WageLedger.WagesPaidTotal = final.Balance.WagesPaid
+	m.WageLedger.WagesEarnedTotal = final.Balance.WagesEarned
+	// --- accepted-event pass: typed accept/refuse/expiry evidence with its
+	// per-actor attribution, the settlement rows with their reconstructed
+	// chains, and the T2 discipline counts. Post-halt this whole pass is
+	// skipped and the three event-derived counters stay -1. ---
+	acceptsByEmployer := map[sim.EntityID]int64{}
+	refusalsByWorker := map[sim.EntityID]int64{}
+	expiriesByWorker := map[sim.EntityID]int64{}
+	if byID != nil {
+		events, fieldViolations, fieldNote, err := v9ParseLabourEvents(byID, patches)
+		if err != nil {
+			return m, err
+		}
+		m.FieldSetViolations = fieldViolations
+		m.FieldSetViolationNote = fieldNote
+		type workerHour struct {
+			worker sim.EntityID
+			hour   int
+		}
+		offers := map[workerHour]sim.EntityID{}
+		type acceptRecord struct {
+			employer sim.EntityID
+			hour     int
+		}
+		acceptsByWorker := map[sim.EntityID][]acceptRecord{}
+		var acceptCount, refusalCount, expiryCount int64
+		for _, ev := range events {
+			switch ev.rule {
+			case world.NaturalLabourOfferRule:
+				offers[workerHour{ev.actor, ev.hour}] = ev.counterparty
+			case world.NaturalLabourDecisionRule:
+				if ev.accepted {
+					acceptCount++
+					acceptsByEmployer[ev.actor]++
+					acceptsByWorker[ev.counterparty] = append(acceptsByWorker[ev.counterparty], acceptRecord{employer: ev.actor, hour: ev.hour})
+				} else {
+					refusalCount++
+					refusalsByWorker[ev.counterparty]++
+				}
+			case world.NaturalLabourSettlementRule:
+			case world.NaturalLabourExpireRule:
+				expiryCount++
+				expiriesByWorker[ev.actor]++
+			}
+		}
+		m.Accepts, m.Refusals, m.Expiries = acceptCount, refusalCount, expiryCount
+		// Settlement rows in (hour, worker) order, each with its reconstructed
+		// 516→517-accept→518 chain and the T2 violation counts.
+		var settleEvents []v9LabourEvent
+		for _, ev := range events {
+			if ev.rule == world.NaturalLabourSettlementRule {
+				settleEvents = append(settleEvents, ev)
+			}
+		}
+		sort.Slice(settleEvents, func(i, j int) bool {
+			if settleEvents[i].hour != settleEvents[j].hour {
+				return settleEvents[i].hour < settleEvents[j].hour
+			}
+			return settleEvents[i].actor < settleEvents[j].actor
+		})
+		for _, se := range settleEvents {
+			worker, employer, settleHour := se.actor, se.counterparty, se.hour
+			row := v9SettlementRow{
+				Worker: int(worker), Employer: int(employer),
+				Patch:      world.NaturalPatchIDBase + home[worker],
+				SettleHour: settleHour, PointCompleted: se.completed, FoodDelta: se.foodDelta,
+				WorkerGeneration: generation[worker], EmployerGeneration: generation[employer],
+				OfferHour: -1, AcceptHour: -1, LatencyHours: -1,
+			}
+			offerHour := settleHour - 1
+			addr, hasOffer := offers[workerHour{worker, offerHour}]
+			row.OfferHour = offerHour
+			row.LatencyHours = settleHour - offerHour
+			acceptedHere := false
+			for _, rec := range acceptsByWorker[worker] {
+				if rec.hour == offerHour {
+					acceptedHere = rec.employer == employer
+					row.AcceptHour = offerHour
+					break
+				}
+			}
+			chainOK := hasOffer && addr == employer && acceptedHere && settleHour-offerHour <= v9ChainWindowHours
+			if !chainOK {
+				m.ChainViolations++
+				if m.ChainViolationNote == "" {
+					m.ChainViolationNote = fmt.Sprintf("first chain violation: worker %d→employer %d settled at h%d (offer filed addressed-to-employer=%t, same-hour accept by that employer=%t, within %d h=%t)", int(worker), int(employer), settleHour, hasOffer && addr == employer, acceptedHere, v9ChainWindowHours, settleHour-offerHour <= v9ChainWindowHours)
+				}
+			}
+			m.SettlementRows = append(m.SettlementRows, row)
+			if m.LatencyMinHours < 0 || row.LatencyHours < m.LatencyMinHours {
+				m.LatencyMinHours = row.LatencyHours
+			}
+			if row.LatencyHours > m.LatencyMaxHours {
+				m.LatencyMaxHours = row.LatencyHours
+			}
+			m.LatencyTotalHours += row.LatencyHours
+			if se.foodDelta != 0 {
+				m.SettlementFoodDeltaViolations++
+				if m.SettlementFoodDeltaNote == "" {
+					m.SettlementFoodDeltaNote = fmt.Sprintf("first nonzero settlement food delta: worker %d→employer %d at h%d delta %+d", int(worker), int(employer), settleHour, se.foodDelta)
+				}
+			}
+			if m.FirstSettlementHour < 0 || settleHour < m.FirstSettlementHour {
+				m.FirstSettlementHour = settleHour
+			}
+		}
+		// Zero accepts without a pending addressed offer: every accept needs
+		// a same-hour filed offer addressed to that employer, walked in
+		// (worker, hour) order so the recorded first note is deterministic.
+		// Refused and expired offers are legitimate non-accepts and are not
+		// violations.
+		type acceptKey struct {
+			worker   sim.EntityID
+			employer sim.EntityID
+			hour     int
+		}
+		var acceptKeys []acceptKey
+		for worker, recs := range acceptsByWorker {
+			for _, rec := range recs {
+				acceptKeys = append(acceptKeys, acceptKey{worker, rec.employer, rec.hour})
+			}
+		}
+		sort.Slice(acceptKeys, func(i, j int) bool {
+			if acceptKeys[i].worker != acceptKeys[j].worker {
+				return acceptKeys[i].worker < acceptKeys[j].worker
+			}
+			if acceptKeys[i].hour != acceptKeys[j].hour {
+				return acceptKeys[i].hour < acceptKeys[j].hour
+			}
+			return acceptKeys[i].employer < acceptKeys[j].employer
+		})
+		for _, ak := range acceptKeys {
+			addr, ok := offers[workerHour{ak.worker, ak.hour}]
+			if !ok || addr != ak.employer {
+				m.AcceptWithoutOfferViolations++
+				if m.AcceptWithoutOfferNote == "" {
+					note := "no filed offer"
+					if ok {
+						note = fmt.Sprintf("the filed offer is addressed to %d", int(addr))
+					}
+					m.AcceptWithoutOfferNote = fmt.Sprintf("first accept without a pending addressed offer: employer %d engaged worker %d at h%d, %s", int(ak.employer), int(ak.worker), ak.hour, note)
+				}
+			}
+		}
+		// Counterparty generation table from the settlement rows.
+		counterparties := map[v9CounterpartyKey]*v9CounterpartyRow{}
+		for _, row := range m.SettlementRows {
+			key := v9CounterpartyKey{row.EmployerGeneration, row.WorkerGeneration}
+			c := counterparties[key]
+			if c == nil {
+				c = &v9CounterpartyRow{EmployerGeneration: key.employerGen, WorkerGeneration: key.workerGen,
+					EmployerClass: v9GenerationClass(key.employerGen), WorkerClass: v9GenerationClass(key.workerGen)}
+				counterparties[key] = c
+			}
+			c.Settlements++
+			c.WageUnits++
+		}
+		keys := make([]v9CounterpartyKey, 0, len(counterparties))
+		for key := range counterparties {
+			keys = append(keys, key)
+		}
+		sort.Slice(keys, func(i, j int) bool {
+			if keys[i].employerGen != keys[j].employerGen {
+				return keys[i].employerGen < keys[j].employerGen
+			}
+			return keys[i].workerGen < keys[j].workerGen
+		})
+		for _, key := range keys {
+			m.Counterparties = append(m.Counterparties, *counterparties[key])
+		}
+	}
+	// --- wage-banked firsts (V9-T4): a worker's first granary unit was the
+	// wage iff no pulse-boundary stock sighting precedes its first settlement
+	// hour (the settlement row covers a same-hour boundary-invisible draw). ---
+	firstSettle := map[sim.EntityID]int{}
+	for _, sa := range settleAttempts {
+		if _, ok := firstSettle[sa.worker]; !ok {
+			firstSettle[sa.worker] = sa.hour
+		}
+	}
+	settledIDs := make([]sim.EntityID, 0, len(firstSettle))
+	for id := range firstSettle {
+		settledIDs = append(settledIDs, id)
+	}
+	sort.Slice(settledIDs, func(i, j int) bool { return settledIDs[i] < settledIDs[j] })
+	for _, id := range settledIDs {
+		h0 := firstSettle[id]
+		if s, seen := firstStockSighting[id]; !seen || s >= h0 {
+			m.WageBankedFirsts++
+			m.WageBankedFirstActors = append(m.WageBankedFirstActors, int(id))
+		}
+	}
+	// --- wage meals (V9-T4): eat-stored draws by actors whose lifetime
+	// cultivated inflow is 0 and cumulative wages earned >0 at the draw hour;
+	// the prior-boundary E≤3 column is the strict subset. ---
+	baseHour := checks[0].Hour
+	for _, ea := range eatAttempts {
+		idx := ea.hour - baseHour
+		if idx < 0 || idx >= len(hourActors) {
+			continue // outside the recorded hourly projection (fixture pre-history)
+		}
+		ha, ok := hourActors[idx][ea.actor]
+		if !ok {
+			continue
+		}
+		if ha.cultivated == 0 && ha.wagesEarned > 0 {
+			m.WageMealDraws++
+			if idx > 0 {
+				if prior, ok2 := hourActors[idx-1][ea.actor]; ok2 && prior.energy <= 3 {
+					m.WageMealDrawsBoundaryE3++
+				}
+			}
+		}
+	}
+	// --- per-actor and per-patch trade rows. ---
+	type actorCounts struct {
+		offers, accepts, refusals, expiries, voids, settlements int64
+	}
+	byActor := map[sim.EntityID]*actorCounts{}
+	countsFor := func(id sim.EntityID) *actorCounts {
+		c := byActor[id]
+		if c == nil {
+			c = &actorCounts{}
+			byActor[id] = c
+		}
+		return c
+	}
+	for _, batch := range journal {
+		for _, a := range batch.Attempts {
+			switch a.Kind {
+			case "labour-offer":
+				countsFor(a.Actor).offers++
+			case "labour-settlement":
+				countsFor(a.Actor).settlements++
+			case "labour-void":
+				countsFor(a.Actor).voids++
+			}
+		}
+	}
+	ids := make([]sim.EntityID, 0, len(states))
+	for id := range states {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	patchAgg := map[int]*v9PatchTradeRow{}
+	for _, id := range ids {
+		c := byActor[id]
+		if c == nil {
+			c = &actorCounts{}
+		}
+		row := v9ActorTradeRow{
+			ID: int(id), HomePatch: world.NaturalPatchIDBase + home[id], Generation: generation[id],
+			Offers: c.offers, Voids: c.voids, Settlements: c.settlements,
+			WagesPaid:   states[id].Granary.WagesPaid,
+			WagesEarned: states[id].Granary.WagesEarned,
+			Accepts:     -1, Refusals: -1, Expiries: -1,
+		}
+		if byID != nil {
+			// Accepts count the employer's accepted 517 engagements; refusals
+			// and expiries count the worker's decided and expired offers.
+			row.Accepts = acceptsByEmployer[id]
+			row.Refusals = refusalsByWorker[id]
+			row.Expiries = expiriesByWorker[id]
+		}
+		m.PerActor = append(m.PerActor, row)
+		pr := patchAgg[row.HomePatch]
+		if pr == nil {
+			pr = &v9PatchTradeRow{Patch: row.HomePatch, Accepts: -1, Refusals: -1, Expiries: -1}
+			patchAgg[row.HomePatch] = pr
+		}
+		pr.Offers += row.Offers
+		pr.Voids += row.Voids
+		pr.Settlements += row.Settlements
+		pr.WagesPaid += row.WagesPaid
+		pr.WagesEarned += row.WagesEarned
+		if row.Accepts >= 0 {
+			if pr.Accepts < 0 {
+				pr.Accepts, pr.Refusals, pr.Expiries = 0, 0, 0
+			}
+			pr.Accepts += row.Accepts
+			pr.Refusals += row.Refusals
+			pr.Expiries += row.Expiries
+		}
+	}
+	patchIDs := make([]int, 0, len(patchAgg))
+	for p := range patchAgg {
+		patchIDs = append(patchIDs, p)
+	}
+	sort.Ints(patchIDs)
+	for _, p := range patchIDs {
+		m.PerPatch = append(m.PerPatch, *patchAgg[p])
+	}
+	return m, nil
+}
+
+// v9BandByPrefix returns the band whose name carries the frozen prefix, or
+// nil when the branch carries no such band.
+func v9BandByPrefix(bands []bandReport, prefix string) *bandReport {
+	for i := range bands {
+		if strings.HasPrefix(bands[i].Name, prefix) {
+			return &bands[i]
+		}
+	}
+	return nil
+}
+
+// v9BandsFor evaluates the predeclared ticket-20 v9 bands of the frozen
+// design verbatim for this branch's cell: T1 trade occurrence, T2 protocol
+// discipline, T3 conservation (the three gating discipline bands with T1),
+// T4/T5 as the named-null descriptive channels, and T6 ecology
+// non-distortion with its cell-specific clause (B9 zero trade attempts at
+// R=0; D9 zero accepts under the cultivation ablation; zero settlements on
+// the fully saturated founding band; the patch-1001 and death clauses
+// everywhere). Band misses are outcomes: reported, never tuned and never
+// fatal. Cross-arm clauses (T5's control trajectory, B9's B12 identity) are
+// evaluated by the matrix lane across reports and noted in the criterion
+// text.
+func v9BandsFor(o options, br *branchReport) []bandReport {
+	m := br.V9Metrics
+	if m == nil {
+		return []bandReport{{Name: "V9: metrics missing", Criterion: "the v9 bands require the v9 metric block", Observed: "v9_metrics absent while natural/9 is declared", WithinBand: false}}
+	}
+	deaths := sumHours(br.Population.DeathsStarvationByHour) + sumHours(br.Population.DeathsAgeByHour)
+	settlementsOnPatch1001 := int64(0)
+	for _, row := range m.SettlementRows {
+		if row.Patch == world.NaturalPatchIDBase {
+			settlementsOnPatch1001++
+		}
+	}
+	// T1: trade occurrence (gating). The per-designated-cell aggregation
+	// across the cell's matrix runs is the matrix lane's cross-report step.
+	t1Within := m.Settlements >= 1 && m.FirstSettlementHour >= 0 && m.FirstSettlementHour <= v9FirstSettlementHourBound
+	descriptive := "≤48 descriptive: not met"
+	if m.FirstSettlementHour >= 0 && m.FirstSettlementHour <= v9DescriptiveHourBound {
+		descriptive = "≤48 descriptive: MET"
+	}
+	t1 := bandReport{Name: "V9-T1: trade occurrence (gating)", Criterion: "≥1 accepted-and-settled contract in the designated cell with first settlement ≤ h96 (≤48 reported descriptively); zero settlements in all designated cells ⇒ the NULL-TRADE verdict reported verbatim and valid; the per-cell aggregation over seeds/workers is the matrix lane's cross-report step",
+		Observed:   fmt.Sprintf("settlements=%d, first_settlement_hour=%d (%s), voids=%d, completed_hour=%d", m.Settlements, m.FirstSettlementHour, descriptive, m.Voids, br.CompletedHour),
+		WithinBand: t1Within}
+	// T2: protocol discipline (gating).
+	var t2 bandReport
+	if !m.LinkEvidenceAvailable {
+		t2 = bandReport{Name: "V9-T2: protocol discipline (gating)", Criterion: "every settlement's journal chain 516→517-accept→518 within ≤2 h ∧ zero settlements without a matched accepted offer ∧ zero accepts without a pending addressed offer ∧ typed refusal/expire/void counts ∧ the privacy-pinned offer field sets with claim-vs-truth divergence structurally 0",
+			Observed:   "not evaluable: the typed-halt halt refuses accepted-history export, so the accepted 516/517/518/519 event evidence is unavailable; journal counts remain exact (offers=" + fmt.Sprint(m.Offers) + ", settlements=" + fmt.Sprint(m.Settlements) + ", voids=" + fmt.Sprint(m.Voids) + ")",
+			WithinBand: false}
+	} else {
+		t2Within := m.ChainViolations == 0 && m.AcceptWithoutOfferViolations == 0 && m.FieldSetViolations == 0
+		t2 = bandReport{Name: "V9-T2: protocol discipline (gating)", Criterion: "every settlement's journal chain 516→517-accept→518 within ≤2 h ∧ zero settlements without a matched accepted offer ∧ zero accepts without a pending addressed offer ∧ typed refusal/expire/void counts ∧ the privacy-pinned offer field sets (only {requester, addressee, hour, fixed terms} published; no claim fields exist, so claim-vs-truth divergence is structurally 0 under the field-set pin)",
+			Observed:   fmt.Sprintf("settlements=%d, accepts=%d, refusals=%d, expiries=%d, voids=%d (%s), chain_violations=%d, accept_without_offer_violations=%d, field_set_violations=%d", m.Settlements, m.Accepts, m.Refusals, m.Expiries, m.Voids, voidCauseSummary(m.VoidCauses), m.ChainViolations, m.AcceptWithoutOfferViolations, m.FieldSetViolations),
+			WithinBand: t2Within}
+	}
+	// T3: conservation (gating).
+	t3Within := br.ConservationVerified && m.WageLedger.PatchHourImbalanceCount == 0 && m.SettlementFoodDeltaViolations == 0
+	t3 := bandReport{Name: "V9-T3: conservation (gating)", Criterion: "hourly G1/G2a″/G2b-with-land/G3 green everywhere (the frozen per-hour gate) ∧ per patch-hour Σwages-paid = Σwages-earned ∧ the aggregate food delta of every settlement 0 (any mint or burn is an implementation-defect stop)",
+		Observed:   fmt.Sprintf("conservation_green=%t, patch_hours_checked=%d, patch_hour_imbalances=%d, settlement_food_delta_checks=%d, nonzero_deltas=%d", br.ConservationVerified, m.WageLedger.PatchHourChecks, m.WageLedger.PatchHourImbalanceCount, m.Settlements, m.SettlementFoodDeltaViolations),
+		WithinBand: t3Within}
+	// T4: worker channel (descriptive, named null).
+	t4 := bandReport{Name: "V9-T4: worker channel (descriptive, named null)", Criterion: "workers whose first granary≥1 hour coincides with wages earned (the wage-banked firsts) and worker meals drawn at E≤3 from wages; within_band=true reports the channel observed, false is the named null reported verbatim (\"trade occurred, worker channel inert\")",
+		Observed:   fmt.Sprintf("wage_banked_firsts=%d (actors %v), wage_meal_draws=%d, prior_boundary_e_le_3_subset=%d", m.WageBankedFirsts, m.WageBankedFirstActors, m.WageMealDraws, m.WageMealDrawsBoundaryE3),
+		WithinBand: m.WageBankedFirsts >= 1 || m.WageMealDraws >= 1}
+	// T5: employer channel (descriptive, named null).
+	finalEmployerK := int64(0)
+	if len(m.EmployerKByHour) > 0 {
+		finalEmployerK = m.EmployerKByHour[len(m.EmployerKByHour)-1]
+	}
+	t5 := bandReport{Name: "V9-T5: employer channel (descriptive, named null)", Criterion: "employer Σk and time-to-k=8 against the (v7, natural/7b) control; within_band=true reports time-to-k=8 recorded; the indistinguishable-trajectory null and the trajectory comparison are the matrix lane's cross-report step, reported verbatim",
+		Observed:   fmt.Sprintf("time_to_k8_hour=%d, employer_k_final=%d, wages_paid_total=%d", m.TimeToK8Hour, finalEmployerK, m.WageLedger.WagesPaidTotal),
+		WithinBand: m.TimeToK8Hour >= 0}
+	// T6: ecology non-distortion (gating), with the cell-specific clause.
+	var cellName, cellClause string
+	cellWithin := true
+	switch {
+	case br.CultivationDisabled:
+		// D9: grants are the only employer stock; the ablation leaves no
+		// cultivated slot, so the accept floor is unreachable.
+		cellName = "D9 (cultivation ablation × natural/9)"
+		cellClause = "D9: zero accepts (grants are the only employer stock; the ablation cultivates nothing, so the stock≥4 accept floor is unreachable)"
+		cellWithin = m.Accepts == 0
+	case o.r == 0:
+		// B9: stock ≡ 0 makes the accept floor unreachable; the frozen clause
+		// names zero trade attempts with trajectories identical to the
+		// (v7, natural/7b) B12 arm — the identity is the cross-report step.
+		cellName = "B9 (R=0 × natural/9)"
+		cellClause = "B9: zero trade attempts (offers+decisions+settlements = 0); trajectory identity to the (v7, natural/7b) B12 arm is the matrix lane's cross-report step"
+		cellWithin = m.Offers+m.Decisions+m.Settlements == 0
+	case o.foundersResolved() == world.NaturalSlotsPerPatch*o.patches:
+		// The fully saturated founding band (the f=16 control): every patch
+		// saturated, settlements structurally forced to zero (the trade-side
+		// A2b mirror).
+		cellName = "saturated founding-band control"
+		cellClause = "saturated control: zero settlements anywhere (every patch saturated; structurally forced by the accept floor)"
+		cellWithin = m.Settlements == 0
+	default:
+		cellName = "designated trade cell"
+		cellClause = "designated trade cell: no extra clause (the patch-1001 and death clauses bind)"
+	}
+	deathClause := m.Settlements == 0 || deaths >= 1
+	patchClause := settlementsOnPatch1001 == 0
+	t6Within := deathClause && patchClause && cellWithin
+	t6 := bandReport{Name: "V9-T6: ecology non-distortion (gating)", Criterion: "≥1 death before h168 in every settlement-hosting cell (the V8-A5 mirror) ∧ zero settlements on patch 1001 (the saturated patch, in every cell) ∧ " + cellClause,
+		Observed:   fmt.Sprintf("cell=%s, deaths_to_horizon=%d (death clause: %t), settlements_on_patch_1001=%d (patch clause: %t), cell clause holds: %t; settlements=%d, births=%d, extinction_hour=%d", cellName, deaths, deathClause, settlementsOnPatch1001, patchClause, cellWithin, m.Settlements, br.Totals.Births, br.Population.ExtinctionHour),
+		WithinBand: t6Within}
+	return []bandReport{t1, t2, t3, t4, t5, t6}
+}
+
+// voidCauseSummary renders the typed void-cause histogram for band text.
+func voidCauseSummary(causes map[string]int64) string {
+	if len(causes) == 0 {
+		return "none"
+	}
+	keys := make([]string, 0, len(causes))
+	for k := range causes {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%d", k, causes[k]))
+	}
+	return strings.Join(parts, ",")
+}
+
+// v9VerdictFor applies the frozen ticket-20 verdict logic to the run's
+// branches: SUPPORTED iff T1∧T2∧T3∧T6 IN and (T4∨T5) observed; NULL-TRADE
+// iff T2/T3/T6 IN with zero settlements; FAILED iff any gating discipline
+// band is OUT. The corner the three frozen implications do not partition
+// (gates IN, settlements > 0, both descriptive channels null) carries the
+// label the ticket-20 record declared pre-run, TRADE-INERT, with the
+// rationale verbatim.
+func v9VerdictFor(r report) *v9VerdictReport {
+	v := &v9VerdictReport{FirstSettlementHour: -1, T1In: true, T2In: true, T3In: true, T6In: true}
+	var missing []string
+	for i := range r.Branches {
+		br := &r.Branches[i]
+		if br.V9Metrics == nil || len(br.V9Bands) == 0 {
+			missing = append(missing, fmt.Sprintf("births=%t branch carries no v9 evidence", br.Births))
+			v.T1In, v.T2In, v.T3In, v.T6In = false, false, false, false
+			continue
+		}
+		m := br.V9Metrics
+		for _, gate := range []struct {
+			prefix string
+			flag   *bool
+		}{
+			{"V9-T1", &v.T1In}, {"V9-T2", &v.T2In}, {"V9-T3", &v.T3In}, {"V9-T6", &v.T6In},
+		} {
+			if b := v9BandByPrefix(br.V9Bands, gate.prefix); b == nil || !b.WithinBand {
+				*gate.flag = false
+			}
+		}
+		v.T4Observed = v.T4Observed || m.WageBankedFirsts >= 1 || m.WageMealDraws >= 1
+		v.T5Observed = v.T5Observed || m.TimeToK8Hour >= 0
+		v.Settlements += m.Settlements
+		if m.FirstSettlementHour >= 0 && (v.FirstSettlementHour < 0 || m.FirstSettlementHour < v.FirstSettlementHour) {
+			v.FirstSettlementHour = m.FirstSettlementHour
+		}
+	}
+	gates := v.T1In && v.T2In && v.T3In && v.T6In
+	discipline := v.T2In && v.T3In && v.T6In
+	switch {
+	case !v.T1In && !v.T2In && !v.T3In && !v.T6In && len(missing) > 0:
+		v.Verdict = v9VerdictFailed
+		v.Rationale = "FAILED: " + strings.Join(missing, "; ")
+	case discipline && v.Settlements == 0:
+		v.Verdict = v9VerdictNullTrade
+		v.Rationale = fmt.Sprintf("NULL-TRADE, reported verbatim and valid: T2∧T3∧T6 IN with zero settlements across the run's branches (T1 OUT by the same zero; worker channel observed=%t, employer channel observed=%t)", v.T4Observed, v.T5Observed)
+	case !gates:
+		v.Verdict = v9VerdictFailed
+		v.Rationale = fmt.Sprintf("FAILED: a gating discipline band is OUT (T1=%t, T2=%t, T3=%t, T6=%t; settlements=%d, first_settlement_hour=%d)", v.T1In, v.T2In, v.T3In, v.T6In, v.Settlements, v.FirstSettlementHour)
+	case v.T4Observed || v.T5Observed:
+		v.Verdict = v9VerdictSupported
+		v.Rationale = fmt.Sprintf("SUPPORTED: T1∧T2∧T3∧T6 IN with settlements=%d (first at h%d) and a channel observed (T4=%t, T5=%t)", v.Settlements, v.FirstSettlementHour, v.T4Observed, v.T5Observed)
+	default:
+		v.Verdict = v9VerdictTradeInert
+		v.Rationale = fmt.Sprintf("TRADE-INERT (declared pre-run): the gates are IN with settlements=%d (first at h%d) but neither descriptive channel observed evidence (T4=%t, T5=%t) — trade occurred and was correctly recorded, yet neither channel produced a measurable effect; the named nulls inside T4/T5 carry the outcome verbatim", v.Settlements, v.FirstSettlementHour, v.T4Observed, v.T5Observed)
+	}
+	return v
+}
+
 // historyEvidence restores the accepted history to count events and verify
 // the journal link target set; the restored head must match the handoff head.
 func historyEvidence(br *branchReport, handoff world.NaturalHandoff, mech world.NaturalMechanism) (map[sim.EventID]kernel.Event, error) {
 	reg, err := world.NaturalRegistry()
-	if mech == world.NaturalMechanismV6 {
+	if mech != world.NaturalMechanismV5 {
 		reg, err = world.NaturalRegistryFor(mech)
 	}
 	if err != nil {
@@ -2675,6 +3956,33 @@ func historyEvidence(br *branchReport, handoff world.NaturalHandoff, mech world.
 		br.Events.WorldEvents[name]++
 	}
 	return byID, nil
+}
+
+// validLabourVoidCause reports whether a labour-void note is inside the
+// frozen taxonomy: the seven NaturalLabourSettle contract refusals plus the
+// two runner-level structural notes (the completion-instant settlement
+// precedence and the engagement-busy E12-class world refusal of a policy
+// accept). An unknown note is a hard error, never silently bucketed.
+func validLabourVoidCause(note string) bool {
+	switch note {
+	case "contract-not-pending", "worker-dead-or-cross-patch", "employer-dead-or-cross-patch",
+		"worker-bag-empty", "employer-stock-short", "employer-at-kmax", "no-free-slot",
+		"settlement-precedence", "engagement-busy":
+		return true
+	}
+	return false
+}
+
+// labourDecisionAcceptEvent reports whether an accepted rule-517 event wrote
+// the employer's engagement row (an accept) or status rows only (a typed
+// refusal) — the 512-shape discriminator.
+func labourDecisionAcceptEvent(ev kernel.Event) bool {
+	for _, d := range ev.Deltas {
+		if d.Component == world.NaturalLabourBookTypeID && d.Field == world.NaturalLabourBookEngagedWorkerField {
+			return true
+		}
+	}
+	return false
 }
 
 // classifyJournal classifies every typed journal attempt and, when the
@@ -2746,6 +4054,37 @@ func classifyJournal(br *branchReport, batches []world.NaturalBatch, byID map[si
 				} else {
 					br.Events.Provisions++
 				}
+			case "labour-offer":
+				// The ticket-20 rule-516 filing: keyed, always committed.
+				br.Events.LabourOffers++
+			case "labour-decision":
+				// The ticket-20 rule-517 decision: the accept/refuse split
+				// reads the accepted event's engagement-row write, so it is
+				// filled only when the accepted history was available.
+				br.Events.LabourDecisions++
+				if byID != nil && a.Accepted {
+					if ev, ok := byID[a.EventID]; ok && labourDecisionAcceptEvent(ev) {
+						br.Events.LabourAccepts++
+					} else {
+						br.Events.LabourRefusals++
+					}
+				}
+			case "labour-settlement":
+				// The ticket-20 committed rule-518 atomic wage settlement.
+				br.Events.LabourSettlements++
+			case "labour-void":
+				// The ticket-20 typed zero-mutation settlement refusal (a
+				// contract-taxonomy reason, the completion-instant fold's
+				// settlement-precedence note, or the engagement-busy world
+				// refusal of a policy accept).
+				if !validLabourVoidCause(a.Refused) {
+					return fmt.Errorf("unknown labour-void cause %q", a.Refused)
+				}
+				br.Events.LabourVoids++
+				if br.Events.LabourVoidCauses == nil {
+					br.Events.LabourVoidCauses = map[string]int64{}
+				}
+				br.Events.LabourVoidCauses[a.Refused]++
 			case "birth-request":
 				br.Events.BirthRequests++
 			case "birth-reply":
@@ -2830,12 +4169,13 @@ func populationEvidence(br *branchReport, checks []world.NaturalCheckpoint, mech
 			}
 		}
 		br.Regen.CultivatedSlotsTotalByHour[h] = tenured
-		// Independent frozen G1/G2a(/G2a′)/G2b/G3 re-verification at every
+		// Independent frozen G1/G2a(/G2a′/G2a″)/G2b/G3 re-verification at every
 		// hour: the frozen v5 signature under the v5 zero value (its bytes
-		// frozen), the mechanism-aware G2a′ form under v6.
+		// frozen), the mechanism-aware extended form under v6 (G2a′) and v7
+		// (G2a″, the ticket-20 wage terms).
 		var balance world.NaturalBalance
 		var err error
-		if mech == world.NaturalMechanismV6 {
+		if mech != world.NaturalMechanismV5 {
 			balance, err = world.NaturalCheckConservationFor(mech, len(c.Patches), c.Patches, c.Slots, c.Founders, c.Newborns, c.AllocatorLast)
 		} else {
 			balance, err = world.NaturalCheckConservation(len(c.Patches), c.Patches, c.Slots, c.Founders, c.Newborns, c.AllocatorLast)
@@ -3037,6 +4377,7 @@ func runBranch(ctx context.Context, o options, births bool, parentDigest string,
 		return br, err
 	}
 	br.JournalBytes = journalBytes
+	var eventsByID map[sim.EventID]kernel.Event
 	if err := populationEvidence(&br, checks, mech); err != nil {
 		return br, err
 	}
@@ -3077,11 +4418,11 @@ func runBranch(ctx context.Context, o options, births bool, parentDigest string,
 			return br, err
 		}
 		br.HistoryBytes = len(handoff.History)
-		byID, err := historyEvidence(&br, handoff, mech)
+		eventsByID, err = historyEvidence(&br, handoff, mech)
 		if err != nil {
 			return br, err
 		}
-		if err := classifyJournal(&br, f.Journal(), byID); err != nil {
+		if err := classifyJournal(&br, f.Journal(), eventsByID); err != nil {
 			return br, err
 		}
 	}
@@ -3119,6 +4460,13 @@ func runBranch(ctx context.Context, o options, births bool, parentDigest string,
 		}
 		br.V8Metrics = &vm
 	}
+	if v9Requested(o) {
+		vm, err := buildV9Metrics(o, &br, checks, f.Journal(), eventsByID)
+		if err != nil {
+			return br, err
+		}
+		br.V9Metrics = &vm
+	}
 	br.Band = bandFor(o, &br)
 	br.CostBudget = costBudget(o, &br)
 	if v6Requested(o) {
@@ -3129,6 +4477,9 @@ func runBranch(ctx context.Context, o options, births bool, parentDigest string,
 	}
 	if v8Requested(o) {
 		br.V8Bands = v8BandsFor(o, &br)
+	}
+	if v9Requested(o) {
+		br.V9Bands = v9BandsFor(o, &br)
 	}
 	return br, nil
 }
@@ -3310,14 +4661,17 @@ func run(ctx context.Context, o options) (report, error) {
 	}
 	// Ref/mechanism consistency is enforced here, before any publication, so
 	// an illegal combination leaves no output file and no checkpoint
-	// directory (the frozen world-side rule naturalRefLegalUnderMechanism
+	// directory (the frozen world-side ladder naturalRefLegalUnderMechanism
 	// refuses the same combinations at construction).
 	if !legalPolicyUnderMechanism(policyName, mech) {
-		return report{}, fmt.Errorf("policy %s requires -mechanism=%s (the rule-515 provision affordance does not exist under the v5 world)", policyName, mechanismV6Name)
+		return report{}, fmt.Errorf("policy %s is not legal under -mechanism=%s (natural/7 and natural/7b require v6 or v7; natural/9 requires v7: the wage contract needs rules 516-519)", policyName, mechanismName)
 	}
 	revision := fmt.Sprintf("natural format-v5/schema-v5/rule-v5/projection-v5/policy %s", policyName)
-	if mech == world.NaturalMechanismV6 {
+	switch mech {
+	case world.NaturalMechanismV6:
 		revision = fmt.Sprintf("natural mechanism-v6/format-v6/schema-v6/rule-v6/projection-v6/policy %s", policyName)
+	case world.NaturalMechanismV7:
+		revision = fmt.Sprintf("natural mechanism-v7/format-v7/schema-v7/rule-v7/projection-v7/policy %s", policyName)
 	}
 	r := report{
 		Status:   "synthetic/model-conditional; frozen natural-limits v5 fixture; no historical calibration, takeoff, or P0 scale claim",
@@ -3490,6 +4844,9 @@ func run(ctx context.Context, o options) (report, error) {
 			r.CompletedHour = br.CompletedHour
 		}
 	}
+	if v9Requested(o) {
+		r.V9Verdict = v9VerdictFor(r)
+	}
 	cpuEnd, rss, err := cpuTime()
 	if err != nil {
 		return r, err
@@ -3507,8 +4864,8 @@ func main() {
 	births := flag.String("births", bothBranchesFlag, "which recorded intervention to run: enabled, disabled, or both (children always branch from the births-disabled neutral root)")
 	fixture := flag.Bool("founder-tenure", false, "declared founder-tenure fixture genesis (births-enabled-only; the only genesis under which organic births are reachable)")
 	cultivationDisabled := flag.Bool("cultivation-disabled", false, "declared cultivation ablation (births-disabled-only): the frozen policy is unchanged; any build event is a defect")
-	policy := flag.String("policy", policy5Name, "frozen policy ref (ticket-16 policy-selection seam): natural/5 (default, byte-compatible with every recorded run), natural/6, or the ticket-17 provision arms natural/7 and natural/7b (both require -mechanism=v6)")
-	mechanism := flag.String("mechanism", mechanismV5Name, "declared world mechanism axis (ticket-17): v5 (default, the frozen v5 world, byte-compatible with every recorded run) or v6 (the rule-515 provision world)")
+	policy := flag.String("policy", policy5Name, "frozen policy ref (ticket-16 policy-selection seam): natural/5 (default, byte-compatible with every recorded run), natural/6, the ticket-17 provision arms natural/7 and natural/7b (both require -mechanism=v6 or v7), or the ticket-20 wage-contract arm natural/9 (requires -mechanism=v7)")
+	mechanism := flag.String("mechanism", mechanismV5Name, "declared world mechanism axis (ticket-17, ticket-20): v5 (default, the frozen v5 world, byte-compatible with every recorded run), v6 (the rule-515 provision world), or v7 (the wage-contract world, rules 516-519)")
 	founders := flag.Int("founders", 0, "declared founding band (ticket-18 fixture axis, run identity): founder rows materialized from the frozen founder-stream prefix; 0 = the default spelling of the full block 8·patches, otherwise 1..8·patches, range-checked before any publication")
 	out := flag.String("out", "", "new JSON report path; refused if it exists; the report also goes to stdout")
 	checkpointDir := flag.String("checkpoint-dir", "", "new directory for the root and branch bundles; must not exist; default creates a fresh temporary directory")

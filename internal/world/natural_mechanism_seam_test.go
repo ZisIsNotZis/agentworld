@@ -443,10 +443,15 @@ func TestNaturalMechanismSeamRefConsistencyNegatives(t *testing.T) {
 		}
 	}
 	// Unknown refs and unadmitted mechanisms fail under every axis.
-	if _, err := NewNatural(NaturalOptions{Patches: 2, R: 8, Seed: 0, Workers: 1, PolicyRef: strategy.NaturalRef{ID: "natural", Version: 9}, Mechanism: NaturalMechanismV6}); !errors.Is(err, ErrNaturalRunner) {
-		t.Fatal("natural/9 accepted under mechanism v6")
+	// Ticket 20 consequence (authorised sample move): natural/9 joined the frozen ref set; the unknown sample moves to 10.
+	if _, err := NewNatural(NaturalOptions{Patches: 2, R: 8, Seed: 0, Workers: 1, PolicyRef: strategy.NaturalRef{ID: "natural", Version: 10}, Mechanism: NaturalMechanismV6}); !errors.Is(err, ErrNaturalRunner) {
+		t.Fatal("natural/10 accepted under mechanism v6")
 	}
-	for _, mechanism := range []NaturalMechanism{1, 2, 4, 5, 7, 8, 65535} {
+	// Ticket 20 consequence (authorised sample move, not a behaviour
+	// change): mechanism 7 became an admitted axis value when the wage
+	// contract landed, so the unadmitted sample moves to the next
+	// undeclared value 9.
+	for _, mechanism := range []NaturalMechanism{1, 2, 4, 5, 8, 9, 65535} {
 		if _, err := NewNatural(NaturalOptions{Patches: 2, R: 8, Seed: 0, Workers: 1, Mechanism: mechanism}); !errors.Is(err, ErrNaturalRunner) {
 			t.Fatalf("mechanism %d accepted", mechanism)
 		}

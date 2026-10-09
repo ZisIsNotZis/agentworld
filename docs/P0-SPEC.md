@@ -2,7 +2,7 @@
 
 Budget: 240 lines — the end-to-end P0 contract keeps module boundaries, interfaces, lifecycle, delivery slices, and acceptance gates together for one-pass implementation review.
 
-Status: design draft
+Status: design contract for the **survival-world substrate only**. Its exclusion of **language-model calls / strategy editing** is **superseded** by the active plan ([VERTICAL-SLICES.md](VERTICAL-SLICES.md)), which puts language-model strategy editing and cognition in its first slice (VS1); that exclusion no longer binds planning. Everything else here remains the design contract for the survival-world substrate.
 
 ## 1. Purpose
 
@@ -22,7 +22,7 @@ Include:
 - deterministic rules, strategies with bounded search, events, projections, checkpoints, branches, and replay;
 - escalation requests recorded for later analysis.
 
-Exclude language-model calls, general institution emergence, distributed execution, molecular physics, natural-language dialogue, and claims about real policy.
+Exclude language-model calls (**superseded** — see the status note above), general institution emergence, distributed execution, molecular physics, natural-language dialogue, and claims about real policy.
 
 ## 3. Runtime modules
 

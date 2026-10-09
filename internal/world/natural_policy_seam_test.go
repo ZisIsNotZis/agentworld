@@ -260,7 +260,7 @@ func TestNaturalPolicySeamBidirectionalRefMismatch(t *testing.T) {
 		t.Fatalf("v6 bundle accepted under a v5-only expectation: %v", err)
 	}
 	// An unknown expectation ref is refused before any work.
-	unknown := naturalSeamExpectation(strategy.NaturalRef{ID: "natural", Version: 9}, 1, false)
+	unknown := naturalSeamExpectation(strategy.NaturalRef{ID: "natural", Version: 10}, 1, false)
 	if err := unknown.validate(); !errors.Is(err, ErrNaturalCheckpoint) {
 		t.Fatalf("unknown expectation ref validated: %v", err)
 	}
@@ -346,7 +346,7 @@ func TestNaturalPolicySeamForgedRefAndFingerprintFailClosed(t *testing.T) {
 		t.Fatalf("natural/6 config with a natural/5 fingerprint encoded: %v", err)
 	}
 	unknown := f6.journalConfig()
-	unknown.Policy = strategy.NaturalRef{ID: "natural", Version: 9}
+	unknown.Policy = strategy.NaturalRef{ID: "natural", Version: 10}
 	if _, err := EncodeNaturalJournal(f6.Journal(), f6.k, head, f6.sched.Time(), unknown); !errors.Is(err, ErrNaturalJournal) {
 		t.Fatalf("unknown journal ref encoded: %v", err)
 	}
@@ -381,17 +381,17 @@ func TestNaturalPolicySeamV6CascadeDispatch(t *testing.T) {
 	f6 := naturalSeamRun(t, naturalSeamRefV6, false)
 	// Delta family (c): E=4, granary 0, wip 0 — v5 eats, v6 re-pioneers.
 	obsC := naturalSeamObs(naturalSeamRefV6, 4, 0, 0, 0)
-	if got, err := f5.naturalEvaluate(1, naturalSeamObs(naturalSeamRefV5, 4, 0, 0, 0)); err != nil || got.Kind != strategy.NaturalEat {
+	if got, err := f5.naturalEvaluate(1, naturalSeamObs(naturalSeamRefV5, 4, 0, 0, 0), strategy.NaturalLabourOfferGuard{}); err != nil || got.Kind != strategy.NaturalEat {
 		t.Fatalf("v5-bound dispatch at the trap state: kind %d err %v", got.Kind, err)
 	}
-	if got, err := f6.naturalEvaluate(1, obsC); err != nil || got.Kind != strategy.NaturalBuild {
+	if got, err := f6.naturalEvaluate(1, obsC, strategy.NaturalLabourOfferGuard{}); err != nil || got.Kind != strategy.NaturalBuild {
 		t.Fatalf("v6-bound dispatch at the trap state: kind %d err %v", got.Kind, err)
 	}
 	// Delta family (a): E=2, granary 1 — v5 builds off the larder, v6 eats.
-	if got, err := f5.naturalEvaluate(1, naturalSeamObs(naturalSeamRefV5, 2, 0, 0, 1)); err != nil || got.Kind != strategy.NaturalBuild {
+	if got, err := f5.naturalEvaluate(1, naturalSeamObs(naturalSeamRefV5, 2, 0, 0, 1), strategy.NaturalLabourOfferGuard{}); err != nil || got.Kind != strategy.NaturalBuild {
 		t.Fatalf("v5-bound dispatch at the survival floor: kind %d err %v", got.Kind, err)
 	}
-	if got, err := f6.naturalEvaluate(1, naturalSeamObs(naturalSeamRefV6, 2, 0, 0, 1)); err != nil || got.Kind != strategy.NaturalEat {
+	if got, err := f6.naturalEvaluate(1, naturalSeamObs(naturalSeamRefV6, 2, 0, 0, 1), strategy.NaturalLabourOfferGuard{}); err != nil || got.Kind != strategy.NaturalEat {
 		t.Fatalf("v6-bound dispatch at the survival floor: kind %d err %v", got.Kind, err)
 	}
 	// The hazard the dispatch exists for: the frozen v5 Evaluate accepts a
@@ -405,7 +405,7 @@ func TestNaturalPolicySeamV6CascadeDispatch(t *testing.T) {
 	}
 	// And the runner's post-evaluation identity check pins the choice to the
 	// runner's own ref in every dispatch.
-	choice, err := f6.naturalEvaluate(1, obsC)
+	choice, err := f6.naturalEvaluate(1, obsC, strategy.NaturalLabourOfferGuard{})
 	if err != nil || choice.Ref != f6.ref {
 		t.Fatalf("dispatched choice carries %+v, want the runner ref %+v", choice.Ref, f6.ref)
 	}

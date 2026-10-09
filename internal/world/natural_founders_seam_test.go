@@ -387,7 +387,7 @@ func TestNaturalFoundersSeamBoundsAndGateMutations(t *testing.T) {
 	}
 	// Gate mutations over a real neutral genesis: the bound and the
 	// positional-prefix rule are live.
-	patches, slots, founders, err := naturalGenesisProjection(2, 8, 0, false, 0)
+	patches, slots, founders, err := naturalGenesisProjection(2, 8, 0, false, 0, NaturalMechanismV5)
 	if err != nil {
 		t.Fatal(err)
 	}

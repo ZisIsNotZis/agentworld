@@ -2,13 +2,13 @@
 
 Agent World is an experimental, event-driven civilization simulator.
 
-Its goal is to maximize civilization-level causal fidelity under finite compute and language-model budgets. Every person persists as an individual actor in the initial design, but most behavior runs through inexpensive executable strategies. Language models wake selectively for novel, uncertain, or potentially high-impact decisions.
+Its goal is to maximize civilization-level causal fidelity under finite compute and language-model budgets. Every person persists as an individual actor in the initial design, but most behavior runs through inexpensive executable strategies. The design reserves expensive reasoning for novel, uncertain, or potentially high-impact decisions; **no language-model call path exists yet** — building one is the subject of the first vertical slice of the active plan ([docs/VERTICAL-SLICES.md](docs/VERTICAL-SLICES.md), VS1).
 
 The project does not aim to replay recorded history exactly. It aims to produce alternative histories whose individual behavior, institutions, technologies, and macro-level outcomes remain causally explainable under explicit human, material, and informational constraints.
 
 ## Status
 
-The project is in its P0 experimental phase. Go is the provisional implementation language. S0–S5 provide simulation primitives, immutable components, a kernel, scheduling and an actor-safe intention boundary. S6 adds a bounded autonomous survival demo. A single-machine P0 checkpoint now persists its accepted history, scheduler state and typed attempt journal; full P0 survival and language-model integration remain future work.
+The P0 substrate is the experimental foundation, while the active plan is the vertical-slice roadmap ([docs/VERTICAL-SLICES.md](docs/VERTICAL-SLICES.md), VS1). Go is the provisional implementation language. S0–S5 provide simulation primitives, immutable components, a kernel, scheduling and an actor-safe intention boundary. S6 adds a bounded autonomous survival demo. A single-machine P0 checkpoint now persists its accepted history, scheduler state and typed attempt journal. Full P0 survival is open. Language-model integration is **not** deferred future-phase work: it is the subject of the first slice (VS1) of the active plan ([docs/VERTICAL-SLICES.md](docs/VERTICAL-SLICES.md)).
 
 ## Development
 
@@ -121,19 +121,21 @@ go run ./cmd/natural -patches=32 -r=8 -seed=0 -workers=1 -hours=168 -births=enab
 
 ## Start here
 
+- [Active plan (vertical slices)](docs/VERTICAL-SLICES.md)
 - [Vision](docs/VISION.md)
 - [Design principles](docs/PRINCIPLES.md)
 - [Conceptual architecture](docs/ARCHITECTURE.md)
 - [P0 executable specification](docs/P0-SPEC.md)
 - [P0 implementation plan](docs/P0-IMPLEMENTATION-PLAN.md)
 - [Validation](docs/VALIDATION.md)
-- [Roadmap](docs/ROADMAP.md)
+- [Roadmap (historical phase plan)](docs/ROADMAP.md)
 - [Open questions](docs/OPEN-QUESTIONS.md)
 - [Glossary](docs/GLOSSARY.md)
+- [Changelog (record of events)](CHANGELOG.md)
 
 ## Material limitations
 
 - A plausible simulated society is not evidence that the same policy will work in reality.
 - Historical calibration tests mechanisms and distributions, not exact event reproduction.
 - Unknown natural laws cannot be validated by language-model judgment alone.
-- Self-modification remains versioned, tested, auditable, and reversible.
+- Any self-modification must remain versioned, tested, auditable, and reversible.

@@ -91,7 +91,8 @@ func TestNatural7FrozenIdentityRefSetAndRegistration(t *testing.T) {
 		}
 	}
 	for _, unknown := range []strategy.NaturalRef{
-		{ID: "natural", Version: 9}, {ID: "natural", Version: 0}, {ID: "other", Version: 7},
+		// Ticket 20 consequence (authorised sample move): natural/9 joined the frozen ref set; the unknown sample moves to 10.
+		{ID: "natural", Version: 10}, {ID: "natural", Version: 0}, {ID: "other", Version: 7},
 		{ID: "natural-7", Version: 7}, {ID: "natural-7b", Version: 8}, {},
 	} {
 		if got, err := strategy.FrozenNaturalPolicyForRef(unknown); !errors.Is(err, strategy.ErrUnknownNaturalPolicy) {
@@ -308,8 +309,9 @@ func TestNatural7RefSetBackwardCompatPins(t *testing.T) {
 	if got, err := strategy.FrozenNaturalPolicyForRef(strategy.FrozenNaturalPolicy7b().Ref); err != nil || got != strategy.FrozenNaturalPolicy7b() {
 		t.Fatalf("natural/8 resolution: %+v %v", got, err)
 	}
-	if _, err := strategy.FrozenNaturalPolicyForRef(strategy.NaturalRef{ID: "natural", Version: 9}); !errors.Is(err, strategy.ErrUnknownNaturalPolicy) {
-		t.Fatalf("natural/9 resolved: %v", err)
+	// Ticket 20 consequence (authorised sample move): natural/9 joined the frozen ref set; the unknown sample moves to 10.
+	if _, err := strategy.FrozenNaturalPolicyForRef(strategy.NaturalRef{ID: "natural", Version: 10}); !errors.Is(err, strategy.ErrUnknownNaturalPolicy) {
+		t.Fatalf("natural/10 resolved: %v", err)
 	}
 }
 

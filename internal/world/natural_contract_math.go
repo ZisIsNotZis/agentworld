@@ -25,6 +25,15 @@ import (
 //	                    + spoiled + birthGranaryPaid — the v5 identity
 //	                    extended by rule 515's withdrawal ledger; at
 //	                    provisioned = 0 (every v5 state) it is exactly G2a.
+//	G2a″ (mechanism v7): cultivatedTotal + wagesEarned = stock + storedMeals
+//	                    + provisioned + spoiled + birthGranaryPaid
+//	                    + wagesPaid — the wage ledgers join the inflow and
+//	                    outflow sides (the worker's wage lands in stock
+//	                    against wagesEarned; the employer's paid wage leaves
+//	                    stock against wagesPaid). At wages ≡ 0 (every v5/v6
+//	                    state, pinned by the granary validator) it is
+//	                    term-for-term G2a′, and at provisioned = 0 as well
+//	                    (every v5 state) term-for-term G2a.
 //	G2b per actor:      invested = 2·created + wip; created − decayed = k;
 //	    land:           tenuredSlots(patch) = Σk over ALL tenure holders
 //	                    (dead included) ≤ 8, each tenured slot's owner an
@@ -71,6 +80,13 @@ type NaturalGranaryState struct {
 	// rule 515 (mechanism v6 only). It is zero in every v5 state — the v5
 	// validators require exactly that — and grows by one per provision.
 	Provisioned int64
+	// WagesPaid and WagesEarned count granary units paid as wages by an
+	// employer and received as wages by a worker under rule 518 (mechanism
+	// v7 only, ticket 20). They are zero in every v5/v6 state — those
+	// validators require exactly that — so G2a″ above reduces term for term
+	// to G2a′ outside the wage mechanism.
+	WagesPaid   int64
+	WagesEarned int64
 }
 type NaturalGenomeState struct {
 	LocusM, LocusY, LocusW         int64        // alleles in [5,7], neutral 6, immutable post-creation
@@ -88,7 +104,37 @@ type NaturalBirthRequestState struct {
 	LastReplyHour   int64
 }
 
-// NaturalActorState is one actor's six component rows read at one version.
+// NaturalLabourOfferState is the mechanism-v7-only worker offer row
+// (component 0x80000058): the birth-request field set minus the
+// self-reported claims — the terms are fixed by the frozen design (one
+// gathered wild unit delivered for exactly one granary stock unit), so no
+// claim and no price field exists. The status enum and its values are the
+// frozen request statuses.
+type NaturalLabourOfferState struct {
+	Hour          int64        // hour of the most recent filing, -1 if never
+	Addressee     sim.EntityID // zero only while never-filed
+	Status        NaturalRequestStatus
+	LastOfferHour int64
+	LastReplyHour int64 // the decision hour of the last answered offer
+}
+
+// NaturalLabourBookState is the mechanism-v7-only employer engagement row
+// (component 0x80000059): the single engagement slot plus the
+// one-decision-per-actor-hour bookkeeping. EngagedWorker is zero exactly
+// while EngagedHour is the never-hour (never engaged, or cleared by rule
+// 519 after the delivery window); LastDecisionHour persists as the audit
+// and the one-decision-per-actor-hour guard.
+type NaturalLabourBookState struct {
+	EngagedWorker    sim.EntityID
+	EngagedHour      int64
+	LastDecisionHour int64
+}
+
+// NaturalActorState is one actor's six component rows read at one version,
+// plus the two mechanism-v7-only wage-contract rows. The Offer and Book
+// fields exist only under NaturalMechanismV7: every v5/v6 validator ignores
+// them and the v5/v6 registries have no such component, so the v5/v6
+// default paths are unchanged; every V7 validator requires them valid.
 type NaturalActorState struct {
 	Body     NaturalBodyState
 	Bag      NaturalBagState
@@ -96,6 +142,8 @@ type NaturalActorState struct {
 	Granary  NaturalGranaryState
 	Genome   NaturalGenomeState
 	Request  NaturalBirthRequestState
+	Offer    NaturalLabourOfferState
+	Book     NaturalLabourBookState
 }
 
 // NaturalNewbornState pairs an allocator-fresh newborn ID with its complete
@@ -143,11 +191,12 @@ type NaturalGrantEntitlement struct {
 type NaturalAliveLookup func(sim.EntityID) bool
 
 // NaturalBalance carries the aggregate frozen gates G1, G2a (G2a′ under
-// mechanism v6), G2b, and G3.
+// mechanism v6, G2a″ under mechanism v7), G2b, and G3.
 type NaturalBalance struct {
 	Produced, Granted, Unrealized, Gathered, Consumed, Stock, Held, Invested int64
 	CultivatedTotal, GranaryStock, StoredMeals, Spoiled                      int64
 	Provisioned                                                              int64 // mechanism v6 only; zero in every v5 balance
+	WagesPaid, WagesEarned                                                   int64 // mechanism v7 only; zero in every v5/v6 balance
 	Capital, Wip, PointsCreated, PointsDecayed, TenuredSlots                 int64
 	InitialEnergy, Energy, BasalSpent, EnergyCapLost                         int64
 	BirthGranaryPaid, Births                                                 int64
@@ -241,9 +290,11 @@ func validNaturalWorksite(w NaturalWorksiteState) bool {
 }
 
 // validNaturalGranaryFor is the mechanism-parameterized granary validator.
-// The zero value requires the v6-only provisioned ledger to be exactly zero
-// (the field does not exist in v5) and keeps every frozen v5 bound;
-// NaturalMechanismV6 admits provisioned in its horizon envelope [0,168].
+// The zero value requires the v6-only provisioned ledger and the v7-only
+// wage ledgers to be exactly zero (the fields do not exist in v5) and keeps
+// every frozen v5 bound; NaturalMechanismV6 admits provisioned in its
+// horizon envelope [0,168] and pins the wage ledgers to zero;
+// NaturalMechanismV7 admits provisioned and both wage ledgers in theirs.
 func validNaturalGranaryFor(m NaturalMechanism, g NaturalGranaryState) bool {
 	if !(g.Stock >= 0 && g.Stock <= NaturalGranaryStockMax &&
 		g.CultivatedTotal >= 0 && g.CultivatedTotal <= NaturalGranaryStockMax &&
@@ -253,10 +304,15 @@ func validNaturalGranaryFor(m NaturalMechanism, g NaturalGranaryState) bool {
 		g.Spoiled >= 0 && g.Spoiled <= NaturalSpoiledMax) {
 		return false
 	}
-	if m == NaturalMechanismV6 {
-		return g.Provisioned >= 0 && g.Provisioned <= NaturalProvisionedMax
+	switch m {
+	case NaturalMechanismV6:
+		return g.Provisioned >= 0 && g.Provisioned <= NaturalProvisionedMax && g.WagesPaid == 0 && g.WagesEarned == 0
+	case NaturalMechanismV7:
+		return g.Provisioned >= 0 && g.Provisioned <= NaturalProvisionedMax &&
+			g.WagesPaid >= 0 && g.WagesPaid <= NaturalWagesMax &&
+			g.WagesEarned >= 0 && g.WagesEarned <= NaturalWagesMax
 	}
-	return g.Provisioned == 0
+	return g.Provisioned == 0 && g.WagesPaid == 0 && g.WagesEarned == 0
 }
 
 func validNaturalGranary(g NaturalGranaryState) bool {
@@ -312,6 +368,61 @@ func validNaturalBirthRequest(patches int, owner sim.EntityID, r NaturalBirthReq
 	return r.Hour >= 0 && r.Hour == r.LastRequestHour && r.Addressee != 0 && r.Addressee != owner && naturalActorEntity(patches, r.Addressee)
 }
 
+// validNaturalLabourOffer checks one mechanism-v7 worker offer row: every
+// hour inside its bounds, the filed shapes coherent, and the status-driven
+// shape exactly as the frozen birth-request discipline defines them:
+//
+//   - idle is either the never-filed shape (all never-hours, no addressee)
+//     or the cleared shape (rule 519 "void contracts clear": the row
+//     retains the last filing as the privileged audit while no contract is
+//     open);
+//   - pending / accepted / refused / expired are filed shapes: the request
+//     hour is the last-offer hour and the addressee is a valid actor other
+//     than the owner;
+//   - accepted and refused carry the decision hour (same-hour decisions:
+//     a pending offer never survives the next pulse, rule 519);
+//   - pending and expired rows are unanswered, so the retained reply hour
+//     predates the filing (or is the never-hour).
+func validNaturalLabourOffer(patches int, owner sim.EntityID, o NaturalLabourOfferState) bool {
+	hourOK := func(h int64) bool { return h >= NaturalNeverHour && h < NaturalHorizonHours }
+	if !hourOK(o.Hour) || !hourOK(o.LastOfferHour) || !hourOK(o.LastReplyHour) || o.Status < NaturalRequestIdle || o.Status > NaturalRequestExpired {
+		return false
+	}
+	filed := func() bool {
+		return o.Hour >= 0 && o.Hour == o.LastOfferHour && o.Addressee != 0 && o.Addressee != owner && naturalActorEntity(patches, o.Addressee)
+	}
+	switch o.Status {
+	case NaturalRequestIdle:
+		if o.Hour == NaturalNeverHour {
+			// Review P2 (ticket-20 L1): the never-filed shape must pin every
+			// touched field, symmetrically with the labour-book validator; an
+			// unfiled row can carry no reply hour either.
+			return o.Addressee == 0 && o.LastOfferHour == NaturalNeverHour && o.LastReplyHour == NaturalNeverHour
+		}
+		// Cleared-with-audit: the last filing is retained for the audit.
+		return o.Addressee != 0 && o.Addressee != owner && naturalActorEntity(patches, o.Addressee)
+	case NaturalRequestPending, NaturalRequestExpired:
+		return filed() && (o.LastReplyHour == NaturalNeverHour || o.LastReplyHour < o.Hour)
+	case NaturalRequestAccepted, NaturalRequestRefused:
+		return filed() && o.LastReplyHour == o.Hour
+	}
+	return false
+}
+
+// validNaturalLabourBook checks one mechanism-v7 employer engagement row:
+// the engaged-worker ref is present exactly while the engagement hour is a
+// real hour (cleared or never-engaged rows carry both zeros), and the
+// decision hour is inside its bounds.
+func validNaturalLabourBook(b NaturalLabourBookState) bool {
+	if b.LastDecisionHour < NaturalNeverHour || b.LastDecisionHour >= NaturalHorizonHours {
+		return false
+	}
+	if b.EngagedWorker == 0 {
+		return b.EngagedHour == NaturalNeverHour
+	}
+	return b.EngagedHour >= 0 && b.EngagedHour < NaturalHorizonHours
+}
+
 // naturalAlive reports the v4-verbatim liveness invariant: died-hour -1
 // with positive energy. Dead actors take no actions; their granaries still
 // spoil and their capital still wears.
@@ -320,9 +431,13 @@ func naturalAlive(a NaturalActorState) bool {
 }
 
 // validNaturalActorFor checks the six rows of one actor under the mechanism
-// axis: home-patch provenance (founder homes are ID-placed; newborn homes
-// are carried), never-gathered coherence, the per-actor granary identity —
-// G2a′ cultivatedTotal = stock + storedMeals + provisioned + spoiled +
+// axis — plus, mechanism v7 only, the two wage-contract rows — against:
+// home-patch provenance (founder homes are ID-placed; newborn homes are
+// carried), never-gathered coherence, the per-actor granary identity —
+// G2a″ cultivatedTotal + wagesEarned = stock + storedMeals + provisioned +
+// spoiled + birthGranaryPaid + wagesPaid under v7; at wages ≡ 0 (pinned for
+// every v5/v6 state by validNaturalGranaryFor) it is term-for-term G2a′
+// cultivatedTotal = stock + storedMeals + provisioned + spoiled +
 // birthGranaryPaid, which at provisioned = 0 (enforced for every v5 state)
 // is exactly the frozen v5 G2a — the per-actor G3 energy identity with the
 // creation base (11 founder, 8 newborn), and the alive invariant
@@ -330,6 +445,9 @@ func naturalAlive(a NaturalActorState) bool {
 func validNaturalActorFor(m NaturalMechanism, patches int, actor sim.EntityID, a NaturalActorState) bool {
 	if !naturalActorEntity(patches, actor) || !validNaturalBody(a.Body) || !validNaturalWorksite(a.Worksite) ||
 		!validNaturalGranaryFor(m, a.Granary) || !validNaturalGenome(patches, actor, a.Genome) || !validNaturalBirthRequest(patches, actor, a.Request) {
+		return false
+	}
+	if m == NaturalMechanismV7 && (!validNaturalLabourOffer(patches, actor, a.Offer) || !validNaturalLabourBook(a.Book)) {
 		return false
 	}
 	home := a.Bag.Source
@@ -346,7 +464,9 @@ func validNaturalActorFor(m NaturalMechanism, patches int, actor sim.EntityID, a
 	// source. Under the v6 mechanism a provisioned unit is the second bag
 	// source (a granary draw, recorded in the provisioned ledger), so a
 	// positive provisioned ledger admits both; the v5 zero value pins
-	// provisioned to zero and keeps the frozen form exactly.
+	// provisioned to zero and keeps the frozen form exactly. A wage is
+	// never a bag source: rule 518 lands it directly in the granary stock,
+	// so the coherence form is unchanged under v7.
 	if a.Body.LastGatherHour == NaturalNeverHour && a.Granary.Provisioned == 0 && (a.Bag.Units != 0 || a.Body.Consumed != 0) {
 		return false
 	}
@@ -354,10 +474,13 @@ func validNaturalActorFor(m NaturalMechanism, patches int, actor sim.EntityID, a
 	if !naturalFounderEntity(patches, actor) {
 		base = NaturalNewbornEnergy
 	}
-	// G2a′: every cultivated unit received is standing, eaten as a stored
-	// meal, drawn as a worksite provision (v6 only), spoiled, or paid
-	// toward a birth.
-	if a.Granary.CultivatedTotal != a.Granary.Stock+a.Granary.StoredMeals+a.Granary.Provisioned+a.Granary.Spoiled+a.Genome.BirthGranaryPaid {
+	// G2a′ (G2a″ under v7): every cultivated unit received is standing,
+	// eaten as a stored meal, drawn as a worksite provision (v6 and v7),
+	// spoiled, or paid toward a birth; under v7 every wage received or
+	// paid joins the same closure on its own side. The wage terms are
+	// pinned to zero outside v7, so the expression reduces term for term
+	// to the frozen G2a′ there.
+	if a.Granary.CultivatedTotal+a.Granary.WagesEarned != a.Granary.Stock+a.Granary.StoredMeals+a.Granary.Provisioned+a.Granary.Spoiled+a.Genome.BirthGranaryPaid+a.Granary.WagesPaid {
 		return false
 	}
 	// G3 per actor.
@@ -790,15 +913,15 @@ func NaturalEatStored(patches, hour int, actorID sim.EntityID, a NaturalActorSta
 }
 
 // NaturalEatStoredFor is the mechanism-parameterized eat-stored; the zero
-// value reproduces NaturalEatStored exactly. Under NaturalMechanismV6 the
-// contract itself enforces the shared one-draw-per-actor-hour guard
-// (LastStoredMealHour < hour) in both directions, because rule 515 can
-// also draw in the same hour: a provision hour draws no stored meal and no
-// second draw follows a stored meal.
+// value reproduces NaturalEatStored exactly. Under NaturalMechanismV6 and
+// NaturalMechanismV7 the contract itself enforces the shared
+// one-draw-per-actor-hour guard (LastStoredMealHour < hour) in both
+// directions, because rule 515 can also draw in the same hour: a provision
+// hour draws no stored meal and no second draw follows a stored meal.
 func NaturalEatStoredFor(m NaturalMechanism, patches, hour int, actorID sim.EntityID, a NaturalActorState) (NaturalActorState, NaturalMeal, error) {
 	if hour < 0 || hour >= NaturalHorizonHours || !naturalActorEntity(patches, actorID) || !validNaturalActorFor(m, patches, actorID, a) || !naturalAlive(a) ||
 		a.Granary.Stock < 1 || a.Granary.StoredMeals >= NaturalHorizonHours ||
-		(m == NaturalMechanismV6 && a.Granary.LastStoredMealHour >= int64(hour)) {
+		(m != NaturalMechanismV5 && a.Granary.LastStoredMealHour >= int64(hour)) {
 		return NaturalActorState{}, NaturalMeal{}, ErrNaturalContract
 	}
 	a.Granary.Stock--
@@ -821,16 +944,16 @@ func NaturalEatStoredFor(m NaturalMechanism, patches, hour int, actorID sim.Enti
 }
 
 // NaturalProvision is the pure rule-515 conversion of the v7 design (ticket
-// 17), mechanism v6 only — every call under the zero value is refused: at
-// the claim instant an actor holding no bag unit, alive, with at least one
-// granary stock unit and no earlier draw this hour (the shared
+// 17), mechanism v6 and v7 only — every call under the zero value is
+// refused: at the claim instant an actor holding no bag unit, alive, with
+// at least one granary stock unit and no earlier draw this hour (the shared
 // LastStoredMealHour < hour guard), converts exactly one stock unit into
 // one bag unit: stock−1, provisioned+1, LastStoredMealHour = hour, bag+1.
 // Conservation is exact per draw (stock−1 = bag+1, a transfer, never a
 // creation): the body is untouched, so G3 is unchanged, and G2a′ stays
 // exact because provisioned absorbs the withdrawn stock unit.
 func NaturalProvision(m NaturalMechanism, patches, hour int, actorID sim.EntityID, a NaturalActorState) (NaturalActorState, error) {
-	if m != NaturalMechanismV6 {
+	if m != NaturalMechanismV6 && m != NaturalMechanismV7 {
 		return NaturalActorState{}, ErrNaturalContract
 	}
 	if hour < 0 || hour >= NaturalHorizonHours || !naturalActorEntity(patches, actorID) || !validNaturalActorFor(m, patches, actorID, a) || !naturalAlive(a) ||
@@ -849,6 +972,293 @@ func NaturalProvision(m NaturalMechanism, patches, hour int, actorID sim.EntityI
 }
 
 // NaturalIdleRequestState is the canonical never-filed request row.
+// NaturalIdleLabourOfferState is the canonical never-filed offer row.
+func NaturalIdleLabourOfferState() NaturalLabourOfferState {
+	return NaturalLabourOfferState{Hour: NaturalNeverHour, LastOfferHour: NaturalNeverHour, LastReplyHour: NaturalNeverHour, Status: NaturalRequestIdle}
+}
+
+// NaturalIdleLabourBookState is the canonical never-engaged book row.
+func NaturalIdleLabourBookState() NaturalLabourBookState {
+	return NaturalLabourBookState{EngagedHour: NaturalNeverHour, LastDecisionHour: NaturalNeverHour}
+}
+
+// NaturalLabourRefusalReason is the typed taxonomy of the frozen settlement
+// refusals (ticket 20): every refusal is a typed void with zero resource
+// mutation, the worker's bag intact, and the worker re-entering the
+// documented denial path (the build-denial loop verbatim). The contract is
+// checked first, then the parties' liveness and shared patch, then the
+// resources, then the completion's slot availability.
+type NaturalLabourRefusalReason uint8
+
+const (
+	NaturalLabourRefusalNone NaturalLabourRefusalReason = iota
+	// NaturalLabourRefusalContractNotPending: no live matched contract —
+	// no accepted offer addressed to this employer, or an engagement row
+	// that does not match (a settlement without a matched offer plus
+	// accept is structurally impossible).
+	NaturalLabourRefusalContractNotPending
+	// NaturalLabourRefusalWorkerDeadOrCrossPatch: the worker is dead, or
+	// the pair's home patches differ.
+	NaturalLabourRefusalWorkerDeadOrCrossPatch
+	// NaturalLabourRefusalEmployerDeadOrCrossPatch: the employer is dead,
+	// or the pair's home patches differ.
+	NaturalLabourRefusalEmployerDeadOrCrossPatch
+	// NaturalLabourRefusalWorkerBagEmpty: the worker holds no gathered
+	// unit to deliver (bag ≠ 1).
+	NaturalLabourRefusalWorkerBagEmpty
+	// NaturalLabourRefusalEmployerStockShort: the employer's granary
+	// stock cannot pay the one-unit wage.
+	NaturalLabourRefusalEmployerStockShort
+	// NaturalLabourRefusalEmployerAtKMax: employer k+wip is at the frozen
+	// KMax, so wages cannot buy wip there.
+	NaturalLabourRefusalEmployerAtKMax
+	// NaturalLabourRefusalNoFreeSlot: the settlement completes a point
+	// but no lowest-index free wild slot with stock 0 exists.
+	NaturalLabourRefusalNoFreeSlot
+)
+
+// NaturalLabourRefusalError carries the typed reason of a refused wage
+// settlement (zero mutation: nothing converts, the bag keeps its unit). It
+// matches ErrNaturalContract for the package's error convention.
+type NaturalLabourRefusalError struct{ Reason NaturalLabourRefusalReason }
+
+func (e *NaturalLabourRefusalError) Error() string {
+	return fmt.Sprintf("%s: labour refusal reason %d", ErrNaturalContract, e.Reason)
+}
+func (e *NaturalLabourRefusalError) Is(target error) bool { return target == ErrNaturalContract }
+
+// NaturalLabourSettleResult mirrors NaturalBuildResult for the settlement's
+// folded completion: the claimed slot index is -1 until a completion
+// actually claims a slot (0 is a legitimate slot index).
+type NaturalLabourSettleResult struct {
+	PointsCompleted  int64
+	ClaimedSlotIndex int
+}
+
+// NaturalLabourSettle is the pure rule-518 handshake of the frozen wage
+// contract (ticket 20), mechanism v7 only — every call under any other
+// mechanism is refused. homeSlots must be the common home patch's slots
+// (the patch is derived from the worker's bag source, exactly as
+// NaturalBuild derives it; a cross-patch array is an invalid call). The
+// fresh-snapshot revalidation runs in the frozen order before any effect:
+// contract pending (the accepted offer addressed to the employer, matched
+// by the engagement row, in its one delivery hour engaged-hour+1), both
+// parties alive on the same patch, worker bag = 1, employer stock ≥ 1,
+// employer k+wip < 8, and — only when the settlement completes a point —
+// a lowest-index free wild slot with stock 0. Any failure is a typed void
+// with zero resource mutation. The effects are exactly the frozen design's:
+// worker bag −1, worker granary stock +1, worker wagesEarned +1, employer
+// granary stock −1, employer wagesPaid +1, employer invested +1 and wip +1,
+// and on wip reaching 2 the frozen point completion (wip −1 to 0, capital
+// +1, created +1, lowest-index free-wild-slot tenure claim with stock 0,
+// the 505 fold). The employer's LastBuildHour is never written: the wage
+// converts one stock unit into one wip at zero employer-hours. G1 holds
+// because the delivered unit is gathered (worker) and invested (employer)
+// inside the same closed patch; G2a″ holds on both sides; G2b holds
+// incrementally; G3 moves no energy.
+func NaturalLabourSettle(m NaturalMechanism, patches, hour int, workerID, employerID sim.EntityID, worker, employer NaturalActorState, homeSlots [NaturalSlotsPerPatch]NaturalSlotState) (NaturalActorState, NaturalActorState, [NaturalSlotsPerPatch]NaturalSlotState, NaturalLabourSettleResult, error) {
+	if m != NaturalMechanismV7 {
+		return NaturalActorState{}, NaturalActorState{}, homeSlots, NaturalLabourSettleResult{}, ErrNaturalContract
+	}
+	if _, err := NaturalPhaseTime(hour, NaturalPhaseLabourSettle); err != nil {
+		return NaturalActorState{}, NaturalActorState{}, homeSlots, NaturalLabourSettleResult{}, ErrNaturalContract
+	}
+	if !naturalActorEntity(patches, workerID) || !naturalActorEntity(patches, employerID) || workerID == employerID ||
+		!validNaturalActorFor(m, patches, workerID, worker) || !validNaturalActorFor(m, patches, employerID, employer) {
+		return NaturalActorState{}, NaturalActorState{}, homeSlots, NaturalLabourSettleResult{}, ErrNaturalContract
+	}
+	if _, err := NaturalPatchID(patches, int(worker.Bag.Source)-NaturalPatchIDBase); err != nil {
+		return NaturalActorState{}, NaturalActorState{}, homeSlots, NaturalLabourSettleResult{}, ErrNaturalContract
+	}
+	for _, slot := range homeSlots {
+		if !validNaturalSlot(slot) {
+			return NaturalActorState{}, NaturalActorState{}, homeSlots, NaturalLabourSettleResult{}, ErrNaturalContract
+		}
+	}
+	// The matched contract: the worker's accepted offer addressed to this
+	// employer, decided in the filing hour, matched by the employer's
+	// engagement row, inside its single delivery hour (engaged-hour + 1 —
+	// the next pulse clears it, so exactly one settlement per accept).
+	engaged := int64(hour) - 1
+	if worker.Offer.Status != NaturalRequestAccepted || worker.Offer.Addressee != employerID ||
+		worker.Offer.Hour != engaged || worker.Offer.LastReplyHour != engaged ||
+		employer.Book.EngagedWorker != workerID || employer.Book.EngagedHour != engaged {
+		return NaturalActorState{}, NaturalActorState{}, homeSlots, NaturalLabourSettleResult{}, &NaturalLabourRefusalError{Reason: NaturalLabourRefusalContractNotPending}
+	}
+	if !naturalAlive(worker) || worker.Bag.Source != employer.Bag.Source {
+		return NaturalActorState{}, NaturalActorState{}, homeSlots, NaturalLabourSettleResult{}, &NaturalLabourRefusalError{Reason: NaturalLabourRefusalWorkerDeadOrCrossPatch}
+	}
+	if !naturalAlive(employer) || worker.Bag.Source != employer.Bag.Source {
+		return NaturalActorState{}, NaturalActorState{}, homeSlots, NaturalLabourSettleResult{}, &NaturalLabourRefusalError{Reason: NaturalLabourRefusalEmployerDeadOrCrossPatch}
+	}
+	if worker.Bag.Units != 1 {
+		return NaturalActorState{}, NaturalActorState{}, homeSlots, NaturalLabourSettleResult{}, &NaturalLabourRefusalError{Reason: NaturalLabourRefusalWorkerBagEmpty}
+	}
+	if employer.Granary.Stock < 1 {
+		return NaturalActorState{}, NaturalActorState{}, homeSlots, NaturalLabourSettleResult{}, &NaturalLabourRefusalError{Reason: NaturalLabourRefusalEmployerStockShort}
+	}
+	if employer.Worksite.Capital+employer.Worksite.Wip >= NaturalKMax {
+		return NaturalActorState{}, NaturalActorState{}, homeSlots, NaturalLabourSettleResult{}, &NaturalLabourRefusalError{Reason: NaturalLabourRefusalEmployerAtKMax}
+	}
+	// Effects, computed on local copies; a refusal below discards them all.
+	worker.Bag.Units = 0
+	worker.Granary.Stock++
+	worker.Granary.WagesEarned++
+	employer.Granary.Stock--
+	employer.Granary.WagesPaid++
+	w := employer.Worksite
+	w.InvestedUnits++
+	result := NaturalLabourSettleResult{ClaimedSlotIndex: -1}
+	w.Wip++
+	if w.Wip > NaturalWipMax { // wip=2: the frozen point completion fires
+		w.Wip = 0
+		w.Capital++
+		w.PointsCreated++
+		result.PointsCompleted = 1
+	}
+	employer.Worksite = w
+	if result.PointsCompleted == 1 {
+		for i := range homeSlots {
+			if homeSlots[i].Mode == NaturalTenureWild {
+				if homeSlots[i].Stock == 0 {
+					homeSlots[i].Mode = NaturalTenureCultivated
+					homeSlots[i].Owner = employerID
+					homeSlots[i].Cultivated = 1
+					result.ClaimedSlotIndex = i
+					break
+				}
+			}
+		}
+		if result.ClaimedSlotIndex < 0 {
+			// Typed refusal, zero mutation: no free wild slot with stock 0.
+			return NaturalActorState{}, NaturalActorState{}, homeSlots, NaturalLabourSettleResult{}, &NaturalLabourRefusalError{Reason: NaturalLabourRefusalNoFreeSlot}
+		}
+	}
+	if !validNaturalActorFor(m, patches, workerID, worker) || !validNaturalActorFor(m, patches, employerID, employer) {
+		return NaturalActorState{}, NaturalActorState{}, homeSlots, NaturalLabourSettleResult{}, ErrNaturalContract
+	}
+	return worker, employer, homeSlots, result, nil
+}
+
+// naturalLabourBookIdle reports whether the employer's engagement slot is
+// free at hour h: no engaged worker, or an engagement already cleared by
+// rule 519 (cleared rows keep the stale audit hour, strictly below h-1 —
+// a live engagement always has engaged-hour h-1, its delivery hour).
+func naturalLabourBookIdle(b NaturalLabourBookState, hour int) bool {
+	return b.EngagedWorker == 0 || b.EngagedHour < int64(hour)-1
+}
+
+// NaturalLabourOffer files the addressed offer under rule 516 at the frozen
+// h+40m+5µs phase, mechanism v7 only — every other mechanism refuses.
+// Preconditions (the frozen filing list): the worker alive and valid, bag 0
+// (the bag decision has consumed the hour's unit), no open offer (pending
+// or accepted — one open contract per worker), no earlier filing this hour
+// (last-offer-hour < h), and a same-patch addressee (addresseeHome is the
+// trusted runner's fresh view; the filing row alone cannot carry it). The
+// derived 1:1 terms are not parameterized: there is nothing to negotiate.
+func NaturalLabourOffer(m NaturalMechanism, patches, hour int, workerID, addressee, addresseeHome sim.EntityID, worker NaturalActorState) (NaturalActorState, error) {
+	if m != NaturalMechanismV7 {
+		return NaturalActorState{}, ErrNaturalContract
+	}
+	if _, err := NaturalPhaseTime(hour, NaturalPhaseLabourOffer); err != nil ||
+		!naturalActorEntity(patches, workerID) || !naturalActorEntity(patches, addressee) || addressee == workerID ||
+		!validNaturalActorFor(m, patches, workerID, worker) || !naturalAlive(worker) ||
+		worker.Bag.Units != 0 ||
+		worker.Offer.Status == NaturalRequestPending || worker.Offer.Status == NaturalRequestAccepted ||
+		worker.Offer.LastOfferHour >= int64(hour) {
+		return NaturalActorState{}, ErrNaturalContract
+	}
+	if _, err := NaturalPatchID(patches, int(addresseeHome)-NaturalPatchIDBase); err != nil || addresseeHome != worker.Bag.Source {
+		return NaturalActorState{}, ErrNaturalContract
+	}
+	worker.Offer.Hour = int64(hour)
+	worker.Offer.Addressee = addressee
+	worker.Offer.Status = NaturalRequestPending
+	worker.Offer.LastOfferHour = int64(hour)
+	if !validNaturalActorFor(m, patches, workerID, worker) {
+		return NaturalActorState{}, ErrNaturalContract
+	}
+	return worker, nil
+}
+
+// NaturalLabourDecision evaluates the addressed employer's rule-517 choice
+// at the frozen h+40m+6µs phase, mechanism v7 only: accept engages the
+// worker (the worker's offer status accepted with the decision hour, the
+// employer's engagement row engaged) and refuse writes the worker's status
+// refused plus only the employer's last-decision-hour (status rows only,
+// the 512 shape). Structural mismatches — no matching pending offer, a
+// second decision in the same hour, an occupied engagement slot on accept —
+// are invalid calls with zero mutation. The accept floor (stock ≥ 4) and
+// the ascending-worker-ID enumeration are the policy's and the runner's
+// to apply; the contract admits any addressed pending offer.
+func NaturalLabourDecision(m NaturalMechanism, patches, hour int, employerID, workerID sim.EntityID, accept bool, employer, worker NaturalActorState) (NaturalActorState, NaturalActorState, NaturalReplyDecision, error) {
+	if m != NaturalMechanismV7 {
+		return NaturalActorState{}, NaturalActorState{}, NaturalReplyNone, ErrNaturalContract
+	}
+	if _, err := NaturalPhaseTime(hour, NaturalPhaseLabourDecision); err != nil ||
+		!naturalActorEntity(patches, employerID) || !naturalActorEntity(patches, workerID) || employerID == workerID ||
+		!validNaturalActorFor(m, patches, employerID, employer) || !validNaturalActorFor(m, patches, workerID, worker) || !naturalAlive(employer) ||
+		worker.Offer.Status != NaturalRequestPending || worker.Offer.Addressee != employerID ||
+		employer.Book.LastDecisionHour >= int64(hour) {
+		return NaturalActorState{}, NaturalActorState{}, NaturalReplyNone, ErrNaturalContract
+	}
+	if accept && !naturalLabourBookIdle(employer.Book, hour) {
+		return NaturalActorState{}, NaturalActorState{}, NaturalReplyNone, ErrNaturalContract
+	}
+	worker.Offer.Status = NaturalRequestRefused
+	worker.Offer.LastReplyHour = int64(hour)
+	employer.Book.LastDecisionHour = int64(hour)
+	decision := NaturalReplyRefuse
+	if accept {
+		worker.Offer.Status = NaturalRequestAccepted
+		employer.Book.EngagedWorker = workerID
+		employer.Book.EngagedHour = int64(hour)
+		decision = NaturalReplyAccept
+	}
+	if !validNaturalActorFor(m, patches, employerID, employer) || !validNaturalActorFor(m, patches, workerID, worker) {
+		return NaturalActorState{}, NaturalActorState{}, NaturalReplyNone, ErrNaturalContract
+	}
+	return employer, worker, decision, nil
+}
+
+// NaturalLabourOfferExpire is the rule-519 pulse transition of one worker
+// offer row, the 513 discipline verbatim plus the void clearing: a pending
+// offer from hour h-1 expires at the pulse of h, and an accepted contract
+// whose single delivery hour (accept hour + 1) has passed — settled or
+// void — clears to idle with its filing retained as the audit. Anything
+// else is a no-op success (the pulse touches many rows); a bad hour is an
+// invalid call.
+func NaturalLabourOfferExpire(hour int, offer NaturalLabourOfferState) (NaturalLabourOfferState, bool, error) {
+	if hour < 1 || hour > NaturalHorizonHours {
+		return NaturalLabourOfferState{}, false, ErrNaturalContract
+	}
+	switch {
+	case offer.Status == NaturalRequestPending && offer.Hour == int64(hour)-1:
+		offer.Status = NaturalRequestExpired
+		return offer, true, nil
+	case offer.Status == NaturalRequestAccepted && offer.LastReplyHour == int64(hour)-2:
+		offer.Status = NaturalRequestIdle
+		return offer, true, nil
+	}
+	return offer, false, nil
+}
+
+// NaturalLabourBookClear is the rule-519 pulse transition of one employer
+// engagement row: the engagement of hour h-2 — whose delivery window closed
+// with the same pulse — clears to the never-engaged shape while the
+// decision audit persists. Anything else is a no-op success.
+func NaturalLabourBookClear(hour int, book NaturalLabourBookState) (NaturalLabourBookState, bool, error) {
+	if hour < 1 || hour > NaturalHorizonHours {
+		return NaturalLabourBookState{}, false, ErrNaturalContract
+	}
+	if book.EngagedWorker != 0 && book.EngagedHour == int64(hour)-2 {
+		book.EngagedWorker = 0
+		book.EngagedHour = NaturalNeverHour
+		return book, true, nil
+	}
+	return book, false, nil
+}
+
 func NaturalIdleRequestState() NaturalBirthRequestState {
 	return NaturalBirthRequestState{Hour: NaturalNeverHour, LastRequestHour: NaturalNeverHour, LastReplyHour: NaturalNeverHour, Status: NaturalRequestIdle}
 }
@@ -1260,6 +1670,8 @@ func NaturalBirthFor(m NaturalMechanism, patches, hour int, kinAllowed bool, new
 		Granary:  NaturalGranaryState{LastStoredMealHour: NaturalNeverHour},
 		Genome:   child,
 		Request:  NaturalIdleRequestState(),
+		Offer:    NaturalIdleLabourOfferState(),
+		Book:     NaturalIdleLabourBookState(),
 	}
 	if !validNaturalActorFor(m, patches, proposerID, proposer) || !validNaturalActorFor(m, patches, consenterID, consenter) || !validNaturalActorFor(m, patches, newbornID, newborn) {
 		return NaturalBirthResult{}, ErrNaturalContract
@@ -1302,7 +1714,10 @@ func NaturalAgeDeath(patches, hour int, actorID sim.EntityID, genome NaturalGeno
 //		    whose home is that patch (mechanism v6: the provisioned inflow
 //		    joins gathered on the inflow side; zero-valued in v5).
 //		G2a ΣcultivatedTotal = Σstored + Σstock + Σspoiled + Σbirth-granary-paid
-//		   (mechanism v6: G2a′ adds the Σprovisioned term; zero-valued in v5);
+//		   (mechanism v6: G2a′ adds the Σprovisioned term; zero-valued in v5;
+//		   mechanism v7: G2a″ adds Σwages-earned to the inflow side and
+//		   Σwages-paid to the outflow side, zero-valued in v5/v6, with the
+//		   closed-history equality Σwages-paid = Σwages-earned);
 //	   and per patch the entitlement seam is exact: grants(patch) =
 //	   ΣcultivatedTotal over the actors whose home is that patch (rule 508
 //	   moves every entitlement into its owner's granary in the same pulse).
@@ -1328,8 +1743,9 @@ func NaturalCheckConservation(patches int, patchStates []NaturalPatchState, slot
 
 // NaturalCheckConservationFor is the mechanism-parameterized conservation
 // gate; the zero value reproduces NaturalCheckConservation exactly
-// (provisioned is pinned to zero per actor there, so the G2a′ aggregate
-// below reduces to the frozen v5 G2a term for term).
+// (provisioned is pinned to zero per actor there, and the wage ledgers are
+// pinned to zero per actor in every v5/v6 state, so the G2a′/G2a″ aggregate
+// below reduces term for term to the frozen v5 G2a).
 //
 // The founder block is the declared founding-band fixture axis (ticket 18):
 // len(founders) is the materialized prefix f of the frozen ID-space founder
@@ -1462,6 +1878,8 @@ func NaturalCheckConservationFor(m NaturalMechanism, patches int, patchStates []
 			b.StoredMeals += a.Granary.StoredMeals
 			b.Provisioned += a.Granary.Provisioned
 			b.Spoiled += a.Granary.Spoiled
+			b.WagesPaid += a.Granary.WagesPaid
+			b.WagesEarned += a.Granary.WagesEarned
 			b.Capital += a.Worksite.Capital
 			b.Wip += a.Worksite.Wip
 			b.PointsCreated += a.Worksite.PointsCreated
@@ -1496,10 +1914,14 @@ func NaturalCheckConservationFor(m NaturalMechanism, patches int, patchStates []
 	// Pass 4: aggregate identities, G1 (with the v6 provisioned inflow;
 	// exactly the frozen form while provisioned is pinned to zero), G2b,
 	// G2a′ (exactly G2a while the provisioned ledger is pinned to zero by
-	// the per-actor validator), G3 extended.
+	// the per-actor validator; under v7 the wage terms join both sides —
+	// pinned to zero in every v5/v6 state, so the frozen form is preserved
+	// term for term), the closed-history wage equality Σpaid = Σearned
+	// (every wage earned was paid in the same settlement), and G3 extended.
 	if b.Gathered+b.Provisioned != b.Consumed+b.Held+b.Invested || b.Produced != b.Gathered+b.Stock ||
 		b.Invested != NaturalPointCostWip*b.PointsCreated+b.Wip || b.PointsCreated-b.PointsDecayed != b.Capital ||
-		b.CultivatedTotal != b.StoredMeals+b.GranaryStock+b.Provisioned+b.Spoiled+b.BirthGranaryPaid ||
+		b.CultivatedTotal+b.WagesEarned != b.StoredMeals+b.GranaryStock+b.Provisioned+b.Spoiled+b.BirthGranaryPaid+b.WagesPaid ||
+		b.WagesPaid != b.WagesEarned ||
 		b.InitialEnergy+NaturalNewbornEnergy*b.Births+b.Consumed+b.StoredMeals != b.Energy+b.BasalSpent+b.EnergyCapLost {
 		return NaturalBalance{}, ErrNaturalContract
 	}

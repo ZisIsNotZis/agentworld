@@ -384,7 +384,7 @@ type NaturalBirthEvidence struct {
 type NaturalAttempt struct {
 	Actor     sim.EntityID
 	Time      sim.SimTime
-	Kind      string // gather | eat-stored | provision | wait | eat | build | build-denied-eat | paired-meal | fallback-eatstored | rest | birth-request | birth-reply
+	Kind      string // gather | eat-stored | provision | wait | eat | build | build-denied-eat | paired-meal | fallback-eatstored | rest | birth-request | birth-reply | labour-offer | labour-decision | labour-settlement | labour-void
 	Key       string
 	Target    sim.EntityID
 	Rejection FoodFlowGatherRejection
@@ -486,7 +486,7 @@ type NaturalOptions struct {
 
 	// PolicyRef is the declared policy identity (ticket 16 D1 seam): the
 	// single binding site resolves it through the frozen natural ref set
-	// {natural/5, natural/6, natural/7, natural/7b} and binds every roster
+	// {natural/5, natural/6, natural/7, natural/7b, natural/9} and binds every roster
 	// entity by it. The zero value is exactly natural/5, so every recorded
 	// v5 scenario keeps its bytes; the ref is run identity end to end
 	// (journal config, checkpoint manifest, bidirectional mismatch
@@ -541,6 +541,13 @@ type NaturalOptions struct {
 	// CeilingHit path (declared run identity; carried by the handoff). Only
 	// lowering is valid; an unknown ceiling or a raise is refused.
 	CeilingThresholds map[NaturalCeiling]int64
+
+	// Cognition is the optional Role A decision seam (spec section 4). The
+	// zero value (nil) leaves every code path and every recorded run
+	// byte-identical; when non-nil the declared wake policy selects the
+	// escalated claim decisions, which are decided by the model through the
+	// recorded-call path. It is not a mechanism or policy change.
+	Cognition *NaturalCognition
 }
 
 // policyRef resolves the declared policy identity: the zero value is the
@@ -601,12 +608,15 @@ func (f *Natural) declaredFounders() int {
 	return f.founders
 }
 
-// naturalRefLegalUnderMechanism is the ref/mechanism consistency rule of
-// the frozen v7 design: the v5 zero value admits exactly the recorded ref
-// set {natural/5, natural/6}; mechanism v6 additionally admits the
-// provision policies natural/7 and natural/7b, which are refused under v5
-// (fail closed) because the rule-515 affordance they select does not exist
-// there. An unknown ref fails for every mechanism.
+// naturalRefLegalUnderMechanism is the ref/mechanism consistency ladder of
+// the frozen v9 design (ticket 20; the explicit rungs recorded by the L2
+// lane, replacing ticket 17's v6 blanket): natural/5 and natural/6 are the
+// base policies legal under ANY admitted mechanism (including mechanism v7,
+// so the zero-use control can construct); natural/7 and natural/7b select
+// the rule-515 affordance and are legal only under mechanism >= v6 (refused
+// under the v5 zero value, fail closed); natural/9 selects the wage-contract
+// rules 516-519 and the wage ledgers that only mechanism v7 registers and is
+// legal ONLY under mechanism v7. An unknown ref fails for every mechanism.
 func naturalRefLegalUnderMechanism(m NaturalMechanism, ref strategy.NaturalRef) bool {
 	if !NaturalMechanismValid(m) {
 		return false
@@ -615,10 +625,15 @@ func naturalRefLegalUnderMechanism(m NaturalMechanism, ref strategy.NaturalRef) 
 	if err != nil {
 		return false
 	}
-	if m == NaturalMechanismV6 {
+	switch policy.Ref {
+	case strategy.FrozenNaturalPolicy().Ref, strategy.FrozenNaturalPolicyV6().Ref:
 		return true
+	case strategy.FrozenNaturalPolicy7().Ref, strategy.FrozenNaturalPolicy7b().Ref:
+		return m == NaturalMechanismV6 || m == NaturalMechanismV7
+	case strategy.FrozenNaturalPolicy9().Ref:
+		return m == NaturalMechanismV7
 	}
-	return policy.Ref == strategy.FrozenNaturalPolicy().Ref || policy.Ref == strategy.FrozenNaturalPolicyV6().Ref
+	return false
 }
 
 func (o NaturalOptions) validate() error {
@@ -626,13 +641,13 @@ func (o NaturalOptions) validate() error {
 		return fmt.Errorf("%w: patches %d outside the derived ID-space precondition", ErrNaturalRunner, o.Patches)
 	}
 	if _, err := strategy.FrozenNaturalPolicyForRef(o.policyRef()); err != nil {
-		return fmt.Errorf("%w: policy ref %+v is not in the frozen natural ref set {natural/5, natural/6, natural/7, natural/7b}: %v", ErrNaturalRunner, o.PolicyRef, err)
+		return fmt.Errorf("%w: policy ref %+v is not in the frozen natural ref set {natural/5, natural/6, natural/7, natural/7b, natural/9}: %v", ErrNaturalRunner, o.PolicyRef, err)
 	}
 	if !NaturalMechanismValid(o.mechanism()) {
 		return fmt.Errorf("%w: mechanism %d is not an admitted mechanism version", ErrNaturalRunner, uint16(o.Mechanism))
 	}
 	if !naturalRefLegalUnderMechanism(o.mechanism(), o.policyRef()) {
-		return fmt.Errorf("%w: policy ref %+v is not legal under mechanism %d (natural/7 and natural/7b require mechanism v6)", ErrNaturalRunner, o.policyRef(), uint16(o.mechanism()))
+		return fmt.Errorf("%w: policy ref %+v is not legal under mechanism %d (natural/7 and natural/7b require mechanism >= v6; natural/9 requires mechanism v7)", ErrNaturalRunner, o.policyRef(), uint16(o.mechanism()))
 	}
 	if !NaturalFoundersValid(o.Patches, o.Founders) {
 		return fmt.Errorf("%w: founders %d outside the derived founding-band bound [1,%d] (zero = default 8P)", ErrNaturalRunner, o.Founders, NaturalSlotsPerPatch*o.Patches)
@@ -643,12 +658,20 @@ func (o NaturalOptions) validate() error {
 	if o.Workers < 1 {
 		return fmt.Errorf("%w: workers %d", ErrNaturalRunner, o.Workers)
 	}
+	if err := o.Cognition.validate(); err != nil {
+		return err
+	}
 	return nil
 }
 
 type naturalBuildOutcome struct {
 	proposal kernel.Proposal
 	refused  NaturalBuildRefusalReason
+	// voidNote is the runner-level structural void of a completion the fold
+	// refused before it was proposed (the recorded settlement precedence);
+	// zero mutation, the bag kept for the denial loop. It is empty unless
+	// refused is NaturalBuildRefusalNone and no proposal exists.
+	voidNote string
 }
 
 type naturalDeath struct {
@@ -705,6 +728,7 @@ type Natural struct {
 	birthWakes          map[sim.EntityID]int64                  // newborn -> hour of its reserved WakeBirth claim
 	admissions          map[sim.EntityID]FoodFlowGatherAdmission
 	builds              map[sim.EntityID]naturalBuildOutcome
+	settles             map[sim.EntityID]naturalSettleOutcome
 	allocator           sim.EntityAllocator // last-ID cross-checked against the max roster ID at restore
 	pending             *naturalPending
 	journal             []NaturalBatch
@@ -722,20 +746,77 @@ type Natural struct {
 	cultivationDisabled bool
 	flow                [24]naturalHourFlow // trailing-24-pulse inflow/consumption ring
 	hourMeals           int64               // meals committed during the running hour
+
+	// Optional Role A decision seam (spec section 4) and the seam-overridden
+	// claim choice recorded for the evaluation phase. A nil cognition and an
+	// empty map are the frozen path.
+	cognition      *NaturalCognition
+	claimDecisions map[sim.EntityID]strategy.NaturalChoice
+
+	// Optional Role B active generation (spec section 5). Nil is the frozen
+	// path; non-nil overrides the claim/bag and birth-request cascades for the
+	// actors it binds (see natural_cognitive_strategy.go).
+	cognitiveStrategy *NaturalCognitiveStrategy
+	// cognitiveCheckpoint is the caller-supplied cognition binding the next
+	// checkpoint manifest records (spec section 7.2). Nil leaves the manifest
+	// byte-unchanged.
+	cognitiveCheckpoint *NaturalCognitiveCheckpoint
 }
 
 func naturalField(field sim.FieldID, n int64) component.FieldSeed {
 	return component.FieldSeed{Field: field, Value: sim.IntegerValue(n)}
 }
 
-// granaryProvisionedSeed is the mechanism-v6-only genesis seed of the
-// provisioned ledger: the v5 zero value returns nothing (the frozen v5
-// granary seeds keep exactly their six fields).
+// granaryProvisionedSeed is the genesis seed of the provisioned ledger
+// (granary field 7) for every mechanism that registers it: v6 and — with
+// the wage ledgers — v7 (the nine-field granary). The v5 zero value returns
+// nothing: the frozen v5 granary seeds keep exactly their six fields.
 func granaryProvisionedSeed(mechanism NaturalMechanism, provisioned int64) []component.FieldSeed {
-	if mechanism != NaturalMechanismV6 {
+	if mechanism != NaturalMechanismV6 && mechanism != NaturalMechanismV7 {
 		return nil
 	}
 	return []component.FieldSeed{{Field: NaturalGranaryProvisionedField, Value: sim.IntegerValue(provisioned)}}
+}
+
+// granaryWageLedgerSeeds are the mechanism-v7-only genesis seeds of the wage
+// ledgers (granary fields 8 wages-paid and 9 wages-earned, ticket 20): the
+// v5 and v6 zero values return nothing, so their granary rows keep exactly
+// their frozen field lists (six and seven fields).
+func granaryWageLedgerSeeds(mechanism NaturalMechanism, wagesPaid, wagesEarned int64) []component.FieldSeed {
+	if mechanism != NaturalMechanismV7 {
+		return nil
+	}
+	return []component.FieldSeed{
+		{Field: NaturalGranaryWagesPaidField, Value: sim.IntegerValue(wagesPaid)},
+		{Field: NaturalGranaryWagesEarnedField, Value: sim.IntegerValue(wagesEarned)}}
+}
+
+// labourRowSeeds are the mechanism-v7-only genesis seeds of the two
+// wage-contract rows every actor carries (ticket 20): the canonical
+// never-filed offer row on 0x80000058 and the never-engaged book row on
+// 0x80000059, both seeded at their idle shapes. Every other mechanism
+// returns nothing: the rows do not exist there.
+func labourRowSeeds(mechanism NaturalMechanism, actor sim.EntityID, a NaturalActorState) ([]component.ComponentSeed, error) {
+	if mechanism != NaturalMechanismV7 {
+		return nil, nil
+	}
+	offeree, err := genomeRefValue(a.Offer.Addressee)
+	if err != nil {
+		return nil, err
+	}
+	engaged, err := genomeRefValue(a.Book.EngagedWorker)
+	if err != nil {
+		return nil, err
+	}
+	return []component.ComponentSeed{
+		{Entity: actor, Component: NaturalLabourOfferTypeID, Fields: []component.FieldSeed{
+			naturalField(NaturalLabourOfferHourField, a.Offer.Hour), {Field: NaturalLabourOfferAddresseeField, Value: offeree},
+			naturalField(NaturalLabourOfferStatusField, int64(a.Offer.Status)), naturalField(NaturalLabourOfferLastOfferHourField, a.Offer.LastOfferHour),
+			naturalField(NaturalLabourOfferLastReplyHourField, a.Offer.LastReplyHour)}},
+		{Entity: actor, Component: NaturalLabourBookTypeID, Fields: []component.FieldSeed{
+			{Field: NaturalLabourBookEngagedWorkerField, Value: engaged},
+			naturalField(NaturalLabourBookEngagedHourField, a.Book.EngagedHour),
+			naturalField(NaturalLabourBookLastDecisionHourField, a.Book.LastDecisionHour)}}}, nil
 }
 
 // naturalNumber writes one integer field patch at the runner's mechanism
@@ -762,9 +843,13 @@ func (f *Natural) naturalProposal(kind string, at sim.SimTime, actor sim.EntityI
 // lifetimes — f materializes the prefix of the frozen founder block, drawing
 // stream positions 0..f−1, so founder i's lifetime equals the frozen world's
 // founder i lifetime for every i ≤ f (the zero-value spelling materializes
-// the whole block, 8P). The mechanism selects the granary seed field list:
-// the v5 zero value keeps the frozen six fields; mechanism v6 requires the
-// provisioned ledger (field 7, complete-row seeds at genesis), seeded 0.
+// the whole block, 8P). The mechanism selects the seed field lists: the v5
+// zero value keeps the frozen six-field granaries; mechanism v6 requires the
+// provisioned ledger (field 7, complete-row seeds at genesis), seeded 0;
+// mechanism v7 (ticket 20) additionally requires the wage ledgers (fields 8
+// and 9, the nine-field granary) and the two idle wage-contract rows
+// (0x80000058/59) every v7 actor carries, so the V7 validators' genesis gate
+// passes and the (v7, natural/7b) zero-use control constructs unchanged.
 func naturalGenesisSeeds(mechanism NaturalMechanism, patches int, r int64, seed uint64, founders int) ([]component.ComponentSeed, []NaturalActorState, error) {
 	var seeds []component.ComponentSeed
 	if !NaturalFoundersValid(patches, founders) {
@@ -784,6 +869,13 @@ func naturalGenesisSeeds(mechanism NaturalMechanism, patches int, r int64, seed 
 		actor, err := NaturalFounderState(patches, sim.EntityID(i+1), lifetime)
 		if err != nil {
 			return nil, nil, err
+		}
+		// Mechanism v7: the founder's wage-contract rows start at their
+		// canonical idle shapes (the frozen constructor's zero rows are the
+		// v5/v6 spelling and invalid under the V7 validators).
+		if mechanism == NaturalMechanismV7 {
+			actor.Offer = NaturalIdleLabourOfferState()
+			actor.Book = NaturalIdleLabourBookState()
 		}
 		actors[i] = actor
 	}
@@ -846,11 +938,12 @@ func naturalGenesisSeeds(mechanism NaturalMechanism, patches int, r int64, seed 
 				naturalField(NaturalWorksiteWearDebtField, a.Worksite.WearDebt), naturalField(NaturalWorksiteInvestedUnitsField, a.Worksite.InvestedUnits),
 				naturalField(NaturalWorksitePointsCreatedField, a.Worksite.PointsCreated), naturalField(NaturalWorksitePointsDecayedField, a.Worksite.PointsDecayed),
 				naturalField(NaturalWorksiteLastBuildHourField, a.Worksite.LastBuildHour)}},
-			component.ComponentSeed{Entity: actor, Component: NaturalGranaryTypeID, Fields: append([]component.FieldSeed{
+			component.ComponentSeed{Entity: actor, Component: NaturalGranaryTypeID, Fields: append(append([]component.FieldSeed{
 				naturalField(NaturalGranaryStockField, a.Granary.Stock), naturalField(NaturalGranaryCultivatedTotalField, a.Granary.CultivatedTotal),
 				naturalField(NaturalGranaryStoredMealsField, a.Granary.StoredMeals), naturalField(NaturalGranaryLastStoredMealHourField, a.Granary.LastStoredMealHour),
 				naturalField(NaturalGranarySpoilDebtField, a.Granary.SpoilDebt), naturalField(NaturalGranarySpoiledField, a.Granary.Spoiled)},
-				granaryProvisionedSeed(mechanism, a.Granary.Provisioned)...)},
+				granaryProvisionedSeed(mechanism, a.Granary.Provisioned)...),
+				granaryWageLedgerSeeds(mechanism, a.Granary.WagesPaid, a.Granary.WagesEarned)...)},
 			component.ComponentSeed{Entity: actor, Component: NaturalGenomeTypeID, Fields: []component.FieldSeed{
 				naturalField(NaturalGenomeLocusMField, a.Genome.LocusM), naturalField(NaturalGenomeLocusYField, a.Genome.LocusY),
 				naturalField(NaturalGenomeLocusWField, a.Genome.LocusW),
@@ -862,6 +955,11 @@ func naturalGenesisSeeds(mechanism NaturalMechanism, patches int, r int64, seed 
 				naturalField(NaturalBirthRequestReportedCapitalField, a.Request.ReportedCapital), naturalField(NaturalBirthRequestReportedGranaryField, a.Request.ReportedGranary),
 				naturalField(NaturalBirthRequestStatusField, int64(a.Request.Status)), naturalField(NaturalBirthRequestLastRequestHourField, a.Request.LastRequestHour),
 				naturalField(NaturalBirthRequestLastReplyHourField, a.Request.LastReplyHour)}})
+		labourSeeds, err := labourRowSeeds(mechanism, actor, a)
+		if err != nil {
+			return nil, nil, err
+		}
+		seeds = append(seeds, labourSeeds...)
 	}
 	return seeds, actors, nil
 }
@@ -920,8 +1018,9 @@ func NewNatural(o NaturalOptions) (*Natural, error) {
 		return nil, fmt.Errorf("%w: neutral h0 world breaks frozen conservation: %v", ErrNaturalRunner, err)
 	}
 	f := &Natural{registry: reg, policies: policies, ref: policy.Ref, mechanism: o.mechanism(), founders: naturalFoundersResolved(o.Patches, o.Founders), patches: o.Patches, seed: o.Seed, r: o.R, births: o.Births,
-		cultivationDisabled: o.CultivationDisabled,
-		bound:               make(map[sim.EntityID]*strategy.NaturalBound), allocator: allocator, ledger: ledger, thresholds: thresholds,
+		cultivationDisabled: o.CultivationDisabled, cognition: o.Cognition,
+		claimDecisions: make(map[sim.EntityID]strategy.NaturalChoice),
+		bound:          make(map[sim.EntityID]*strategy.NaturalBound), allocator: allocator, ledger: ledger, thresholds: thresholds,
 		pulseLifecycle: make(map[sim.EntityID]scheduler.Lifecycle), current: make(map[sim.EntityID]strategy.NaturalAction),
 		denied: make(map[sim.EntityID]int64), deniedBuild: make(map[sim.EntityID]int64), meals: make(map[sim.EntityID]NaturalMealIntent),
 		birthWakes: make(map[sim.EntityID]int64), refusals: make(map[NaturalRefusalReason]int64)}
@@ -955,18 +1054,25 @@ func NewNatural(o NaturalOptions) (*Natural, error) {
 	return f, nil
 }
 
-// # The policy cascade dispatch (ticket 16 D1 seam, extended by ticket 17)
+// # The policy cascade dispatch (ticket 16 D1 seam, extended by tickets 17
+// and 20)
 //
 // The frozen v5 cascade bytes cannot detect a v6 bound: their only ref check
 // is obs.Ref against the bound's own ref, which a v6 bound satisfies. The
 // ref discipline therefore lives in the dispatch, not the cascade — every
 // evaluation site routes through these helpers, which call the matching
 // cascade for the runner's bound ref: the frozen v5 Evaluate for
-// {natural,5}, EvaluateV6 for {natural,6}, and — ticket 17 — Evaluate7 for
+// {natural,5}, EvaluateV6 for {natural,6}, — ticket 17 — Evaluate7 for
 // {natural,7} and Evaluate7b for {natural,8} (the v6/v7 cascades' own
-// bound-identity guards fail closed under any other bound content). Every
-// dispatch site still re-pins choice.Ref == f.ref.
-func (f *Natural) naturalEvaluate(id sim.EntityID, obs strategy.NaturalObservation) (strategy.NaturalChoice, error) {
+// bound-identity guards fail closed under any other bound content), and —
+// ticket 20 — Evaluate9 for {natural,9}. Every dispatch site still re-pins
+// choice.Ref == f.ref.
+func (f *Natural) naturalEvaluate(id sim.EntityID, obs strategy.NaturalObservation, ownOffer strategy.NaturalLabourOfferGuard) (strategy.NaturalChoice, error) {
+	if f.cognitiveStrategy != nil {
+		if choice, handled, err := f.cognitiveStrategy.evaluateClaim(f.patches, id, obs); handled || err != nil {
+			return choice, err
+		}
+	}
 	switch f.ref {
 	case strategy.FrozenNaturalPolicyV6().Ref:
 		return f.bound[id].EvaluateV6(obs)
@@ -974,14 +1080,27 @@ func (f *Natural) naturalEvaluate(id sim.EntityID, obs strategy.NaturalObservati
 		return f.bound[id].Evaluate7(obs)
 	case strategy.FrozenNaturalPolicy7b().Ref:
 		return f.bound[id].Evaluate7b(obs)
+	case strategy.FrozenNaturalPolicy9().Ref:
+		return f.bound[id].Evaluate9(strategy.NaturalLabourObservation{NaturalObservation: obs, OwnOffer: ownOffer})
 	}
 	return f.bound[id].Evaluate(obs)
 }
 
+// naturalLabourOfferGuard projects one actor's wage-contract offer row into
+// the policy guard of the rule-516/518 observations.
+func naturalLabourOfferGuard(a NaturalActorState) strategy.NaturalLabourOfferGuard {
+	return strategy.NaturalLabourOfferGuard{Status: strategy.NaturalRequestStatus(a.Offer.Status), LastOfferHour: a.Offer.LastOfferHour, LastReplyHour: a.Offer.LastReplyHour}
+}
+
 // naturalEvaluateBirthRequest dispatches the frozen proposer decision at
-// h+40m+5µs for the bound ref (EvaluateBirthRequestV6 and its natural/7 and
-// natural/7b twins file only at own energy ≥ 4).
+// h+40m+5µs for the bound ref (EvaluateBirthRequestV6 and its natural/7,
+// natural/7b and natural/9 twins file only at own energy ≥ 4).
 func (f *Natural) naturalEvaluateBirthRequest(id sim.EntityID, obs strategy.NaturalRequestObservation) (strategy.NaturalRequestChoice, error) {
+	if f.cognitiveStrategy != nil {
+		if choice, handled, err := f.cognitiveStrategy.evaluateBirthRequest(f.patches, id, obs); handled || err != nil {
+			return choice, err
+		}
+	}
 	switch f.ref {
 	case strategy.FrozenNaturalPolicyV6().Ref:
 		return f.bound[id].EvaluateBirthRequestV6(obs)
@@ -989,13 +1108,15 @@ func (f *Natural) naturalEvaluateBirthRequest(id sim.EntityID, obs strategy.Natu
 		return f.bound[id].EvaluateBirthRequest7(obs)
 	case strategy.FrozenNaturalPolicy7b().Ref:
 		return f.bound[id].EvaluateBirthRequest7b(obs)
+	case strategy.FrozenNaturalPolicy9().Ref:
+		return f.bound[id].EvaluateBirthRequest9(obs)
 	}
 	return f.bound[id].EvaluateBirthRequest(obs)
 }
 
 // naturalEvaluateBirthReply dispatches the frozen consenter decision at
-// h+40m+6µs for the bound ref (EvaluateBirthReplyV6 and its natural/7 and
-// natural/7b twins accept only at own energy ≥ 4).
+// h+40m+6µs for the bound ref (EvaluateBirthReplyV6 and its natural/7,
+// natural/7b and natural/9 twins accept only at own energy ≥ 4).
 func (f *Natural) naturalEvaluateBirthReply(id sim.EntityID, obs strategy.NaturalReplyObservation) (strategy.NaturalReplyChoice, error) {
 	switch f.ref {
 	case strategy.FrozenNaturalPolicyV6().Ref:
@@ -1004,14 +1125,42 @@ func (f *Natural) naturalEvaluateBirthReply(id sim.EntityID, obs strategy.Natura
 		return f.bound[id].EvaluateBirthReply7(obs)
 	case strategy.FrozenNaturalPolicy7b().Ref:
 		return f.bound[id].EvaluateBirthReply7b(obs)
+	case strategy.FrozenNaturalPolicy9().Ref:
+		return f.bound[id].EvaluateBirthReply9(obs)
 	}
 	return f.bound[id].EvaluateBirthReply(obs)
+}
+
+// naturalEvaluateLabourOffer dispatches the frozen natural/9 worker filing
+// decision at h+40m+5µs (rule 516). The dispatch (not the cascade) carries
+// the ref discipline: the 9 bound's own identity guard fails closed under
+// any other bound content, and the site re-pins choice.Ref == f.ref.
+func (f *Natural) naturalEvaluateLabourOffer(id sim.EntityID, obs strategy.NaturalLabourOfferObservation) (strategy.NaturalLabourOfferChoice, error) {
+	return f.bound[id].EvaluateLabourOffer9(obs)
+}
+
+// naturalEvaluateLabourDecision dispatches the frozen natural/9 employer
+// decision at h+40m+6µs (rule 517) under the same ref discipline.
+func (f *Natural) naturalEvaluateLabourDecision(id sim.EntityID, obs strategy.NaturalLabourDecisionObservation) (strategy.NaturalLabourDecisionChoice, error) {
+	return f.bound[id].EvaluateLabourDecision9(obs)
+}
+
+// naturalLabourLane reports whether the runner's bound ref selects the
+// wage-contract lane (ticket 20). Only natural/9 emits the labour actions,
+// so every labour wake, pulse transition, and dispatch below is gated on
+// it: the (v7, natural/7b) zero-use control keeps the v6 code paths and
+// trajectories byte for byte.
+func (f *Natural) naturalLabourLane() bool {
+	return f.ref == strategy.FrozenNaturalPolicy9().Ref
 }
 
 // naturalActorState reads one actor's six component rows at one version.
 // The mechanism selects the granary field list: the v5 zero value reads the
 // frozen six fields; mechanism v6 additionally reads the provisioned ledger
-// (field 7), so G2a′ and the balance carry the real counter.
+// (field 7), so G2a′ and the balance carry the real counter; mechanism v7
+// (ticket 20) additionally reads the wage ledgers (fields 8 and 9) and the
+// actor's two wage-contract rows, so the V7 validators and the labour
+// observations see the real counters.
 func naturalActorState(view scheduler.SnapshotView, mechanism NaturalMechanism, actor sim.EntityID) (NaturalActorState, error) {
 	body, err := capacityInts(view, actor, NaturalBodyTypeID,
 		NaturalBodyEnergyField, NaturalBodyHungerField, NaturalBodyBasalSpentField, NaturalBodyCapLostField, NaturalBodyConsumedField, NaturalBodyLastGatherHourField, NaturalBodyBasalDebtField)
@@ -1040,13 +1189,20 @@ func naturalActorState(view scheduler.SnapshotView, mechanism NaturalMechanism, 
 	if mechanism == NaturalMechanismV6 {
 		granaryFields = append(granaryFields, NaturalGranaryProvisionedField)
 	}
+	if mechanism == NaturalMechanismV7 {
+		granaryFields = append(granaryFields, NaturalGranaryProvisionedField, NaturalGranaryWagesPaidField, NaturalGranaryWagesEarnedField)
+	}
 	granary, err := capacityInts(view, actor, NaturalGranaryTypeID, granaryFields...)
 	if err != nil {
 		return NaturalActorState{}, err
 	}
 	provisioned := int64(0) // the ledger does not exist under the v5 zero value
+	wagesPaid, wagesEarned := int64(0), int64(0)
 	if mechanism == NaturalMechanismV6 {
 		provisioned = granary[6]
+	}
+	if mechanism == NaturalMechanismV7 {
+		provisioned, wagesPaid, wagesEarned = granary[6], granary[7], granary[8]
 	}
 	genomeValues, err := capacityRead(view, actor, NaturalGenomeTypeID,
 		NaturalGenomeLocusMField, NaturalGenomeLocusYField, NaturalGenomeLocusWField, NaturalGenomeParentAField, NaturalGenomeParentBField,
@@ -1094,9 +1250,52 @@ func naturalActorState(view scheduler.SnapshotView, mechanism NaturalMechanism, 
 		Body:     NaturalBodyState{Energy: body[0], Hunger: body[1], BasalSpent: body[2], CapLost: body[3], Consumed: body[4], LastGatherHour: body[5], BasalDebt: body[6]},
 		Bag:      NaturalBagState{Units: units, Source: source},
 		Worksite: NaturalWorksiteState{Capital: worksite[0], Wip: worksite[1], WearDebt: worksite[2], InvestedUnits: worksite[3], PointsCreated: worksite[4], PointsDecayed: worksite[5], LastBuildHour: worksite[6]},
-		Granary:  NaturalGranaryState{Stock: granary[0], CultivatedTotal: granary[1], StoredMeals: granary[2], LastStoredMealHour: granary[3], SpoilDebt: granary[4], Spoiled: granary[5], Provisioned: provisioned},
+		Granary:  NaturalGranaryState{Stock: granary[0], CultivatedTotal: granary[1], StoredMeals: granary[2], LastStoredMealHour: granary[3], SpoilDebt: granary[4], Spoiled: granary[5], Provisioned: provisioned, WagesPaid: wagesPaid, WagesEarned: wagesEarned},
 		Genome:   NaturalGenomeState{LocusM: genomeInts[0], LocusY: genomeInts[1], LocusW: genomeInts[2], ParentA: parentA, ParentB: parentB, BirthHour: genomeInts[5], DeathHour: genomeInts[6], DiedHour: genomeInts[7], BirthGranaryPaid: genomeInts[8]},
 		Request:  NaturalBirthRequestState{Hour: requestInts[0], Addressee: addressee, ReportedCapital: requestInts[2], ReportedGranary: requestInts[3], Status: NaturalRequestStatus(requestInts[4]), LastRequestHour: requestInts[5], LastReplyHour: requestInts[6]},
+	}
+	if mechanism == NaturalMechanismV7 {
+		offereValues, err := capacityRead(view, actor, NaturalLabourOfferTypeID,
+			NaturalLabourOfferHourField, NaturalLabourOfferAddresseeField, NaturalLabourOfferStatusField, NaturalLabourOfferLastOfferHourField, NaturalLabourOfferLastReplyHourField)
+		if err != nil {
+			return NaturalActorState{}, err
+		}
+		offerInts := make([]int64, len(offereValues))
+		for i, v := range offereValues {
+			if i == 1 {
+				continue
+			}
+			if offerInts[i], err = v.Integer(); err != nil {
+				return NaturalActorState{}, err
+			}
+		}
+		offeree, err := capacityRefValue(offereValues[1])
+		if err != nil {
+			return NaturalActorState{}, err
+		}
+		bookValues, err := capacityRead(view, actor, NaturalLabourBookTypeID,
+			NaturalLabourBookEngagedWorkerField, NaturalLabourBookEngagedHourField, NaturalLabourBookLastDecisionHourField)
+		if err != nil {
+			return NaturalActorState{}, err
+		}
+		bookInts := make([]int64, len(bookValues))
+		for i, v := range bookValues {
+			if i == 0 {
+				continue
+			}
+			if bookInts[i], err = v.Integer(); err != nil {
+				return NaturalActorState{}, err
+			}
+		}
+		engagedWorker, err := capacityRefValue(bookValues[0])
+		if err != nil {
+			return NaturalActorState{}, err
+		}
+		a.Offer = NaturalLabourOfferState{Hour: offerInts[0], Addressee: offeree, Status: NaturalRequestStatus(offerInts[2]), LastOfferHour: offerInts[3], LastReplyHour: offerInts[4]}
+		a.Book = NaturalLabourBookState{EngagedWorker: engagedWorker, EngagedHour: bookInts[1], LastDecisionHour: bookInts[2]}
+		if a.Offer.Status < NaturalRequestIdle || a.Offer.Status > NaturalRequestExpired {
+			return NaturalActorState{}, ErrNaturalContract
+		}
 	}
 	if a.Request.Status < NaturalRequestIdle || a.Request.Status > NaturalRequestExpired {
 		return NaturalActorState{}, ErrNaturalContract
@@ -1527,17 +1726,66 @@ func (f *Natural) pulse(ready scheduler.ReadyFiber, view scheduler.SnapshotView)
 			w.actors[id] = expired
 		}
 	}
+	// Stage 6b: world-caused labour expiry and book clearing (rule 519,
+	// ticket 20, the wage-contract lane only). The 513 discipline verbatim
+	// plus the void clearing: a pending offer from h-1 expires, an accepted
+	// contract whose single delivery hour (accept hour + 1) has passed
+	// clears to idle-with-audit, and the matching engagement of hour h-2
+	// clears in the same pulse. An offer and its engagement can clear
+	// together, so one actor commits at most one rule-519 proposal with the
+	// disjoint status patches (offer status first, then the book's cleared
+	// engagement fields). Idle rows produce no proposals, so the (v7,
+	// natural/7b) zero-use control commits nothing here.
+	if h >= 1 && f.naturalLabourLane() {
+		for _, id := range f.roster {
+			a := w.actors[id]
+			offere, offerChanged, err := NaturalLabourOfferExpire(h, a.Offer)
+			if err != nil {
+				return out, err
+			}
+			book, bookChanged, err := NaturalLabourBookClear(h, a.Book)
+			if err != nil {
+				return out, err
+			}
+			if !offerChanged && !bookChanged {
+				continue
+			}
+			var ps []component.Patch
+			if offerChanged {
+				ps = append(ps, f.naturalNumber(id, NaturalLabourOfferTypeID, NaturalLabourOfferStatusField, int64(offere.Status)))
+			}
+			if bookChanged {
+				engaged, err := genomeRefValue(book.EngagedWorker)
+				if err != nil {
+					return out, err
+				}
+				ps = append(ps,
+					component.Patch{Entity: id, Component: NaturalLabourBookTypeID, SchemaVersion: f.mechanism.SchemaVersion(), Field: NaturalLabourBookEngagedWorkerField, Value: engaged},
+					f.naturalNumber(id, NaturalLabourBookTypeID, NaturalLabourBookEngagedHourField, book.EngagedHour))
+			}
+			proposal := f.naturalProposal("labour-expiry", at, id, NaturalLabourExpireRule, ps...)
+			proposal.Cause = kernel.Cause{World: true}
+			if err = f.guard(proposal); err != nil {
+				return out, err
+			}
+			out.Proposals = append(out.Proposals, proposal)
+			a.Offer, a.Book = offere, book
+			w.actors[id] = a
+		}
+	}
 	// Stage 7: wakes. Every living actor claims at h+1µs — except a newborn
 	// whose first claim is already reserved as its WakeBirth wake — and,
 	// when births are enabled, evaluates the birth-request cascade at
-	// h+40m+5µs.
+	// h+40m+5µs; a wage-contract lane (natural/9) evaluates its rule-516
+	// offer filing at the same shared instant even with births off, so the
+	// negotiation wake exists exactly when a lane can file at it.
 	if h < NaturalHorizonHours {
 		claim, err := NaturalPhaseTime(h, NaturalPhaseClaim)
 		if err != nil {
 			return out, err
 		}
 		var requestAt sim.SimTime
-		if f.births {
+		if f.births || f.naturalLabourLane() {
 			requestAt, err = NaturalPhaseTime(h, NaturalPhaseBirthRequest)
 			if err != nil {
 				return out, err
@@ -1554,7 +1802,7 @@ func (f *Natural) pulse(ready scheduler.ReadyFiber, view scheduler.SnapshotView)
 			} else {
 				out.Effects = append(out.Effects, scheduler.Effect{Kind: scheduler.EffectSchedule, Actor: id, Wake: scheduler.Wake{Actor: id, At: claim, Cause: scheduler.WakeNeedThreshold}})
 			}
-			if f.births {
+			if f.births || f.naturalLabourLane() {
 				out.Effects = append(out.Effects, scheduler.Effect{Kind: scheduler.EffectSchedule, Actor: id, Wake: scheduler.Wake{Actor: id, At: requestAt, Cause: scheduler.WakeAudit}})
 			}
 		}
@@ -1633,7 +1881,7 @@ func (f *Natural) naturalDenialEat(view scheduler.SnapshotView, hour int, at sim
 	if err != nil {
 		return kernel.Proposal{}, NaturalAttempt{}, err
 	}
-	choice, err := f.naturalEvaluate(id, obs)
+	choice, err := f.naturalEvaluate(id, obs, naturalLabourOfferGuard(a))
 	if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
 		return kernel.Proposal{}, NaturalAttempt{}, ErrNaturalRunner
 	}
@@ -1677,6 +1925,7 @@ func (f *Natural) evaluate(_ context.Context, ready scheduler.ReadyFiber, view s
 	bagDecision, _ := phase(NaturalPhaseBagDecision)
 	buildStart, _ := phase(NaturalPhaseBuildStart)
 	buildCompletion := NaturalBuildCompletion(buildStart)
+	labourSettle, _ := phase(NaturalPhaseLabourSettle)
 	paired, _ := phase(NaturalPhasePairedMeal)
 	birthRequestAt, _ := phase(NaturalPhaseBirthRequest)
 	birthReplyAt, _ := phase(NaturalPhaseBirthReply)
@@ -1715,13 +1964,21 @@ func (f *Natural) evaluate(_ context.Context, ready scheduler.ReadyFiber, view s
 		if a.Bag.Units != 0 {
 			return out, ErrNaturalRunner
 		}
-		obs, err := f.observe(view, id, h, strategy.NaturalNoDenial)
-		if err != nil {
-			return out, err
-		}
-		choice, err := f.naturalEvaluate(id, obs)
-		if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
-			return out, ErrNaturalRunner
+		var choice strategy.NaturalChoice
+		if stored, ok := f.claimDecisions[id]; ok {
+			// The seam decision recorded in the allocation phase decides; the
+			// evaluation phase never calls the model again and never re-derives
+			// the decision (spec section 4.4).
+			choice = stored
+		} else {
+			obs, err := f.observe(view, id, h, strategy.NaturalNoDenial)
+			if err != nil {
+				return out, err
+			}
+			choice, err = f.naturalEvaluate(id, obs, naturalLabourOfferGuard(a))
+			if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
+				return out, ErrNaturalRunner
+			}
 		}
 		switch choice.Kind {
 		case strategy.NaturalGather:
@@ -1835,11 +2092,15 @@ func (f *Natural) evaluate(_ context.Context, ready scheduler.ReadyFiber, view s
 		if f.denied[id] != int64(h) || f.current[id] != 0 {
 			return out, ErrNaturalRunner
 		}
+		deniedState, err := naturalActorState(view, f.mechanism, id)
+		if err != nil {
+			return out, err
+		}
 		obs, err := f.observe(view, id, h, strategy.NaturalGatherDenied)
 		if err != nil {
 			return out, err
 		}
-		choice, err := f.naturalEvaluate(id, obs)
+		choice, err := f.naturalEvaluate(id, obs, naturalLabourOfferGuard(deniedState))
 		if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
 			return out, ErrNaturalRunner
 		}
@@ -1877,7 +2138,7 @@ func (f *Natural) evaluate(_ context.Context, ready scheduler.ReadyFiber, view s
 		if err != nil {
 			return out, err
 		}
-		choice, err := f.naturalEvaluate(id, obs)
+		choice, err := f.naturalEvaluate(id, obs, naturalLabourOfferGuard(a))
 		if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
 			return out, ErrNaturalRunner
 		}
@@ -1905,6 +2166,19 @@ func (f *Natural) evaluate(_ context.Context, ready scheduler.ReadyFiber, view s
 			}
 			f.pending.mu.Unlock()
 			out.Effects = append(out.Effects, scheduler.Effect{Kind: scheduler.EffectSchedule, Actor: id, Wake: scheduler.Wake{Actor: id, At: buildStart, Cause: scheduler.WakeAudit}})
+		case strategy.NaturalDeliver:
+			// Rule 518 delivery (ticket 20, natural/9 only): the worker's own
+			// accepted contract is inside its single delivery hour and the bag
+			// holds exactly the gathered unit, so the delivery IS the hour's
+			// unit conversion — the settlement attempt fires at the frozen
+			// build-completion instant (h+40m+3µs, rule 518's own phase; no
+			// new phase instant). The coordinator folds the attempt against
+			// the hour's completing builds and settlements before the batch;
+			// the folded outcome commits the enumerated two-party proposal or
+			// records the typed void with zero mutation (the worker keeps the
+			// bag and re-enters the documented denial path at the paired
+			// instant).
+			out.Effects = append(out.Effects, scheduler.Effect{Kind: scheduler.EffectSchedule, Actor: id, Wake: scheduler.Wake{Actor: id, At: labourSettle, Cause: scheduler.WakeAudit}})
 		case strategy.NaturalEat:
 			proposal, err := NaturalConsumeProposalFor(f.mechanism, naturalKey("eat", at, id), f.patches, h, id, a)
 			if err != nil {
@@ -1951,6 +2225,23 @@ func (f *Natural) evaluate(_ context.Context, ready scheduler.ReadyFiber, view s
 			return out, ErrNaturalRunner
 		}
 		attempt := NaturalAttempt{Actor: id, Time: at, Kind: "build"}
+		if outcome.voidNote != "" {
+			// The completion-instant fold voided this completion before it
+			// was proposed (the recorded settlement precedence: the settlement
+			// into this builder owns its worksite fields). Zero mutation, the
+			// bag retained, and the documented denial loop decides the meal at
+			// the paired instant.
+			attempt.Refused = outcome.voidNote
+			f.pending.mu.Lock()
+			f.pending.deniedBuild = append(f.pending.deniedBuild, id)
+			if intent, ok := f.meals[id]; ok && intent.Hour == h && intent.Paired {
+				f.pending.mealsCleared = append(f.pending.mealsCleared, id)
+			}
+			f.pending.mu.Unlock()
+			out.Effects = append(out.Effects, scheduler.Effect{Kind: scheduler.EffectSchedule, Actor: id, Wake: scheduler.Wake{Actor: id, At: paired, Cause: scheduler.WakeAudit}})
+			record(attempt)
+			return out, nil
+		}
 		if outcome.refused != NaturalBuildRefusalNone {
 			attempt.Refused = naturalBuildRefusalNote(outcome.refused)
 			f.pending.mu.Lock()
@@ -2014,11 +2305,50 @@ func (f *Natural) evaluate(_ context.Context, ready scheduler.ReadyFiber, view s
 		}
 		record(attempt)
 	case ready.Causes[0] == scheduler.WakeAudit && at == birthRequestAt:
-		// Birth request (rule 510): the proposer files an addressed request
-		// with self-reported claims. Waits are not journaled.
-		if !f.births || f.current[id] != 0 {
+		// The shared negotiation-filing instant (h+40m+5µs): rule 516 labour-
+		// offer and rule 510 birth-request. Budget composition (frozen design,
+		// supervisor decision recorded 2026-09-29): at most one negotiation
+		// filing per actor-hour, and the wage lane has precedence — the
+		// natural/9 offer cascade evaluates first and a filing consumes the
+		// hour's negotiation slot (the birth lane simply retries next hour);
+		// only a waiting offer cascade falls through to the birth-request
+		// cascade. Waits are not journaled.
+		if (!f.births && !f.naturalLabourLane()) || f.current[id] != 0 {
 			return out, ErrNaturalRunner
 		}
+		if f.naturalLabourLane() {
+			proposal, filed, err := f.labourOfferDecision(view, h, at, id)
+			if err != nil {
+				return out, err
+			}
+			if filed {
+				if err = f.guard(proposal); err != nil {
+					return out, err
+				}
+				out.Proposals = append(out.Proposals, proposal)
+				record(NaturalAttempt{Actor: id, Time: at, Kind: "labour-offer", Key: proposal.Key})
+				// The decision wake goes to a LIVING addressee only. Nothing
+				// can die between +5µs and +6µs, so this snapshot verdict is
+				// final for the hour. The scheduler's wake queue dedupes an
+				// identical (actor, at, cause) entry, so an employer also
+				// addressed by a birth request this hour holds one wake whose
+				// single audit cause carries both pending decisions under the
+				// one-decision budget.
+				wake, err := f.labourDecisionWake(view, h, proposal)
+				if err != nil {
+					return out, err
+				}
+				if wake != (scheduler.Wake{}) {
+					out.Effects = append(out.Effects, scheduler.Effect{Kind: scheduler.EffectSchedule, Actor: wake.Actor, Wake: wake})
+				}
+				return out, nil
+			}
+		}
+		if !f.births {
+			return out, nil
+		}
+		// Birth request (rule 510): the proposer files an addressed request
+		// with self-reported claims. Waits are not journaled.
 		proposal, filed, err := f.birthRequestDecision(view, h, at, id)
 		if err != nil {
 			return out, err
@@ -2045,15 +2375,42 @@ func (f *Natural) evaluate(_ context.Context, ready scheduler.ReadyFiber, view s
 			out.Effects = append(out.Effects, scheduler.Effect{Kind: scheduler.EffectSchedule, Actor: wake.Actor, Wake: wake})
 		}
 	case ready.Causes[0] == scheduler.WakeAudit && at == birthReplyAt:
+		// The shared negotiation-decision instant (h+40m+6µs): rule 517
+		// labour-decision and rules 511/512 birth-reply. Budget composition
+		// (frozen design, supervisor decision recorded 2026-09-29): at most
+		// one negotiation decision per actor-hour, and the wage lane has
+		// precedence — the natural/9 employer cascade decides first and a
+		// decision consumes the hour's negotiation slot; only a None verdict
+		// (no pending addressed offer) falls through to the birth-reply
+		// cascade.
+		if f.current[id] != 0 {
+			return out, ErrNaturalRunner
+		}
+		if f.naturalLabourLane() {
+			proposal, attempt, err := f.labourDecisionDecision(view, h, at, id)
+			if err != nil {
+				return out, err
+			}
+			if attempt.Actor != 0 {
+				if proposal.Key != "" {
+					if err = f.guard(proposal); err != nil {
+						return out, err
+					}
+					out.Proposals = append(out.Proposals, proposal)
+				}
+				record(attempt)
+				return out, nil
+			}
+		}
+		if !f.births {
+			return out, nil
+		}
 		// Birth reply (rules 511/512): the consenter decides; the runner
 		// revalidates the full surplus gate on fresh truth through the
 		// contract. Acceptance commits one atomic allocator-based
 		// entity-create; refusal commits the typed two-row rule 512; death
 		// between phases would be typed zero-mutation evidence. No pending
 		// request: no evidence.
-		if !f.births || f.current[id] != 0 {
-			return out, ErrNaturalRunner
-		}
 		proposal, attempt, err := f.birthReplyDecision(view, h, at, id)
 		if err != nil {
 			return out, err
@@ -2080,6 +2437,42 @@ func (f *Natural) evaluate(_ context.Context, ready scheduler.ReadyFiber, view s
 			}
 		}
 		f.pending.mu.Unlock()
+	case ready.Causes[0] == scheduler.WakeAudit && at == labourSettle:
+		// Rule 518 labour-settlement (ticket 20, natural/9 only): the folded
+		// atomic wage settlement or its typed void, decided by the
+		// coordinator's completion-instant arbitration before the batch. A
+		// committed settlement carries exactly the enumerated two-party patch
+		// set (plus the completion's tenure claim); a void is ZERO mutation
+		// with the typed note: the worker keeps the bag and re-enters the
+		// documented denial path (the paired-instant re-eat) whenever it
+		// still holds the unit — a denied-gather void has no unit and the
+		// frozen denied-gather fallback already decided the hour.
+		if f.current[id] != 0 {
+			return out, ErrNaturalRunner
+		}
+		outcome, ok := f.settles[id]
+		if !ok {
+			return out, ErrNaturalRunner // wake-topology violation: no folded settlement outcome
+		}
+		if outcome.void != "" {
+			record(NaturalAttempt{Actor: id, Time: at, Kind: "labour-void", Refused: outcome.void})
+			a, err := naturalActorState(view, f.mechanism, id)
+			if err != nil {
+				return out, err
+			}
+			if a.Bag.Units == 1 {
+				f.pending.mu.Lock()
+				f.pending.deniedBuild = append(f.pending.deniedBuild, id)
+				f.pending.mu.Unlock()
+				out.Effects = append(out.Effects, scheduler.Effect{Kind: scheduler.EffectSchedule, Actor: id, Wake: scheduler.Wake{Actor: id, At: paired, Cause: scheduler.WakeAudit}})
+			}
+			return out, nil
+		}
+		if err := f.guard(outcome.proposal); err != nil {
+			return out, err
+		}
+		out.Proposals = append(out.Proposals, outcome.proposal)
+		record(NaturalAttempt{Actor: id, Time: at, Kind: "labour-settlement", Key: outcome.proposal.Key})
 	default:
 		return out, ErrNaturalRunner
 	}
@@ -2368,6 +2761,363 @@ func (f *Natural) birthReplyDecision(view scheduler.SnapshotView, hour int, at s
 	return proposal, attempt, nil
 }
 
+// naturalLabourRefusalNote is the typed journal note of a refused wage
+// settlement (zero mutation, the bag kept, the documented denial path). The
+// note names the contract's own typed refusal taxonomy; the one runner-level
+// structural note (settlement-precedence) is the completion-instant fold's
+// supervisor-ruled settlement precedence, never a contract-taxonomy reason.
+func naturalLabourRefusalNote(reason NaturalLabourRefusalReason) string {
+	switch reason {
+	case NaturalLabourRefusalContractNotPending:
+		return "contract-not-pending"
+	case NaturalLabourRefusalWorkerDeadOrCrossPatch:
+		return "worker-dead-or-cross-patch"
+	case NaturalLabourRefusalEmployerDeadOrCrossPatch:
+		return "employer-dead-or-cross-patch"
+	case NaturalLabourRefusalWorkerBagEmpty:
+		return "worker-bag-empty"
+	case NaturalLabourRefusalEmployerStockShort:
+		return "employer-stock-short"
+	case NaturalLabourRefusalEmployerAtKMax:
+		return "employer-at-kmax"
+	case NaturalLabourRefusalNoFreeSlot:
+		return "no-free-slot"
+	}
+	return ""
+}
+
+// naturalSettlementPrecedenceNote is the runner-level structural note of a
+// completion-instant flow voided by the fold's declared settlement
+// precedence (supervisor decision recorded 2026-09-29): a settlement whose
+// enumerated field set intersects an earlier-folded same-instant winner, or
+// an employer's own rule-505 completion whose field set intersects the
+// settlement into it. The voided flow stages nothing (zero mutation); a
+// voided build keeps its bag and re-enters the documented denial loop.
+const naturalSettlementPrecedenceNote = "settlement-precedence"
+
+// naturalLabourEngagementBusyNote is the typed zero-mutation note on a
+// policy accept the world refuses (the E12 class, frozen design): the
+// employer's one engagement slot is still occupied by the previous hour's
+// live engagement (engaged-hour h-1, its delivery hour), so the contract's
+// structural book-idle precondition fails. The decision stages nothing, the
+// book's decision audit stays unwritten, and the pending offer stays
+// pending — rule 519 expires it at the next pulse.
+const naturalLabourEngagementBusyNote = "engagement-busy"
+
+// naturalSettleOutcome carries one worker's folded rule-518 outcome for the
+// settle instant (mirror of naturalBuildOutcome): either the validated
+// proposal or the typed void note.
+type naturalSettleOutcome struct {
+	proposal kernel.Proposal
+	void     string
+}
+
+// naturalFlowFields lists the (entity, component, field) keys one proposal
+// writes; the completion-instant fold uses the sets to declare its
+// precedence: a flow whose set intersects an already-folded winner is voided
+// BEFORE it is proposed (the kernel's whole-proposal collision rule must
+// never silently discard a settlement).
+// naturalFlowKey names one (entity, component, field) write of a proposal;
+// the completion-instant fold tracks the union of its winners' keys so the
+// declared precedence can void a flow before it is proposed.
+type naturalFlowKey struct {
+	entity    sim.EntityID
+	component sim.ComponentTypeID
+	field     sim.FieldID
+}
+
+// naturalFlowFields lists the field keys one proposal writes.
+func naturalFlowFields(p kernel.Proposal) map[naturalFlowKey]bool {
+	out := make(map[naturalFlowKey]bool, len(p.Patches))
+	for _, patch := range p.Patches {
+		out[naturalFlowKey{patch.Entity, patch.Component, patch.Field}] = true
+	}
+	return out
+}
+
+// arbitrateCompletions folds the hour's completing flows at the frozen
+// h+40m+3µs instant in the declared settlement-precedence order (supervisor
+// decision recorded 2026-09-29, pre-run): every folded call resolves on the
+// folded fresh state — settlements first in ascending worker ID, then the
+// surviving employers' own rule-505 completions in ascending builder ID —
+// and any flow whose enumerated field set intersects an already-folded
+// winner is voided BEFORE it is proposed, so the kernel's whole-proposal
+// collision rule can never silently discard a settlement. A voided
+// settlement is typed labour-void evidence with zero mutation (the worker
+// keeps the bag and re-enters the documented denial path); a voided build
+// keeps the builder's bag and enters the same denial loop, its worksite
+// resting at the settlement's state. Slot-claim exhaustion stays the
+// contract's own typed refusal: each folded call sees the earlier claims in
+// its slot array, exactly the frozen rule-505 arbitration discipline.
+func (f *Natural) arbitrateCompletions(view scheduler.SnapshotView, at sim.SimTime, completions, settleActors []sim.EntityID) error {
+	f.settles = make(map[sim.EntityID]naturalSettleOutcome, len(settleActors))
+	f.builds = make(map[sim.EntityID]naturalBuildOutcome, len(completions))
+	h := int(at / sim.SimTime(NaturalHour))
+	w, err := f.worldState(view)
+	if err != nil {
+		return err
+	}
+	written := make(map[naturalFlowKey]bool)
+	intersects := func(fields map[naturalFlowKey]bool) bool {
+		for key := range fields {
+			if written[key] {
+				return true
+			}
+		}
+		return false
+	}
+	mark := func(fields map[naturalFlowKey]bool) {
+		for key := range fields {
+			written[key] = true
+		}
+	}
+	// Stage 1: settlements in ascending worker ID on the folded state. A
+	// contract refusal is the contract's own typed taxonomy; a field-set
+	// intersection with an earlier winner (the chained employer-worker
+	// case) is the runner-level precedence note. Either way the folded
+	// state keeps the pre-settlement rows and slots.
+	sortedSettles := append([]sim.EntityID(nil), settleActors...)
+	sort.Slice(sortedSettles, func(i, j int) bool { return sortedSettles[i] < sortedSettles[j] })
+	for _, id := range sortedSettles {
+		a, ok := w.actors[id]
+		if !ok || a.Offer.Status != NaturalRequestAccepted {
+			return ErrNaturalRunner
+		}
+		employerID := a.Offer.Addressee
+		employer, ok := w.actors[employerID]
+		if !ok {
+			return ErrNaturalRunner
+		}
+		index := int(a.Bag.Source - NaturalPatchIDBase)
+		if index < 0 || index >= f.patches {
+			return ErrNaturalRunner
+		}
+		before := slotArray(w.slots[index])
+		outcome := naturalSettleOutcome{}
+		nextWorker, nextEmployer, foldedSlots, _, err := NaturalLabourSettle(f.mechanism, f.patches, h, id, employerID, a, employer, before)
+		var refusal *NaturalLabourRefusalError
+		switch {
+		case errors.As(err, &refusal):
+			outcome.void = naturalLabourRefusalNote(refusal.Reason)
+		case err != nil:
+			return err
+		default:
+			// The proposal builder re-runs the same pure handshake; it must
+			// see the settlement's PRE-claim slots, or the folded claim
+			// would refuse against itself.
+			proposal, err := NaturalLabourSettleProposalFor(f.mechanism, naturalKey("labour-settlement", at, id), f.patches, h, id, employerID, a, employer, before)
+			if err != nil {
+				return err
+			}
+			fields := naturalFlowFields(proposal)
+			if intersects(fields) {
+				outcome.void = naturalSettlementPrecedenceNote
+			} else {
+				outcome.proposal = proposal
+				mark(fields)
+				w.slots[index] = slotSlice(foldedSlots)
+				w.actors[id] = nextWorker
+				w.actors[employerID] = nextEmployer
+			}
+		}
+		f.settles[id] = outcome
+	}
+	// Stage 2: the surviving builders' own rule-505 completions, ascending
+	// builder ID. A builder whose worksite fields an already-folded
+	// settlement owns (the settlement into it wrote invested/wip) is voided
+	// before any contract call: zero mutation, the bag retained for the
+	// documented denial re-eat, the worksite at the settlement's state.
+	sorted := append([]sim.EntityID(nil), completions...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+	for _, id := range sorted {
+		if f.current[id] != strategy.NaturalBuild {
+			return ErrNaturalRunner
+		}
+		if written[naturalFlowKey{id, NaturalWorksiteTypeID, NaturalWorksiteInvestedUnitsField}] ||
+			written[naturalFlowKey{id, NaturalWorksiteTypeID, NaturalWorksiteWipField}] {
+			f.builds[id] = naturalBuildOutcome{voidNote: naturalSettlementPrecedenceNote}
+			continue
+		}
+		a, ok := w.actors[id]
+		if !ok || a.Bag.Units != 1 {
+			return ErrNaturalRunner
+		}
+		index := int(a.Bag.Source - NaturalPatchIDBase)
+		if index < 0 || index >= f.patches {
+			return ErrNaturalRunner
+		}
+		before := slotArray(w.slots[index])
+		foldedActor, folded, _, err := NaturalBuildFor(f.mechanism, f.patches, h, id, a, a.Bag.Source, before)
+		outcome := naturalBuildOutcome{}
+		var refusal *NaturalBuildRefusalError
+		switch {
+		case errors.As(err, &refusal):
+			outcome.refused = refusal.Reason
+		case err != nil:
+			return err
+		default:
+			// The proposal builder re-runs the same pure claim; it must see
+			// the builder's PRE-claim slots, or the builder's own folded
+			// claim would refuse against itself.
+			proposal, err := NaturalBuildProposalFor(f.mechanism, naturalKey("build", at, id), f.patches, h, id, a, before)
+			if err != nil {
+				return err
+			}
+			outcome.proposal = proposal
+			mark(naturalFlowFields(proposal))
+			w.slots[index] = slotSlice(folded)
+			w.actors[id] = foldedActor
+		}
+		f.builds[id] = outcome
+	}
+	return nil
+}
+
+// labourOfferDecision evaluates the frozen natural/9 worker cascade at
+// h+40m+5µs over the cap-free roster (same-patch mates in ascending ID
+// order) and builds the validated rule-516 proposal when the policy files.
+func (f *Natural) labourOfferDecision(view scheduler.SnapshotView, hour int, at sim.SimTime, worker sim.EntityID) (kernel.Proposal, bool, error) {
+	w, err := f.worldState(view)
+	if err != nil {
+		return kernel.Proposal{}, false, err
+	}
+	a, ok := w.actors[worker]
+	if !ok || !naturalAlive(a) {
+		return kernel.Proposal{}, false, ErrNaturalRunner
+	}
+	mates := make([]sim.EntityID, 0, len(f.roster))
+	for _, mateID := range f.roster {
+		if mateID == worker {
+			continue
+		}
+		mate, ok := w.actors[mateID]
+		if !ok {
+			return kernel.Proposal{}, false, ErrNaturalRunner
+		}
+		if mate.Bag.Source == a.Bag.Source {
+			mates = append(mates, mateID)
+		}
+	}
+	obs := strategy.NaturalLabourOfferObservation{
+		Actor: worker, Ref: f.ref, Hour: hour, WorldVersion: view.Version,
+		HomePatch:  a.Bag.Source,
+		Energy:     naturalIntegerObservation(a.Body.Energy),
+		BagUnits:   naturalIntegerObservation(a.Bag.Units),
+		OwnOffer:   naturalLabourOfferGuard(a),
+		PatchMates: mates,
+	}
+	choice, err := f.naturalEvaluateLabourOffer(worker, obs)
+	if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
+		return kernel.Proposal{}, false, ErrNaturalRunner
+	}
+	if choice.Kind != strategy.NaturalLabourOfferFile {
+		return kernel.Proposal{}, false, nil
+	}
+	// addresseeHome is the trusted runner's fresh view of the addressee's
+	// home patch: the mates were derived same-patch, so the addressee's home
+	// is the worker's own bag source (the L1-recorded caller-owned seam).
+	proposal, err := NaturalLabourOfferProposalFor(f.mechanism, naturalKey("labour-offer", at, worker), f.patches, hour, worker, choice.Addressee, a.Bag.Source, a)
+	if err != nil {
+		return kernel.Proposal{}, false, err
+	}
+	return proposal, true, nil
+}
+
+// labourDecisionWake derives the employer's decision wake from the committed
+// offer proposal: the addressee, if alive in this snapshot.
+func (f *Natural) labourDecisionWake(view scheduler.SnapshotView, hour int, offer kernel.Proposal) (scheduler.Wake, error) {
+	at, err := NaturalPhaseTime(hour, NaturalPhaseLabourDecision)
+	if err != nil {
+		return scheduler.Wake{}, err
+	}
+	var addressee sim.EntityID
+	for _, patch := range offer.Patches {
+		if patch.Field == NaturalLabourOfferAddresseeField {
+			addressee, err = capacityRefValue(patch.Value)
+			if err != nil {
+				return scheduler.Wake{}, err
+			}
+		}
+	}
+	if addressee == 0 {
+		return scheduler.Wake{}, ErrNaturalRunner
+	}
+	state, err := naturalActorState(view, f.mechanism, addressee)
+	if err != nil {
+		return scheduler.Wake{}, err
+	}
+	if !naturalAlive(state) {
+		return scheduler.Wake{}, nil
+	}
+	return scheduler.Wake{Actor: addressee, At: at, Cause: scheduler.WakeAudit}, nil
+}
+
+// labourDecisionDecision is the trusted decision-phase duty for one employer
+// at h+40m+6µs (rule 517): fresh full state, the pending addressed offers'
+// public identities (ascending worker order), the frozen policy cascade, and
+// the contract's own revalidation on the same truth. An accept or refusal
+// commits the enumerated rule-517 proposal; no pending offer resolves to no
+// evidence (the birth-reply cascade holds the hour's negotiation slot then,
+// per the recorded precedence). A contract refusal here is a runner
+// invariant break (the policy floor implies the world's revalidation) and
+// fails loud with zero mutation.
+func (f *Natural) labourDecisionDecision(view scheduler.SnapshotView, hour int, at sim.SimTime, employer sim.EntityID) (kernel.Proposal, NaturalAttempt, error) {
+	var empty kernel.Proposal
+	w, err := f.worldState(view)
+	if err != nil {
+		return empty, NaturalAttempt{}, err
+	}
+	self, ok := w.actors[employer]
+	if !ok {
+		return empty, NaturalAttempt{}, ErrNaturalRunner
+	}
+	if !naturalAlive(self) {
+		return empty, NaturalAttempt{}, nil // a dead employer never acts
+	}
+	var pending []strategy.NaturalLabourPendingView
+	for _, id := range f.roster { // ascending ID order
+		offer := w.actors[id].Offer
+		if offer.Status != NaturalRequestPending || offer.Hour != int64(hour) || offer.Addressee != employer {
+			continue
+		}
+		pending = append(pending, strategy.NaturalLabourPendingView{Worker: id, Addressee: employer, Hour: hour})
+	}
+	obs := strategy.NaturalLabourDecisionObservation{
+		Actor: employer, Ref: f.ref, Hour: hour, WorldVersion: view.Version,
+		Energy:              naturalIntegerObservation(self.Body.Energy),
+		GranaryStock:        naturalIntegerObservation(self.Granary.Stock),
+		Capital:             naturalIntegerObservation(self.Worksite.Capital),
+		Wip:                 naturalIntegerObservation(self.Worksite.Wip),
+		OwnLastDecisionHour: self.Book.LastDecisionHour,
+		Pending:             pending,
+	}
+	choice, err := f.naturalEvaluateLabourDecision(employer, obs)
+	if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
+		return empty, NaturalAttempt{}, ErrNaturalRunner
+	}
+	if choice.Kind == strategy.NaturalLabourDecisionNone {
+		return empty, NaturalAttempt{}, nil
+	}
+	worker, ok := w.actors[choice.Worker]
+	if !ok || choice.Worker == employer {
+		return empty, NaturalAttempt{}, ErrNaturalRunner
+	}
+	if choice.Kind == strategy.NaturalLabourDecisionAccept && !naturalLabourBookIdle(self.Book, hour) {
+		// A policy accept that the world refuses voids with zero mutation
+		// (the E12 class): the one engagement slot is still occupied by the
+		// live previous-hour engagement, so the contract's structural accept
+		// precondition fails. Nothing stages — the pending offer stays
+		// pending and expires at the next pulse (rule 519), and the book's
+		// decision audit stays unwritten.
+		return empty, NaturalAttempt{Actor: employer, Time: at, Kind: "labour-void", Refused: naturalLabourEngagementBusyNote}, nil
+	}
+	proposal, err := NaturalLabourDecisionProposalFor(f.mechanism, naturalKey("labour-decision", at, employer), f.patches, hour, employer, choice.Worker, choice.Kind == strategy.NaturalLabourDecisionAccept, self, worker)
+	if err != nil {
+		return empty, NaturalAttempt{}, err
+	}
+	return proposal, NaturalAttempt{Actor: employer, Time: at, Kind: "labour-decision", Key: proposal.Key}, nil
+}
+
 // naturalAllocateGathers admits gather claims over the cap-free roster with
 // the v1 rotation discipline generalized without ID-range arithmetic: the
 // rotation start is (seed+hour+patch) mod 8, claimants rotate by
@@ -2482,8 +3232,9 @@ func naturalAllocateGathers(patches, hour int, seed uint64, stocked []FoodFlowSt
 // must be resolved before the claim step: the coordinator evaluates each
 // waking actor's frozen policy choice on the same authoritative head the
 // workers will see (pure, deterministic), then admits.
-func (f *Natural) allocate(at sim.SimTime) error {
+func (f *Natural) allocate(ctx context.Context, at sim.SimTime) error {
 	f.admissions = make(map[sim.EntityID]FoodFlowGatherAdmission)
+	f.claimDecisions = make(map[sim.EntityID]strategy.NaturalChoice)
 	h := int(at / sim.SimTime(NaturalHour))
 	claim, err := NaturalPhaseTime(h, NaturalPhaseClaim)
 	if err != nil || at != claim {
@@ -2522,9 +3273,12 @@ func (f *Natural) allocate(at sim.SimTime) error {
 		if err != nil {
 			return err
 		}
-		choice, err := f.naturalEvaluate(id, obs)
+		choice, err := f.naturalEvaluate(id, obs, naturalLabourOfferGuard(a))
 		if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
 			return ErrNaturalRunner
+		}
+		if err := f.naturalSeamOverride(ctx, id, h, view.Version, obs, &choice); err != nil {
+			return err
 		}
 		switch choice.Kind {
 		case strategy.NaturalGather:
@@ -2553,64 +3307,11 @@ func (f *Natural) allocate(at sim.SimTime) error {
 	return nil
 }
 
-// arbitrateBuilds folds the contract's NaturalBuild over the hour's
-// completing builders in ascending actor ID, so each builder's
-// fresh-snapshot slot claim sees the earlier claims of the same batch and a
-// builder that finds no free slot at its folded turn is refused by the
-// contract itself (typed refusal, zero mutation, denial loop).
-func (f *Natural) arbitrateBuilds(view scheduler.SnapshotView, at sim.SimTime, completions []sim.EntityID) error {
-	f.builds = make(map[sim.EntityID]naturalBuildOutcome, len(completions))
-	if len(completions) == 0 {
-		return nil
-	}
-	h := int(at / sim.SimTime(NaturalHour))
-	w, err := f.worldState(view)
-	if err != nil {
-		return err
-	}
-	sorted := append([]sim.EntityID(nil), completions...)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
-	for _, id := range sorted {
-		if f.current[id] != strategy.NaturalBuild {
-			return ErrNaturalRunner
-		}
-		a, ok := w.actors[id]
-		if !ok || a.Bag.Units != 1 {
-			return ErrNaturalRunner
-		}
-		index := int(a.Bag.Source - NaturalPatchIDBase)
-		if index < 0 || index >= f.patches {
-			return ErrNaturalRunner
-		}
-		before := slotArray(w.slots[index])
-		_, folded, _, err := NaturalBuildFor(f.mechanism, f.patches, h, id, a, a.Bag.Source, before)
-		outcome := naturalBuildOutcome{}
-		var refusal *NaturalBuildRefusalError
-		switch {
-		case errors.As(err, &refusal):
-			outcome.refused = refusal.Reason
-		case err != nil:
-			return err
-		default:
-			// The proposal builder re-runs the same pure claim; it must see
-			// the builder's PRE-claim slots, or the builder's own folded
-			// claim would refuse against itself.
-			proposal, err := NaturalBuildProposalFor(f.mechanism, naturalKey("build", at, id), f.patches, h, id, a, before)
-			if err != nil {
-				return err
-			}
-			outcome.proposal = proposal
-		}
-		w.slots[index] = slotSlice(folded)
-		f.builds[id] = outcome
-	}
-	return nil
-}
-
 // naturalLinkAttempt binds a keyed attempt to its committed event (v4
 // two-flag semantics). The one legitimate keyless outcome is a birth that
-// lost its kernel batch to a newborn-ID collision; a refused build is
-// legitimately unkeyed with its typed note. Anything else unlinked is a
+// lost its kernel batch to a newborn-ID collision; a refused build or a
+// typed labour void is legitimately unkeyed with its typed note. Anything
+// else unlinked is a
 // linkage break.
 func naturalLinkAttempt(a *NaturalAttempt, ids map[string]sim.EventID) error {
 	if a.Key == "" {
@@ -2780,25 +3481,35 @@ func (f *Natural) Step(ctx context.Context) (bool, error) {
 			f.pulseLifecycle[id] = fiber.Lifecycle
 		}
 	}
-	if err := f.allocate(at); err != nil {
+	if err := f.allocate(ctx, at); err != nil {
 		return false, err
 	}
-	// Build-completion arbitration before the workers run (same batch, same
-	// pre-batch snapshot, deterministic ascending-ID fold).
+	// Completion-instant arbitration before the workers run (same batch,
+	// same pre-batch snapshot, the declared settlement-precedence fold:
+	// settlements ascending worker ID first, then builds ascending builder
+	// ID, with field-set intersections voided before they are proposed).
 	if start, err := NaturalPhaseTime(h, NaturalPhaseBuildStart); err == nil && at == NaturalBuildCompletion(start) {
-		var completions []sim.EntityID
+		var completions, settleActors []sim.EntityID
 		for _, wake := range snap.Wakes {
-			if wake.At == at && wake.Cause == scheduler.WakeCompletion && f.rosterContains(wake.Actor) {
+			if wake.At != at || !f.rosterContains(wake.Actor) {
+				continue
+			}
+			switch wake.Cause {
+			case scheduler.WakeCompletion:
 				completions = append(completions, wake.Actor)
+			case scheduler.WakeAudit:
+				// The only audit wake at the completion instant is a rule-518
+				// settlement attempt (the bag decision's Deliver wake).
+				settleActors = append(settleActors, wake.Actor)
 			}
 		}
 		head := f.k.SnapshotHead()
-		if err := f.arbitrateBuilds(scheduler.SnapshotView{Reader: head.Reader, Authority: head.Authority, Version: head.Version}, at, completions); err != nil {
+		if err := f.arbitrateCompletions(scheduler.SnapshotView{Reader: head.Reader, Authority: head.Authority, Version: head.Version}, at, completions, settleActors); err != nil {
 			return false, err
 		}
 	}
 	f.pending = &naturalPending{started: make(map[sim.EntityID]strategy.NaturalAction), meals: make(map[sim.EntityID]NaturalMealIntent)}
-	defer func() { f.pending = nil; f.builds = nil }()
+	defer func() { f.pending = nil; f.builds = nil; f.settles = nil }()
 	events, processed, err := f.sched.Step(ctx)
 	if err != nil || !processed {
 		return processed, err
