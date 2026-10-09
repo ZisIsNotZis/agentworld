@@ -172,6 +172,8 @@ func NaturalRefRecordOf(ref strategy.NaturalRef) NaturalRefRecord {
 }
 
 // PatchRecord records a strategy-modification intervention (spec 9.1).
+// Proposer is the declared proposer identity (model id + call id, or the
+// reserved harness identity); it is empty on a Role A role marker.
 type PatchRecord struct {
 	ParentRef            NaturalRefRecord `json:"parent_ref"`
 	ChildRef             NaturalRefRecord `json:"child_ref"`
@@ -181,13 +183,16 @@ type PatchRecord struct {
 	Intent               string           `json:"intent"`
 	PatchDigest          string           `json:"patch_digest"`
 	Scope                string           `json:"scope"`
+	Proposer             string           `json:"proposer,omitempty"`
 	AffectedActorsDigest string           `json:"affected_actors_digest"`
 }
 
 // ValidationRecord records the validator's verdict and sandbox evidence.
+// Validator is the declared validator identity (spec 5.5).
 type ValidationRecord struct {
 	Verdict             string `json:"verdict"`
 	Reason              string `json:"reason"`
+	Validator           string `json:"validator,omitempty"`
 	SandboxBranchDigest string `json:"sandbox_branch_digest,omitempty"`
 	WindowHours         int    `json:"window_hours,omitempty"`
 }

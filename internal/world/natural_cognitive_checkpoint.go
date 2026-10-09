@@ -233,11 +233,33 @@ func (f *Natural) SetCognitiveCheckpoint(binding *NaturalCognitiveCheckpoint) {
 	f.cognitiveCheckpoint = &copy
 }
 
-// cognitiveBlockFromState builds the manifest block from the active generation
-// state and the attached binding.
+// cognitiveBlockFromState builds the manifest block from the runner's cognitive
+// state and the attached binding. The block exists whenever the runner carries
+// a cognitive seam or an active generation AND a binding is attached, so a
+// seam-only lane (no generation yet) also binds its recorded-call ledger
+// digest/count; a non-cognitive runner writes nothing.
 func (f *Natural) cognitiveBlockFromState() (*naturalCognitiveBlock, error) {
-	if f.cognitiveStrategy == nil || f.cognitiveCheckpoint == nil {
+	if f.cognitiveCheckpoint == nil || (f.cognition == nil && f.cognitiveStrategy == nil) {
 		return nil, nil
+	}
+	binding := f.cognitiveCheckpoint
+	wakeFP := binding.WakePolicy.Fingerprint()
+	block := &naturalCognitiveBlock{
+		WakePolicy: binding.WakePolicy, WakeFingerprint: wakeFP,
+		CognitiveBudget: binding.CognitiveBudget, ModelDigest: binding.ModelDigest,
+		LedgerDigest: binding.LedgerDigest, LedgerCount: binding.LedgerCount, ApplyHour: binding.ApplyHour,
+		BaseRef: f.ref, HeadRef: f.ref,
+	}
+	if f.cognitiveStrategy == nil {
+		// Seam-only lane: no active generation, so the head is the frozen base.
+		// The head fingerprint is the frozen policy's own, so a seam-active
+		// bundle still records the active behaviour logic identity.
+		fingerprint, err := strategy.FrozenNaturalPolicyFingerprint(f.bound[1].Policy())
+		if err != nil {
+			return nil, err
+		}
+		block.HeadFingerprint = fingerprint
+		return block, nil
 	}
 	gen := f.cognitiveStrategy.generation
 	fingerprint, err := strategy.NaturalCognitiveGenerationFingerprint(gen)
@@ -258,15 +280,13 @@ func (f *Natural) cognitiveBlockFromState() (*naturalCognitiveBlock, error) {
 		}
 	}
 	sort.Slice(bindings, func(i, j int) bool { return bindings[i].Actor < bindings[j].Actor })
-	binding := f.cognitiveCheckpoint
-	wakeFP := binding.WakePolicy.Fingerprint()
-	return &naturalCognitiveBlock{
-		WakePolicy: binding.WakePolicy, WakeFingerprint: wakeFP,
-		CognitiveBudget: binding.CognitiveBudget, ModelDigest: binding.ModelDigest,
-		LedgerDigest: binding.LedgerDigest, LedgerCount: binding.LedgerCount, ApplyHour: binding.ApplyHour,
-		BaseRef: gen.BaseRef, HeadRef: gen.Ref, HeadFingerprint: fingerprint,
-		Lineage: f.cognitiveStrategy.Lineage(), Generations: generations, Bindings: bindings,
-	}, nil
+	block.BaseRef = gen.BaseRef
+	block.HeadRef = gen.Ref
+	block.HeadFingerprint = fingerprint
+	block.Lineage = f.cognitiveStrategy.Lineage()
+	block.Generations = generations
+	block.Bindings = bindings
+	return block, nil
 }
 
 // restoreCognitiveState re-activates a decoded cognition block on a freshly
@@ -284,7 +304,10 @@ func restoreCognitiveState(f *Natural, block *naturalCognitiveBlock) error {
 }
 
 // cognitiveReplayFromBlock resolves the head generation and its bound actors
-// from a decoded block, checking the head fingerprint and every binding.
+// from a decoded block, checking the head fingerprint and every binding. A
+// seam-only block carries no generation (the head is the frozen base), so it
+// yields no generation replay; its ledger binding is still verified by the
+// restore.
 func cognitiveReplayFromBlock(block *naturalCognitiveBlock) (*cognitiveJournalReplay, error) {
 	if block == nil {
 		return nil, nil
@@ -292,6 +315,9 @@ func cognitiveReplayFromBlock(block *naturalCognitiveBlock) (*cognitiveJournalRe
 	generations, err := block.decodeGenerations()
 	if err != nil {
 		return nil, err
+	}
+	if len(generations) == 0 {
+		return nil, nil
 	}
 	var head *strategy.NaturalCognitiveGeneration
 	for i := range generations {

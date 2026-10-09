@@ -2,9 +2,12 @@ package cognition_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"agentworld/internal/cognition"
 	"agentworld/internal/cognition/protocol"
@@ -70,10 +73,15 @@ type fakeSandbox struct {
 	patched int64
 	parent  int64
 	gating  bool
+	// parentGens records the parent generation passed on each parent-branch
+	// call (nil for the frozen base), so a test can pin which branch the
+	// sandbox compared against.
+	parentGens []*strategy.NaturalCognitiveGeneration
 }
 
-func (s *fakeSandbox) RunBranch(_ context.Context, gen *strategy.NaturalCognitiveGeneration) (cognition.SandboxOutcome, error) {
+func (s *fakeSandbox) RunBranch(_ context.Context, gen *strategy.NaturalCognitiveGeneration, parent *strategy.NaturalCognitiveGeneration) (cognition.SandboxOutcome, error) {
 	if gen == nil {
+		s.parentGens = append(s.parentGens, parent)
 		return cognition.SandboxOutcome{Indicator: s.parent}, nil
 	}
 	return cognition.SandboxOutcome{Indicator: s.patched, GatingRegressed: s.gating}, nil
@@ -167,15 +175,15 @@ func TestSandboxAdmissionRule(t *testing.T) {
 	candidate := cognitiveParentGenerationForTest(t)
 	ctx := context.Background()
 
-	admit, err := cognition.RunSandbox(ctx, &fakeSandbox{parent: 5, patched: 6}, candidate, 24)
+	admit, err := cognition.RunSandbox(ctx, &fakeSandbox{parent: 5, patched: 6}, nil, candidate, 24)
 	if err != nil || !admit.Admitted || admit.Reason != cognition.SandboxReasonAdmitted {
 		t.Fatalf("admit: %+v err %v", admit, err)
 	}
-	noImprove, err := cognition.RunSandbox(ctx, &fakeSandbox{parent: 6, patched: 6}, candidate, 24)
+	noImprove, err := cognition.RunSandbox(ctx, &fakeSandbox{parent: 6, patched: 6}, nil, candidate, 24)
 	if err != nil || noImprove.Admitted || noImprove.Reason != cognition.SandboxReasonNoImprovement {
 		t.Fatalf("no-improvement: %+v err %v", noImprove, err)
 	}
-	gating, err := cognition.RunSandbox(ctx, &fakeSandbox{parent: 5, patched: 9, gating: true}, candidate, 24)
+	gating, err := cognition.RunSandbox(ctx, &fakeSandbox{parent: 5, patched: 9, gating: true}, nil, candidate, 24)
 	if err != nil || gating.Admitted || gating.Reason != cognition.SandboxReasonGating {
 		t.Fatalf("gating: %+v err %v", gating, err)
 	}
@@ -301,10 +309,174 @@ func TestRoleBNoTriggerAudit(t *testing.T) {
 	}
 }
 
+// echoingProposer returns a proposal whose parent ref echoes the request's
+// current head, so a multi-audit lifecycle can chain children. Each call
+// returns a distinct in-domain delta so every child differs from its parent.
+type echoingProposer struct{ calls int }
+
+func (p *echoingProposer) ProposeStrategyPatch(_ context.Context, req protocol.PatchRequest) (protocol.PatchProposal, error) {
+	p.calls++
+	deltas := []protocol.ParameterDelta{
+		{Param: protocol.ParamClaimGatherEnergyFloor, Value: 2},
+		{Param: protocol.ParamClaimBankEnergyCeiling, Value: 4},
+	}
+	return protocol.PatchProposal{
+		Propose: true, ParentRef: req.ParentRef,
+		Deltas: []protocol.ParameterDelta{deltas[(p.calls-1)%len(deltas)]},
+		Intent: "echo the current head", CallRef: uint64(p.calls),
+	}, nil
+}
+
+// TestRoleBSandboxParentIsPerCall pins spec 10.2: one audit hour resolves a
+// pending measurement (its parent branch is the measured generation's parent)
+// and then proposes a new candidate (its parent branch is the current head).
+// After an apply that is not rolled back the two parents differ, so a fixed
+// pre-audit parent would compare the new proposal against the wrong branch.
+// Reverting the proposal call to a fixed parent fails this test.
+func TestRoleBSandboxParentIsPerCall(t *testing.T) {
+	applier := &fakeApplier{actors: []sim.EntityID{1, 2}}
+	sandbox := &fakeSandbox{parent: 5, patched: 6}
+	c, _ := newRoleBTestController(t, applier, sandbox, &echoingProposer{})
+
+	if _, err := c.Audit(context.Background(), 24, triggeringEvidence()); err != nil {
+		t.Fatal(err)
+	}
+	head := c.Head().Ref
+	if !strategy.IsCognitiveRef(head) {
+		t.Fatalf("head did not advance after the apply: %+v", head)
+	}
+	// The measurement at h48 admits, so the apply is not rolled back and the
+	// head is still the first child when the new proposal runs.
+	if _, err := c.Audit(context.Background(), 48, triggeringEvidence()); err != nil {
+		t.Fatal(err)
+	}
+	if len(sandbox.parentGens) != 3 {
+		t.Fatalf("parent branches run=%d, want 3 (%+v)", len(sandbox.parentGens), sandbox.parentGens)
+	}
+	measureParent := sandbox.parentGens[1]
+	if measureParent != nil {
+		t.Fatalf("measurement parent branch %+v, want the frozen base (nil)", measureParent)
+	}
+	proposalParent := sandbox.parentGens[2]
+	if proposalParent == nil || proposalParent.Ref != head {
+		t.Fatalf("proposal parent branch %+v, want the current head %+v", proposalParent, head)
+	}
+}
+
+// TestRoleBExtinctAuditResolvesPending pins P2-13: an extinct-roster audit
+// resolves a pending measurement with a typed `unavailable` result instead of
+// abandoning it, then records the no-effect audit. Dropping the pending
+// handling fails this test.
+func TestRoleBExtinctAuditResolvesPending(t *testing.T) {
+	applier := &fakeApplier{actors: []sim.EntityID{1, 2}}
+	sandbox := &fakeSandbox{parent: 5, patched: 6}
+	c, _ := newRoleBTestController(t, applier, sandbox, &echoingProposer{})
+	if _, err := c.Audit(context.Background(), 24, triggeringEvidence()); err != nil {
+		t.Fatal(err)
+	}
+	records, err := c.AuditExtinct(48)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertKinds(t, records, cognition.InterventionPatchMeasure, cognition.InterventionNoTriggerAudit)
+	if records[0].Result.Status != "unavailable" || records[0].Result.Reason != "roster-extinct" {
+		t.Fatalf("extinct pending measure %+v, want unavailable/roster-extinct", records[0].Result)
+	}
+	if records[1].Result.Status != "no-effect" {
+		t.Fatalf("extinct no-effect %+v", records[1].Result)
+	}
+	// The second extinct audit has no pending measurement left to resolve.
+	records, err = c.AuditExtinct(72)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertKinds(t, records, cognition.InterventionNoTriggerAudit)
+}
+
 func validProposalWithUnknownParam() protocol.PatchProposal {
 	p := validProposal()
 	p.Deltas = []protocol.ParameterDelta{{Param: "claim.unknown", Value: 3}}
 	return p
+}
+
+// TestRoleBProposalReferencesWholeCallRange pins P2-7/P2-8: the recorded
+// proposal carries the declared proposer identity and references every
+// physical attempt of a retried call, so a retry cannot orphan a call record or
+// understate cost. Using only the used attempt's seq fails this test.
+func TestRoleBProposalReferencesWholeCallRange(t *testing.T) {
+	l := roleBTestLedger(t)
+	attempts := 0
+	fake := &cognition.FakeClient{Respond: func(req cognition.ModelRequest) (cognition.ModelResponse, error) {
+		attempts++
+		if attempts < 3 {
+			return cognition.ModelResponse{}, errors.New("transport down")
+		}
+		var wire struct {
+			ParentRef struct {
+				ID      string `json:"id"`
+				Version uint32 `json:"version"`
+			} `json:"parent_ref"`
+		}
+		if err := json.Unmarshal(req.Request, &wire); err != nil {
+			return cognition.ModelResponse{}, err
+		}
+		body := fmt.Sprintf(`{"schema_version":1,"propose":true,"parent_ref":{"id":%q,"version":%d},"deltas":[{"param":"claim.gather_energy_floor","value":2}],"intent":"retry"}`,
+			wire.ParentRef.ID, wire.ParentRef.Version)
+		return cognition.ModelResponse{Body: []byte(body), Content: []byte(body),
+			Usage: cognition.Usage{PromptTokens: 1, CompletionTokens: 1}, Status: cognition.CallStatusOK}, nil
+	}}
+	acct, err := cognition.NewCognitiveAccount(generousBudget())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec, err := cognition.NewRecorder(cognition.RecorderConfig{
+		Ledger: l, Client: fake, Budget: acct, Price: testPrice(),
+		Now:   func() time.Time { return time.UnixMicro(1) },
+		Sleep: func(context.Context, time.Duration) error { return nil },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	proposer, err := cognition.NewRoleBProposer(rec, "gw.example/v1/chat/completions", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctrl, err := cognition.NewRoleBController(cognition.RoleBControllerConfig{
+		Ledger: l, Proposer: proposer, Sandbox: &fakeSandbox{parent: 5, patched: 6}, Applier: &fakeApplier{actors: []sim.EntityID{1, 2}}, Operator: "model#test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ctrl.Start(strategy.FrozenNaturalPolicy7().Ref); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ctrl.Audit(context.Background(), 24, triggeringEvidence()); err != nil {
+		t.Fatal(err)
+	}
+	records, err := cognition.ReadInterventionRecords(l.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var propose *cognition.InterventionRecord
+	for i := range records {
+		if records[i].Kind == cognition.InterventionPatchPropose {
+			propose = &records[i]
+		}
+	}
+	if propose == nil {
+		t.Fatal("no patch-propose record")
+	}
+	if len(propose.CallRefs) != 3 {
+		t.Fatalf("propose record call refs=%v, want all 3 physical attempts", propose.CallRefs)
+	}
+	if propose.Patch == nil || propose.Patch.Proposer != "model#test#2" {
+		t.Fatalf("proposer identity %+v, want model#test#2", propose.Patch)
+	}
+	for _, rec := range records {
+		if rec.Kind == cognition.InterventionPatchValidate && (rec.Validation == nil || rec.Validation.Validator == "") {
+			t.Fatalf("validate record has no validator identity: %+v", rec)
+		}
+	}
 }
 
 func assertKinds(t *testing.T, records []cognition.InterventionRecord, want ...cognition.InterventionKind) {

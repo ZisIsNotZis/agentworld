@@ -22,6 +22,12 @@ func loadCell(prior cellReport, spec cellSpec, fp fixture, root string) (*cellRu
 	dir := filepath.Join(root, spec.String())
 	ledgerPath := filepath.Join(dir, "calls.jsonl")
 	opts := restoreOptions(fp, true)
+	if spec.Arm != ArmA0 {
+		// Every cognitive lane (including the seam-only inert arm) binds its
+		// recorded-call ledger in the manifest cognition block, so the restore
+		// requires and verifies the ledger path.
+		opts.CognitiveLedgerPath = ledgerPath
+	}
 	if spec.Arm != ArmA0 && spec.Arm != ArmA1i {
 		replay, err := cognition.OpenReplay(ledgerPath)
 		if err != nil {
@@ -31,7 +37,6 @@ func loadCell(prior cellReport, spec cellSpec, fp fixture, root string) (*cellRu
 		if err != nil {
 			return nil, fmt.Errorf("load %s: %w", spec.String(), err)
 		}
-		opts.CognitiveLedgerPath = ledgerPath
 		opts.CognitiveReplaySeam = seam
 		opts.CognitiveReplayWake = wakeFor(spec.Arm)
 	}
@@ -47,6 +52,7 @@ func loadCell(prior cellReport, spec cellSpec, fp fixture, root string) (*cellRu
 			CompletionTokens: prior.CompletionTokens, CostMicros: prior.CostMicros,
 		},
 		ceilingRows: prior.CeilingRows, durationMS: prior.DurationMS, halted: prior.Halted,
+		finalBundleError: prior.FinalBundleError,
 	}
 	if prior.CeilingHit != "" {
 		cr.ceilingHit = &cognition.CognitiveCeilingHit{Ceiling: cognition.CognitiveCeiling(prior.CeilingHit)}

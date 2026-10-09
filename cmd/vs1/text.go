@@ -33,6 +33,11 @@ func renderText(ev evaluation) string {
 			c.Arm, c.F, c.Seed, c.CallCount, c.Escalated, c.AppliedModel, c.DecisionErrors,
 			c.CostMicros, c.CallsPerActorHour, c.RoleBApplied, c.Halted)
 	}
+	for _, c := range ev.Cells {
+		if c.FinalBundleError != "" {
+			fmt.Fprintf(&b, "final-bundle-error %s f%d-s%d: %s\n", c.Arm, c.F, c.Seed, c.FinalBundleError)
+		}
+	}
 
 	fmt.Fprintf(&b, "\nFIDELITY-VECTOR SCAFFOLD (emitted, not gated; budgeted arm vs A3 reference)\n")
 	fmt.Fprintf(&b, "%-4s %-3s %-2s %-4s %-24s %8s %8s %6s\n", "arm", "f", "s", "ref", "indicator", "max", "mean", "first")
@@ -67,9 +72,9 @@ func renderText(ev evaluation) string {
 
 	if ev.Probe != nil {
 		fmt.Fprintf(&b, "\nSCALE/CEILING PROBE (descriptive)\n")
-		fmt.Fprintf(&b, "P=32 founders=%d max_calls=%d ceiling=%s threshold=%d observed=%d hour=%d ledger=%d replayable=%t\n",
+		fmt.Fprintf(&b, "P=32 founders=%d max_calls=%d ceiling=%s threshold=%d observed=%d hour=%d ledger=%d ledger-chain-verifies=%t\n",
 			ev.Probe.Founders, ev.Probe.MaxCalls, ev.Probe.Ceiling, ev.Probe.Threshold, ev.Probe.Observed,
-			ev.Probe.HitHour, ev.Probe.LedgerCount, ev.Probe.Replayable)
+			ev.Probe.HitHour, ev.Probe.LedgerCount, ev.Probe.LedgerChainVerifies)
 		fmt.Fprintf(&b, "P15: %s\n", ev.Probe.P15Verdict)
 	}
 

@@ -2,6 +2,7 @@ package world
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"path/filepath"
 	"reflect"
@@ -117,6 +118,55 @@ func TestNaturalSeamReplayJournalAndCheckpoint(t *testing.T) {
 	}
 }
 
+// TestNaturalSeamOnlyCheckpointBindsLedger pins ADR 0006 6.1 / spec 7.2 for a
+// seam-only lane: a runner with a cognitive seam but no active generation still
+// writes a manifest cognition block binding the recorded-call ledger, and the
+// restore refuses a missing ledger. Reverting the block condition to require an
+// active generation, or the restore check to opt-in, fails this test.
+func TestNaturalSeamOnlyCheckpointBindsLedger(t *testing.T) {
+	f, ledger, _, ledgerPath := seamReplayTestRunner(t)
+	if _, ok := f.ActiveCognitiveGeneration(); ok {
+		t.Fatal("the seam-only runner unexpectedly carries a generation")
+	}
+	summary, err := ledger.Summary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.SetCognitiveCheckpoint(&NaturalCognitiveCheckpoint{WakePolicy: cognition.VS1WakePolicy(), LedgerDigest: summary.Digest, LedgerCount: summary.Count})
+	replay, err := cognition.OpenReplay(ledgerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replaySeam, err := cognition.NewReplaySeam(replay, cognition.VS1WakePolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle := filepath.Join(t.TempDir(), "seam-only.bundle")
+	if _, err := f.SaveResumeCheckpointWithReplay(bundle, replaySeam, cognition.VS1WakePolicy()); err != nil {
+		t.Fatal(err)
+	}
+	_, _, m, err := naturalCheckedSections(bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.cognitive == nil {
+		t.Fatal("a seam-only bundle wrote no manifest cognition block")
+	}
+	if m.cognitive.LedgerCount != summary.Count || m.cognitive.LedgerDigest != summary.Digest {
+		t.Fatalf("seam-only block bound ledger count=%d digest mismatch=%t", m.cognitive.LedgerCount, m.cognitive.LedgerDigest != summary.Digest)
+	}
+	opts := NaturalRestoreOptions{Patches: 2, R: 8, Seed: 0, Workers: 1, Births: true,
+		PolicyRef: strategy.FrozenNaturalPolicy7().Ref, Mechanism: NaturalMechanismV6, Founders: 10,
+		CognitiveReplaySeam: replaySeam, CognitiveReplayWake: cognition.VS1WakePolicy()}
+	if _, _, err := RestoreNaturalCheckpoint(bundle, opts); err == nil {
+		t.Fatal("a seam-only bundle restored without the recorded-call ledger")
+	}
+	opts.CognitiveLedgerPath = ledgerPath
+	if _, _, err := RestoreNaturalCheckpoint(bundle, opts); err != nil {
+		t.Fatalf("seam-only restore with the ledger: %v", err)
+	}
+}
+
 // TestNaturalSeamRestoreWithoutReplayRefused pins the guard: without the
 // recorded-seam replay the restore of a seam-active bundle fails closed
 // (deleting the ledger-resolution path fails this test).
@@ -170,12 +220,13 @@ func TestNaturalCognitiveCheckpointDivergingJournalRoundTrip(t *testing.T) {
 	if err := f.ActivateCognitiveGeneration(gen, liveActors(t, f)); err != nil {
 		t.Fatal(err)
 	}
-	f.SetCognitiveCheckpoint(&NaturalCognitiveCheckpoint{WakePolicy: cognition.VS1WakePolicy(), ApplyHour: 24})
+	f.SetCognitiveCheckpoint(&NaturalCognitiveCheckpoint{WakePolicy: cognition.VS1WakePolicy(), LedgerDigest: sha256.Sum256(nil), ApplyHour: 24})
 	naturalRunTo(t, f, 30)
 	if reflect.DeepEqual(frozen.Checkpoints(), f.Checkpoints()) {
 		t.Fatal("the generation did not change the journal; the round trip would be vacuous")
 	}
 
+	ledgerPath, _ := testCognitiveLedger(t)
 	bundle := filepath.Join(t.TempDir(), "cog-diverging.bundle")
 	if _, err := f.SaveResumeCheckpoint(bundle); err != nil {
 		t.Fatalf("save of a generation-diverged journal: %v", err)
@@ -183,6 +234,7 @@ func TestNaturalCognitiveCheckpointDivergingJournalRoundTrip(t *testing.T) {
 	restored, _, err := RestoreNaturalCheckpoint(bundle, NaturalRestoreOptions{
 		Patches: 2, R: 8, Seed: 0, Workers: 1, Births: true,
 		PolicyRef: strategy.FrozenNaturalPolicy7().Ref, Mechanism: NaturalMechanismV6, Founders: 10,
+		CognitiveLedgerPath: ledgerPath,
 	})
 	if err != nil {
 		t.Fatalf("restore of a generation-diverged journal: %v", err)

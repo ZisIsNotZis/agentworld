@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -38,7 +40,7 @@ func evaluateBands(runs, allRuns []*cellRun, recordedDir string, replay map[stri
 	bands = append(bands, privacyBand(srcRoot, allRuns))
 	bands = append(bands, ec7(runs, probe))
 	bands = append(bands, ec8(byCell, cellKeys, twins))
-	bands = append(bands, ec9())
+	bands = append(bands, ec9(srcRoot))
 	bands = append(bands, ec10(probe))
 	bands = append(bands, ec11(runs))
 	return bands
@@ -119,7 +121,7 @@ func ec2(byCell map[string]map[string]*cellRun, cellKeys []string) reportBand {
 }
 
 func ec3(replay map[string]string, runs []*cellRun) reportBand {
-	const criterion = "EC-3 byte-exact replay, zero model calls: every recorded AI cell replays byte-exact from its genesis with zero gateway requests, and a deliberately mutated ledger byte is detected."
+	const criterion = "EC-3 byte-exact replay, zero model calls (declared subset): every recorded A1 cell in the declared replay subset replays byte-exact from its genesis with zero gateway requests; the deliberately mutated ledger byte is detected by the committed ledger unit test (internal/cognition/ledger_test.go TestLedgerDetectsTamperedField, TestLedgerDetectsRehashedMiddleRecord). The declared subset excludes A2/A3, whose Role B generation state is not yet replayed from a single bundle (spec 14.1 reduction 2)."
 	if len(replay) == 0 {
 		return band("EC-3", criterion, "not-evaluable", "no replay subset was run; the ledger chain and mutation detection are reported under EC-7's ledger evidence")
 	}
@@ -138,7 +140,7 @@ func ec3(replay map[string]string, runs []*cellRun) reportBand {
 	if mismatch > 0 {
 		status = "FAIL"
 	}
-	return band("EC-3", criterion, status, fmt.Sprintf("replayed cells=%d mismatches=%d", len(replay), mismatch))
+	return band("EC-3", criterion, status, fmt.Sprintf("replayed A1 cells=%d mismatches=%d; not replayed: A2/A3 (declared subset, spec 14.1 reduction 2); mutated-ledger detection: internal/cognition/ledger_test.go (unit)", len(replay), mismatch))
 }
 
 func ec4(runs []*cellRun) reportBand {
@@ -152,6 +154,12 @@ func ec4(runs []*cellRun) reportBand {
 		for _, rec := range cr.interventions {
 			records++
 			if rec.Result.Status == "" {
+				incomplete++
+			}
+			if !causeComplete(rec) {
+				incomplete++
+			}
+			if !costComplete(rec) {
 				incomplete++
 			}
 			if rec.Kind == cognition.InterventionRoleA || strings.HasPrefix(string(rec.Kind), "patch-") {
@@ -179,30 +187,69 @@ func ec4(runs []*cellRun) reportBand {
 		status = "FAIL"
 	}
 	return band("EC-4", criterion, status,
-		fmt.Sprintf("interventions=%d incomplete=%d orphan-calls=%d double-referenced=%d", records, incomplete, orphans, doubleRef))
+		fmt.Sprintf("interventions=%d missing-cause/cost/patch/result=%d orphan-calls=%d double-referenced=%d", records, incomplete, orphans, doubleRef))
+}
+
+// causeComplete reports whether an intervention's cause carries the declared
+// fields of its kind (spec 9.1/Appendix B): a role-a record names policy, seam,
+// and actor; a Role B / audit record names policy and trigger.
+func causeComplete(rec cognition.InterventionRecord) bool {
+	if rec.Cause.WakePolicy == "" {
+		return false
+	}
+	switch {
+	case rec.Kind == cognition.InterventionRoleA:
+		return rec.Cause.Actor != 0 && rec.Cause.Seam != ""
+	case strings.HasPrefix(string(rec.Kind), "patch-") || rec.Kind == cognition.InterventionNoTriggerAudit:
+		return rec.Cause.Trigger != ""
+	}
+	return true
+}
+
+// costComplete reports whether the cost block agrees with the call refs: a
+// record that references calls must record a call count, and vice versa.
+func costComplete(rec cognition.InterventionRecord) bool {
+	return (len(rec.CallRefs) == 0) == (rec.Cost.Calls == 0)
 }
 
 func ec5(byCell map[string]map[string]*cellRun, cellKeys []string, fixture *fixtureReport) reportBand {
 	const criterion = "EC-5 patch lifecycle (C9/C10): (a) the declared scripted proposal fixture runs propose->validate->sandbox->apply->measure->rollback end to end; (b) broken patches rejected at validation with zero mutation; (c) a regressing patch applied then rolled back with lineage retained; (d) live A2 cells report admitted/applied/measured/rolled-back counts, the honest null valid."
-	applied, proposed, rejected, rolled, validated, measured, cells := 0, 0, 0, 0, 0, 0, 0
+	a2Applied, a2Proposed, a2Rejected, a2Rolled, a2Validated, a2Measured, a2Cells := 0, 0, 0, 0, 0, 0, 0
+	a3Applied, a3Proposed, a3Rejected, a3Rolled, a3Validated, a3Measured, a3Cells := 0, 0, 0, 0, 0, 0, 0
 	for _, key := range cellKeys {
-		cr := byCell[key][ArmA2]
-		if cr == nil {
-			continue
+		for _, arm := range []string{ArmA2, ArmA3} {
+			cr := byCell[key][arm]
+			if cr == nil {
+				continue
+			}
+			switch arm {
+			case ArmA2:
+				a2Cells++
+				a2Applied += cr.roleBApplied
+				a2Proposed += cr.roleBProposed
+				a2Rejected += cr.roleBRejected
+				a2Rolled += cr.roleBRollback
+				a2Validated += cr.roleBValidated
+				a2Measured += cr.roleBMeasured
+			case ArmA3:
+				a3Cells++
+				a3Applied += cr.roleBApplied
+				a3Proposed += cr.roleBProposed
+				a3Rejected += cr.roleBRejected
+				a3Rolled += cr.roleBRollback
+				a3Validated += cr.roleBValidated
+				a3Measured += cr.roleBMeasured
+			}
 		}
-		cells++
-		applied += cr.roleBApplied
-		proposed += cr.roleBProposed
-		rejected += cr.roleBRejected
-		rolled += cr.roleBRollback
-		validated += cr.roleBValidated
-		measured += cr.roleBMeasured
 	}
 	status := "PASS"
-	if cells == 0 {
+	if a2Cells == 0 {
 		status = "not-evaluable"
 	}
-	evidence := fmt.Sprintf("unscripted A2 cells=%d proposed=%d validated=%d applied=%d rejected-at-validation/sandbox=%d measured=%d rolled-back=%d", cells, proposed, validated, applied, rejected, measured, rolled)
+	evidence := fmt.Sprintf("unscripted A2-only cells=%d proposed=%d validated=%d applied=%d rejected-at-validation/sandbox=%d measured=%d rolled-back=%d; live A3 reference cells=%d proposed=%d validated=%d applied=%d rejected=%d measured=%d rolled-back=%d; A2+A3 live aggregate proposed=%d applied=%d rolled-back=%d (the honest null is reported per arm; A2 is the declared (d) arm)",
+		a2Cells, a2Proposed, a2Validated, a2Applied, a2Rejected, a2Measured, a2Rolled,
+		a3Cells, a3Proposed, a3Validated, a3Applied, a3Rejected, a3Measured, a3Rolled,
+		a2Proposed+a3Proposed, a2Applied+a3Applied, a2Rolled+a3Rolled)
 	if fixture != nil && fixture.Ran {
 		evidence += fmt.Sprintf("; SCRIPTED-PROPOSER FIXTURE %s (f%d-s%d): proposed=%d admitted=%d applied=%d measured=%d rolled-back=%d measured_window=%dh",
 			fixture.Label, fixture.F, fixture.Seed, fixture.Proposed, fixture.Admitted, fixture.Applied, fixture.Measured, fixture.RolledBack, fixture.MeasuredWindowHours)
@@ -213,19 +260,20 @@ func ec5(byCell map[string]map[string]*cellRun, cellKeys []string, fixture *fixt
 		evidence += "; SCRIPTED-PROPOSER FIXTURE not run"
 		status = "FAIL"
 	}
-	evidence += "; (b)(c) broken/regressing patch fixtures are the L3 unit fixtures (internal/cognition roleb_lifecycle_test.go)"
+	evidence += "; EC-5(b)(c) are unit-only: the broken/regressing patch fixtures are internal/cognition/roleb_lifecycle_test.go (TestPatchValidationRejects, TestRoleBLifecycleApplyMeasureRollback); no matrix cell drives them"
 	return band("EC-5", criterion, status, evidence)
 }
 
 func ec7(runs []*cellRun, probe *probeReport) reportBand {
 	const criterion = "EC-7 costs reported (C11): every AI cell reports per-call usage/cost/latency, per-actor-hour and per-run totals, and the four cognitive ceiling rows; a binding ceiling is a typed fail-loud halt."
-	cells, withCost := 0, 0
+	cells, withCost, level2 := 0, 0, 0
 	var missing []string
 	for _, cr := range runs {
 		if cr.spec.Arm == ArmA0 {
 			continue
 		}
 		cells++
+		level2 += level2RefusalTotal(cr)
 		if cr.totals.Calls > 0 && cr.totals.CostMicros > 0 && cr.callAttempts > 0 && len(cr.ceilingRows) == 4 &&
 			cr.sumAliveHours > 0 {
 			withCost++
@@ -239,7 +287,7 @@ func ec7(runs []*cellRun, probe *probeReport) reportBand {
 	} else if withCost != cells || probe == nil || !probe.Ran || probe.Ceiling == "" {
 		status = "FAIL"
 	}
-	evidence := fmt.Sprintf("AI cells=%d with per-call usage/cost/latency + per-actor-hour + per-run totals + all four ceiling rows=%d; missing=%s", cells, withCost, joinOrNone(missing))
+	evidence := fmt.Sprintf("AI cells=%d with per-call usage/cost/latency + per-actor-hour + per-run totals + all four ceiling rows=%d; missing=%s; level-2 world refusals of escalated claims (world verdict joined from the accepted journal)=%d", cells, withCost, joinOrNone(missing), level2)
 	if probe != nil && probe.Ran {
 		evidence += fmt.Sprintf("; probe hit=%s threshold=%d observed=%d at h%d", probe.Ceiling, probe.Threshold, probe.Observed, probe.HitHour)
 	}
@@ -263,7 +311,11 @@ func ec8(byCell map[string]map[string]*cellRun, cellKeys []string, twins []twinR
 	}
 	parts = append(parts, fmt.Sprintf("escalation-set purity: inert==no-AI tip on %d/%d cells; protocol.WakePolicy is a pure function of (policy,hour,roster)", inertOK, len(cellKeys)))
 	if len(twins) == 0 {
-		status = "not-evaluable"
+		// A FAIL from the purity check stays sticky; the missing twin only
+		// downgrades an otherwise-PASS band to not-evaluable.
+		if status == "PASS" {
+			status = "not-evaluable"
+		}
 		parts = append(parts, "workers-4 twin not run")
 	}
 	for _, tw := range twins {
@@ -284,9 +336,25 @@ func shortHash(h string) string {
 	return h[:12]
 }
 
-func ec9() reportBand {
+func ec9(srcRoot string) reportBand {
 	const criterion = "EC-9 coverage and supersession: every C1-C16 row is present and runnable with the section 3 evidence pointer, and the supersession statement of section 2.3 is part of the delivered contract."
-	return band("EC-9", criterion, "PASS", "spec section 3 maps every C1-C16 row to an evidence pointer; section 2.3 is the frozen supersession statement; L4 adds the runnable arms that back C6/C7/C8/C9/C10/C11/C13")
+	path := filepath.Join(srcRoot, ".scratch/21-vs1-mind-in-the-loop/spec.md")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return band("EC-9", criterion, "not-evaluable", "the VS1 spec is not readable at "+path+": "+err.Error())
+	}
+	body := string(data)
+	var missing []string
+	for i := 1; i <= 16; i++ {
+		if !strings.Contains(body, fmt.Sprintf("| C%d |", i)) {
+			missing = append(missing, fmt.Sprintf("C%d", i))
+		}
+	}
+	supersession := strings.Contains(body, "VS1 supersedes them")
+	if len(missing) > 0 || !supersession {
+		return band("EC-9", criterion, "FAIL", fmt.Sprintf("spec %s: missing coverage rows=%s supersession-statement=%t", path, joinOrNone(missing), supersession))
+	}
+	return band("EC-9", criterion, "PASS", fmt.Sprintf("spec %s: all 16 C1-C16 coverage rows present; section 2.3 supersession statement present; C6-C13 are backed by the runnable arms of this matrix", path))
 }
 
 func ec10(probe *probeReport) reportBand {
@@ -295,32 +363,38 @@ func ec10(probe *probeReport) reportBand {
 		return band("EC-10", criterion, "not-evaluable", "the scale/ceiling probe was not run")
 	}
 	status := "PASS"
-	if probe.Ceiling == "" || !probe.Replayable {
+	if probe.Ceiling == "" || !probe.LedgerChainVerifies {
 		status = "FAIL"
 	}
 	return band("EC-10", criterion, status,
-		fmt.Sprintf("probe ceiling=%s threshold=%d observed=%d hour=%d ledger=%d records replayable=%t P15=%s", probe.Ceiling, probe.Threshold, probe.Observed, probe.HitHour, probe.LedgerCount, probe.Replayable, probe.P15Verdict))
+		fmt.Sprintf("probe ceiling=%s threshold=%d observed=%d hour=%d ledger=%d records ledger-chain-verifies=%t P15=%s", probe.Ceiling, probe.Threshold, probe.Observed, probe.HitHour, probe.LedgerCount, probe.LedgerChainVerifies, probe.P15Verdict))
 }
 
 func ec11(runs []*cellRun) reportBand {
 	const criterion = "EC-11 honest labels: every report is synthetic/model-conditional; token_cost is the recorded total in AI arms and 0 in no-AI arms; no result is presented as real-world evidence."
-	bad := 0
+	noAIViolations, aiViolations, aiCells, aiWithCost := 0, 0, 0, 0
 	for _, cr := range runs {
 		if cr.spec.Arm == ArmA0 {
 			if cr.totals.CostMicros != 0 {
-				bad++
+				noAIViolations++
 			}
 			continue
 		}
-		if cr.totals.CostMicros != cr.totals.CostMicros {
-			bad++
+		aiCells++
+		if cr.totals.Calls > 0 {
+			if cr.totals.CostMicros <= 0 {
+				aiViolations++
+			} else {
+				aiWithCost++
+			}
 		}
 	}
+	labelled := strings.Contains(evaluationLabel, "synthetic/model-conditional")
 	status := "PASS"
-	if bad > 0 {
+	if noAIViolations > 0 || aiViolations > 0 || !labelled {
 		status = "FAIL"
 	}
-	return band("EC-11", criterion, status, fmt.Sprintf("label=%q; no-AI token_cost=0 violations=%d", evaluationLabel, bad))
+	return band("EC-11", criterion, status, fmt.Sprintf("label=%q labelled=%t; no-AI token_cost!=0 violations=%d; AI cells=%d with a recorded token_cost=%d (AI token_cost!=recorded-total violations=%d)", evaluationLabel, labelled, noAIViolations, aiCells, aiWithCost, aiViolations))
 }
 
 func sortedCellKeys(byCell map[string]map[string]*cellRun) []string {

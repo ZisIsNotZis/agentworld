@@ -31,10 +31,15 @@ type SandboxOutcome struct {
 }
 
 // SandboxBranch runs one deterministic fork of the run's committed audit-hour
-// checkpoint with the seam disabled. A nil generation is the unpatched parent
-// continuation.
+// checkpoint with the seam disabled. gen is the branch's active generation; a
+// nil gen is the unpatched parent continuation, and parent is then the
+// generation the parent branch runs under (nil for the frozen base). The
+// parent is passed per call because one audit hour both resolves a pending
+// measurement (parent = the measured generation's parent) and proposes a new
+// candidate (parent = the current head), which differ after an apply that is
+// not rolled back (spec 10.2).
 type SandboxBranch interface {
-	RunBranch(ctx context.Context, gen *strategy.NaturalCognitiveGeneration) (SandboxOutcome, error)
+	RunBranch(ctx context.Context, gen *strategy.NaturalCognitiveGeneration, parent *strategy.NaturalCognitiveGeneration) (SandboxOutcome, error)
 }
 
 // Sandbox verdict reasons.
@@ -56,24 +61,26 @@ type SandboxVerdict struct {
 // RunSandbox runs the deterministic fork pair and applies the declared
 // admission rule: admit iff the patched branch strictly improves the trigger
 // indicator and no declared gating band or invariant regresses on either
-// branch.
-func RunSandbox(ctx context.Context, branch SandboxBranch, candidate strategy.NaturalCognitiveGeneration, windowHours int) (SandboxVerdict, error) {
+// branch. parent is the generation the unpatched branch runs under; it is
+// passed per call so a proposal after a non-rolled-back apply is compared
+// against the current head, not a fixed pre-audit parent.
+func RunSandbox(ctx context.Context, branch SandboxBranch, parent *strategy.NaturalCognitiveGeneration, candidate strategy.NaturalCognitiveGeneration, windowHours int) (SandboxVerdict, error) {
 	if branch == nil {
 		return SandboxVerdict{}, ErrPatchRejected
 	}
-	parent, err := branch.RunBranch(ctx, nil)
+	parentOutcome, err := branch.RunBranch(ctx, nil, parent)
 	if err != nil {
 		return SandboxVerdict{}, err
 	}
-	patched, err := branch.RunBranch(ctx, &candidate)
+	patched, err := branch.RunBranch(ctx, &candidate, nil)
 	if err != nil {
 		return SandboxVerdict{}, err
 	}
-	verdict := SandboxVerdict{Parent: parent, Patched: patched, WindowHours: windowHours}
+	verdict := SandboxVerdict{Parent: parentOutcome, Patched: patched, WindowHours: windowHours}
 	switch {
-	case patched.GatingRegressed || parent.GatingRegressed:
+	case patched.GatingRegressed || parentOutcome.GatingRegressed:
 		verdict.Reason = SandboxReasonGating
-	case patched.Indicator <= parent.Indicator:
+	case patched.Indicator <= parentOutcome.Indicator:
 		verdict.Reason = SandboxReasonNoImprovement
 	default:
 		verdict.Admitted = true

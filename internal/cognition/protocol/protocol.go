@@ -159,6 +159,10 @@ type PatchProposal struct {
 	Deltas    []ParameterDelta
 	Intent    string
 	CallRef   uint64
+	// CallAttempt is the used physical attempt's index; with CallRef it gives
+	// the whole call range so an intervention references every attempt record
+	// of a retried proposal (spec 9.2, EC-4).
+	CallAttempt int
 }
 
 // SeamDecider is the model-call protocol interface (spec section 6.1,

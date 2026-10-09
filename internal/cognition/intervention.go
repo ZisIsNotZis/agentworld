@@ -85,13 +85,18 @@ func AppendRoleAIntervention(l *Ledger, in RoleAInterventionInput) (Intervention
 // used attempt's sequence and index, so the run is exactly
 // [seq-(attempt-1), seq].
 func callRefRange(call CallResult) []uint64 {
-	if call.Attempt <= 1 {
-		return []uint64{call.Seq}
+	return callRefRefs(call.Seq, call.Attempt)
+}
+
+// callRefRefs is the shared attempt-range expansion.
+func callRefRefs(seq uint64, attempt int) []uint64 {
+	if attempt <= 1 {
+		return []uint64{seq}
 	}
-	refs := make([]uint64, 0, call.Attempt)
-	start := call.Seq - uint64(call.Attempt-1)
-	for seq := start; seq <= call.Seq; seq++ {
-		refs = append(refs, seq)
+	refs := make([]uint64, 0, attempt)
+	start := seq - uint64(attempt-1)
+	for s := start; s <= seq; s++ {
+		refs = append(refs, s)
 	}
 	return refs
 }

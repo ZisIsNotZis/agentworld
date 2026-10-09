@@ -2,6 +2,9 @@ package world
 
 import (
 	"context"
+	"crypto/sha256"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -9,6 +12,18 @@ import (
 	"agentworld/internal/sim"
 	"agentworld/internal/strategy"
 )
+
+// testCognitiveLedger writes an empty recorded-call ledger and returns its path
+// and whole-file digest, so a cognitive checkpoint binding can be attached and
+// the restore's ledger requirement satisfied.
+func testCognitiveLedger(t *testing.T) (string, [32]byte) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "calls.jsonl")
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path, sha256.Sum256(nil)
+}
 
 // The world-side Role B tests (spec sections 5.4 and 7.2): the active
 // generation changes the run, clearing it restores the frozen path, and the
@@ -115,7 +130,8 @@ func TestNaturalCognitiveCheckpointRoundTrip(t *testing.T) {
 	if err := f.ActivateCognitiveGeneration(gen, liveActors(t, f)); err != nil {
 		t.Fatal(err)
 	}
-	f.SetCognitiveCheckpoint(&NaturalCognitiveCheckpoint{WakePolicy: protocol.VS1WakePolicy(), ApplyHour: 2})
+	ledgerPath, ledgerDigest := testCognitiveLedger(t)
+	f.SetCognitiveCheckpoint(&NaturalCognitiveCheckpoint{WakePolicy: protocol.VS1WakePolicy(), LedgerDigest: ledgerDigest, ApplyHour: 2})
 	naturalRunTo(t, f, 4)
 
 	path := t.TempDir() + "/cog.bundle"
@@ -125,6 +141,7 @@ func TestNaturalCognitiveCheckpointRoundTrip(t *testing.T) {
 	restored, _, err := RestoreNaturalCheckpoint(path, NaturalRestoreOptions{
 		Patches: 2, R: 8, Seed: 0, Workers: 1, Births: true,
 		PolicyRef: strategy.FrozenNaturalPolicy7().Ref, Mechanism: NaturalMechanismV6, Founders: 10,
+		CognitiveLedgerPath: ledgerPath,
 	})
 	if err != nil {
 		t.Fatal(err)

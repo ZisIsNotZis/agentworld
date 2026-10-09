@@ -367,11 +367,12 @@ func runProbe(ctx context.Context, root string, maxCalls uint64) (*probeReport, 
 	}
 	rep.LedgerCount = summary.Count
 	rep.LedgerDigest = hexString(summary.Digest[:])
-	// Replayable: the chain verifies and every recorded request resolves.
+	// Ledger-chain verification: the chain parses and verifies. This is not a
+	// world replay of the probe run (spec 11.4).
 	if _, err := cognition.OpenReplay(stack.ledgerPath); err != nil {
 		return nil, err
 	}
-	rep.Replayable = true
+	rep.LedgerChainVerifies = true
 	return rep, nil
 }
 

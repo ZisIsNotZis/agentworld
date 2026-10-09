@@ -54,6 +54,7 @@ type cellRun struct {
 	roleBNoTrigger   int
 	modelDigest      string
 	finalBundleName  string
+	finalBundleError string
 	ceilingRows      []cognition.CognitiveRow
 	callAttempts     int
 	callLatencyUS    int64
@@ -189,8 +190,8 @@ func finalizeStack(f *world.Natural, stack *cognitionStack, cr *cellRun, applyHo
 	digest, err := f.SaveResumeCheckpointWithReplay(bundlePath, seam, wake)
 	if err != nil {
 		// A post-halt export is refused; the binding is still attached and the
-		// ledger summary is recorded.
-		_ = err
+		// ledger summary is recorded. The failure is reported, never swallowed.
+		cr.finalBundleError = err.Error()
 	} else {
 		cr.finalDigest = digestString(digest)
 		cr.finalBundleName = filepath.Base(bundlePath)
@@ -308,19 +309,15 @@ func runAudit(ctx context.Context, f *world.Natural, stack *cognitionStack, dir 
 	session := stack.roleB
 	// A modification audit has no roster to bind once the population is
 	// extinct: the apply/rollback seam refuses an empty roster (a declared
-	// no-op, not an error). Record the zero-cost no-effect audit and leave
-	// every world byte untouched.
+	// no-op, not an error). Record the typed no-effect audit, resolving any
+	// pending measurement as a typed `unavailable` result, and leave every
+	// world byte untouched.
 	if checks := f.Checkpoints(); len(checks) > 0 && checks[len(checks)-1].Metrics.Alive == 0 {
-		_, err := stack.ledger.AppendIntervention(cognition.InterventionRecord{
-			Kind:   cognition.InterventionNoTriggerAudit,
-			Cause:  cognition.InterventionCause{WakePolicy: "role-b", Hour: hour, Trigger: "roster-extinct"},
-			Cost:   cognition.InterventionCost{},
-			Result: cognition.InterventionResult{Status: "no-effect", Reason: "roster-extinct", IndicatorDeltas: []cognition.IndicatorDelta{}},
-		})
+		records, err := stack.roleB.ctrl.AuditExtinct(hour)
 		if err != nil {
 			return fmt.Errorf("audit h%d extinct: %w", hour, err)
 		}
-		session.auditRecords = append(session.auditRecords, cognition.InterventionRecord{Kind: cognition.InterventionNoTriggerAudit})
+		session.auditRecords = append(session.auditRecords, records...)
 		session.noTrigger++
 		return nil
 	}
@@ -331,28 +328,22 @@ func runAudit(ctx context.Context, f *world.Natural, stack *cognitionStack, dir 
 	if err := attachBinding(f, stack, session, spec); err != nil {
 		return fmt.Errorf("audit h%d binding: %w", hour, err)
 	}
-	// A seam-active run whose cognition block binds the recorded-call ledger
-	// must fork from the ledger the block was bound against. The live ledger
-	// keeps growing (this audit appends its own intervention records), so the
-	// sandbox restores an immutable snapshot taken at the binding instant; the
-	// whole-file ledger guard therefore still verifies, and the fork still
-	// resolves every recorded Role A decision. A run with no active generation
-	// writes no block, so no snapshot is needed.
-	sandboxSeam := seam
-	ledgerPath := stack.ledgerPath
-	if _, ok := f.ActiveCognitiveGeneration(); ok {
-		ledgerPath = filepath.Join(dir, fmt.Sprintf("audit-h%03d-ledger.jsonl", hour))
-		if err := copyFile(stack.ledgerPath, ledgerPath); err != nil {
-			return fmt.Errorf("audit h%d ledger snapshot: %w", hour, err)
-		}
-		snapshotReplay, err := cognition.OpenReplay(ledgerPath)
-		if err != nil {
-			return fmt.Errorf("audit h%d ledger snapshot open: %w", hour, err)
-		}
-		sandboxSeam, err = cognition.NewReplaySeam(snapshotReplay, wake)
-		if err != nil {
-			return fmt.Errorf("audit h%d ledger snapshot seam: %w", hour, err)
-		}
+	// The cognition block binds the recorded-call ledger at the binding instant,
+	// and this audit then appends its own call and intervention records. The
+	// sandbox therefore forks from an immutable snapshot taken at the binding
+	// instant, so the whole-file ledger guard still verifies and the fork still
+	// resolves every recorded Role A decision.
+	ledgerPath := filepath.Join(dir, fmt.Sprintf("audit-h%03d-ledger.jsonl", hour))
+	if err := copyFile(stack.ledgerPath, ledgerPath); err != nil {
+		return fmt.Errorf("audit h%d ledger snapshot: %w", hour, err)
+	}
+	snapshotReplay, err := cognition.OpenReplay(ledgerPath)
+	if err != nil {
+		return fmt.Errorf("audit h%d ledger snapshot open: %w", hour, err)
+	}
+	sandboxSeam, err := cognition.NewReplaySeam(snapshotReplay, wake)
+	if err != nil {
+		return fmt.Errorf("audit h%d ledger snapshot seam: %w", hour, err)
 	}
 	cpPath := filepath.Join(dir, fmt.Sprintf("audit-h%03d.bundle", hour))
 	if _, err := f.SaveResumeCheckpointWithReplay(cpPath, seam, wake); err != nil {
@@ -363,11 +354,6 @@ func runAudit(ctx context.Context, f *world.Natural, stack *cognitionStack, dir 
 	session.sandbox.restore.CognitiveReplaySeam = sandboxSeam
 	session.sandbox.restore.CognitiveReplayWake = wake
 	session.sandbox.restore.CognitiveLedgerPath = ledgerPath
-	if session.pending {
-		session.sandbox.parentGeneration = session.pendingParent
-	} else {
-		session.sandbox.parentGeneration = session.head
-	}
 	startHour := hour - 24
 	if startHour < 0 {
 		startHour = 0
@@ -381,20 +367,11 @@ func runAudit(ctx context.Context, f *world.Natural, stack *cognitionStack, dir 
 	for _, rec := range records {
 		switch rec.Kind {
 		case cognition.InterventionPatchApply:
-			session.pendingParent = session.head
-			session.pending = true
 			session.applyHour = hour
 			session.applied++
 		case cognition.InterventionPatchRollback:
-			session.pending = false
 			session.rollback++
 		}
-	}
-	if gen, ok := f.ActiveCognitiveGeneration(); ok {
-		g := gen
-		session.head = &g
-	} else {
-		session.head = nil
 	}
 	return nil
 }

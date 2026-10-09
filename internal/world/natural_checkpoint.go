@@ -2866,7 +2866,11 @@ func RestoreNaturalCheckpoint(path string, expected NaturalRestoreOptions) (*Nat
 	if !naturalManifestMatches(m, expected) {
 		return nil, [32]byte{}, ErrNaturalCheckpoint
 	}
-	if m.cognitive != nil && expected.CognitiveLedgerPath != "" {
+	if m.cognitive != nil {
+		// A bundle that carries a cognition block binds a recorded-call ledger,
+		// so the restore requires the ledger path and refuses a missing, short,
+		// or mismatched ledger (spec 7.2, ADR 0006 6.1). The check is not
+		// opt-in: a caller without the ledger cannot restore a cognitive bundle.
 		if err := VerifyCognitiveLedger(m.cognitive, expected.CognitiveLedgerPath); err != nil {
 			return nil, [32]byte{}, err
 		}

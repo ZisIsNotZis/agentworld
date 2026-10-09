@@ -10,7 +10,6 @@ import (
 
 	"agentworld/internal/cognition"
 	"agentworld/internal/cognition/protocol"
-	"agentworld/internal/strategy"
 	"agentworld/internal/world"
 )
 
@@ -90,9 +89,6 @@ type cognitionStack struct {
 type roleBSession struct {
 	ctrl             *cognition.RoleBController
 	sandbox          *naturalSandboxBranch
-	head             *strategy.NaturalCognitiveGeneration
-	pendingParent    *strategy.NaturalCognitiveGeneration
-	pending          bool
 	auditRecords     []cognition.InterventionRecord
 	applied          int
 	rollback         int

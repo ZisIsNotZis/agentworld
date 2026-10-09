@@ -230,8 +230,10 @@ func buildEvidence(checks []world.NaturalCheckpoint, journal []world.NaturalBatc
 		ev.Actors = append(ev.Actors, protocol.ActorEvidence{Actor: a.Bag.Source, Capital: a.Worksite.Capital, GranaryStock: a.Granary.Stock})
 	}
 	mouths := map[sim.EntityID]int64{}
+	patchCapital := map[sim.EntityID]int64{}
 	for _, a := range aliveActors(checks[last]) {
 		mouths[a.Bag.Source]++
+		patchCapital[a.Bag.Source] += a.Worksite.Capital
 	}
 	patches := make([]sim.EntityID, 0, len(mouths))
 	for patch := range mouths {
@@ -239,7 +241,7 @@ func buildEvidence(checks []world.NaturalCheckpoint, journal []world.NaturalBatc
 	}
 	sort.Slice(patches, func(i, j int) bool { return patches[i] < patches[j] })
 	for _, patch := range patches {
-		ev.Patches = append(ev.Patches, protocol.PatchEvidence{Patch: patch, Mouths: mouths[patch]})
+		ev.Patches = append(ev.Patches, protocol.PatchEvidence{Patch: patch, Mouths: mouths[patch], Capital: patchCapital[patch]})
 	}
 	for _, batch := range journal {
 		hour := int(batch.Time / sim.SimTime(world.NaturalHour))

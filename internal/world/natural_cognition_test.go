@@ -5,10 +5,12 @@ import (
 	"encoding/hex"
 	"path/filepath"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
 	"agentworld/internal/cognition"
+	"agentworld/internal/cognition/protocol"
 	"agentworld/internal/strategy"
 )
 
@@ -220,5 +222,75 @@ func TestNaturalSeamEscalatesSelectedHoursAndDiverges(t *testing.T) {
 	// wired by the persistence lane, so the divergence is compared directly.)
 	if reflect.DeepEqual(frozen.Checkpoints(), seamed.Checkpoints()) {
 		t.Fatal("a load-bearing wait seam did not diverge from the frozen run")
+	}
+}
+
+// capturingSeam records every Role A request it is asked to decide.
+type capturingSeam struct {
+	mu   sync.Mutex
+	reqs []cognition.ActorSeamRequest
+}
+
+func (s *capturingSeam) DecideActorSeam(_ context.Context, req cognition.ActorSeamRequest) (cognition.ActorSeamDecision, error) {
+	s.mu.Lock()
+	s.reqs = append(s.reqs, req)
+	s.mu.Unlock()
+	return cognition.ActorSeamDecision{Source: cognition.SourceFallback, Reason: "captured"}, nil
+}
+
+// TestNaturalSeamRequestCarriesActiveGeneration pins spec 4.5/6.2: a seam
+// request made while a generation is active carries the actor's own bound
+// vector and the active head ref, not the frozen base vector/ref. Deleting the
+// active-generation lookup (reverting to FrozenNaturalClaimParameters(f.ref)
+// and HeadRef f.ref) fails this test.
+func TestNaturalSeamRequestCarriesActiveGeneration(t *testing.T) {
+	f, err := NewNatural(naturalCognitionTestOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	naturalRunTo(t, f, 2)
+	gen := divergentCognitiveGeneration(t)
+	if err := f.ActivateCognitiveGeneration(gen, liveActors(t, f)); err != nil {
+		t.Fatal(err)
+	}
+	seam := &capturingSeam{}
+	if err := f.SetCognition(&NaturalCognition{Seam: seam, WakePolicy: cognition.VS1WakePolicy()}); err != nil {
+		t.Fatal(err)
+	}
+	naturalRunTo(t, f, 12)
+
+	seam.mu.Lock()
+	reqs := append([]cognition.ActorSeamRequest(nil), seam.reqs...)
+	seam.mu.Unlock()
+	if len(reqs) == 0 {
+		t.Fatal("no seam request was captured")
+	}
+	wantParams := gen.Params.Values()
+	if wantParams[protocol.ParamClaimGatherEnergyFloor] == 0 {
+		t.Fatal("the divergent generation did not set the gather floor")
+	}
+	boundSeen := 0
+	for _, req := range reqs {
+		// A newborn born after the boundary is unbound and takes the frozen
+		// fallback (spec 14.1 reduction 1); only bound actors carry the head.
+		if !f.CognitiveActorBound(req.Actor) {
+			if req.Identity.HeadRef != strategy.FrozenNaturalPolicy7().Ref {
+				t.Fatalf("unbound actor %d request head ref %+v, want the frozen base", req.Actor, req.Identity.HeadRef)
+			}
+			continue
+		}
+		boundSeen++
+		if req.Identity.HeadRef != gen.Ref {
+			t.Fatalf("bound actor %d request head ref %+v, want the active generation %+v", req.Actor, req.Identity.HeadRef, gen.Ref)
+		}
+		if req.Identity.BaseRef != strategy.FrozenNaturalPolicy7().Ref {
+			t.Fatalf("request base ref %+v, want the frozen base", req.Identity.BaseRef)
+		}
+		if !reflect.DeepEqual(req.Strategy, wantParams) {
+			t.Fatalf("request strategy vector %+v, want the active generation vector %+v", req.Strategy, wantParams)
+		}
+	}
+	if boundSeen == 0 {
+		t.Fatal("no bound actor's request was captured")
 	}
 }

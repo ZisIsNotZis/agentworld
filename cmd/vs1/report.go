@@ -9,6 +9,8 @@ import (
 	"sort"
 
 	"agentworld/internal/cognition"
+	"agentworld/internal/sim"
+	"agentworld/internal/world"
 )
 
 // The VS1 evaluation report: one row per arm-in-cell plus the frozen
@@ -57,6 +59,10 @@ type cellReport struct {
 	Escalated      int `json:"escalated_decisions"`
 	AppliedModel   int `json:"applied_model_decisions"`
 	DecisionErrors int `json:"decision_errors"`
+	// Level2Refusals counts escalated claims whose committed world attempt was
+	// a typed level-2 refusal (the world verdict, joined from the accepted
+	// journal; spec 4.3/11.5 indicator 7).
+	Level2Refusals int `json:"level2_world_refusals"`
 	RoleBApplied   int `json:"role_b_applied"`
 	RoleBRollback  int `json:"role_b_rolled_back"`
 	RoleBProposed  int `json:"role_b_proposed"`
@@ -68,8 +74,11 @@ type cellReport struct {
 
 	CeilingHit string `json:"ceiling_hit,omitempty"`
 	Halted     bool   `json:"halted"`
-	TokenCost  int64  `json:"token_cost"`
-	DurationMS int64  `json:"duration_ms"`
+	// FinalBundleError reports a failed final-bundle save (spec section 13: a
+	// post-halt export is refused, but the failure is never swallowed).
+	FinalBundleError string `json:"final_bundle_error,omitempty"`
+	TokenCost        int64  `json:"token_cost"`
+	DurationMS       int64  `json:"duration_ms"`
 }
 
 type fidelityIndicator struct {
@@ -100,8 +109,10 @@ type probeReport struct {
 	Observed     uint64 `json:"observed"`
 	LedgerCount  uint64 `json:"ledger_count"`
 	LedgerDigest string `json:"ledger_digest"`
-	Replayable   bool   `json:"replayable"`
-	P15Verdict   string `json:"p15_verdict"`
+	// LedgerChainVerifies reports that the probe's recorded-call ledger chain
+	// parses and verifies; the probe is not world-replayed (spec 11.4).
+	LedgerChainVerifies bool   `json:"ledger_chain_verifies"`
+	P15Verdict          string `json:"p15_verdict"`
 }
 
 type inventory struct {
@@ -178,11 +189,13 @@ func cellReportOf(cr *cellRun) cellReport {
 		PromptTokens:     cr.totals.PromptTokens,
 		CompletionTokens: cr.totals.CompletionTokens, CostMicros: cr.totals.CostMicros,
 		ActorHours: cr.sumAliveHours, Escalated: cr.escalated, AppliedModel: cr.appliedModel,
-		DecisionErrors: cr.decisionErrors, RoleBApplied: cr.roleBApplied, RoleBRollback: cr.roleBRollback,
+		DecisionErrors: cr.decisionErrors, Level2Refusals: level2RefusalTotal(cr),
+		RoleBApplied: cr.roleBApplied, RoleBRollback: cr.roleBRollback,
 		RoleBProposed: cr.roleBProposed, RoleBRejected: cr.roleBRejected, RoleBValidated: cr.roleBValidated,
 		RoleBMeasured: cr.roleBMeasured, RoleBWindowH: cr.roleBMeasureHour, RoleBNoTrigger: cr.roleBNoTrigger,
 		Halted: cr.halted, TokenCost: cr.totals.CostMicros, DurationMS: cr.durationMS,
-		CeilingRows: cr.ceilingRows,
+		FinalBundleError: cr.finalBundleError,
+		CeilingRows:      cr.ceilingRows,
 	}
 	if isFixtureArm(cr.spec.Arm) {
 		rep.Fixture = FixtureLabel
@@ -334,14 +347,15 @@ func summarize(index int, name string, seq []float64) fidelityIndicator {
 }
 
 // decisionErrorIndicator is the escalation decision-error rate (indicator 7):
-// the absolute difference of the two cumulative ratios. Level-2 world refusals
-// are not recorded as escalations, so this is the recorded level-1 rate; the
-// label states that.
+// the absolute difference of the two cumulative ratios. The numerator counts
+// both level-1 (malformed/inadmissible fallback) and level-2 (typed world
+// refusal) outcomes of escalated decisions, the latter joined from the accepted
+// journal by (hour, actor).
 func decisionErrorIndicator(b, r *cellRun, n int) fidelityIndicator {
 	bSeq := make([]float64, n)
 	rSeq := make([]float64, n)
-	bec := cumulativeHourly(b.interventions)
-	rec := cumulativeHourly(r.interventions)
+	bec := cumulativeHourly(b.interventions, b.journal)
+	rec := cumulativeHourly(r.interventions, r.journal)
 	for i := 0; i < n; i++ {
 		hour := b.proj.Hours[i]
 		bSeq[i] = rate(bec, hour)
@@ -351,17 +365,19 @@ func decisionErrorIndicator(b, r *cellRun, n int) fidelityIndicator {
 	for i := 0; i < n; i++ {
 		diff[i] = math.Abs(bSeq[i] - rSeq[i])
 	}
-	ind := summarize(8, "decision-error-rate(level-1)", diff)
+	ind := summarize(8, "decision-error-rate(level-1+level-2)", diff)
 	return ind
 }
 
 type hourlyCounts struct {
 	escalated []int
 	errors    []int
+	level2    []int
 }
 
-func cumulativeHourly(interventions []cognition.InterventionRecord) hourlyCounts {
-	hc := hourlyCounts{escalated: make([]int, 169), errors: make([]int, 169)}
+func cumulativeHourly(interventions []cognition.InterventionRecord, journal []world.NaturalBatch) hourlyCounts {
+	hc := hourlyCounts{escalated: make([]int, 169), errors: make([]int, 169), level2: make([]int, 169)}
+	modelEscalated := map[[2]int]bool{}
 	for _, rec := range interventions {
 		if rec.Kind != cognition.InterventionRoleA {
 			continue
@@ -371,18 +387,71 @@ func cumulativeHourly(interventions []cognition.InterventionRecord) hourlyCounts
 			continue
 		}
 		hc.escalated[h]++
-		if rec.RoleA != nil && rec.RoleA.Source != cognition.SourceModel {
+		if rec.RoleA != nil && rec.RoleA.Source == cognition.SourceModel {
+			modelEscalated[[2]int{h, int(rec.Cause.Actor)}] = true
+		} else {
 			hc.errors[h]++
 		}
 	}
+	hc.level2 = level2RefusalCounts(journal, modelEscalated)
 	return hc
+}
+
+// level2RefusalCounts joins the accepted journal to the escalated decisions
+// whose model action was applied (source == model): an applied model claim whose
+// committed attempt carries an explicit refusal marker is a level-2 world
+// refusal (spec 4.3). A fallback/inert decision is already counted as a level-1
+// error, and the frozen path's own denials are not model decision errors, so
+// neither is double-counted here.
+func level2RefusalCounts(journal []world.NaturalBatch, modelEscalated map[[2]int]bool) []int {
+	counts := make([]int, 169)
+	for _, batch := range journal {
+		hour := int(batch.Time / sim.SimTime(world.NaturalHour))
+		if hour < 0 || hour > 168 {
+			continue
+		}
+		for _, at := range batch.Attempts {
+			switch at.Kind {
+			case "gather", "provision", "eat-stored":
+			default:
+				continue
+			}
+			if !modelEscalated[[2]int{hour, int(at.Actor)}] {
+				continue
+			}
+			if at.Rejection != world.FoodFlowGatherAdmitted || at.ProvisionRefused != "" || at.NoMeal != "" {
+				counts[hour]++
+			}
+		}
+	}
+	return counts
+}
+
+// level2RefusalTotal is the per-cell count of level-2 world refusals of
+// escalated model-applied claims.
+func level2RefusalTotal(cr *cellRun) int {
+	total := 0
+	for _, n := range level2RefusalCounts(cr.journal, modelEscalatedKeySet(cr.interventions)) {
+		total += n
+	}
+	return total
+}
+
+func modelEscalatedKeySet(interventions []cognition.InterventionRecord) map[[2]int]bool {
+	out := map[[2]int]bool{}
+	for _, rec := range interventions {
+		if rec.Kind == cognition.InterventionRoleA && rec.RoleA != nil && rec.RoleA.Source == cognition.SourceModel {
+			out[[2]int{rec.Cause.Hour, int(rec.Cause.Actor)}] = true
+		}
+	}
+	return out
 }
 
 func rate(hc hourlyCounts, hour int) float64 {
 	esc, errs := 0, 0
 	for h := 0; h <= hour && h < len(hc.escalated); h++ {
 		esc += hc.escalated[h]
-		errs += hc.errors[h]
+		errs += hc.errors[h] + hc.level2[h]
 	}
 	if esc == 0 {
 		return 0

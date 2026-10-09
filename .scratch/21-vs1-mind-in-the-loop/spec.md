@@ -777,6 +777,23 @@ smaller, each carried honestly into the evidence rather than papered over.
 6. **Hermetic model.** Every arm runs L1's deterministic FakeClient: the mechanism is proven
    load-bearing, while real-model load-bearing awaits spend authorisation (§13, §16). Costs are
    modelled price-table charges over fake usage, never real spend.
+7. **Sandbox gating regression is halt-or-extinction (code-review P2-12).** §10.2's "no declared
+   gating band or invariant regresses" is implemented as the deterministic fork's ceiling-halt or
+   population-extinction signal, not a per-band G1–G3 comparison; a branch that regresses an
+   individual declared band without halting or dying is not caught by the sandbox. A later lane
+   evaluates the full band set per branch.
+8. **EC-6's adversarial proof is a marker/key-set scan (code-review P2-14).** The matrix-time EC-6
+   check feeds a fully populated sentinel observation through the allow-list encoder and scans every
+   recorded request for privileged markers and unexpected keys; it does not construct §6.6.3's world
+   whose privileged fields hold unique sentinel values and drive a run against it. That construction
+   is the committed unit test (internal/cognition/observation_test.go); the matrix re-derives the
+   key-set and marker scan from the recorded requests.
+9. **A Role A intervention records the level-1 outcome, not the world verdict (code-review P2-10
+   residual).** The role-a record is appended before the world commits the claim, so its `result` is
+   the level-1 acceptance/fallback. The world verdict is the committed journal attempt; the
+   evaluation joins it to the escalated (hour, actor) set and counts level-2 refusals in fidelity
+   indicator 7 and each cell report. Writing the verdict back onto the intervention record would
+   require a post-commit ledger append and is left to a later lane.
 
 ## 15. Risks and stop conditions
 

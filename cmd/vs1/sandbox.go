@@ -13,25 +13,25 @@ import (
 // naturalSandboxBranch is the concrete SandboxBranch L3 injected: a
 // deterministic fork pair from the live run's own committed audit-hour
 // checkpoint, restored with the seam disabled, run to the declared window
-// horizon (spec section 10.2). RunBranch(nil) is the unpatched parent
-// continuation (the head generation at the audit boundary, or the frozen base);
-// RunBranch(&candidate) activates the candidate generation on the restored
-// roster. Neither branch wires a Role A seam, so no model call happens in a
-// fork.
+// horizon (spec section 10.2). RunBranch(nil, parent) is the unpatched parent
+// continuation under the parent generation passed for this call (nil is the
+// frozen base); RunBranch(&candidate, nil) activates the candidate generation
+// on the restored roster. Neither branch wires a Role A seam, so no model call
+// happens in a fork.
 type naturalSandboxBranch struct {
-	live             *world.Natural
-	dir              string
-	windowHours      int
-	restore          world.NaturalRestoreOptions
-	checkpointPath   string
-	parentGeneration *strategy.NaturalCognitiveGeneration
+	live           *world.Natural
+	dir            string
+	windowHours    int
+	restore        world.NaturalRestoreOptions
+	checkpointPath string
 }
 
-// RunBranch implements cognition.SandboxBranch. RunBranch(nil) is the
-// unpatched parent continuation; the restored runner carries no live seam, so
-// both forks are seam-disabled and the recorded Role A decisions are
+// RunBranch implements cognition.SandboxBranch. The parent is passed per call:
+// the pending measurement passes the measured generation's parent, and a fresh
+// proposal passes the current head. The restored runner carries no live seam,
+// so both forks are seam-disabled and the recorded Role A decisions are
 // reproduced only by the restore-time reference replay.
-func (b *naturalSandboxBranch) RunBranch(ctx context.Context, gen *strategy.NaturalCognitiveGeneration) (cognition.SandboxOutcome, error) {
+func (b *naturalSandboxBranch) RunBranch(ctx context.Context, gen *strategy.NaturalCognitiveGeneration, parent *strategy.NaturalCognitiveGeneration) (cognition.SandboxOutcome, error) {
 	if b == nil || b.live == nil || b.checkpointPath == "" {
 		return cognition.SandboxOutcome{}, fmt.Errorf("sandbox branch requires a committed audit-hour checkpoint")
 	}
@@ -41,7 +41,7 @@ func (b *naturalSandboxBranch) RunBranch(ctx context.Context, gen *strategy.Natu
 	}
 	active := gen
 	if active == nil {
-		active = b.parentGeneration
+		active = parent
 	}
 	if active == nil {
 		// The restored runner may carry the block's head generation; the

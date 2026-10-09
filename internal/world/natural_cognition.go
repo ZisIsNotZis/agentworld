@@ -141,24 +141,43 @@ func naturalLowestStockedSlot(obs strategy.NaturalObservation) sim.EntityID {
 }
 
 // naturalActorSeamRequest builds the declared Role A request from the frozen
-// observation value only.
+// observation value and the actor's ACTIVE behaviour logic (spec section 4.5):
+// the runner's own bound strategy parameter vector and the active head ref. A
+// bound actor carries the active generation's vector and ref; an unbound actor
+// carries the frozen base vector and ref. The base ref in the identity block is
+// always the runner's frozen base (a rebind never changes it, spec 5.4).
 func (f *Natural) naturalActorSeamRequest(id sim.EntityID, hour int, version sim.WorldVersion, obs strategy.NaturalObservation) protocol.ActorSeamRequest {
+	ref, params := f.activeClaimParameters(id)
 	return protocol.ActorSeamRequest{
 		Seam:        protocol.SeamNaturalClaim,
 		Actor:       id,
 		Hour:        hour,
 		Version:     version,
 		Observation: obs,
-		Strategy:    protocol.FrozenNaturalClaimParameters(f.ref),
+		Strategy:    params,
 		Actions:     naturalClaimActions(f.mechanism),
-		Identity:    f.naturalRunIdentity(),
+		Identity:    f.naturalRunIdentity(ref),
 	}
 }
 
-// naturalRunIdentity is the declared run identity block. The base and head
-// refs coincide until the patch lane introduces a versioned generation; the
-// identity digest binds the block.
-func (f *Natural) naturalRunIdentity() protocol.RunIdentity {
+// activeClaimParameters returns the actor's active head ref and parameter
+// vector: the bound generation's own vector when the actor carries the active
+// generation, otherwise the frozen base vector of the runner's base ref. The
+// frozen vector is the declared Appendix C parent vector; the active vector is
+// the generation's substituted vector.
+func (f *Natural) activeClaimParameters(id sim.EntityID) (strategy.NaturalRef, map[protocol.ParamID]int64) {
+	if f.cognitiveStrategy != nil && f.cognitiveStrategy.Binds(id) {
+		gen := f.cognitiveStrategy.generation
+		return gen.Ref, gen.Params.Values()
+	}
+	return f.ref, protocol.FrozenNaturalClaimParameters(f.ref)
+}
+
+// naturalRunIdentity is the declared run identity block. BaseRef is the
+// runner's frozen base; HeadRef is the active head the request is made under
+// (the bound generation's ref, else the frozen base). The identity digest binds
+// the block.
+func (f *Natural) naturalRunIdentity(headRef strategy.NaturalRef) protocol.RunIdentity {
 	return protocol.RunIdentity{
 		Fixture: protocol.FixtureIdentity{
 			Patches: f.patches, R: int(f.r), Founders: f.founders,
@@ -166,6 +185,6 @@ func (f *Natural) naturalRunIdentity() protocol.RunIdentity {
 		},
 		Seed:    f.seed,
 		BaseRef: f.ref,
-		HeadRef: f.ref,
+		HeadRef: headRef,
 	}
 }

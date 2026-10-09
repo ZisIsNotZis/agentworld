@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"agentworld/internal/cognition"
 	"agentworld/internal/cognition/protocol"
 )
 
@@ -51,6 +52,32 @@ func TestTriggerPredicate(t *testing.T) {
 	}
 	if name, fired := triggerPredicateOf(protocol.TrajectoryEvidence{BirthsTotal: 0}); !fired || name != "no-birth" {
 		t.Fatalf("no-birth predicate %q %t", name, fired)
+	}
+}
+
+// TestTriggerMirrorsCognitionCrossCheck pins P2-15: the harness's duplicated
+// trigger predicate/indicator must equal the declared implementation in
+// internal/cognition, which is the single source of truth. If either copy
+// drifts, one of these assertions fails.
+func TestTriggerMirrorsCognitionCrossCheck(t *testing.T) {
+	cases := []protocol.TrajectoryEvidence{
+		{},
+		{BirthsTotal: 0},
+		{BirthsTotal: 1, BuildsCommitted: 0},
+		{BirthsTotal: 1, BuildsCommitted: 1, MaxCapital: 0},
+		{BirthsTotal: 1, BuildsCommitted: 1, MaxCapital: 1},
+		{BirthsTotal: 1, BuildsCommitted: 1, MaxCapital: 2},
+		{BirthsTotal: 5, BuildsCommitted: 9, MaxCapital: 7},
+	}
+	for i, ev := range cases {
+		gotName, gotFired := triggerPredicateOf(ev)
+		wantName, wantFired := cognition.TriggerPredicate(ev)
+		if gotName != wantName || gotFired != wantFired {
+			t.Fatalf("case %d predicate (%q,%t) != cognition (%q,%t)", i, gotName, gotFired, wantName, wantFired)
+		}
+		if got, want := triggerIndicatorOf(ev), cognition.TriggerIndicator(ev); got != want {
+			t.Fatalf("case %d indicator %d != cognition %d", i, got, want)
+		}
 	}
 }
 

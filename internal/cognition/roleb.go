@@ -30,6 +30,10 @@ var (
 	ErrRoleBSandbox = errors.New("role B requires a sandbox branch")
 )
 
+// roleBValidatorIdentity is the declared validator identity recorded on every
+// patch verdict (spec 5.5): the deterministic admissibility/sandbox validator.
+const roleBValidatorIdentity = "deterministic-patch-validator/v1"
+
 // The declared audit-hour set (spec section 5.1): a pulse boundary every 24
 // hours over the 168-hour horizon.
 var VS1AuditHours = []int{24, 48, 72, 96, 120, 144, 168}
@@ -73,6 +77,7 @@ type pendingMeasurement struct {
 	affectedActors []sim.EntityID
 	applyHour      int
 	indicator      int64
+	proposer       string
 }
 
 // RoleBController is the stateful Role B lifecycle.
@@ -126,6 +131,28 @@ func (c *RoleBController) Start(base strategy.NaturalRef) error {
 
 // Head returns the current parent (head) identity.
 func (c *RoleBController) Head() PatchParent { return c.head }
+
+// proposerIdentity is the recorded proposer identity (spec 5.5): the operator
+// identity plus the used attempt's call id.
+func (c *RoleBController) proposerIdentity(callRef uint64) string {
+	return fmt.Sprintf("%s#%d", c.operator, callRef)
+}
+
+// headGeneration returns the active head's generation, or nil when the head is
+// a frozen base. The sandbox parent branch runs under it.
+func (c *RoleBController) headGeneration() *strategy.NaturalCognitiveGeneration {
+	return c.generationOf(c.head.Ref)
+}
+
+// generationOf resolves a ref to its registered generation, or nil for a
+// frozen base (a ref the controller never registered).
+func (c *RoleBController) generationOf(ref strategy.NaturalRef) *strategy.NaturalCognitiveGeneration {
+	if gen, ok := c.generations[ref]; ok {
+		g := gen
+		return &g
+	}
+	return nil
+}
 
 // TriggerPredicate is the declared in-run kick-in (spec section 5.1). It fires
 // on any one of the three evidence thresholds; the returned name is recorded.
@@ -199,12 +226,12 @@ func (c *RoleBController) Audit(ctx context.Context, hour int, evidence protocol
 	proposeRecord, err := c.appendIntervention(InterventionRecord{
 		Kind:     InterventionPatchPropose,
 		Cause:    InterventionCause{WakePolicy: "role-b", Hour: hour, Trigger: predicate, EvidenceDigest: formatHash(evidenceDigest)},
-		CallRefs: []uint64{proposal.CallRef},
+		CallRefs: callRefRefs(proposal.CallRef, proposal.CallAttempt),
 		Cost:     InterventionCost{Calls: 1},
 		Patch: &PatchRecord{
 			ParentRef: NaturalRefRecordOf(c.head.Ref), ChildRef: NaturalRefRecordOf(proposal.ParentRef),
 			ParentFingerprint: formatHash(c.head.Fingerprint), Deltas: proposal.Deltas, Intent: proposal.Intent,
-			Scope: "role-b",
+			Scope: "role-b", Proposer: c.proposerIdentity(proposal.CallRef),
 		},
 		Result: InterventionResult{Status: "pending", Reason: "proposed", IndicatorDeltas: []IndicatorDelta{}},
 	})
@@ -221,8 +248,12 @@ func (c *RoleBController) Audit(ctx context.Context, hour int, evidence protocol
 		Patch: &PatchRecord{
 			ParentRef: NaturalRefRecordOf(c.head.Ref), ChildRef: NaturalRefRecordOf(proposal.ParentRef),
 			ParentFingerprint: formatHash(c.head.Fingerprint), Deltas: proposal.Deltas, Intent: proposal.Intent, Scope: "role-b",
+			Proposer: c.proposerIdentity(proposal.CallRef),
 		},
 		Validation: &validation,
+	}
+	if validateRecord.Validation != nil {
+		validateRecord.Validation.Validator = roleBValidatorIdentity
 	}
 	if err != nil {
 		validateRecord.Result = InterventionResult{Status: "rejected", Reason: validation.Reason, IndicatorDeltas: []IndicatorDelta{}}
@@ -245,7 +276,7 @@ func (c *RoleBController) Audit(ctx context.Context, hour int, evidence protocol
 	validateRecord.Patch.ChildFingerprint = formatHash(childFingerprint)
 	validateRecord.Patch.PatchDigest = formatHash(sha256.Sum256(childWire))
 
-	verdict, err := RunSandbox(ctx, c.sandbox, child, c.measurement)
+	verdict, err := RunSandbox(ctx, c.sandbox, c.headGeneration(), child, c.measurement)
 	if err != nil {
 		return records, err
 	}
@@ -281,7 +312,7 @@ func (c *RoleBController) Audit(ctx context.Context, hour int, evidence protocol
 			ParentRef: NaturalRefRecordOf(c.head.Ref), ChildRef: childRef,
 			ParentFingerprint: formatHash(c.head.Fingerprint), ChildFingerprint: formatHash(childFingerprint),
 			Deltas: proposal.Deltas, Intent: proposal.Intent, PatchDigest: formatHash(sha256.Sum256(childWire)),
-			Scope: "role-b", AffectedActorsDigest: formatHash(affected),
+			Scope: "role-b", Proposer: c.proposerIdentity(proposal.CallRef), AffectedActorsDigest: formatHash(affected),
 		},
 		Result: InterventionResult{Status: "applied", WindowHours: c.measurement, IndicatorDeltas: []IndicatorDelta{}},
 	})
@@ -299,9 +330,49 @@ func (c *RoleBController) Audit(ctx context.Context, hour int, evidence protocol
 	c.head = parent
 	c.pending = &pendingMeasurement{
 		generation: child, parent: proposal.ParentRef, affectedDigest: affected, affectedActors: actors,
-		applyHour: hour, indicator: triggerIndicator(evidence),
+		applyHour: hour, indicator: TriggerIndicator(evidence), proposer: c.proposerIdentity(proposal.CallRef),
 	}
 	return records, nil
+}
+
+// AuditExtinct records an audit hour with no living roster (spec 14.1
+// reduction 4). There is nothing to bind or measure, so it abandons a pending
+// measurement with a typed `unavailable` result (never a fabricated value) and
+// records the zero-cost no-effect audit. It never touches the world.
+func (c *RoleBController) AuditExtinct(hour int) ([]InterventionRecord, error) {
+	if !c.started {
+		return nil, fmt.Errorf("%w: controller not started", ErrRoleB)
+	}
+	var records []InterventionRecord
+	if c.pending != nil {
+		pending := c.pending
+		record, err := c.appendIntervention(InterventionRecord{
+			Kind: InterventionPatchMeasure,
+			Cause: InterventionCause{WakePolicy: "role-b", Hour: hour, Trigger: "roster-extinct",
+				EvidenceDigest: formatHash(TrajectoryEvidenceDigest(protocol.TrajectoryEvidence{}))},
+			Cost: InterventionCost{},
+			Patch: &PatchRecord{
+				ParentRef: NaturalRefRecordOf(pending.parent), ChildRef: NaturalRefRecordOf(pending.generation.Ref),
+				Scope: "role-b", Proposer: pending.proposer, AffectedActorsDigest: formatHash(pending.affectedDigest),
+			},
+			Result: InterventionResult{Status: "unavailable", Reason: "roster-extinct", IndicatorDeltas: []IndicatorDelta{}},
+		})
+		if err != nil {
+			return records, err
+		}
+		records = append(records, record)
+		c.pending = nil
+	}
+	noEffect, err := c.appendIntervention(InterventionRecord{
+		Kind:   InterventionNoTriggerAudit,
+		Cause:  InterventionCause{WakePolicy: "role-b", Hour: hour, Trigger: "roster-extinct"},
+		Cost:   InterventionCost{},
+		Result: InterventionResult{Status: "no-effect", Reason: "roster-extinct", IndicatorDeltas: []IndicatorDelta{}},
+	})
+	if err != nil {
+		return records, err
+	}
+	return append(records, noEffect), nil
 }
 
 // measureAndMaybeRollback resolves the pending measurement: it records the
@@ -312,7 +383,7 @@ func (c *RoleBController) Audit(ctx context.Context, hour int, evidence protocol
 func (c *RoleBController) measureAndMaybeRollback(ctx context.Context, hour int, evidence protocol.TrajectoryEvidence) ([]InterventionRecord, error) {
 	pending := c.pending
 	var records []InterventionRecord
-	deltas := []IndicatorDelta{{Indicator: "trigger", Delta: triggerIndicator(evidence) - pending.indicator}}
+	deltas := []IndicatorDelta{{Indicator: "trigger", Delta: TriggerIndicator(evidence) - pending.indicator}}
 	measureRecord, err := c.appendIntervention(InterventionRecord{
 		Kind: InterventionPatchMeasure,
 		Cause: InterventionCause{WakePolicy: "role-b", Hour: hour, Trigger: "measured",
@@ -320,7 +391,7 @@ func (c *RoleBController) measureAndMaybeRollback(ctx context.Context, hour int,
 		Cost: InterventionCost{},
 		Patch: &PatchRecord{
 			ParentRef: NaturalRefRecordOf(pending.parent), ChildRef: NaturalRefRecordOf(pending.generation.Ref),
-			Scope: "role-b", AffectedActorsDigest: formatHash(pending.affectedDigest),
+			Scope: "role-b", Proposer: pending.proposer, AffectedActorsDigest: formatHash(pending.affectedDigest),
 		},
 		Result: InterventionResult{Status: "measured", WindowHours: hour - pending.applyHour, IndicatorDeltas: deltas},
 	})
@@ -330,7 +401,7 @@ func (c *RoleBController) measureAndMaybeRollback(ctx context.Context, hour int,
 	records = append(records, measureRecord)
 	c.pending = nil
 
-	verdict, err := RunSandbox(ctx, c.sandbox, pending.generation, c.measurement)
+	verdict, err := RunSandbox(ctx, c.sandbox, c.generationOf(pending.parent), pending.generation, c.measurement)
 	if err != nil {
 		return records, err
 	}
@@ -364,9 +435,9 @@ func (c *RoleBController) measureAndMaybeRollback(ctx context.Context, hour int,
 		Cost: InterventionCost{},
 		Patch: &PatchRecord{
 			ParentRef: NaturalRefRecordOf(pending.parent), ChildRef: NaturalRefRecordOf(pending.generation.Ref),
-			Scope: "role-b", AffectedActorsDigest: formatHash(pending.affectedDigest),
+			Scope: "role-b", Proposer: pending.proposer, AffectedActorsDigest: formatHash(pending.affectedDigest),
 		},
-		Validation: &ValidationRecord{Verdict: "rollback", Reason: verdict.Reason, SandboxBranchDigest: formatHash(verdict.Patched.BranchDigest), WindowHours: verdict.WindowHours},
+		Validation: &ValidationRecord{Verdict: "rollback", Reason: verdict.Reason, Validator: roleBValidatorIdentity, SandboxBranchDigest: formatHash(verdict.Patched.BranchDigest), WindowHours: verdict.WindowHours},
 		Result:     InterventionResult{Status: "rolled-back", Reason: verdict.Reason, IndicatorDeltas: deltas},
 	})
 	if err != nil {
@@ -379,9 +450,9 @@ func (c *RoleBController) appendIntervention(record InterventionRecord) (Interve
 	return c.ledger.AppendIntervention(record)
 }
 
-// triggerIndicator is the declared value the sandbox/measurement compare: the
+// TriggerIndicator is the declared value the sandbox/measurement compare: the
 // binding problem's own reading.
-func triggerIndicator(evidence protocol.TrajectoryEvidence) int64 {
+func TriggerIndicator(evidence protocol.TrajectoryEvidence) int64 {
 	switch {
 	case evidence.BirthsTotal == 0:
 		return evidence.MaxCapital
@@ -519,7 +590,12 @@ func (p *RoleBProposer) ProposeStrategyPatch(ctx context.Context, req protocol.P
 	if err != nil {
 		return protocol.PatchProposal{}, err
 	}
-	return DecodeStrategyPatchContent(call.Content, req, call.Seq)
+	proposal, err := DecodeStrategyPatchContent(call.Content, req, call.Seq)
+	if err != nil {
+		return protocol.PatchProposal{}, err
+	}
+	proposal.CallAttempt = call.Attempt
+	return proposal, nil
 }
 
 // DecodeStrategyPatchContent decodes and validates the response schema. A
