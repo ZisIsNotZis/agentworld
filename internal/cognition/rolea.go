@@ -127,7 +127,7 @@ func (s *RoleASeam) DecideActorSeam(ctx context.Context, req ActorSeamRequest) (
 	if _, err := AppendRoleAIntervention(s.ledger, RoleAInterventionInput{
 		WakePolicy: s.wakePolicy, Seam: req.Seam, Actor: req.Actor, Hour: req.Hour,
 		SimTimeMicros: roleASimTimeMicros(req.Hour), Ref: req.Identity.HeadRef,
-		Decision: decision, Call: call,
+		FrozenAction: req.FrozenAction, Decision: decision, Call: call,
 	}); err != nil {
 		return ActorSeamDecision{}, err
 	}

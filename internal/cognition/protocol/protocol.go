@@ -69,16 +69,22 @@ type RunIdentity struct {
 
 // ActorSeamRequest is the declared Role A request (Appendix A). It is built
 // only from strategy values; Observation is the frozen actor-visible value and
-// Strategy is the actor's own bound parameter vector.
+// Strategy is the actor's own bound parameter vector. FrozenAction is the
+// frozen cascade's own claim action at this seam instant; it is carried for the
+// recorded intervention so the load-bearing check can compare the applied model
+// action against the frozen cascade's (spec EC-2). It is NOT part of the
+// canonical request bytes: EncodeActorSeamRequest writes each wire field by
+// name, so the recorded request hash is unchanged.
 type ActorSeamRequest struct {
-	Seam        string
-	Actor       sim.EntityID
-	Hour        int
-	Version     sim.WorldVersion
-	Observation strategy.NaturalObservation
-	Strategy    map[ParamID]int64
-	Actions     []string
-	Identity    RunIdentity
+	Seam         string
+	Actor        sim.EntityID
+	Hour         int
+	Version      sim.WorldVersion
+	Observation  strategy.NaturalObservation
+	Strategy     map[ParamID]int64
+	Actions      []string
+	Identity     RunIdentity
+	FrozenAction string
 }
 
 // ActorSeamDecision is the declared Role A outcome (Appendix A). Source is

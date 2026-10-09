@@ -70,6 +70,10 @@ var declaredPatchRequestKeys = []string{
 type privacyScan struct {
 	roleARequests int
 	roleBRequests int
+	// recordedRoleA counts the recorded Role A requests scanned, excluding the
+	// synthetic sentinel. EC-6 requires it to be nonzero: a band that passes on
+	// the sentinel alone has scanned no run evidence.
+	recordedRoleA int
 	markers       []string
 	keyViolations []string
 }
@@ -309,6 +313,7 @@ func privacyBand(srcRoot string, runs []*cellRun) reportBand {
 			switch call.Role {
 			case cognition.RoleActorDecision:
 				scan.scanRoleARequest(fmt.Sprintf("%s#%d", cr.spec.String(), call.Seq), call.RequestBytes)
+				scan.recordedRoleA++
 			case cognition.RoleStrategyPatch:
 				scan.scanRoleBRequest(fmt.Sprintf("%s#%d", cr.spec.String(), call.Seq), call.RequestBytes)
 			}
@@ -316,14 +321,19 @@ func privacyBand(srcRoot string, runs []*cellRun) reportBand {
 	}
 
 	status := "PASS"
-	if len(violations) > 0 || len(scan.markers) > 0 || len(scan.keyViolations) > 0 {
+	switch {
+	case len(violations) > 0 || len(scan.markers) > 0 || len(scan.keyViolations) > 0:
+		status = "FAIL"
+	case scan.recordedRoleA == 0:
+		// A privacy band that saw no recorded Role A request proves nothing
+		// about the run's boundary; it must not PASS on the sentinel alone.
 		status = "FAIL"
 	}
 	evidence := fmt.Sprintf(
-		"import closure: request-builder=%d pkgs (no %s), protocol=%d pkgs (no net/transport/%s), world=%d pkgs (no transport client); violations=%d %s; sentinel+recorded Role A requests scanned=%d (incl. 1 adversarial sentinel), observation key set exact, privileged markers=%d %s; Role B packets scanned=%d, aggregate key set exact, key violations=%d %s",
+		"import closure: request-builder=%d pkgs (no %s), protocol=%d pkgs (no net/transport/%s), world=%d pkgs (no transport client); violations=%d %s; sentinel+recorded Role A requests scanned=%d (incl. 1 adversarial sentinel; recorded=%d), observation key set exact, privileged markers=%d %s; Role B packets scanned=%d, aggregate key set exact, key violations=%d %s",
 		builder, worldPkg, protocols, worldPkg, world,
 		len(violations), joinOrNone(violations),
-		scan.roleARequests, len(scan.markers), joinOrNone(scan.markers),
+		scan.roleARequests, scan.recordedRoleA, len(scan.markers), joinOrNone(scan.markers),
 		scan.roleBRequests, len(scan.keyViolations), joinOrNone(scan.keyViolations))
 	return band("EC-6", criterion, status, evidence)
 }

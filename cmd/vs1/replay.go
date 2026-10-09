@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"path/filepath"
+	"sync"
 
 	"agentworld/internal/cognition"
 )
@@ -27,45 +28,78 @@ func (c *replayModelClient) Complete(_ context.Context, req cognition.ModelReque
 	return cognition.ModelResponse{Body: res.ResponseBody, Content: res.Content, Usage: res.Usage, Status: res.Status}, nil
 }
 
-// runReplaySubset replays every A1 cell that ran and compares the accepted
-// history. It is bounded by the caller's deadline: an unreplayed cell is
-// recorded with its reason, never silently dropped.
-func runReplaySubset(ctx context.Context, runs []*cellRun, root string, arms []string) map[string]string {
-	out := map[string]string{}
-	for _, cr := range runs {
-		if cr.spec.Arm != ArmA1 || !cr.haveAccepted {
-			continue
-		}
-		key := cr.spec.String()
-		if ctx.Err() != nil {
-			out[key] = "skipped:budget"
-			continue
-		}
-		replay, err := cognition.OpenReplay(cr.ledgerPath)
-		if err != nil {
-			out[key] = "replay-open:" + err.Error()
-			continue
-		}
-		// The replay sentinel must be incapable of a network call.
-		if _, err := replay.NetworkClient().Complete(ctx, cognition.ModelRequest{
-			Model: cognition.DefaultModelID, Endpoint: "sentinel", Request: []byte("{}"),
-		}); err == nil {
-			out[key] = "network-not-forbidden"
-			continue
-		}
-		rc, err := runCell(ctx, cr.spec, cr.fp, filepath.Join(root, "replay"), replay)
-		if err != nil {
-			out[key] = "replay-run:" + err.Error()
-			continue
-		}
-		if rc.accepted.TipHash == cr.accepted.TipHash && rc.accepted.ProjectionHash == cr.accepted.ProjectionHash &&
-			rc.accepted.HistoryBytes == cr.accepted.HistoryBytes {
-			out[key] = "identical"
-		} else {
-			out[key] = "mismatch"
-		}
+// runReplaySubset replays every recorded AI cell that ran and compares the
+// accepted history. It is bounded by the caller's deadline and run with the
+// declared matrix parallelism (each cell writes its own replay directory): an
+// unreplayed cell is recorded with its reason, never silently dropped. An
+// A2/A3 cell with no applied generation (no apply, no rollback) has empty
+// generation state, so its genesis replay is byte-exact like A1's; a cell with
+// generation state is not replayed from a single bundle (spec 14.1 reduction 2)
+// and is declared, not silently omitted.
+func runReplaySubset(ctx context.Context, runs []*cellRun, root string, arms []string, parallel int) map[string]string {
+	if parallel < 1 {
+		parallel = 1
 	}
+	var mu sync.Mutex
+	out := map[string]string{}
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, parallel)
+	for _, cr := range runs {
+		switch cr.spec.Arm {
+		case ArmA1:
+		case ArmA2, ArmA3:
+			if cr.roleBApplied > 0 || cr.roleBRollback > 0 {
+				continue
+			}
+		default:
+			continue
+		}
+		if !cr.haveAccepted {
+			continue
+		}
+		cr := cr
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			key, verdict := replayOneCell(ctx, cr, root)
+			mu.Lock()
+			out[key] = verdict
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
 	return out
+}
+
+// replayOneCell replays one recorded cell from its genesis through the replay
+// client and compares the accepted history. A network-incapable sentinel client
+// is proven first; a budget-expired cell records its typed skip.
+func replayOneCell(ctx context.Context, cr *cellRun, root string) (key, verdict string) {
+	key = cr.spec.String()
+	if ctx.Err() != nil {
+		return key, "skipped:budget"
+	}
+	replay, err := cognition.OpenReplay(cr.ledgerPath)
+	if err != nil {
+		return key, "replay-open:" + err.Error()
+	}
+	// The replay sentinel must be incapable of a network call.
+	if _, err := replay.NetworkClient().Complete(ctx, cognition.ModelRequest{
+		Model: cognition.DefaultModelID, Endpoint: "sentinel", Request: []byte("{}"),
+	}); err == nil {
+		return key, "network-not-forbidden"
+	}
+	rc, err := runCell(ctx, cr.spec, cr.fp, filepath.Join(root, "replay"), replay)
+	if err != nil {
+		return key, "replay-run:" + err.Error()
+	}
+	if rc.accepted.TipHash == cr.accepted.TipHash && rc.accepted.ProjectionHash == cr.accepted.ProjectionHash &&
+		rc.accepted.HistoryBytes == cr.accepted.HistoryBytes {
+		return key, "identical"
+	}
+	return key, "mismatch"
 }
 
 func asCeiling(err error, target **cognition.CognitiveCeilingHitError) bool {

@@ -158,6 +158,10 @@ type RoleARecord struct {
 	Reason         string  `json:"reason,omitempty"`
 	Confidence     float64 `json:"confidence"`
 	FallbackReason string  `json:"fallback_reason,omitempty"`
+	// FrozenAction is the frozen cascade's own claim action at the same seam
+	// instant, recorded so the load-bearing check can verify the applied model
+	// action diverged from it (spec EC-2). Empty on an unrecorded/frozen path.
+	FrozenAction string `json:"frozen_action,omitempty"`
 }
 
 // NaturalRefRecord is the canonical wire form of a strategy reference.

@@ -33,6 +33,7 @@ type RoleAInterventionInput struct {
 	Hour          int
 	SimTimeMicros int64
 	Ref           strategy.NaturalRef
+	FrozenAction  string
 	Decision      ActorSeamDecision
 	Call          CallResult
 }
@@ -74,6 +75,7 @@ func AppendRoleAIntervention(l *Ledger, in RoleAInterventionInput) (Intervention
 			Reason:         in.Decision.Reason,
 			Confidence:     in.Decision.Confidence,
 			FallbackReason: fallbackReasonOf(in.Decision),
+			FrozenAction:   in.FrozenAction,
 		},
 		Result: InterventionResult{Status: status, Reason: reason, IndicatorDeltas: []IndicatorDelta{}},
 	}

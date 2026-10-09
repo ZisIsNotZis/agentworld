@@ -52,12 +52,16 @@ func renderText(ev evaluation) string {
 	}
 
 	if len(ev.Fixtures) > 0 {
-		fmt.Fprintf(&b, "\nSCRIPTED-PROPOSER FIXTURE (labeled; not a declared arm)\n")
+		fmt.Fprintf(&b, "\nSCRIPTED-PROPOSER FIXTURES (labeled; not declared arms)\n")
 		for _, f := range ev.Fixtures {
 			fmt.Fprintf(&b, "%s\n", f.Label)
-			fmt.Fprintf(&b, "%s f%d-s%d: proposed=%d admitted=%d applied=%d measured=%d rolled-back=%d measured_window=%dh\n",
-				f.Arm, f.F, f.Seed, f.Proposed, f.Admitted, f.Applied, f.Measured, f.RolledBack, f.MeasuredWindowHours)
-			fmt.Fprintf(&b, "unscripted A2 honest null (separate): proposed=%d validated=%d applied=%d rejected=%d rolled-back=%d\n",
+			fmt.Fprintf(&b, "%s f%d-s%d: proposed=%d admitted=%d applied=%d measured=%d rolled-back=%d measured_window=%dh divergent-parent-sandbox=%d measurement-kept-head=%t\n",
+				f.Arm, f.F, f.Seed, f.Proposed, f.Admitted, f.Applied, f.Measured, f.RolledBack,
+				f.MeasuredWindowHours, f.DivergentParentSandbox, f.MeasurementKeptHead)
+			if f.FinalBundleError != "" {
+				fmt.Fprintf(&b, "  final-bundle-error %s: %s\n", f.Arm, f.FinalBundleError)
+			}
+			fmt.Fprintf(&b, "  unscripted A2 honest null (separate): proposed=%d validated=%d applied=%d rejected=%d rolled-back=%d\n",
 				f.UnscriptedA2Proposed, f.UnscriptedA2Validated, f.UnscriptedA2Applied, f.UnscriptedA2Rejected, f.UnscriptedA2Rolled)
 		}
 	}

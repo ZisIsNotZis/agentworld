@@ -204,7 +204,7 @@ func (s *inertSeam) DecideActorSeam(ctx context.Context, req protocol.ActorSeamR
 	if _, err := cognition.AppendRoleAIntervention(s.ledger, cognition.RoleAInterventionInput{
 		WakePolicy: s.wake, Seam: req.Seam, Actor: req.Actor, Hour: req.Hour,
 		SimTimeMicros: int64(req.Hour)*3_600_000_000 + 1, Ref: req.Identity.HeadRef,
-		Decision: recorded, Call: call,
+		FrozenAction: req.FrozenAction, Decision: recorded, Call: call,
 	}); err != nil {
 		return protocol.ActorSeamDecision{}, err
 	}

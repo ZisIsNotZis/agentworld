@@ -43,6 +43,7 @@ type cellRun struct {
 	escalated        int
 	decisionErrors   int
 	appliedModel     int
+	divergedModel    int
 	frozenBase       strategy.NaturalRef
 	roleBApplied     int
 	roleBRollback    int
@@ -52,12 +53,16 @@ type cellRun struct {
 	roleBMeasured    int
 	roleBMeasureHour int
 	roleBNoTrigger   int
-	modelDigest      string
-	finalBundleName  string
-	finalBundleError string
-	ceilingRows      []cognition.CognitiveRow
-	callAttempts     int
-	callLatencyUS    int64
+	// roleBDivergentParent counts patch-validate records whose sandbox parent
+	// branch was a cognitive generation (the current head after an apply that
+	// was not rolled back), i.e. the divergent-parent case (spec 10.2).
+	roleBDivergentParent int
+	modelDigest          string
+	finalBundleName      string
+	finalBundleError     string
+	ceilingRows          []cognition.CognitiveRow
+	callAttempts         int
+	callLatencyUS        int64
 }
 
 func isAuditHour(hour int) bool {
@@ -263,6 +268,9 @@ func (cr *cellRun) countInterventions() {
 			if rec.RoleA != nil {
 				if rec.RoleA.Source == cognition.SourceModel {
 					cr.appliedModel++
+					if rec.RoleA.FrozenAction != "" && rec.RoleA.Action != rec.RoleA.FrozenAction {
+						cr.divergedModel++
+					}
 				} else {
 					cr.decisionErrors++
 				}
@@ -278,6 +286,9 @@ func (cr *cellRun) countInterventions() {
 				cr.roleBRejected++
 			} else if rec.Result.Status == "validated" {
 				cr.roleBValidated++
+			}
+			if rec.Patch != nil && rec.Patch.ParentRef.ID == strategy.NaturalCognitiveRefID {
+				cr.roleBDivergentParent++
 			}
 		case cognition.InterventionPatchMeasure:
 			cr.roleBMeasured++

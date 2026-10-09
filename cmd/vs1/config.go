@@ -25,24 +25,45 @@ const (
 	// of a declared arm, so it is NOT part of declaredArms: the declared 60-cell
 	// matrix and its honest-null A2 counts are untouched.
 	ArmA2f = "A2f"
+	// ArmA2g is the admitted-measurement fixture: the same A2 mechanism scripted
+	// so the h72 sandbox re-check ADMITS, leaving the head on the child
+	// generation, after which the h72 proposal is sandboxed against that child (a
+	// cognitive generation, not the frozen base) -- the divergent-parent case of
+	// spec 10.2, exercised end to end rather than only with a fake sandbox.
+	ArmA2g = "A2g"
 )
 
 // declaredArms is the arm order of the matrix.
 var declaredArms = []string{ArmA0, ArmA1, ArmA1i, ArmA2, ArmA3}
 
-// FixtureLabel labels the scripted-proposer fixture everywhere it appears: it
-// is a hand-authored script that makes the machinery's apply/measure/rollback
-// path reachable, not a model judgment and not a result tuned into the arms.
-const FixtureLabel = "scripted-proposer-fixture (hand-authored Role B script; exercises apply/measure/rollback; not a declared arm)"
+// FixtureLabel labels the scripted-proposer fixtures everywhere they appear:
+// they are hand-authored scripts that make the machinery's lifecycle paths
+// reachable, not model judgments and not results tuned into the arms.
+const FixtureLabel = "scripted-proposer-fixture (hand-authored Role B script; not a declared arm)"
+
+// fixtureLabelFor distinguishes the two scripted fixtures: A2f exercises
+// apply->measure->rollback; A2g exercises an admitted measurement and the
+// divergent-parent sandbox branch.
+func fixtureLabelFor(arm string) string {
+	if arm == ArmA2g {
+		return FixtureLabel + " [admitted-measurement: the h72 measurement admits and the h72 proposal is sandboxed against the diverged child parent]"
+	}
+	return FixtureLabel + " [rollback: h48 apply, h72 measure+rollback]"
+}
 
 // scriptedFixtureFounders and scriptedFixtureSeed pin the one declared cell
-// (spec section 11.3) the scripted-proposer fixture runs in: f=10, s=0, whose
-// audit-hour trajectory lets the hand-authored delta pass the concrete sandbox
+// (spec section 11.3) the scripted-proposer fixtures run in: f=10, s=0, whose
+// audit-hour trajectory lets the hand-authored deltas pass the concrete sandbox
 // admission rule (measured offline against the cached audit bundles).
 const (
 	scriptedFixtureFounders = 10
 	scriptedFixtureSeed     = 0
 )
+
+// divergentSwitchHour is the hour the A2g Role A script switches from
+// provision-first to gather; it replenishes the world across [48,72] so the h72
+// sandbox re-check is run over a populated window (spec 10.2).
+const divergentSwitchHour = 48
 
 // twinFounders, twinSeed, and twinWorkers pin the declared determinism twin
 // (spec section 11.3): f=12, s=0 at 4 workers, compared against its workers-1
@@ -53,14 +74,16 @@ const (
 	twinWorkers  = 4
 )
 
-// scriptedFixture returns the fixture of the scripted-proposer fixture cell.
-// The horizon is the rollback boundary (h72): the mandatory rollback cannot be
-// followed by another reconcilable save because a single bundle does not yet
-// replay a journal segment produced under a rolled-back generation (spec
-// section 14.1 reduction 2), so the fixture ends where that path completes.
+// scriptedFixture returns the fixture of the scripted-proposer fixture cells.
+// The horizon runs past the h72 audit (so the measurement resolves) to the next
+// declared audit boundary (VS1AuditHours[3] = 96), where the run stops. The
+// post-measurement save is not reconcilable while an applied generation is
+// active (spec section 14.1 reduction 2), so it fails and is reported, never
+// swallowed; the fixture report carries that failure rather than pretending it
+// saved.
 func scriptedFixture() fixture {
 	fp := declaredFixture(scriptedFixtureFounders, scriptedFixtureSeed)
-	fp.Hours = cognition.VS1AuditHours[3] // h48 apply, h72 measure+rollback, stop before any post-rollback save
+	fp.Hours = cognition.VS1AuditHours[3]
 	return fp
 }
 
@@ -159,12 +182,12 @@ func wakeFor(arm string) protocol.WakePolicy {
 func usesModel(arm string) bool { return arm != ArmA0 }
 
 // usesRoleB reports whether an arm runs the Role B lifecycle.
-func usesRoleB(arm string) bool { return arm == ArmA2 || arm == ArmA3 || arm == ArmA2f }
+func usesRoleB(arm string) bool { return arm == ArmA2 || arm == ArmA3 || isFixtureArm(arm) }
 
 // isFixtureArm reports whether an arm is a labeled hand-authored fixture rather
 // than a declared matrix arm. Fixture runs are reported separately and never
 // enter the declared-arm counts or the fidelity vector.
-func isFixtureArm(arm string) bool { return arm == ArmA2f }
+func isFixtureArm(arm string) bool { return arm == ArmA2f || arm == ArmA2g }
 
 // budgetFor returns the declared cognitive ceiling of an arm. The VS1 matrix
 // ceiling is a declared compute/authorised-spend bound (the hermetic fake

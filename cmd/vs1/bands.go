@@ -14,7 +14,7 @@ import (
 // roadmap's VS1 (a)-(f) from the gathered runs. A criterion L4 cannot decide
 // from its own artifacts is reported not-evaluable with the evidence pointer,
 // never silently PASS.
-func evaluateBands(runs, allRuns []*cellRun, recordedDir string, replay map[string]string, probe *probeReport, srcRoot string, fixture *fixtureReport, twins []twinReport) []reportBand {
+func evaluateBands(runs, allRuns []*cellRun, recordedDir string, replay map[string]string, probe *probeReport, srcRoot string, fixtures []fixtureReport, twins []twinReport) []reportBand {
 	byKey := map[string]*cellRun{}
 	byCell := map[string]map[string]*cellRun{}
 	for _, cr := range runs {
@@ -36,7 +36,7 @@ func evaluateBands(runs, allRuns []*cellRun, recordedDir string, replay map[stri
 	bands = append(bands, ec2(byCell, cellKeys))
 	bands = append(bands, ec3(replay, runs))
 	bands = append(bands, ec4(runs))
-	bands = append(bands, ec5(byCell, cellKeys, fixture))
+	bands = append(bands, ec5(byCell, cellKeys, fixtures))
 	bands = append(bands, privacyBand(srcRoot, allRuns))
 	bands = append(bands, ec7(runs, probe))
 	bands = append(bands, ec8(byCell, cellKeys, twins))
@@ -89,7 +89,7 @@ func ec1(runs []*cellRun, byCell map[string]map[string]*cellRun, recordedDir str
 }
 
 func ec2(byCell map[string]map[string]*cellRun, cellKeys []string) reportBand {
-	const criterion = "EC-2 load-bearing model, no hidden coupling: role-a-inert == no-AI byte-exact at all 12 cells; at every cell the role-a arm's trajectory differs from no-AI in >=1 declared indicator hour; and the ledger shows >=1 applied model decision per cell whose action differs from the frozen cascade."
+	const criterion = "EC-2 load-bearing model, no hidden coupling: role-a-inert == no-AI byte-exact at all 12 cells; at every cell the role-a arm's trajectory differs from no-AI in >=1 declared indicator hour; and the ledger shows >=1 applied model decision per cell whose action differs from the frozen cascade's action at the same seam instant."
 	inertMismatch, noDivergence, noApplied, checked := 0, 0, 0, 0
 	for _, key := range cellKeys {
 		cell := byCell[key]
@@ -105,7 +105,7 @@ func ec2(byCell map[string]map[string]*cellRun, cellKeys []string) reportBand {
 		if !diverges(a1, a0) {
 			noDivergence++
 		}
-		if a1.appliedModel < 1 {
+		if a1.appliedModel < 1 || a1.divergedModel < 1 {
 			noApplied++
 		}
 	}
@@ -117,15 +117,16 @@ func ec2(byCell map[string]map[string]*cellRun, cellKeys []string) reportBand {
 		status = "FAIL"
 	}
 	return band("EC-2", criterion, status,
-		fmt.Sprintf("cells=%d inert!=no-AI=%d no-divergence=%d no-applied-model=%d (hermetic FakeClient content, not a real-model claim)", checked, inertMismatch, noDivergence, noApplied))
+		fmt.Sprintf("cells=%d inert!=no-AI=%d no-divergence=%d no-applied-diverging-model=%d (an applied model decision whose recorded action differs from the frozen cascade's own recorded action at the same seam; hermetic FakeClient content, not a real-model claim)", checked, inertMismatch, noDivergence, noApplied))
 }
 
 func ec3(replay map[string]string, runs []*cellRun) reportBand {
-	const criterion = "EC-3 byte-exact replay, zero model calls (declared subset): every recorded A1 cell in the declared replay subset replays byte-exact from its genesis with zero gateway requests; the deliberately mutated ledger byte is detected by the committed ledger unit test (internal/cognition/ledger_test.go TestLedgerDetectsTamperedField, TestLedgerDetectsRehashedMiddleRecord). The declared subset excludes A2/A3, whose Role B generation state is not yet replayed from a single bundle (spec 14.1 reduction 2)."
+	const criterion = "EC-3 byte-exact replay, zero model calls: every recorded AI cell whose generation state is empty replays byte-exact from its genesis with zero gateway requests -- A1, and the apply-free A2/A3 cells -- and a deliberately mutated ledger byte is detected by the committed ledger unit test (internal/cognition/ledger_test.go TestLedgerDetectsTamperedField, TestLedgerDetectsRehashedMiddleRecord). An AI cell carrying applied-generation state (an apply or a rollback) is not yet replayed from a single bundle: spec 14.1 reduction 2 covers an apply following a mid-run rollback, and those cells are declared, not silently omitted."
 	if len(replay) == 0 {
 		return band("EC-3", criterion, "not-evaluable", "no replay subset was run; the ledger chain and mutation detection are reported under EC-7's ledger evidence")
 	}
 	mismatch := 0
+	perArm := map[string]int{}
 	keys := make([]string, 0, len(replay))
 	for k := range replay {
 		keys = append(keys, k)
@@ -135,12 +136,33 @@ func ec3(replay map[string]string, runs []*cellRun) reportBand {
 		if replay[k] != "identical" {
 			mismatch++
 		}
+		if arm, _, ok := strings.Cut(k, "-"); ok {
+			perArm[arm]++
+		}
 	}
 	status := "PASS"
 	if mismatch > 0 {
 		status = "FAIL"
 	}
-	return band("EC-3", criterion, status, fmt.Sprintf("replayed A1 cells=%d mismatches=%d; not replayed: A2/A3 (declared subset, spec 14.1 reduction 2); mutated-ledger detection: internal/cognition/ledger_test.go (unit)", len(replay), mismatch))
+	notReplayed := notReplayedSummary(runs)
+	return band("EC-3", criterion, status, fmt.Sprintf("replayed cells=%d mismatches=%d by-arm[A1=%d A2=%d A3=%d]; not replayed: %s, plus the generation-state fixtures A2f/A2g (spec 14.1 reduction 2: an apply following a mid-run rollback is not yet replayed from a single bundle); mutated-ledger detection: internal/cognition/ledger_test.go (unit)", len(replay), mismatch, perArm[ArmA1], perArm[ArmA2], perArm[ArmA3], notReplayed))
+}
+
+// notReplayedSummary names the AI cells the declared replay subset omitted
+// because they carry applied-generation state (an apply or a rollback).
+func notReplayedSummary(runs []*cellRun) string {
+	var out []string
+	for _, cr := range runs {
+		if cr.spec.Arm != ArmA2 && cr.spec.Arm != ArmA3 {
+			continue
+		}
+		if cr.roleBApplied == 0 && cr.roleBRollback == 0 {
+			continue
+		}
+		out = append(out, fmt.Sprintf("%s(apply=%d rollback=%d)", cr.spec.String(), cr.roleBApplied, cr.roleBRollback))
+	}
+	sort.Strings(out)
+	return joinOrNone(out)
 }
 
 func ec4(runs []*cellRun) reportBand {
@@ -212,8 +234,8 @@ func costComplete(rec cognition.InterventionRecord) bool {
 	return (len(rec.CallRefs) == 0) == (rec.Cost.Calls == 0)
 }
 
-func ec5(byCell map[string]map[string]*cellRun, cellKeys []string, fixture *fixtureReport) reportBand {
-	const criterion = "EC-5 patch lifecycle (C9/C10): (a) the declared scripted proposal fixture runs propose->validate->sandbox->apply->measure->rollback end to end; (b) broken patches rejected at validation with zero mutation; (c) a regressing patch applied then rolled back with lineage retained; (d) live A2 cells report admitted/applied/measured/rolled-back counts, the honest null valid."
+func ec5(byCell map[string]map[string]*cellRun, cellKeys []string, fixtures []fixtureReport) reportBand {
+	const criterion = "EC-5 patch lifecycle (C9/C10): (a) the declared scripted proposal fixtures run propose->validate->sandbox->apply->measure->rollback (A2f) and propose->...->admitted-measurement->divergent-parent-sandbox (A2g) end to end; (b) broken patches rejected at validation with zero mutation; (c) a regressing patch applied then rolled back with lineage retained; (d) live A2 cells report admitted/applied/measured/rolled-back counts, the honest null valid."
 	a2Applied, a2Proposed, a2Rejected, a2Rolled, a2Validated, a2Measured, a2Cells := 0, 0, 0, 0, 0, 0, 0
 	a3Applied, a3Proposed, a3Rejected, a3Rolled, a3Validated, a3Measured, a3Cells := 0, 0, 0, 0, 0, 0, 0
 	for _, key := range cellKeys {
@@ -250,14 +272,41 @@ func ec5(byCell map[string]map[string]*cellRun, cellKeys []string, fixture *fixt
 		a2Cells, a2Proposed, a2Validated, a2Applied, a2Rejected, a2Measured, a2Rolled,
 		a3Cells, a3Proposed, a3Validated, a3Applied, a3Rejected, a3Measured, a3Rolled,
 		a2Proposed+a3Proposed, a2Applied+a3Applied, a2Rolled+a3Rolled)
-	if fixture != nil && fixture.Ran {
-		evidence += fmt.Sprintf("; SCRIPTED-PROPOSER FIXTURE %s (f%d-s%d): proposed=%d admitted=%d applied=%d measured=%d rolled-back=%d measured_window=%dh",
-			fixture.Label, fixture.F, fixture.Seed, fixture.Proposed, fixture.Admitted, fixture.Applied, fixture.Measured, fixture.RolledBack, fixture.MeasuredWindowHours)
-		if fixture.Admitted == 0 || fixture.Applied == 0 || fixture.Measured == 0 || fixture.RolledBack == 0 {
+	if len(fixtures) == 0 {
+		evidence += "; SCRIPTED-PROPOSER FIXTURES not run"
+		status = "FAIL"
+	}
+	var rollbackFixture, divergentFixture *fixtureReport
+	for i := range fixtures {
+		switch fixtures[i].Arm {
+		case ArmA2f:
+			rollbackFixture = &fixtures[i]
+		case ArmA2g:
+			divergentFixture = &fixtures[i]
+		}
+	}
+	if rollbackFixture != nil && rollbackFixture.Ran {
+		evidence += fmt.Sprintf("; ROLLBACK FIXTURE %s (f%d-s%d): proposed=%d admitted=%d applied=%d measured=%d rolled-back=%d measured_window=%dh",
+			rollbackFixture.Arm, rollbackFixture.F, rollbackFixture.Seed, rollbackFixture.Proposed, rollbackFixture.Admitted,
+			rollbackFixture.Applied, rollbackFixture.Measured, rollbackFixture.RolledBack, rollbackFixture.MeasuredWindowHours)
+		if rollbackFixture.Admitted == 0 || rollbackFixture.Applied == 0 || rollbackFixture.Measured == 0 || rollbackFixture.RolledBack == 0 {
 			status = "FAIL"
 		}
 	} else {
-		evidence += "; SCRIPTED-PROPOSER FIXTURE not run"
+		evidence += "; ROLLBACK FIXTURE not run"
+		status = "FAIL"
+	}
+	if divergentFixture != nil && divergentFixture.Ran {
+		evidence += fmt.Sprintf("; DIVERGENT-PARENT FIXTURE %s (f%d-s%d): proposed=%d admitted=%d applied=%d measured=%d rolled-back=%d measurement-kept-head=%t divergent-parent-sandbox=%d",
+			divergentFixture.Arm, divergentFixture.F, divergentFixture.Seed, divergentFixture.Proposed, divergentFixture.Admitted,
+			divergentFixture.Applied, divergentFixture.Measured, divergentFixture.RolledBack, divergentFixture.MeasurementKeptHead, divergentFixture.DivergentParentSandbox)
+		// The divergent-parent case needs the measurement to keep the head on the
+		// child generation AND a proposal sandboxed against that child.
+		if !divergentFixture.MeasurementKeptHead || divergentFixture.DivergentParentSandbox < 1 {
+			status = "FAIL"
+		}
+	} else {
+		evidence += "; DIVERGENT-PARENT FIXTURE not run"
 		status = "FAIL"
 	}
 	evidence += "; EC-5(b)(c) are unit-only: the broken/regressing patch fixtures are internal/cognition/roleb_lifecycle_test.go (TestPatchValidationRejects, TestRoleBLifecycleApplyMeasureRollback); no matrix cell drives them"
@@ -394,7 +443,7 @@ func ec11(runs []*cellRun) reportBand {
 	if noAIViolations > 0 || aiViolations > 0 || !labelled {
 		status = "FAIL"
 	}
-	return band("EC-11", criterion, status, fmt.Sprintf("label=%q labelled=%t; no-AI token_cost!=0 violations=%d; AI cells=%d with a recorded token_cost=%d (AI token_cost!=recorded-total violations=%d)", evaluationLabel, labelled, noAIViolations, aiCells, aiWithCost, aiViolations))
+	return band("EC-11", criterion, status, fmt.Sprintf("label=%q labelled=%t; no-AI cells with a nonzero token_cost=%d; AI cells=%d, of which with a positive recorded token_cost (=cost_micros by construction)=%d; AI cells with zero recorded token_cost=%d", evaluationLabel, labelled, noAIViolations, aiCells, aiWithCost, aiViolations))
 }
 
 func sortedCellKeys(byCell map[string]map[string]*cellRun) []string {

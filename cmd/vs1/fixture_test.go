@@ -11,18 +11,24 @@ import (
 // fixture's Role B delta and that the declared arms keep the honest-null
 // provision-floor proposal unchanged.
 func TestScriptedFixtureDeltaAdmitsAndIsInDomain(t *testing.T) {
-	deltas, _ := patchedDeltasFor(ArmA2f)
+	deltas, _ := patchedDeltasFor(ArmA2f, strategy.FrozenNaturalPolicy7().Ref.ID)
 	if len(deltas) != 1 || deltas[0].Param != protocol.ParamBagBuildEnergyFloor || deltas[0].Value != 2 {
 		t.Fatalf("fixture deltas %+v, want bag.build_energy_floor=2", deltas)
 	}
-	for _, d := range deltas {
+	// The A2g divergent fixture proposes a distinct delta on a cognitive parent
+	// so the h72 proposal is not rejected as a no-op before the sandbox.
+	divergent, _ := patchedDeltasFor(ArmA2g, strategy.NaturalCognitiveRefID)
+	if len(divergent) != 1 || divergent[0].Param != protocol.ParamBagBuildEnergyFloor || divergent[0].Value != 1 {
+		t.Fatalf("A2g chained deltas %+v, want bag.build_energy_floor=1", divergent)
+	}
+	for _, d := range append(append([]protocol.ParameterDelta(nil), deltas...), divergent...) {
 		min, max, ok := strategy.CognitiveParameterDomain(strategy.CognitiveParamID(d.Param))
 		if !ok || d.Value < min || d.Value > max {
 			t.Fatalf("fixture delta %s=%d outside the declared domain [%d,%d]", d.Param, d.Value, min, max)
 		}
 	}
 	for _, arm := range []string{ArmA2, ArmA3} {
-		deltas, _ := patchedDeltasFor(arm)
+		deltas, _ := patchedDeltasFor(arm, strategy.FrozenNaturalPolicy7().Ref.ID)
 		if len(deltas) != 1 || deltas[0].Param != protocol.ParamClaimProvisionEnergyFloor || deltas[0].Value != 3 {
 			t.Fatalf("declared arm %s delta changed: %+v", arm, deltas)
 		}

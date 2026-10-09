@@ -7,6 +7,7 @@ import (
 
 	"agentworld/internal/cognition"
 	"agentworld/internal/cognition/protocol"
+	"agentworld/internal/strategy"
 )
 
 // slotWire is the observation home-slot row the scripted policy reads.
@@ -24,10 +25,13 @@ type slotWire struct {
 // otherwise take a stored meal; otherwise gather a stocked home slot; otherwise
 // wait. This deliberately overrides the frozen cascade's own energy thresholds,
 // which is the seam's point, and is the mechanism the f=12 natural/7-versus-7b
-// sensitivity datum already found decision-relevant.
+// sensitivity datum already found decision-relevant. The A2g fixture switches
+// to gather at divergentSwitchHour, which replenishes the h72 sandbox window so
+// its measurement can admit.
 //
-// Role B: propose the declared single-delta child that lowers
-// claim.provision_energy_floor to 3, echoing the request's parent ref.
+// Role B: a single declared delta over the request's parent ref. The A2g
+// fixture proposes a distinct delta on a cognitive parent so its h72 proposal
+// reaches the sandbox against the divergent parent instead of being a no-op.
 func scriptedResponder(spec cellSpec) func(cognition.ModelRequest) (cognition.ModelResponse, error) {
 	return func(req cognition.ModelRequest) (cognition.ModelResponse, error) {
 		var envelope struct {
@@ -55,6 +59,9 @@ func scriptedResponder(spec cellSpec) func(cognition.ModelRequest) (cognition.Mo
 			}
 			action := scriptedActorAction(wire.Observation.BagUnits, wire.Observation.GranaryStock,
 				wire.Observation.LastStoredMealHour, wire.Actor.Hour, wire.Observation.HomeSlots)
+			if spec.Arm == ArmA2g && wire.Actor.Hour >= divergentSwitchHour {
+				action = "gather"
+			}
 			content = []byte(fmt.Sprintf(
 				`{"schema_version":1,"action":%q,"rationale":"hermetic scripted provision-first proposal","confidence":1}`,
 				action))
@@ -68,7 +75,7 @@ func scriptedResponder(spec cellSpec) func(cognition.ModelRequest) (cognition.Mo
 			if err := json.Unmarshal(req.Request, &wire); err != nil {
 				return cognition.ModelResponse{}, fmt.Errorf("scripted responder: %w", err)
 			}
-			deltas, intent := patchedDeltasFor(spec.Arm)
+			deltas, intent := patchedDeltasFor(spec.Arm, wire.ParentRef.ID)
 			content = []byte(fmt.Sprintf(
 				`{"schema_version":1,"propose":true,"parent_ref":{"id":%q,"version":%d},"deltas":%s,"intent":%q}`,
 				wire.ParentRef.ID, wire.ParentRef.Version, encodeScriptedDeltas(deltas), intent))
@@ -83,16 +90,29 @@ func scriptedResponder(spec cellSpec) func(cognition.ModelRequest) (cognition.Mo
 	}
 }
 
-// patchedDeltasFor returns the declared Role B script of an arm. The declared
-// arms propose the single provision-floor child (the hermetic honest-null
-// proposal the concrete sandbox declines at every declared cell). The
-// scripted-proposer fixture proposes the single build-floor delta measured to
-// pass the concrete sandbox admission rule at the fixture cell
-// (bag.build_energy_floor=2 over the parent's 3), so the apply/measure/rollback
-// path is reachable. It is a fixture, not a tuning of the declared arms (see
-// FixtureLabel).
-func patchedDeltasFor(arm string) ([]protocol.ParameterDelta, string) {
-	if arm == ArmA2f {
+// patchedDeltasFor returns the declared Role B script of an arm, given the
+// parent ref id the proposal echoes. The declared arms propose the single
+// provision-floor child (the hermetic honest-null proposal the concrete sandbox
+// declines at every declared cell). The scripted fixtures propose a single
+// build-floor delta measured to pass the concrete sandbox admission rule at the
+// fixture cell. A2f applies bag.build_energy_floor=2 over the base's 3 and is
+// then rolled back at h72; A2g applies the same delta on the frozen base and,
+// on the resulting cognitive parent, a distinct bag.build_energy_floor=1 delta,
+// so its h72 proposal reaches the sandbox against the divergent parent rather
+// than being rejected as a no-op. These are fixtures, not tunings of the
+// declared arms (see FixtureLabel).
+func patchedDeltasFor(arm, parentRefID string) ([]protocol.ParameterDelta, string) {
+	switch arm {
+	case ArmA2f:
+		return []protocol.ParameterDelta{
+			{Param: protocol.ParamBagBuildEnergyFloor, Value: 2},
+		}, "scripted-proposer fixture: relax the bag build energy floor"
+	case ArmA2g:
+		if parentRefID == strategy.NaturalCognitiveRefID {
+			return []protocol.ParameterDelta{
+				{Param: protocol.ParamBagBuildEnergyFloor, Value: 1},
+			}, "scripted-proposer fixture: relax the bag build floor again on the chained parent"
+		}
 		return []protocol.ParameterDelta{
 			{Param: protocol.ParamBagBuildEnergyFloor, Value: 2},
 		}, "scripted-proposer fixture: relax the bag build energy floor"

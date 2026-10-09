@@ -56,8 +56,11 @@ type cellReport struct {
 	ActorHours        int64                    `json:"actor_hours"`
 	CeilingRows       []cognition.CognitiveRow `json:"ceiling_rows,omitempty"`
 
-	Escalated      int `json:"escalated_decisions"`
-	AppliedModel   int `json:"applied_model_decisions"`
+	Escalated    int `json:"escalated_decisions"`
+	AppliedModel int `json:"applied_model_decisions"`
+	// DivergedModel counts applied model decisions whose action differs from
+	// the frozen cascade's own action at the same seam instant (EC-2).
+	DivergedModel  int `json:"diverged_model_decisions"`
 	DecisionErrors int `json:"decision_errors"`
 	// Level2Refusals counts escalated claims whose committed world attempt was
 	// a typed level-2 refusal (the world verdict, joined from the accepted
@@ -139,24 +142,38 @@ type twinReport struct {
 
 // fixtureReport is the labeled scripted-proposer fixture evidence (EC-5a). It
 // carries the live lifecycle counts and, separately, the unscripted A2
-// honest-null counts so the fixture never masks the declared arms.
+// honest-null counts so the fixture never masks the declared arms. The A2g
+// fixture also reports its divergent-parent sandbox count, whether the
+// measurement kept the head on the child generation, and its reported
+// final-bundle save failure.
 type fixtureReport struct {
-	Label                 string `json:"label"`
-	Arm                   string `json:"arm"`
-	F                     int    `json:"f"`
-	Seed                  uint64 `json:"seed"`
-	Ran                   bool   `json:"ran"`
-	Proposed              int    `json:"proposed"`
-	Admitted              int    `json:"admitted"`
-	Applied               int    `json:"applied"`
-	Measured              int    `json:"measured"`
-	RolledBack            int    `json:"rolled_back"`
-	MeasuredWindowHours   int    `json:"measured_window_hours"`
-	UnscriptedA2Proposed  int    `json:"unscripted_a2_proposed"`
-	UnscriptedA2Applied   int    `json:"unscripted_a2_applied"`
-	UnscriptedA2Rolled    int    `json:"unscripted_a2_rolled_back"`
-	UnscriptedA2Rejected  int    `json:"unscripted_a2_rejected"`
-	UnscriptedA2Validated int    `json:"unscripted_a2_validated"`
+	Label               string `json:"label"`
+	Arm                 string `json:"arm"`
+	F                   int    `json:"f"`
+	Seed                uint64 `json:"seed"`
+	Ran                 bool   `json:"ran"`
+	Proposed            int    `json:"proposed"`
+	Admitted            int    `json:"admitted"`
+	Applied             int    `json:"applied"`
+	Measured            int    `json:"measured"`
+	RolledBack          int    `json:"rolled_back"`
+	MeasuredWindowHours int    `json:"measured_window_hours"`
+	// DivergentParentSandbox counts patch-validate records whose proposal parent
+	// was a cognitive generation, i.e. the sandbox parent branch was the current
+	// head after an apply that was not rolled back (spec 10.2).
+	DivergentParentSandbox int `json:"divergent_parent_sandbox"`
+	// MeasurementKeptHead reports that a measurement resolved without a
+	// rollback, so the applied generation stayed bound.
+	MeasurementKeptHead bool `json:"measurement_kept_head"`
+	// FinalBundleError reports a failed final-bundle save (spec section 13: a
+	// post-measurement export is refused, but the failure is never swallowed).
+	FinalBundleError string `json:"final_bundle_error,omitempty"`
+
+	UnscriptedA2Proposed  int `json:"unscripted_a2_proposed"`
+	UnscriptedA2Applied   int `json:"unscripted_a2_applied"`
+	UnscriptedA2Rolled    int `json:"unscripted_a2_rolled_back"`
+	UnscriptedA2Rejected  int `json:"unscripted_a2_rejected"`
+	UnscriptedA2Validated int `json:"unscripted_a2_validated"`
 }
 
 type evaluation struct {
@@ -189,6 +206,7 @@ func cellReportOf(cr *cellRun) cellReport {
 		PromptTokens:     cr.totals.PromptTokens,
 		CompletionTokens: cr.totals.CompletionTokens, CostMicros: cr.totals.CostMicros,
 		ActorHours: cr.sumAliveHours, Escalated: cr.escalated, AppliedModel: cr.appliedModel,
+		DivergedModel:  cr.divergedModel,
 		DecisionErrors: cr.decisionErrors, Level2Refusals: level2RefusalTotal(cr),
 		RoleBApplied: cr.roleBApplied, RoleBRollback: cr.roleBRollback,
 		RoleBProposed: cr.roleBProposed, RoleBRejected: cr.roleBRejected, RoleBValidated: cr.roleBValidated,
@@ -498,6 +516,7 @@ func sortRuns(runs []*cellRun) {
 		order[a] = i
 	}
 	order[ArmA2f] = len(declaredArms)
+	order[ArmA2g] = len(declaredArms) + 1
 	sort.Slice(runs, func(i, j int) bool {
 		if order[runs[i].spec.Arm] != order[runs[j].spec.Arm] {
 			return order[runs[i].spec.Arm] < order[runs[j].spec.Arm]

@@ -49,8 +49,8 @@ func main() {
 	}
 	total := len(armList) * len(cellList)
 
-	var priorEval evaluation
 	priorCells := map[string]cellReport{}
+	var priorEval evaluation
 	if *reuse != "" {
 		pe, err := readEvaluation(*reuse)
 		if err != nil {
@@ -135,14 +135,14 @@ func main() {
 		}
 	}
 
-	var fixture *fixtureReport
+	var fixtures []fixtureReport
 	if *runFixture {
-		fr, frun, err := runScriptedFixture(ctx, *root)
+		frs, fruns, err := runScriptedFixtures(ctx, *root)
 		if err != nil {
-			skipped = append(skipped, "fixture:"+err.Error())
+			skipped = append(skipped, "fixtures:"+err.Error())
 		} else {
-			extraRuns = append(extraRuns, frun)
-			fixture = fr
+			extraRuns = append(extraRuns, fruns...)
+			fixtures = frs
 		}
 	}
 
@@ -161,11 +161,17 @@ func main() {
 
 	var replay map[string]string
 	if *reuse != "" {
-		replay = reuseReplay(priorEval)
-	} else {
-		replay = runReplaySubset(ctx, runs, *root, armList)
+		// The reuse path re-derives the EC-3 replay subset from the reloaded
+		// bundles and ledgers; a reuse-mode verdict is never carried over from a
+		// prior evaluation's own claim. The replay directory is rebuilt so a
+		// second reuse run does not collide with the first.
+		_ = os.RemoveAll(filepath.Join(*root, "replay"))
 	}
-	eval := buildEvaluation(runs, extraRuns, *recorded, skipped, declared, probe, replay, *srcRoot, fixture, twins)
+	replay = runReplaySubset(ctx, runs, *root, armList, *parallel)
+	if *reuse != "" {
+		replay = mergeReuseReplay(priorEval, replay)
+	}
+	eval := buildEvaluation(runs, extraRuns, *recorded, skipped, declared, probe, replay, *srcRoot, fixtures, twins)
 	eval.Revision = revisionString(*reuse)
 	if err := writeEvaluation(eval, *outJSON, *outText); err != nil {
 		fail("write evaluation: %v", err)
@@ -193,19 +199,18 @@ func readEvaluation(path string) (evaluation, error) {
 	return ev, nil
 }
 
-// reuseReplay reconstructs the EC-3 replay map from a prior evaluation: the
-// replay of an unchanged cell is the prior result.
-func reuseReplay(prior evaluation) map[string]string {
-	out := map[string]string{}
+// mergeReuseReplay guards the -reuse path against stale evidence. The
+// re-derived map is the only source of a verdict; a prior evaluation's own
+// replay subset is treated as a claim to re-check, never as a fact. Any prior
+// cell the re-derivation did not reproduce is recorded as not-re-derived (and
+// so fails EC-3) rather than assumed identical.
+func mergeReuseReplay(prior evaluation, rederived map[string]string) map[string]string {
 	for _, k := range prior.ReplaySubset {
-		out[k] = "identical"
-		for _, m := range prior.ReplayMismatches {
-			if strings.HasPrefix(m, k+":") {
-				out[k] = strings.TrimPrefix(m, k+":")
-			}
+		if _, ok := rederived[k]; !ok {
+			rederived[k] = "not-re-derived:stale-prior-verdict"
 		}
 	}
-	return out
+	return rederived
 }
 
 // runTwin runs the declared workers-4 determinism twin of one arm and compares
@@ -239,33 +244,44 @@ func findRun(runs []*cellRun, arm string, f int, seed uint64) *cellRun {
 	return nil
 }
 
-// runScriptedFixture runs the scripted-proposer fixture cell through the live
-// lifecycle and reports its admitted/applied/measured/rolled-back counts.
-func runScriptedFixture(ctx context.Context, root string) (*fixtureReport, *cellRun, error) {
-	spec := cellSpec{Arm: ArmA2f, F: scriptedFixtureFounders, Seed: scriptedFixtureSeed, Workers: 1}
-	_ = os.RemoveAll(filepath.Join(root, spec.String()))
-	cr, err := runCell(ctx, spec, scriptedFixture(), root, nil)
-	if err != nil {
-		return nil, nil, err
+// runScriptedFixtures runs the declared scripted-proposer fixture cells
+// through the live lifecycle and reports each one's admitted/applied/measured/
+// rolled-back counts, its measurement outcome, its divergent-parent sandbox
+// evidence, and its reported final-bundle save result.
+func runScriptedFixtures(ctx context.Context, root string) ([]fixtureReport, []*cellRun, error) {
+	var reports []fixtureReport
+	var runs []*cellRun
+	for _, arm := range []string{ArmA2f, ArmA2g} {
+		spec := cellSpec{Arm: arm, F: scriptedFixtureFounders, Seed: scriptedFixtureSeed, Workers: 1}
+		_ = os.RemoveAll(filepath.Join(root, spec.String()))
+		cr, err := runCell(ctx, spec, scriptedFixture(), root, nil)
+		if err != nil {
+			return reports, runs, fmt.Errorf("%s: %w", arm, err)
+		}
+		reports = append(reports, fixtureReport{
+			Label: fixtureLabelFor(arm), Arm: arm, F: spec.F, Seed: spec.Seed, Ran: true,
+			Proposed: cr.roleBProposed, Admitted: cr.roleBValidated, Applied: cr.roleBApplied,
+			Measured: cr.roleBMeasured, RolledBack: cr.roleBRollback, MeasuredWindowHours: cr.roleBMeasureHour,
+			DivergentParentSandbox: cr.roleBDivergentParent,
+			MeasurementKeptHead:    cr.roleBMeasured > 0 && cr.roleBRollback == 0,
+			FinalBundleError:       cr.finalBundleError,
+		})
+		runs = append(runs, cr)
 	}
-	return &fixtureReport{
-		Label: FixtureLabel, Arm: ArmA2f, F: spec.F, Seed: spec.Seed, Ran: true,
-		Proposed: cr.roleBProposed, Admitted: cr.roleBValidated, Applied: cr.roleBApplied,
-		Measured: cr.roleBMeasured, RolledBack: cr.roleBRollback, MeasuredWindowHours: cr.roleBMeasureHour,
-	}, cr, nil
+	return reports, runs, nil
 }
 
 // buildEvaluation assembles the report. runs are the declared matrix cells;
 // extraRuns are the labeled twin and fixture runs (kept out of the matrix
 // bands and the fidelity vector, but included in the EC-6 request scan).
-func buildEvaluation(runs, extraRuns []*cellRun, recordedDir string, skipped, declared []string, probe *probeReport, replay map[string]string, srcRoot string, fixture *fixtureReport, twins []twinReport) evaluation {
+func buildEvaluation(runs, extraRuns []*cellRun, recordedDir string, skipped, declared []string, probe *probeReport, replay map[string]string, srcRoot string, fixtures []fixtureReport, twins []twinReport) evaluation {
 	reports := make([]cellReport, 0, len(runs))
 	for _, cr := range runs {
 		reports = append(reports, cellReportOf(cr))
 	}
-	if fixture != nil {
-		fixture.UnscriptedA2Proposed, fixture.UnscriptedA2Applied, fixture.UnscriptedA2Rolled,
-			fixture.UnscriptedA2Rejected, fixture.UnscriptedA2Validated = unscriptedA2Counts(runs)
+	for i := range fixtures {
+		fixtures[i].UnscriptedA2Proposed, fixtures[i].UnscriptedA2Applied, fixtures[i].UnscriptedA2Rolled,
+			fixtures[i].UnscriptedA2Rejected, fixtures[i].UnscriptedA2Validated = unscriptedA2Counts(runs)
 	}
 	replayKeys := make([]string, 0, len(replay))
 	for k := range replay {
@@ -288,13 +304,11 @@ func buildEvaluation(runs, extraRuns []*cellRun, recordedDir string, skipped, de
 		Cells:            reports,
 		Fidelity:         buildFidelity(runs),
 		Probe:            probe,
-		Bands:            evaluateBands(runs, allRuns, recordedDir, replay, probe, srcRoot, fixture, twins),
+		Bands:            evaluateBands(runs, allRuns, recordedDir, replay, probe, srcRoot, fixtures, twins),
 		ReplaySubset:     replayKeys,
 		ReplayMismatches: mismatches,
 	}
-	if fixture != nil {
-		ev.Fixtures = []fixtureReport{*fixture}
-	}
+	ev.Fixtures = fixtures
 	ev.Twins = twins
 	return ev
 }

@@ -85,7 +85,13 @@ func (f *Natural) naturalSeamOverride(ctx context.Context, id sim.EntityID, hour
 	if !f.naturalSeamEscalates(hour) {
 		return nil
 	}
-	decision, err := f.cognition.Seam.DecideActorSeam(ctx, f.naturalActorSeamRequest(id, hour, version, obs))
+	// Record the frozen cascade's own action before the override: it is the
+	// comparison baseline for the load-bearing check (EC-2). The seam request
+	// carries it for the intervention record; it is not part of the canonical
+	// request bytes.
+	request := f.naturalActorSeamRequest(id, hour, version, obs)
+	request.FrozenAction = naturalChoiceAction(choice.Kind)
+	decision, err := f.cognition.Seam.DecideActorSeam(ctx, request)
 	if err != nil {
 		return err
 	}
@@ -96,6 +102,23 @@ func (f *Natural) naturalSeamOverride(ctx context.Context, id sim.EntityID, hour
 	}
 	f.claimDecisions[id] = *choice
 	return nil
+}
+
+// naturalChoiceAction is the claim action string of a frozen choice kind. The
+// escalated seam admits only the four declared actions; an unexpected kind is
+// recorded as the empty string (never silently mapped).
+func naturalChoiceAction(kind strategy.NaturalAction) string {
+	switch kind {
+	case strategy.NaturalGather:
+		return "gather"
+	case strategy.NaturalEatStored:
+		return "eat-stored"
+	case strategy.NaturalProvision:
+		return "provision"
+	case strategy.NaturalWait:
+		return "wait"
+	}
+	return ""
 }
 
 // naturalApplySeamAction maps a level-1-admissible action onto the frozen
