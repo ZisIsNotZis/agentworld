@@ -77,7 +77,10 @@ map. This substrate is what VS1/VS2 build on.
 
 This phase was where the pre-pivot plan deferred model reasoning. In the active plan cognition is in
 the first slice (VS1) and the allocation experiment is VS2; see
-[VERTICAL-SLICES.md](VERTICAL-SLICES.md).
+[VERTICAL-SLICES.md](VERTICAL-SLICES.md). Of the mechanism this phase deferred, M1 (VS1)
+implementation is complete with hermetic evidence PASS on all eleven frozen exit criteria
+(EC-1..EC-11); the real-model arm is blocked on spend authorisation, and the allocation experiment
+this phase anticipated is M2/VS2.
 
 Target: approximately 10,000 explicit people with selective model intervention.
 

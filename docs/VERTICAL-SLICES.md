@@ -152,14 +152,14 @@ reported rather than narrated.
 
 ## Milestones (= slices)
 
-| Milestone | Slice | Accepted when |
-|---|---|---|
-| **M1** | VS1 | **A mind in the loop.** The project is no longer an LLM-free simulator: a real model drives part of the world's decisions *and* modifies behaviour logic during the run, its interventions are costed and replayed exactly, and the modification is recorded with lineage and applied or rolled back under audit. |
-| **M2** | VS2 | **First evidence on the central claim.** Selective allocation beats — or decisively fails to beat — uniform and periodic spending at equal budget, across seeds, on the declared multi-indicator fidelity metric. |
-| **M3** | VS3 | **Self-improving.** Strategies measurably improve over generations under audited mutation, with provenance and rollback for every patch. |
-| **M4** | VS4 | **Stakes and scale.** The central-claim result survives heterogeneity and scale; the marginal value of reasoning is measured, not assumed. |
-| **M5** | VS5 | **Society.** Institutions and organizations arise and persist only through inspectable incentives and enforcement. |
-| **M6** | VS6 | **History.** Model-conditional calibration, conditional branches, sensitivity rather than one timeline. |
+| Milestone | Slice | Status | Accepted when |
+|---|---|---|---|
+| **M1** | VS1 | **Implementation complete; hermetic evidence PASS on all eleven frozen exit criteria (EC-1..EC-11); the real-model arm blocked on spend authorisation.** | **A mind in the loop.** The project is no longer an LLM-free simulator: a real model drives part of the world's decisions *and* modifies behaviour logic during the run, its interventions are costed and replayed exactly, and the modification is recorded with lineage and applied or rolled back under audit. |
+| **M2** | VS2 | Not started | **First evidence on the central claim.** Selective allocation beats — or decisively fails to beat — uniform and periodic spending at equal budget, across seeds, on the declared multi-indicator fidelity metric. |
+| **M3** | VS3 | Not started | **Self-improving.** Strategies measurably improve over generations under audited mutation, with provenance and rollback for every patch. |
+| **M4** | VS4 | Not started | **Stakes and scale.** The central-claim result survives heterogeneity and scale; the marginal value of reasoning is measured, not assumed. |
+| **M5** | VS5 | Not started | **Society.** Institutions and organizations arise and persist only through inspectable incentives and enforcement. |
+| **M6** | VS6 | Not started | **History.** Model-conditional calibration, conditional branches, sensitivity rather than one timeline. |
 
 ## Cross-cutting invariants (apply from VS1 onward)
 
