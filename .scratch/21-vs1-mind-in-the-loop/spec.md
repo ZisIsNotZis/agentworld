@@ -35,8 +35,8 @@ This ticket produces the contract and the ADR. Implementation is the follow-on l
   model call under the observation boundary (§4).
 - One **Role B mechanism**: in-run proposal, validation, sandbox counterfactual, application,
   measurement, and rollback of a **versioned strategy patch** expressed as data (§5, §10).
-- A **model-call protocol** through the project's LiteLLM gateway for `zai/glm-5.3-flash`, specified
-  as an interface; the implementation is a later lane (§6).
+- A **model-call protocol** through the project's LiteLLM gateway for the application model
+  `github-copilot/gpt-6-luna`, specified as an interface; the implementation is a later lane (§6).
 - A **recorded-call ledger** with request hashes, response bytes, model identity, usage, cost,
   sampling parameters, and latency; replay reads the ledger and never calls a model (§7).
 - **Cost accounting and an instrumented, fail-loud cognitive budget ceiling** under the P15
@@ -91,7 +91,7 @@ later slices raise the ceiling of a row without creating it.
 | C3 | Resources and economy | Unchanged: production, consumption, storage, spoilage, transfer, conservation-checked ledgers | recorded natural lane, G1–G3 gates |
 | C4 | Strategy as versioned data | Extended: the frozen `natural/*` refs plus the **patched generation format** of §5.2 (typed parameter vectors, byte-pinned, fingerprinted, parent-linked) | §5.2, §10.1, Appendix C |
 | C5 | Observation boundary | Asserted and now consumed by a real decider: every Role A request is built from the frozen `strategy.NaturalObservation` value only, by an allow-list encoder | §4.5, §6.2, EC-6 |
-| C6 | Language-model intervention | New: a real `zai/glm-5.3-flash` call at the declared seam changes what an actor does, with the prompt/request and the response bytes recorded | §4, §6, §7 |
+| C6 | Language-model intervention | New: a real `github-copilot/gpt-6-luna` call at the declared seam changes what an actor does, with the prompt/request and the response bytes recorded | §4, §6, §7 |
 | C7 | Cognitive allocation | New: a declared `WakePolicy` object; the VS1 instance is the honest uniform/periodic baseline (all actors in selected hours) | §11.1 |
 | C8 | Intervention ledger | New: one append-only, hash-chained record per intervention with cause/cost/patch/result | §9, EC-4 |
 | C9 | Strategy self-modification | New: the system emits a new strategy version with a parent ref, validated before use | §5.2, §5.3 |
@@ -315,8 +315,10 @@ validation result, rollout state, affected actors), and it is what an outside pa
 
 ### 6.1 Gateway and interface (specified, not implemented)
 
-- **Model**: `zai/glm-5.3-flash`, reached through the project's **LiteLLM gateway** over an
-  OpenAI-compatible `POST {base}/v1/chat/completions`.
+- **Model**: `github-copilot/gpt-6-luna` (operator decision), reached through the project's
+  **LiteLLM gateway** over an OpenAI-compatible `POST {base}/v1/chat/completions`. The gateway base
+  URL, auth source, JSON-mode/seed support and price data are discovered from the environment, never
+  assumed.
 - **Interface** (the world never sees the client implementation; direction of dependency in §6.6):
 
 ```go
@@ -343,7 +345,7 @@ written by name; no reflection over structs, no map iteration, no world reader i
   "role": "actor-decision",
   "seam": "natural.claim",
   "prompt_template": "natural-claim/v1",
-  "model": "zai/glm-5.3-flash",
+  "model": "github-copilot/gpt-6-luna",
   "run": { "fixture": {"patches": 2, "r": 8, "founders": 12, "mechanism": 6, "births": true},
             "seed": 0, "base_ref": {"id": "natural", "version": 7},
             "head_ref": {"id": "natural", "version": 7},
@@ -838,13 +840,15 @@ privileged state; an unlabelled report; any band, constant, or cell edited after
 
 ## 16. Open questions for the operator
 
-1. **Spend authorisation and the gateway contract.** The design needs (a) the authorised cognitive
-   ceiling (calls/tokens/spend) for the matrix — the arithmetic in §11.2 gives roughly 32 k calls for
-   the full plan (≈11 k across A1, A1i and A2, ≈22 k for A3), up to ×3 worst case with retries, plus
-   deterministic sandbox compute; (b) the price-table version and values used to convert usage to
-   cost; (c) the gateway base URL and whether it honours `response_format: json_object` and a `seed`
-   parameter. Without (a) the A3 reduction of §11.3 applies; without (c) the declared
-   plain-completion fallback applies.
+1. **Gateway contract and the cognitive ceiling — PARTLY RESOLVED (current truth).** The operator has
+   fixed the application model at `github-copilot/gpt-6-luna`. Still to be established, by DISCOVERY
+   from the environment rather than assumption: the gateway base URL, the auth key source, whether it
+   honours `response_format: json_object` and a `seed`, and the price data used to convert usage to
+   cost. The cognitive ceiling is built as a declared, instrumented, fail-loud P15 limit with at least
+   1.5x headroom over the declared matrix need (the arithmetic in §11.2 gives roughly 32 k calls for
+   the full plan — ≈11 k across A1, A1i and A2, ≈22 k for A3 — up to ×3 worst case with retries, plus
+   deterministic sandbox compute). Until that budget is declared and a real-call smoke test passes, the
+   A3 reduction of §11.3 applies and **no real model call has been made**.
 2. **One seam or two.** This design escalates exactly one decision (the claim instant) so the model's
    causal footprint is exactly one instant per selected actor-hour. If the operator intends the
    unit-conversion decision (bag decision, `h+20m+2µs`) to be model-decided in VS1 as well, that is a
@@ -862,6 +866,14 @@ privileged state; an unlabelled report; any band, constant, or cell edited after
    `natural/7 × v6` evidence as the no-AI arm. Confirm the cells (f=10/11/12 × seeds 0–3) and that
    reusing recorded evidence as the control arm is acceptable (EC-1 requires one fresh byte-identity
    reproduction through the VS1 harness).
+
+**Status of the questions above (current truth).** Items 2–5 are settled by the shipped VS1
+implementation and its frozen evidence: exactly one seam (the claim instant) is escalated; the
+patchable set is the Appendix C strategy-side threshold vector only; the rebind is runner state
+recorded in the ledger, manifest and strategy section; and the declared cells are f=10/11/12 × seeds
+0–3 with the recorded ticket-19 evidence reused as the no-AI arm, reproduced byte-identically through
+the VS1 harness (EC-1). Item 1's gateway contract and the real-model evidence are the only open work:
+the real-model arm is blocked on the gateway binding and the declared budget.
 
 ## Appendix A — Types (the implementable contract)
 
