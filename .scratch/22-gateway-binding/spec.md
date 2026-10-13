@@ -1,8 +1,10 @@
 # Ticket 22 — Gateway binding (VS1 real-model arm enablement)
 
-Status: in progress (worker lane). Repair branch `feature/22-gateway-binding-v2` off `38e3dd2`
-(the `feature/22-gateway-binding` tip); original lane branch `feature/22-gateway-binding`.
-Baseline revision at lane start: `6fa551a9f3eadd55ed934805e1c3fd0f36415ddf` (master, 2026-10-13).
+Status: complete, reviewed and merged to master (`cf825b3`); see "Delivery and final
+integration verification" below. The v2 repair was implemented on branch
+`feature/22-gateway-binding-v2` off `38e3dd2` (the `feature/22-gateway-binding` tip); original lane
+branch `feature/22-gateway-binding`. Baseline revision at lane start:
+`6fa551a9f3eadd55ed934805e1c3fd0f36415ddf` (master, 2026-10-13).
 
 A post-completion independent static review returned FAIL with one P1 and several P2 findings; the
 repair round is recorded in the "Repair round (v2)" section below.
@@ -211,8 +213,45 @@ empty wire equals the declared chat default. EC-1 is unaffected: the A0 arm stil
 
 ## Commit
 
-Committed on `feature/22-gateway-binding` (not merged to master): see `git log -1` on that branch.
+Both lane revisions are merged to master: the original lane commit `38e3dd2` (`Bind the cognition
+client to the real LiteLLM gateway wire contract (ticket 22)`) and the v2 repair `559ab6e`
+(`Repair ticket 22 gateway binding: bind model+wire into recorded identity, fix P2 findings`) were
+combined by merge commit `cf825b3` (`Merge feature/22-gateway-binding-v2: bind the cognition client
+to the real LiteLLM gateway contract (reviewed tip 559ab6e)`). No branch is unmerged.
 
-The v2 repair is committed on `feature/22-gateway-binding-v2` (not merged) as
-`Repair ticket 22 gateway binding: bind model+wire into recorded identity, fix P2 findings`;
-see `git log -1` on that branch for the exact revision.
+## Delivery and final integration verification (2026-10-13T19:30:08+08:00)
+
+Integration on master, recorded by the final verification worker.
+
+**Merges.** `cf825b3` merged `feature/22-gateway-binding-v2` (this ticket's repair, branch tip
+`559ab6e`) and `b968334` merged `feature/23-docs-reconciliation` (branch tip `a30fdda`); `7f66802`
+("Record the ticket-23 review P2 notes and the worktree incident on master") is the current master
+HEAD. Merged tree: HEAD `7f6680264f2130522d710e08ca34b9ee46b55fab` on `master`, working tree clean
+(`git status --porcelain` empty).
+
+**Fast gates on merged master** (all passed): `go build ./...`, `go vet ./...`, `gofmt` over the
+tracked files, `git diff --check`.
+
+**Full non-race suite, split to remove the default-timeout artifact.** `go test ./...` passed in
+every package except `internal/world`, which aborted only on the **default 10m per-package
+timeout**, not on a test failure (the Makefile `test` target's bound is 30m; `internal/world`
+alone measured 985s, i.e. 985s > the 600s default). Rerun in isolation it passed:
+`ok agentworld/internal/world 776.357s`. This is the documented default-timeout artifact, not a
+product failure.
+
+**Race verification on merged master** (HEAD `7f66802`, run 2026-10-13 19:12–19:32; commands run
+with the repo-local toolchain `PATH="$PWD/.tmp/go-toolchain/root/usr/lib/go-1.24/bin:$PATH"`,
+go1.24.13 linux/amd64, 12 CPUs, because ambient `PATH` has no `go`):
+
+| Command | Result |
+|---|---|
+| `go test -race -timeout 15m ./internal/cognition/...` | passed — `ok agentworld/internal/cognition 2.559s`; `ok agentworld/internal/cognition/protocol 1.014s` (exit 0, wall 6.0s) |
+| `go test -race -timeout 20m ./internal/world/ -run 'Cognitive\|Replay\|ZeroUse'` | passed — `ok agentworld/internal/world 511.696s` (exit 0, wall 8m43.7s) |
+| `go test -race -timeout 20m ./cmd/vs1/...` | passed — `ok agentworld/cmd/vs1 443.843s` (exit 0, wall 7m29.7s) |
+
+No step hit its bound and no failure occurred, so the bounded race set above is green at the
+reviewed revision. **Disclosed bound:** the full `make race` set (90m aggregate) was **not** run;
+this verification races only the directly changed package (`internal/cognition`) and the two
+seam/checkpoint/replay suites that exercise the changed cognition identity (`internal/world`
+subtests, `cmd/vs1`). A package outside that set could still carry an unraced defect introduced by
+this ticket; the non-race suite above covers behaviour only.
