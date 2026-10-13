@@ -324,7 +324,7 @@ func ec4(fidelity []fidelityRow) reportBand {
 func ec5(replay map[string]string) reportBand {
 	const criterion = "VS2-EC-5 identity and replay valid across strategy updates: a priority-bearing arm (P/U/A) replays byte-exact from genesis with zero model calls -- accepted history, hourly projections, allocation decisions and both ledgers -- and the selector re-derives the identical escalation set; the checkpoint manifest's cognition block binds the full priority-policy fingerprint and a restore under a differing policy is refused."
 	if len(replay) == 0 {
-		return band("VS2-EC-5", criterion, "not-evaluable", "no priority arm was replayed; the priority checkpoint/restore round trip and the mutated-policy-fingerprint refusal are exercised in internal/world/natural_priority_replay_test.go and cmd/vs2/replay_test.go")
+		return band("VS2-EC-5", criterion, "not-evaluable", "no priority arm was replayed; the priority checkpoint/restore round trip and the mutated-policy-fingerprint refusal are exercised in internal/world/natural_priority_replay_test.go and cmd/vs2/e2e_test.go")
 	}
 	mismatch := 0
 	keys := make([]string, 0, len(replay))
@@ -342,7 +342,7 @@ func ec5(replay map[string]string) reportBand {
 		status = "FAIL"
 	}
 	return band("VS2-EC-5", criterion, status, fmt.Sprintf(
-		"priority cells replayed=%d mismatches=%d; selection-sequence identity and the mutated-policy-fingerprint refusal are unit-exercised (internal/world/natural_priority_replay_test.go, cmd/vs2/replay_test.go)", len(replay), mismatch))
+		"priority cells replayed=%d mismatches=%d; selection-sequence identity and the mutated-policy-fingerprint refusal are unit-exercised (internal/world/natural_priority_replay_test.go, cmd/vs2/e2e_test.go)", len(replay), mismatch))
 }
 
 // ec7 is VS2-EC-7: protected exploration is present and bounded.
