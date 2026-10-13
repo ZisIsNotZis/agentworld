@@ -203,7 +203,10 @@ Go toolchain: `GOROOT=/home/z/vibe/agentworld/.tmp/go-toolchain/root/usr/lib/go-
 
 ## Revision addendum
 
-- Ticket commit on `feature/32-vs2-l5`: recorded after commit.
+- Lane commit on `feature/32-vs2-l5`: `ed438efd42d9acabb1e2bef1d968e0411ca192d3` (VS2 L5 evidence record
+  + current-fact docs reconciliation).
+- This ticket's blob at that commit: `f9dca38a669fbe7804be90d57f3581bccbcf9ca1`.
+- Addendum commit (records the lane commit hash): recorded in the handoff after commit.
 
 ## Not accepted / what remains
 
