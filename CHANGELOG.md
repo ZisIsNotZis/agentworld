@@ -79,3 +79,4 @@ for anything: current truth lives in the authoritative documents — the active 
 
 - **Ticket 30 — VS2 lane L4c: equal-budget attention experiment runner `cmd/vs2`.** Revision `4a0ad28`.
 - **Ticket 31 — VS2 lane L2b: candidate feature derivations and escalation predicate.** Revision `48b4882` (spec commit `2517e3a`, implementation commit `5c56098`).
+- **Ticket 33 — VS2 lane L5: evidence record and current-state docs reconciliation.** Merge `2ef513b` (lane commit `ed438ef`, revision addendum `8ab4015`).

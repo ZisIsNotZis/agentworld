@@ -79,6 +79,10 @@ Report artifacts (this revision):
 `sha256 9ab67d41f98b595de4058586a01b16fc896f44b8cb2b8f285f94d02d8a549ec8`.
 
 - Inventory: 60/60 declared cells ran; 36/36 priority replays identical (zero model calls); wall 459s.
+- **Inventory scope.** "60/60 declared cells" is the **primary matrix only**: the 12 §8.2 primary
+  cells × 5 arms (A0/R/P/U/A). The §8.2 sensitivity-seed extension (`f=12`, seeds 4–7), the §8.2
+  optional `N = 512` budget-sensitivity extension and the §8.3 `w = 4` determinism twin were **not run**
+  in this evidence record (no `-sensitivity`, no `N` override, no `w = 4`); no claim is made about them.
 - Revision binding (from the report): model `github_copilot/gpt-6-luna`, wire `responses`, model+wire
   identity digest `66f1270482c7472ac66022c1c4d31ac48620b0e4129b065cb65ae11fde260a62`; model+feature
   identity digest `55f368ad603928e625c6f39d0a30ffa64c199c3b6365371b93b573f89a45919f`; feature set
