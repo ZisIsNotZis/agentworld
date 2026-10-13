@@ -428,3 +428,9 @@ Same command/params as the ticket-34 repair run, fresh output paths, run
 - The re-run artifact `.tmp/35-vs2-evaluation.json` is produced from the source at `d764af0`.
 - The commit that records this note is the branch tip at recording time; its hash is recorded in the
   addendum below.
+
+### Addendum — this note's commit
+
+Recorded 2026-10-14T01:59:20+08:00 (CST). Correction-note commit: `f6db1c1`; this ticket's blob at
+that commit: `e7e11b10c54f8e86e32b062cc8b6d635d0d48993`. Branch `feature/35-vs2-citation-fix` tip at
+this addendum is the commit that records it (the final revision on the branch); base master `17bdb33`.
