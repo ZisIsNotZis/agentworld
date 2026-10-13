@@ -124,7 +124,7 @@ changed paths are exercised.
 
 ## Revision addendum
 
-- L4b commit on `feature/29-vs2-l4b`: `TBD` (adds the two in-scope source files, the new test
+- L4b commit on `feature/29-vs2-l4b`: `5a27c67` (adds the two in-scope source files, the new test
   file, and this ticket).
 
 ## Residual risks / declared gaps
