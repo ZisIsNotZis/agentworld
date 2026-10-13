@@ -207,23 +207,94 @@ func TestNaturalSelectorSeamDrivesEscalation(t *testing.T) {
 	}
 }
 
-// TestNaturalCandidateFeaturesObservationOnly pins the declared C.1 raw rows:
-// the candidate feature vector is read directly from the actor's own
-// observation (energy/hunger/capital/granary_stock/last_stored_meal_hour plus
-// the stocked home-slot count); the derived rows stay zero.
+// TestNaturalCandidateFeaturesObservationOnly pins the declared C.1 rows: the
+// observation-only rows come from the actor's own observation (through the
+// protocol projection), the scheduler-level prior_reliability row is the
+// declared world-level constant, and escalation_requested is the actor's own
+// predicate result.
 func TestNaturalCandidateFeaturesObservationOnly(t *testing.T) {
 	obs := strategy.NaturalObservation{
 		Energy: sim.IntegerValue(7), Hunger: sim.IntegerValue(3), Capital: sim.IntegerValue(5),
 		GranaryStock: sim.IntegerValue(2), LastStoredMealHour: sim.IntegerValue(9),
+		LastDenial: strategy.NaturalGatherDenied,
 		HomeSlots: []strategy.NaturalSlotView{
 			{ID: 1, Stock: sim.IntegerValue(1)},
 			{ID: 2, Stock: sim.IntegerValue(0)},
 			{ID: 3, Stock: sim.IntegerValue(1)},
 		},
 	}
-	want := protocol.ValueFeatures{Energy: 7, Hunger: 3, Capital: 5, GranaryStock: 2, LastStoredMealHour: 9, StockedHomeSlots: 2}
-	if got := naturalCandidateFeatures(obs); got != want {
+	got, _, _ := naturalCandidateFeatures(protocol.DeclaredEscalationPredicate(), obs)
+	want := protocol.ObservationFeatures(obs)
+	want.PriorReliability = protocol.DeclaredPriorReliability
+	if requested, _ := protocol.EscalationRequest(protocol.DeclaredEscalationPredicate(), obs); requested {
+		want.EscalationRequested = 1
+	}
+	if got != want {
 		t.Fatalf("candidate features = %+v, want %+v", got, want)
+	}
+	if got.Energy != 7 || got.Hunger != 3 || got.Capital != 5 || got.GranaryStock != 2 ||
+		got.LastStoredMealHour != 9 || got.StockedHomeSlots != 2 {
+		t.Fatalf("raw rows = %+v", got)
+	}
+	if got.LastDenial != "gather" {
+		t.Fatalf("last_denial = %q, want gather", got.LastDenial)
+	}
+	if got.PriorReliability != protocol.DeclaredPriorReliability {
+		t.Fatalf("prior_reliability = %d, want the declared world-level %d", got.PriorReliability, protocol.DeclaredPriorReliability)
+	}
+	if got.Urgency == 0 || got.Impact == 0 || got.PropagationRisk == 0 || got.DecisionSensitivity == 0 {
+		t.Fatalf("derived rows are vacuous: %+v", got)
+	}
+}
+
+// TestNaturalFeatureThresholdConstantsCrossCheck ties the protocol's restated
+// frozen claim thresholds to the world's exported frozen constants, so the
+// derivation can never silently drift from the substrate.
+func TestNaturalFeatureThresholdConstantsCrossCheck(t *testing.T) {
+	checks := []struct {
+		name     string
+		protocol int64
+		world    int64
+	}{
+		{"energy capacity", protocol.FeatureEnergyCapacity, CapacityEnergyCapacity},
+		{"hunger capacity", protocol.FeatureHungerCapacity, CapacityHungerCapacity},
+		{"slots per patch", protocol.FeatureSlotsPerPatch, CapacitySlotsPerPatch},
+		{"build energy floor", protocol.FeatureBuildEnergyFloor, CapacityPolicyTLow},
+		{"consent min energy", protocol.FeatureConsentMinEnergy, NaturalConsentMinEnergy},
+		{"consent min capital", protocol.FeatureConsentMinCapital, NaturalConsentMinCapital},
+		{"consent min granary", protocol.FeatureConsentMinGranary, NaturalConsentMinGranary},
+	}
+	for _, c := range checks {
+		if c.protocol != c.world {
+			t.Fatalf("%s: protocol=%d, world=%d", c.name, c.protocol, c.world)
+		}
+	}
+}
+
+// TestNaturalEscalationRosterCarriesDerivedFeatures pins that the world roster
+// carries the derived feature rows, the declared world-level prior, and the
+// actor's own escalation request (with its typed reason), so the value model
+// can rank and the request is auditable.
+func TestNaturalEscalationRosterCarriesDerivedFeatures(t *testing.T) {
+	obs := strategy.NaturalObservation{
+		Energy: sim.IntegerValue(5), Hunger: sim.IntegerValue(24),
+		Capital: sim.IntegerValue(2), GranaryStock: sim.IntegerValue(3),
+		LastStoredMealHour: sim.IntegerValue(5), Hour: 5,
+		HomeSlots: []strategy.NaturalSlotView{{ID: 2001, Stock: sim.IntegerValue(1)}},
+	}
+	roster := naturalEscalationRoster(5, []naturalClaimWake{{id: 3, obs: obs}})
+	if len(roster) != 1 {
+		t.Fatalf("roster = %+v", roster)
+	}
+	c := roster[0]
+	if c.Features.PriorReliability != protocol.DeclaredPriorReliability {
+		t.Fatalf("prior_reliability = %d", c.Features.PriorReliability)
+	}
+	if !c.Requested || c.Reason != protocol.EscalationRequestedByActor || c.Features.EscalationRequested != 1 {
+		t.Fatalf("escalation request not carried: requested=%t reason=%q bit=%d", c.Requested, c.Reason, c.Features.EscalationRequested)
+	}
+	if c.Features.Urgency == 0 || c.Features.DecisionSensitivity == 0 || c.Features.Impact == 0 {
+		t.Fatalf("derived rows are vacuous on the roster: %+v", c.Features)
 	}
 }
 

@@ -44,12 +44,16 @@ type CostProxy struct {
 	ProjectedCompletionTokens uint64
 }
 
-// ValueModelSpec is the versioned value model: the weights and the cost proxy.
-// Its version is part of run identity (VS2-EC-8).
+// ValueModelSpec is the versioned value model: the feature-set version, the
+// weights, and the cost proxy. Its version (and the declared feature set it
+// projects) is part of run identity (VS2-EC-8): it rides
+// WakePolicy.Identity()/Fingerprint(), so the checkpoint cognition block binds
+// the feature set alongside the weights (Appendix A.1).
 type ValueModelSpec struct {
-	Version   string
-	Weights   []FeatureWeight
-	CostProxy CostProxy
+	Version    string
+	FeatureSet string // declared candidate feature-set version (Appendix C.1); "" == unspecified
+	Weights    []FeatureWeight
+	CostProxy  CostProxy
 }
 
 // CallPrice is the protocol-local cost type for the value projection. The

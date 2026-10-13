@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -58,6 +59,18 @@ func TestHermeticEndToEndReport(t *testing.T) {
 	}
 	if ev.ModelIdentity == "" || len(ev.ModelIdentity) != 64 {
 		t.Fatalf("model identity digest = %q", ev.ModelIdentity)
+	}
+	// The report names the declared feature set and binds it into a separate
+	// model+feature identity digest (the model identity digest is unchanged).
+	if ev.FeatureSet != protocol.FeatureSetVersion {
+		t.Fatalf("feature set = %q, want %q", ev.FeatureSet, protocol.FeatureSetVersion)
+	}
+	if ev.ModelFeatureIdentity == "" || len(ev.ModelFeatureIdentity) != 64 {
+		t.Fatalf("model+feature identity digest = %q", ev.ModelFeatureIdentity)
+	}
+	wantFeatureIdentity := cognition.ModelFeatureIdentityDigest(cognition.DefaultModelID, cognition.WireResponses, cognition.FrozenSampling(), protocol.FeatureSetVersion)
+	if hex.EncodeToString(wantFeatureIdentity[:]) != ev.ModelFeatureIdentity {
+		t.Fatalf("model+feature identity = %q, want %x", ev.ModelFeatureIdentity, wantFeatureIdentity)
 	}
 	if len(ev.Cells) != len(declaredArms) {
 		t.Fatalf("cells = %d, want %d", len(ev.Cells), len(declaredArms))

@@ -137,49 +137,38 @@ func (f *Natural) naturalSeamBudget() protocol.BudgetState {
 // naturalEscalationRoster builds the per-hour escalation candidate roster from
 // the claim-wake set, in the declared order (ascending actor id, spec section
 // 4.5/8.1). Each candidate carries the actor's own observation-derived feature
-// vector; the roster is a pure read of the frozen observation and mutates
-// nothing.
+// vector plus the declared world-level prior-reliability row and the actor's
+// own escalation-request bit; the roster is a pure read of the frozen
+// observation and mutates nothing.
 func naturalEscalationRoster(hour int, wakes []naturalClaimWake) []protocol.EscalationCandidate {
+	predicate := protocol.DeclaredEscalationPredicate()
 	roster := make([]protocol.EscalationCandidate, 0, len(wakes))
 	for _, w := range wakes {
+		features, requested, reason := naturalCandidateFeatures(predicate, w.obs)
 		roster = append(roster, protocol.EscalationCandidate{
-			Actor: w.id, Hour: hour, Features: naturalCandidateFeatures(w.obs),
+			Actor: w.id, Hour: hour, Features: features, Requested: requested, Reason: reason,
 		})
 	}
 	sort.Slice(roster, func(i, j int) bool { return roster[i].Actor < roster[j].Actor })
 	return roster
 }
 
-// naturalCandidateFeatures derives a candidate's declared observation-only
-// feature rows (Appendix C.1) from the actor's own claim observation. The raw
-// rows are read directly; the derived rows (decision_sensitivity, urgency,
-// impact, propagation_risk), the world-level aggregate prior_reliability, the
-// last_denial string encoding, and the actor-raised escalation_requested bit
-// (its predicate is not yet declared) stay zero.
-func naturalCandidateFeatures(obs strategy.NaturalObservation) protocol.ValueFeatures {
-	var features protocol.ValueFeatures
-	features.Energy = naturalFeatureInt(obs.Energy)
-	features.Hunger = naturalFeatureInt(obs.Hunger)
-	features.Capital = naturalFeatureInt(obs.Capital)
-	features.GranaryStock = naturalFeatureInt(obs.GranaryStock)
-	features.LastStoredMealHour = naturalFeatureInt(obs.LastStoredMealHour)
-	for _, slot := range obs.HomeSlots {
-		if naturalFeatureInt(slot.Stock) >= 1 {
-			features.StockedHomeSlots++
-		}
+// naturalCandidateFeatures derives a candidate's declared feature rows
+// (Appendix C.1) from the actor's own claim observation and the declared
+// escalation predicate. The observation-only rows (including the derived
+// decision_sensitivity/urgency/impact/propagation_risk and the last_denial
+// encoding) come from protocol.ObservationFeatures; the one scheduler-level row,
+// prior_reliability, is the declared world-level cell statistic (which the §4.3
+// predicate never reads); escalation_requested is the actor's own predicate
+// result, returned with its typed reason for the candidate record.
+func naturalCandidateFeatures(predicate protocol.PolicyPredicate, obs strategy.NaturalObservation) (protocol.ValueFeatures, bool, protocol.EscalationReason) {
+	features := protocol.ObservationFeatures(obs)
+	features.PriorReliability = protocol.DeclaredPriorReliability
+	requested, reason := protocol.EscalationRequest(predicate, obs)
+	if requested {
+		features.EscalationRequested = 1
 	}
-	return features
-}
-
-// naturalFeatureInt reads an observation value as its integer projection. A
-// non-integer observation value contributes zero, matching the frozen
-// stocked-slot read (naturalLowestStockedSlot).
-func naturalFeatureInt(v sim.Value) int64 {
-	n, err := v.Integer()
-	if err != nil {
-		return 0
-	}
-	return n
+	return features, requested, reason
 }
 
 // naturalSeamOverride replaces the frozen claim choice with the seam decision

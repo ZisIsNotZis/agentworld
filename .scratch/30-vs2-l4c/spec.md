@@ -193,3 +193,30 @@ it is reported verbatim.
    world export; it is out of this lane's contract.
 5. The `-sensitivity` extension (f=12 seeds 4..7) and the N=512 budget-sensitivity cell are implemented
    behind flags but were not run for this evidence record; the primary matrix is the recorded run.
+
+## Addendum — additive cmd/vs2 delta from lane L2b (ticket 31)
+
+Recorded 2026-10-14T00:05+08:00 (CST) by the ticket-31 worker. Lane L2b (ticket 31) declared and
+implemented the candidate feature derivations and versioned the feature set `vs2-features/1`. Because
+the VS2 report must name the feature set while VS1's recorded model/sampling identity digest must stay
+byte-identical, the supervisor authorised a minimal ADDITIVE `cmd/vs2` change (base `e9a0a79` →
+`5c56098`): one `feature_set` report field, one separate `model_feature_identity_digest` report field,
+and the `ValueModelSpec.FeatureSet` binding. Every other cmd/vs2 behaviour and existing report field is
+byte-identical; the bound `ModelIdentityDigest` is unchanged (the new digest is separate).
+
+Exact delta (file:line at `5c56098`):
+
+- `cmd/vs2/config.go:59` — `FeatureSet: protocol.FeatureSetVersion` in `declaredValueModel()`, so the
+  feature-set version rides `ValueModelSpec` / the policy identity / the checkpoint cognition block.
+- `cmd/vs2/report.go:128-133` — new `model_feature_identity_digest` and `feature_set` fields on the
+  `evaluation` struct.
+- `cmd/vs2/main.go:154,162-163,182` — the model+feature identity digest computation, the two populated
+  report fields, and the feature-set token in `revisionString()`.
+- `cmd/vs2/text.go:18` — the text report line naming the model+feature identity and the feature set.
+- `cmd/vs2/e2e_test.go` — the report assertions plus the `encoding/hex` import.
+
+This addendum supersedes the residual-risk note 1 above ("the L2 derived features are zero"): as of
+`5c56098` the derived rows are implemented (ticket 31), and the re-run primary matrix records VS2-EC-3
+as `clean-negative` (adaptive-dominates 6/12, mutually non-dominating 6/12, baseline-strictly-dominates
+0/12) rather than `FAIL`. The central claim remains unaccepted (real-model arm still blocked on spend);
+the artifact hashes and verbatim bands are in `.scratch/31-vs2-l2b/spec.md`.

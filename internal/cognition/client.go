@@ -95,6 +95,45 @@ type modelIdentityWire struct {
 	Seed        *int64  `json:"seed"`
 }
 
+// ModelFeatureIdentityDigest is the declared model+feature run-identity digest:
+// SHA-256 over the model identity block plus the declared candidate feature-set
+// version. It is a NEW, separate digest; ModelIdentityDigest is unchanged, so
+// VS1's recorded model/sampling identity digest stays byte-identical. It binds
+// the candidate feature set a run's allocation policy used to the run identity,
+// so a report names both the model+wires and the feature set.
+func ModelFeatureIdentityDigest(model string, wire WireMode, sampling Sampling, featureSet string) [32]byte {
+	if wire == "" {
+		wire = WireChatCompletions
+	}
+	base := ModelIdentityDigest(model, wire, sampling)
+	body, err := canonicalJSON(modelFeatureIdentityWire{
+		Model:               model,
+		Wire:                string(wire),
+		Temperature:         sampling.Temperature,
+		TopP:                sampling.TopP,
+		MaxTokens:           sampling.MaxTokens,
+		Seed:                sampling.Seed,
+		FeatureSet:          featureSet,
+		ModelIdentityDigest: formatHash(base),
+	})
+	if err != nil {
+		// The identity block is a fixed, always-encodable struct.
+		panic(err)
+	}
+	return sha256.Sum256(body)
+}
+
+type modelFeatureIdentityWire struct {
+	Model               string  `json:"model"`
+	Wire                string  `json:"wire"`
+	Temperature         float64 `json:"temperature"`
+	TopP                float64 `json:"top_p"`
+	MaxTokens           int     `json:"max_tokens"`
+	Seed                *int64  `json:"seed"`
+	FeatureSet          string  `json:"feature_set"`
+	ModelIdentityDigest string  `json:"model_identity_digest"`
+}
+
 // Sampling is the declared sampling state sent with a call. Seed is nil when
 // the gateway does not support a seed (the VS1 instance sends none and records
 // that fact).
