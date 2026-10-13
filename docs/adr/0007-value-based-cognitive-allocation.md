@@ -38,24 +38,28 @@ new scheduler subsystem, and it obeys three invariants:
    same nil-tolerant seam pattern VS1 used for the Role A `ClaimSeam`: `NaturalCognition` gains an
    optional `protocol.EscalationSelector`, and with it absent the world takes the VS1 path.
 
-2. **A deterministic function of the declared policy, the ordered candidate stream, and the budget
-   state, over the actor's own observation.** The value projection — expected value, expected cost, and
-   their integer fixed-point ratio — is a pure function over the candidate feature vector, which is
-   derived only from the actor's own `strategy.NaturalObservation` plus world-level aggregate rows the
-   runner already publishes (the VS1 Role B `TrajectoryEvidence` discipline). Escalation requests are a
-   declared pure predicate over that observation. Selection over the candidate stream is a deterministic
-   **streaming accumulator**, not a stateless per-hour gate: an exact-`N` periodic or uniform arm needs
-   the run-total candidate count `|U|`, which is endogenous and arm-dependent, so `|U|` is fixed by a
-   declared model-free pre-pass and the accumulator's state (accumulated candidate count, PRNG position)
-   is recorded run state. The selector imports no `internal/world`; the world imports no client. The
-   projection is a versioned, integer fixed-point numerical projection (P6, ADR 0003) — never prose,
-   never a float, never a single scalar objective.
+2. **A deterministic function of the declared policy, the arm's own ordered candidate stream, and the
+   budget state, over the actor's own observation.** The value projection — expected value, expected
+   cost, and their integer fixed-point ratio — is a pure function over the candidate feature vector,
+   which is derived from the actor's own `strategy.NaturalObservation` (plus one scheduler-level
+   world-level aggregate row, a declared versioned cell statistic that carries no other actor's private
+   state, matching the VS1 Role B `TrajectoryEvidence` discipline). Escalation requests are a declared
+   pure predicate over that observation. Selection over the candidate stream is a deterministic
+   **streaming accumulator** operating on **each arm's own realized stream**: `N` is a declared call
+   ceiling, U and A sample exactly `min(N, |U_arm|)` arm-locally with the policy PRNG, and P is
+   hour-granular and `|U|`-independent, so no arm needs the run-total candidate count (which is
+   endogenous and arm-dependent) and there is no model-free pre-pass; the accumulator's recorded state
+   (accumulated candidate count, PRNG position) makes the selection and its replay exact. The selector
+   imports no `internal/world`; the world imports no client. The projection is a versioned, integer
+   fixed-point numerical projection (P6, ADR 0003) — never prose, never a float, never a single scalar
+   objective. The projection's cost type is protocol-local (`protocol.CallPrice`), because
+   `internal/cognition` imports `protocol` and a `cognition.PriceTable` parameter would cycle.
 
 3. **No world RNG; a declared policy PRNG instead.** The escalation set is a deterministic function of
-   the declared policy identity, the ordered candidate stream, and the budget state, plus the policy's
-   own declared PRNG stream, seeded from run identity and advanced in a declared deterministic order by
-   the streaming accumulator. The uniform-random arm and protected exploration draw from that stream,
-   not the world stream, and its seed and consumed position are recorded. A `full` reference
+   the declared policy identity, the arm's own ordered candidate stream, and the budget state, plus the
+   policy's own declared PRNG stream, seeded from run identity and advanced in a declared deterministic
+   order by the streaming accumulator. The uniform-random arm and protected exploration draw from that
+   stream, not the world stream, and its seed and consumed position are recorded. A `full` reference
    (`Priority == nil`) draws nothing.
 
 Because the selection is reproducible from the deterministic candidate stream, the recorded policy
@@ -67,11 +71,13 @@ the full-policy fingerprint recomputation, and the restore-time refusal (L2 lane
 
 ## Alternatives considered
 
-- **Keep a stateless per-hour `Select` and drop exact-`N` equal budget.** Rejected. Equal budget on the
-  call axis is the experiment's foundation ("at the same budget"); a stateless periodic gate cannot
-  realize exactly `N` without the run-total `|U|`, so dropping exact-`N` would weaken the central-claim
-  comparison rather than preserve it. The deterministic accumulator keeps the goal and records the state
-  that makes replay exact.
+- **Keep a stateless per-hour `Select` and fix `|U|` with a model-free pre-pass so every arm realizes
+  exactly `N`.** Rejected. Equal budget on the call axis is the experiment's foundation ("at the same
+  budget"), but `|U|` is endogenous and arm-dependent — reasoning changes the trajectory — so a
+  model-free count cannot equal a model arm's realized count and exact-`N`-everywhere is unrealizable.
+  The design instead declares `N` as a ceiling and compares arms at the **matched realized call count**,
+  which keeps the same-budget comparison honest without asserting a stream length the model arm does not
+  produce.
 - **A free-standing scheduler beside the wake policy that reads world state directly.** Rejected. It
   violates the observation boundary (C5), creates a second allocation subsystem beside VS1's object,
   and makes replay depend on world state that only the live run held. The world already consumes the
@@ -83,10 +89,11 @@ the full-policy fingerprint recomputation, and the restore-time refusal (L2 lane
   metric is a vector; a scalar objective would encode hidden values and invite optimization artifacts.
   Priority is an integer fixed-point ratio of two declared projections, and the fidelity comparison is
   vector dominance, never a scalar winner.
-- **Give the priority layer privileged state (aggregate truth, other actors' state).** Rejected. It
-  violates C5 and P7, and it makes the project's differentiator — reasoning *under* a boundary —
-  untestable. The feature contract is observation-only and tested by the import-graph and sentinel
-  checks.
+- **Give the priority layer privileged state (undeclared aggregates, other actors' private state).**
+  Rejected. It violates C5 and P7, and it makes the project's differentiator — reasoning *under* a
+  boundary — untestable. The feature contract admits only the actor's own observation plus one declared
+  world-level aggregate row (`prior_reliability`, a versioned cell statistic carrying no other actor's
+  private state), and it is tested by the import-graph and sentinel checks.
 - **Use real floating-point arithmetic for the expectation.** Rejected. Float arithmetic is not
   reproducible across platforms and would make the "deterministic function" claim false in practice.
   Priority and the exploration fraction are integer fixed-point.
@@ -99,9 +106,11 @@ the full-policy fingerprint recomputation, and the restore-time refusal (L2 lane
 - Equal budget becomes definable on the deterministic call axis: the model is unpriced (ADR 0006
   Addendum), so cost cannot equalize arms; calls can. The cost-equalized comparison becomes a declared
   operator gate rather than a fabricated price.
-- The selector is a deterministic streaming accumulator rather than a stateless per-hour function: a
-  declared model-free pre-pass fixes `|U|`, and the accumulator's recorded state (accumulated candidate
-  count, PRNG position) makes the exact-`N` budgets and their replay well defined.
+- The selector is a deterministic streaming accumulator over each arm's own stream: `N` is a declared
+  ceiling, arm-local rules spend exactly `N` when the stream permits and report under-spend otherwise,
+  and the accumulator's recorded state (candidate count, PRNG position) makes the selection and its
+  replay well defined. Because stream lengths are endogenous, arms are compared at the **matched
+  realized call count** rather than at an asserted fixed `|U|`.
 - The value model is a versioned hypothesis that must be calibrated: predicted priority is compared to
   realized downstream effect, and the calibration error is reported (P6). An uninformative model is a
   measurable outcome, not a hidden default.
