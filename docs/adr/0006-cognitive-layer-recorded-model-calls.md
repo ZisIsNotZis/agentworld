@@ -123,7 +123,17 @@ model call has been made.
 
 - **Model identity.** The application model is exposed as `github_copilot/gpt-6-luna` (underscore).
   The VS1 spec's earlier hyphen spelling `github-copilot/gpt-6-luna` is not exposed by the gateway.
-  The id is configuration (`$LITELLM_MODEL`, default the discovered id), never a call-site constant.
+  There is one declared application-model identity (`cognition.DefaultModelID`, the same value as
+  `DefaultGatewayModel`); the gateway's configured model comes from `$LITELLM_MODEL`, and the
+  canonical request encoder and the recorded run-identity model digest are derived from the declared
+  identity rather than a superseded literal.
+- **Model identity is recorded.** The recorded run-identity model digest is derived from the
+  application model, the declared wire, and the frozen sampling instance, so the checkpoint binding
+  names the model and wire a run actually used and two runs on different models or wires cannot share
+  an identity.
+- **Output mode is recorded per call.** The requested JSON output mode (`json_object` or a plain
+  completion) is recorded on the call record when the transport declares it; the hermetic fake and
+  replay transports declare none, so their recorded bytes are unchanged.
 - **Two wires, one recorded mode.** The client speaks the OpenAI-compatible chat wire
   (`POST /v1/chat/completions`, the original assumption, kept as the hermetic default) and the
   Responses wire (`POST /v1/responses`), which the application model's metadata advertises as its
@@ -137,17 +147,24 @@ model call has been made.
   and `credential_present` reach the ledger; no secret material is ever recorded.
 - **Unpriced is a typed state.** The application model's metadata carries no input/output cost fields.
   Cost computation is pluggable (`Pricer`); when no entry exists the default `UnpricedPrice` records
-  `price_version: "unpriced"` with `cost_micros: 0`, a typed state rather than a fabricated zero. A
-  declared `PriceTable` still prices a priced model exactly as before. Because an unpriced call
-  charges nothing, the cost ceiling cannot bind for it: a live unpriced run must declare a price or
-  explicitly waive the cost ceiling.
+  `price_version: "unpriced"` with `cost_micros: 0`, a typed state rather than a fabricated zero. The
+  typed `Cost.Unpriced` state and the reserved `unpriced` version must agree, so the recorded unpriced
+  flag is derived from them. A declared `PriceTable` still prices a priced model exactly as before.
+  Because an unpriced call charges nothing, the cost ceiling cannot bind for it: a live unpriced run
+  must declare a price or explicitly waive the cost ceiling.
+- **Oversized bodies are labelled.** An oversized response is recorded by digest and length; because
+  the transport buffers only a bounded prefix, the record marks the digest/length as a truncated
+  prefix so an auditor knows the digest is recomputable from that prefix and does not claim the full
+  body.
 - **One network boundary.** The real transport (`internal/cognition/gateway.go`) is the package's
   single declared network file; the structural guard test permits `net` only there and keeps the
   fake, replay, ledger, recorder, and world-boundary prohibitions everywhere else.
 - **Disabled by default.** `cmd/vs1 gateway-probe` is the only command that contacts the gateway. It
   performs one metadata request and refuses unless `-authorize` or
   `AGENTWORLD_GATEWAY_PROBE_AUTHORIZED=1` is set, so the later authorised live lane enables it with
-  one flag.
+  one flag. The bearer credential is read from the environment only (there is no `-api-key` flag), so
+  it cannot appear in the process table, and `DiscoverGatewayContract` itself refuses an unauthorized
+  config with a typed error without opening a connection.
 
 Retries, the 30 s attempt timeout and 90 s call deadline, ledger recording, replay, and the budget
 remain the Recorder's (unchanged); the transport performs exactly one attempt and never records.

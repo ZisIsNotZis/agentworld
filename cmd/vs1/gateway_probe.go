@@ -25,8 +25,9 @@ func runGatewayProbe(args []string) int {
 	fs := flag.NewFlagSet("gateway-probe", flag.ContinueOnError)
 	baseURL := fs.String("gateway-url", os.Getenv(cognition.EnvGatewayBaseURL),
 		"gateway base URL (default $"+cognition.EnvGatewayBaseURL+")")
-	apiKey := fs.String("api-key", os.Getenv(cognition.EnvGatewayAPIKey),
-		"gateway bearer credential (default $"+cognition.EnvGatewayAPIKey+"); never recorded")
+	// The bearer credential is read from the environment only, so it can never
+	// appear in the process table (a command-line flag would leak it to ps).
+	apiKey := os.Getenv(cognition.EnvGatewayAPIKey)
 	model := fs.String("model", cognition.DefaultGatewayModel, "application model id to inspect")
 	authorize := fs.Bool("authorize", os.Getenv(gatewayProbeAuthorizedEnv) == "1",
 		"authorize the single metadata GET (no spend)")
@@ -44,7 +45,9 @@ func runGatewayProbe(args []string) int {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
-	contract, err := cognition.DiscoverGatewayContract(ctx, cognition.GatewayConfig{BaseURL: *baseURL, APIKey: *apiKey})
+	contract, err := cognition.DiscoverGatewayContract(ctx, cognition.GatewayConfig{
+		BaseURL: *baseURL, APIKey: apiKey, Authorized: true,
+	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "vs1 gateway-probe:", err)
 		return 1

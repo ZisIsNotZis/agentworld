@@ -188,7 +188,7 @@ reported rather than narrated.
 - VS1 carries **both** AI roles: Role A (an actor's mind at a declared decision seam) and Role B
   (in-run behaviour-logic modification); Role B must kick in *during* the run.
 - The fidelity metric is the frozen definition given in VS2.
-- Application model: **`github-copilot/gpt-6-luna`** (operator decision, replacing the earlier `zai/glm-5.3-flash` choice); orchestration subagents: **`deepseek/deepseek-flash`**.
+- Application model: **`github_copilot/gpt-6-luna`** (operator decision; this gateway-exposed underscore id is the single declared application-model identity and supersedes the earlier `zai/glm-5.3-flash` choice); orchestration subagents: **`deepseek/deepseek-flash`**.
 - The ecology arc is closed: no new ecology work follows it. The substrate it produced is the
   instrument VS1/VS2 build on.
 

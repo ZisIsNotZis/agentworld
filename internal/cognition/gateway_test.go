@@ -381,6 +381,9 @@ func TestGatewayOversizedBodyIsRecordedByDigestAndLength(t *testing.T) {
 	if len(records) != 1 || records[0].ResponseDigest == "" || records[0].ResponseLength <= cognition.MaxResponseBytes {
 		t.Fatalf("oversized record missing digest/length: %+v", records)
 	}
+	if !records[0].ResponseTruncatedPrefix {
+		t.Fatalf("oversized digest/length must be labelled a truncated prefix: %+v", records[0])
+	}
 }
 
 // --- cost and identity ------------------------------------------------------
@@ -490,7 +493,7 @@ func TestDiscoverGatewayContractParsesMetadataOnly(t *testing.T) {
 	defer srv.Close()
 
 	contract, err := cognition.DiscoverGatewayContract(context.Background(), cognition.GatewayConfig{
-		BaseURL: srv.URL, APIKey: "test-key", HTTPClient: srv.Client(),
+		BaseURL: srv.URL, APIKey: "test-key", Authorized: true, HTTPClient: srv.Client(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -560,5 +563,185 @@ func TestGatewayEmptyResponsesMappingFallsBack(t *testing.T) {
 	}
 	if decision.Source != cognition.SourceFallback || decision.Reason != string(cognition.FallbackReasonMalformed) {
 		t.Fatalf("empty responses content must fall back: %+v", decision)
+	}
+}
+
+// --- repair round (ticket 22 v2): output mode, identity, probe gate --------
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// TestDiscoverGatewayContractRefusesUnauthorizedWithoutNetwork pins that the
+// metadata probe itself refuses an unauthorized config with a typed error and
+// never opens a connection.
+func TestDiscoverGatewayContractRefusesUnauthorizedWithoutNetwork(t *testing.T) {
+	called := false
+	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		called = true
+		return nil, errors.New("network must not be touched")
+	})}
+	_, err := cognition.DiscoverGatewayContract(context.Background(), cognition.GatewayConfig{
+		BaseURL: "http://127.0.0.1:4000", Authorized: false, HTTPClient: client,
+	})
+	if !errors.Is(err, cognition.ErrGatewayUnauthorized) {
+		t.Fatalf("unauthorized discovery accepted: %v", err)
+	}
+	if called {
+		t.Fatal("unauthorized discovery opened a connection")
+	}
+}
+
+// TestGatewayOutputPlainOmitsJSONFormat pins the plain output mode on both
+// wires: the chat wire omits response_format and the Responses wire omits
+// text/format.
+func TestGatewayOutputPlainOmitsJSONFormat(t *testing.T) {
+	for _, tc := range []struct {
+		mode      cognition.WireMode
+		formatKey string
+	}{
+		{cognition.WireChatCompletions, "response_format"},
+		{cognition.WireResponses, "text"},
+	} {
+		var gotBody map[string]any
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewDecoder(r.Body).Decode(&gotBody)
+			if tc.mode == cognition.WireChatCompletions {
+				_, _ = w.Write(chatWireBody(actorDecisionJSON, 1, 1))
+			} else {
+				_, _ = w.Write(responsesWireBody(actorDecisionJSON, 1, 1))
+			}
+		}))
+		gw, err := cognition.NewGatewayClient(cognition.GatewayConfig{
+			BaseURL: srv.URL, Authorized: true, WireMode: tc.mode,
+			Model: cognition.DefaultGatewayModel, OutputMode: cognition.OutputPlain, HTTPClient: srv.Client(),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := gw.Complete(context.Background(), cognition.ModelRequest{
+			Endpoint: gw.WireEndpoint(), Sampling: cognition.FrozenSampling(), Request: []byte(`{"schema_version":1}`),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := gotBody[tc.formatKey]; ok {
+			t.Fatalf("%s wire in plain mode requested %q: %v", tc.mode, tc.formatKey, gotBody)
+		}
+		srv.Close()
+	}
+}
+
+// TestGatewayRecordsRequestedOutputMode pins that the requested JSON output
+// mode (json_object or plain text) reaches the ledger per call, while the
+// hermetic fake transport records none and its bytes stay unchanged.
+func TestGatewayRecordsRequestedOutputMode(t *testing.T) {
+	for _, tc := range []struct {
+		output cognition.OutputMode
+		want   string
+	}{
+		{cognition.OutputJSON, string(cognition.OutputJSON)},
+		{cognition.OutputPlain, string(cognition.OutputPlain)},
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write(chatWireBody(actorDecisionJSON, 1, 1))
+		}))
+		gw, err := cognition.NewGatewayClient(cognition.GatewayConfig{
+			BaseURL: srv.URL, Authorized: true, CredentialPresent: true, WireMode: cognition.WireChatCompletions,
+			OutputMode: tc.output, HTTPClient: srv.Client(),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		l, path := newTestLedger(t)
+		rec := recorderWith(t, l, gw, testPrice(), newAccount(t, generousBudget()), cognition.RecorderConfig{})
+		if _, err := rec.Call(context.Background(), gatewayCall(gw, cognition.RoleActorDecision, 6)); err != nil {
+			t.Fatal(err)
+		}
+		records, err := cognition.ReadCallRecords(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(records) != 1 || records[0].OutputMode != tc.want {
+			t.Fatalf("requested output mode %s not recorded: %+v", tc.output, records)
+		}
+		srv.Close()
+	}
+
+	// The fake declares no output mode, so its record stays empty.
+	l, path := newTestLedger(t)
+	if _, err := newRecorder(t, l, &cognition.FakeClient{}, newAccount(t, generousBudget())).Call(
+		context.Background(), sampleRequest(cognition.RoleActorDecision, `{"schema_version":1}`, 6)); err != nil {
+		t.Fatal(err)
+	}
+	fakeRecords, err := cognition.ReadCallRecords(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fakeRecords) != 1 || fakeRecords[0].OutputMode != "" {
+		t.Fatalf("fake path must record no output mode: %+v", fakeRecords)
+	}
+}
+
+// TestModelIdentityDigestBindsModelAndWire pins the P1 repair: the recorded
+// model identity digest is derived from the declared model and wire, so two
+// runs on different models or wires get different digests.
+func TestModelIdentityDigestBindsModelAndWire(t *testing.T) {
+	sampling := cognition.FrozenSampling()
+	base := cognition.ModelIdentityDigest(cognition.DefaultModelID, cognition.WireChatCompletions, sampling)
+	if base != cognition.ModelIdentityDigest(cognition.DefaultModelID, cognition.WireChatCompletions, sampling) {
+		t.Fatal("identity digest is not deterministic")
+	}
+	if base == cognition.ModelIdentityDigest("other/model", cognition.WireChatCompletions, sampling) {
+		t.Fatal("two models share an identity digest")
+	}
+	if base == cognition.ModelIdentityDigest(cognition.DefaultModelID, cognition.WireResponses, sampling) {
+		t.Fatal("two wires share an identity digest")
+	}
+	if base != cognition.ModelIdentityDigest(cognition.DefaultModelID, "", sampling) {
+		t.Fatal("the empty wire is not the declared chat default")
+	}
+	// One declared application-model identity: the gateway-exposed underscore id.
+	if cognition.DefaultModelID != cognition.DefaultGatewayModel {
+		t.Fatalf("DefaultModelID %q and DefaultGatewayModel %q differ",
+			cognition.DefaultModelID, cognition.DefaultGatewayModel)
+	}
+	if cognition.DefaultModelID != "github_copilot/gpt-6-luna" {
+		t.Fatalf("declared application model = %q", cognition.DefaultModelID)
+	}
+}
+
+type fixedPricer struct {
+	version string
+	cost    cognition.Cost
+}
+
+func (p fixedPricer) PriceVersion() string                         { return p.version }
+func (p fixedPricer) Cost(cognition.Usage) (cognition.Cost, error) { return p.cost, nil }
+func (p fixedPricer) Validate() error                              { return nil }
+
+// TestRecorderRejectsInconsistentPricer pins that the typed Cost.Unpriced state
+// and the reserved `unpriced` price version must agree, so the recorded
+// unpriced flag cannot silently disagree with the pricer.
+func TestRecorderRejectsInconsistentPricer(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		pricer fixedPricer
+	}{
+		{"unpriced with a priced version", fixedPricer{version: "test/1", cost: cognition.Cost{Unpriced: true}}},
+		{"priced with the reserved unpriced version", fixedPricer{version: cognition.UnpricedPriceVersion, cost: cognition.Cost{Micros: 5}}},
+	} {
+		l, _ := newTestLedger(t)
+		rec, err := cognition.NewRecorder(cognition.RecorderConfig{
+			Ledger: l, Client: &cognition.FakeClient{}, Budget: newAccount(t, generousBudget()),
+			Price: tc.pricer, Now: func() time.Time { return time.UnixMicro(1_700_000_000_000_000) },
+			Sleep: func(context.Context, time.Duration) error { return nil },
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := rec.Call(context.Background(),
+			sampleRequest(cognition.RoleActorDecision, `{"schema_version":1}`, 6)); !errors.Is(err, cognition.ErrInvalidModelRequest) {
+			t.Fatalf("%s: inconsistent pricer accepted: %v", tc.name, err)
+		}
 	}
 }

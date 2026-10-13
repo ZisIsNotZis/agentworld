@@ -34,11 +34,11 @@ const (
 )
 
 // DefaultGatewayModel is the declared application model id as exposed by the
-// gateway metadata. The ticket-21 spec writes the hyphen spelling
-// `github-copilot/gpt-6-luna`; the gateway exposes the underscore spelling,
-// which is the id actually sent on the wire. The id is configuration, never
-// hard-coded into a call site.
-const DefaultGatewayModel = "github_copilot/gpt-6-luna"
+// gateway metadata. It is the single declared application-model identity
+// (DefaultModelID); the gateway exposes the underscore spelling, which is the
+// id actually sent on the wire. The gateway's configured model comes from the
+// environment (GatewayConfig.Model); both spellings are this one value.
+const DefaultGatewayModel = DefaultModelID
 
 // WireMode names one declared gateway wire. The two declared wires differ in
 // request path, request body, JSON output mode, and usage extraction.
@@ -406,7 +406,8 @@ func (g *GatewayClient) WireMode() WireMode { return g.codec.Mode() }
 // model actually addressed.
 func (g *GatewayClient) WireModel() string { return g.model }
 
-// OutputMode is the configured JSON output mode.
+// OutputMode is the configured JSON output mode. It satisfies
+// TransportOutputMode, so the Recorder records the requested mode per call.
 func (g *GatewayClient) OutputMode() OutputMode { return g.output }
 
 // Complete performs exactly one physical attempt. A refusal (unauthorized or no
@@ -540,9 +541,14 @@ type gatewayModelsBody struct {
 
 // DiscoverGatewayContract performs the declared metadata-only discovery probe:
 // one authorized GET {base}/v1/models. It spends nothing and records nothing;
-// the caller (cmd/vs1 gateway-probe) prints the result. The base URL and
-// credential are not stored in the returned contract.
+// the caller (cmd/vs1 gateway-probe) prints the result. It refuses, with a
+// typed error and no network access, unless cfg.Authorized is set, so the
+// probe cannot reach the gateway by any other path. The base URL and credential
+// are not stored in the returned contract.
 func DiscoverGatewayContract(ctx context.Context, cfg GatewayConfig) (GatewayContract, error) {
+	if !cfg.Authorized {
+		return GatewayContract{}, fmt.Errorf("%w: gateway discovery is not authorized", ErrGatewayUnauthorized)
+	}
 	host, path, err := splitEndpoint(cfg.BaseURL)
 	if err != nil {
 		return GatewayContract{}, err
@@ -601,6 +607,15 @@ func DiscoverGatewayContract(ctx context.Context, cfg GatewayConfig) (GatewayCon
 // unchanged.
 type TransportIdentity interface {
 	WireModel() string
+}
+
+// TransportOutputMode is implemented by transports that request a declared JSON
+// output mode. The Recorder records the mode when present, so an auditor can
+// see whether a JSON-object or a plain completion was requested. The hermetic
+// fake and replay transports report none, so their recorded bytes are
+// unchanged.
+type TransportOutputMode interface {
+	OutputMode() OutputMode
 }
 
 // Pricer converts one attempt's usage to a cost and declares the price-table

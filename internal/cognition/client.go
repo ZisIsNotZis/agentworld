@@ -26,10 +26,15 @@ import (
 	"agentworld/internal/cognition/protocol"
 )
 
-// Declared protocol identity. The gateway model and the sampling parameters
-// are part of run identity (spec section 6).
+// Declared protocol identity. The application model and the sampling
+// parameters are part of run identity (spec section 6).
 const (
-	DefaultModelID = "zai/glm-5.3-flash"
+	// DefaultModelID is the single declared application-model identity, the id
+	// the gateway exposes and sends on the wire. It is the operator-decided
+	// `github_copilot/gpt-6-luna` (underscore); the earlier `zai/glm-5.3-flash`
+	// choice is superseded. The gateway's configured model comes from
+	// $LITELLM_MODEL (DefaultGatewayModel); both spellings are this one value.
+	DefaultModelID = "github_copilot/gpt-6-luna"
 
 	RoleActorDecision = "actor-decision"
 	RoleStrategyPatch = "strategy-patch"
@@ -56,6 +61,39 @@ var (
 	ErrGatewayUnimplemented   = errors.New("model gateway transport is not implemented in this lane")
 	ErrReplayNetworkForbidden = errors.New("replay is incapable of network access")
 )
+
+// ModelIdentityDigest is the declared run-identity digest of a model call:
+// SHA-256 over the application model, the declared wire mode, and the sampling
+// instance. It binds the checkpoint/manifest identity to the model and wire a
+// run actually used, so two runs on different models or wires cannot share an
+// identity. The empty wire mode is the declared chat default.
+func ModelIdentityDigest(model string, wire WireMode, sampling Sampling) [32]byte {
+	if wire == "" {
+		wire = WireChatCompletions
+	}
+	body, err := canonicalJSON(modelIdentityWire{
+		Model:       model,
+		Wire:        string(wire),
+		Temperature: sampling.Temperature,
+		TopP:        sampling.TopP,
+		MaxTokens:   sampling.MaxTokens,
+		Seed:        sampling.Seed,
+	})
+	if err != nil {
+		// The identity block is a fixed, always-encodable struct.
+		panic(err)
+	}
+	return sha256.Sum256(body)
+}
+
+type modelIdentityWire struct {
+	Model       string  `json:"model"`
+	Wire        string  `json:"wire"`
+	Temperature float64 `json:"temperature"`
+	TopP        float64 `json:"top_p"`
+	MaxTokens   int     `json:"max_tokens"`
+	Seed        *int64  `json:"seed"`
+}
 
 // Sampling is the declared sampling state sent with a call. Seed is nil when
 // the gateway does not support a seed (the VS1 instance sends none and records
@@ -265,35 +303,51 @@ func (r *Recorder) Call(ctx context.Context, req CallRequest) (CallResult, error
 		status, httpStatus := classifyCall(resp, completeErr)
 		digest, length := "", 0
 		body, content := resp.Body, resp.Content
+		truncatedPrefix := false
 		if status == CallStatusOversized {
 			sum := sha256.Sum256(resp.Body)
 			digest, length = formatHash(sum), len(resp.Body)
 			body, content = nil, nil
+			// The transport buffers at most MaxResponseBytes+1 bytes, so this
+			// digest and length describe that leading prefix, not the full
+			// body; label the scope so an auditor knows what to recompute.
+			truncatedPrefix = true
 		}
 		cost, err := r.price.Cost(resp.Usage)
 		if err != nil {
 			return CallResult{}, err
 		}
+		priceVersion := r.price.PriceVersion()
+		// `unpriced` is the reserved price-table version; the typed Cost.Unpriced
+		// state and the recorded version must agree, so the recorded unpriced
+		// flag can be derived from the version without a dead field.
+		if cost.Unpriced != (priceVersion == UnpricedPriceVersion) {
+			return CallResult{}, fmt.Errorf(
+				"%w: pricer is inconsistent: Unpriced=%t but PriceVersion=%q (the reserved unpriced version is %q)",
+				ErrInvalidModelRequest, cost.Unpriced, priceVersion, UnpricedPriceVersion)
+		}
 		rec, err := r.ledger.AppendCall(CallRecord{
-			Role:                req.Role,
-			RequestHash:         formatHash(requestHash),
-			RequestBytes:        req.Request,
-			ResponseBody:        body,
-			Content:             content,
-			ModelID:             r.recordedModel(req.Model),
-			Endpoint:            req.Endpoint,
-			CredentialPresent:   req.CredentialPresent,
-			Sampling:            req.Sampling,
-			Usage:               resp.Usage,
-			CostMicros:          cost.Micros,
-			PriceVersion:        r.price.PriceVersion(),
-			Attempt:             attempt,
-			Status:              status,
-			HTTPStatus:          httpStatus,
-			ResponseDigest:      digest,
-			ResponseLength:      length,
-			StartedAtUnixMicros: started.UnixMicro(),
-			LatencyMicros:       latency.Microseconds(),
+			Role:                    req.Role,
+			RequestHash:             formatHash(requestHash),
+			RequestBytes:            req.Request,
+			ResponseBody:            body,
+			Content:                 content,
+			ModelID:                 r.recordedModel(req.Model),
+			Endpoint:                req.Endpoint,
+			CredentialPresent:       req.CredentialPresent,
+			Sampling:                req.Sampling,
+			Usage:                   resp.Usage,
+			CostMicros:              cost.Micros,
+			PriceVersion:            priceVersion,
+			OutputMode:              r.recordedOutputMode(),
+			Attempt:                 attempt,
+			Status:                  status,
+			HTTPStatus:              httpStatus,
+			ResponseDigest:          digest,
+			ResponseLength:          length,
+			ResponseTruncatedPrefix: truncatedPrefix,
+			StartedAtUnixMicros:     started.UnixMicro(),
+			LatencyMicros:           latency.Microseconds(),
 		})
 		if err != nil {
 			return CallResult{}, err
@@ -331,6 +385,16 @@ func (r *Recorder) recordedModel(declared string) string {
 		}
 	}
 	return declared
+}
+
+// recordedOutputMode is the JSON output mode recorded for a call. A transport
+// that requests a declared output mode (the real gateway) is the authority;
+// every hermetic transport reports none, so its recorded bytes are unchanged.
+func (r *Recorder) recordedOutputMode() string {
+	if mode, ok := r.client.(TransportOutputMode); ok {
+		return string(mode.OutputMode())
+	}
+	return ""
 }
 
 // classifyCall turns one transport outcome into a recorded status. An oversized
