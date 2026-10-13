@@ -134,7 +134,7 @@ declared 168-hour horizon, byte-identical across the migration.
   - `cmd/vs1/run.go` `26d4490ec5ee7abec62d1a57d0fac96b4b29b42d`
   - `cmd/vs1/vs1_test.go` `348b0d630399bac293d7f1d0bbb18fa0633157bc`
   - `cmd/vs1/residual_test.go` `b5728e635faa7bf472362f7324883134c494385e`
-- L4a commit on `feature/28-vs2-l4a`: `<recorded in the commit that lands this ticket>`.
+- L4a commit on `feature/28-vs2-l4a`: `403b95d0b5678c742de96ac6cf0c0c53c8fcdc5e` (the commit that added `internal/experiment/**`, migrated `cmd/vs1`, and added this ticket; this line records its hash).
 
 ## Residual risks / declared gaps
 
