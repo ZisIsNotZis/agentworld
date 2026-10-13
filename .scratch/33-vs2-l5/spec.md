@@ -320,3 +320,5 @@ Go toolchain: `GOROOT=/home/z/vibe/agentworld/.tmp/go-toolchain/root/usr/lib/go-
 - Branch `feature/34-vs2-docs-repair`; base master `2ef513b` (the verified L5 merge).
 - Repair commits: `2396625`, `87cb72a`, `98f88ec`; HEAD `98f88ec`.
 - The re-run artifact `.tmp/34-vs2-evaluation.json` is produced from the source at `98f88ec`.
+- Repair-note commit: `3c29d39`; this ticket's blob at that commit:
+  `2c7e29e4480afed9e51dd259de8c817e7152f18b`.
