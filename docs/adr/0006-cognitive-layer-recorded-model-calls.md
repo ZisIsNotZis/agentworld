@@ -114,3 +114,40 @@ deterministic fork pair evaluated under matched conditions, and its verdict is r
 candidate beam-style evaluation with diversity constraints is not adopted in VS1; it belongs to VS3's
 sustained evolution, once a population of strategy variants exists to retain. ADR 0003 is honoured by
 refusing a single scalar objective and emitting a per-indicator divergence vector instead.
+
+## Addendum — the real gateway wire contract (ticket 22)
+
+Discovery against the running LiteLLM gateway (`GET /v1/models`, metadata only, no spend) fixed the
+wire contract the VS1 real-model arm needs. This addendum is code plus hermetic tests; no live
+model call has been made.
+
+- **Model identity.** The application model is exposed as `github_copilot/gpt-6-luna` (underscore).
+  The VS1 spec's earlier hyphen spelling `github-copilot/gpt-6-luna` is not exposed by the gateway.
+  The id is configuration (`$LITELLM_MODEL`, default the discovered id), never a call-site constant.
+- **Two wires, one recorded mode.** The client speaks the OpenAI-compatible chat wire
+  (`POST /v1/chat/completions`, the original assumption, kept as the hermetic default) and the
+  Responses wire (`POST /v1/responses`), which the application model's metadata advertises as its
+  only supported endpoint. A `WireMode` selects the request path, the request body, the JSON output
+  mode (`response_format` versus `text.format`), and the usage fields (`prompt_tokens` /
+  `completion_tokens` versus `input_tokens` / `output_tokens`). The wire mode reaches the ledger
+  through the recorded endpoint host+path, so no record field changes and existing records stay
+  byte-identical.
+- **Configuration, never recorded.** The base URL (`$LITELLM_BASE_URL`), the bearer credential
+  (`$LITELLM_API_KEY`), the wire model, and the wire are configuration. Only the endpoint host+path
+  and `credential_present` reach the ledger; no secret material is ever recorded.
+- **Unpriced is a typed state.** The application model's metadata carries no input/output cost fields.
+  Cost computation is pluggable (`Pricer`); when no entry exists the default `UnpricedPrice` records
+  `price_version: "unpriced"` with `cost_micros: 0`, a typed state rather than a fabricated zero. A
+  declared `PriceTable` still prices a priced model exactly as before. Because an unpriced call
+  charges nothing, the cost ceiling cannot bind for it: a live unpriced run must declare a price or
+  explicitly waive the cost ceiling.
+- **One network boundary.** The real transport (`internal/cognition/gateway.go`) is the package's
+  single declared network file; the structural guard test permits `net` only there and keeps the
+  fake, replay, ledger, recorder, and world-boundary prohibitions everywhere else.
+- **Disabled by default.** `cmd/vs1 gateway-probe` is the only command that contacts the gateway. It
+  performs one metadata request and refuses unless `-authorize` or
+  `AGENTWORLD_GATEWAY_PROBE_AUTHORIZED=1` is set, so the later authorised live lane enables it with
+  one flag.
+
+Retries, the 30 s attempt timeout and 90 s call deadline, ledger recording, replay, and the budget
+remain the Recorder's (unchanged); the transport performs exactly one attempt and never records.

@@ -161,18 +161,21 @@ type CallResult struct {
 	ResponseBody        []byte
 	Usage               Usage
 	CostMicros          int64
+	CostUnpriced        bool
 	Status              CallStatus
 	StartedAtUnixMicros int64
 	LatencyMicros       int64
 }
 
 // RecorderConfig wires the client stack. Ledger, Client, Budget, and Price are
-// required. The zero values of the harness bounds take the declared defaults.
+// required. Price is a pluggable Pricer so a model with no price entry takes
+// the typed unpriced state instead of a fabricated zero. The zero values of the
+// harness bounds take the declared defaults.
 type RecorderConfig struct {
 	Ledger         *Ledger
 	Client         ModelClient
 	Budget         *CognitiveAccount
-	Price          PriceTable
+	Price          Pricer
 	MaxAttempts    int
 	AttemptTimeout time.Duration
 	CallDeadline   time.Duration
@@ -188,7 +191,7 @@ type Recorder struct {
 	ledger         *Ledger
 	client         ModelClient
 	budget         *CognitiveAccount
-	price          PriceTable
+	price          Pricer
 	maxAttempts    int
 	attemptTimeout time.Duration
 	callDeadline   time.Duration
@@ -200,6 +203,9 @@ type Recorder struct {
 func NewRecorder(cfg RecorderConfig) (*Recorder, error) {
 	if cfg.Ledger == nil || cfg.Client == nil || cfg.Budget == nil {
 		return nil, fmt.Errorf("%w: ledger, client, and budget are required", ErrModelClient)
+	}
+	if cfg.Price == nil {
+		return nil, fmt.Errorf("%w: a pricer is required (use UnpricedPrice for a model with no price entry)", ErrModelClient)
 	}
 	if err := cfg.Price.Validate(); err != nil {
 		return nil, err
@@ -264,7 +270,7 @@ func (r *Recorder) Call(ctx context.Context, req CallRequest) (CallResult, error
 			digest, length = formatHash(sum), len(resp.Body)
 			body, content = nil, nil
 		}
-		cost, err := r.price.CostMicros(resp.Usage)
+		cost, err := r.price.Cost(resp.Usage)
 		if err != nil {
 			return CallResult{}, err
 		}
@@ -274,13 +280,13 @@ func (r *Recorder) Call(ctx context.Context, req CallRequest) (CallResult, error
 			RequestBytes:        req.Request,
 			ResponseBody:        body,
 			Content:             content,
-			ModelID:             req.Model,
+			ModelID:             r.recordedModel(req.Model),
 			Endpoint:            req.Endpoint,
 			CredentialPresent:   req.CredentialPresent,
 			Sampling:            req.Sampling,
 			Usage:               resp.Usage,
-			CostMicros:          cost,
-			PriceVersion:        r.price.Version,
+			CostMicros:          cost.Micros,
+			PriceVersion:        r.price.PriceVersion(),
 			Attempt:             attempt,
 			Status:              status,
 			HTTPStatus:          httpStatus,
@@ -292,7 +298,7 @@ func (r *Recorder) Call(ctx context.Context, req CallRequest) (CallResult, error
 		if err != nil {
 			return CallResult{}, err
 		}
-		if err := r.budget.Charge(req.Hour, resp.Usage, cost); err != nil {
+		if err := r.budget.Charge(req.Hour, resp.Usage, cost.Micros); err != nil {
 			return CallResult{}, err
 		}
 		if !status.retryable(httpStatus) {
@@ -312,6 +318,19 @@ func (r *Recorder) complete(ctx context.Context, req ModelRequest) (ModelRespons
 	attemptCtx, cancel := context.WithTimeout(ctx, r.attemptTimeout)
 	defer cancel()
 	return r.client.Complete(attemptCtx, req)
+}
+
+// recordedModel is the model id recorded for a call. A transport that addresses
+// a declared wire model (the real gateway) is the authority on the model
+// actually called; every hermetic transport reports none, so the request's
+// declared model is recorded unchanged.
+func (r *Recorder) recordedModel(declared string) string {
+	if identity, ok := r.client.(TransportIdentity); ok {
+		if model := identity.WireModel(); model != "" {
+			return model
+		}
+	}
+	return declared
 }
 
 // classifyCall turns one transport outcome into a recorded status. An oversized
@@ -350,6 +369,7 @@ func callResultFrom(rec CallRecord) CallResult {
 		ResponseBody:        rec.ResponseBody,
 		Usage:               rec.Usage,
 		CostMicros:          rec.CostMicros,
+		CostUnpriced:        rec.PriceVersion == UnpricedPriceVersion,
 		Status:              rec.Status,
 		StartedAtUnixMicros: rec.StartedAtUnixMicros,
 		LatencyMicros:       rec.LatencyMicros,
@@ -420,52 +440,10 @@ func DefaultFakeResponse() ModelResponse {
 	}
 }
 
-// GatewayConfig is the environment-derived configuration of the real
-// OpenAI-compatible LiteLLM gateway. It is never recorded: only the endpoint
-// host+path and whether a credential was present reach the ledger, and no
-// secret material is ever recorded.
-type GatewayConfig struct {
-	BaseURL           string
-	CredentialPresent bool
-	// Authorized is the spend authorization. It is false in VS1 L1: no spend
-	// has been authorized, so the adapter is a stub that cannot call a model.
-	Authorized bool
-}
-
-// GatewayClient is the config-gated gateway adapter. In this lane it is a stub
-// with no network dependency at all: an unauthorized client refuses with a
-// typed error, and an authorized one refuses because the transport is not
-// built yet. Either way it is incapable of making a network call.
-type GatewayClient struct {
-	endpoint          string
-	credentialPresent bool
-	authorized        bool
-}
-
-// NewGatewayClient records the endpoint host+path (no query, no credential)
-// and returns the stub. It never performs I/O.
-func NewGatewayClient(cfg GatewayConfig) (*GatewayClient, error) {
-	host, path, err := splitEndpoint(cfg.BaseURL)
-	if err != nil {
-		return nil, err
-	}
-	return &GatewayClient{endpoint: host + path, credentialPresent: cfg.CredentialPresent, authorized: cfg.Authorized}, nil
-}
-
-// Endpoint is the recorded host+path of the gateway.
-func (g *GatewayClient) Endpoint() string { return g.endpoint }
-
-// CredentialPresent reports whether a credential was configured, for the
-// ledger's credential_present field.
-func (g *GatewayClient) CredentialPresent() bool { return g.credentialPresent }
-
-// Complete always fails: the stub is incapable of a network call.
-func (g *GatewayClient) Complete(context.Context, ModelRequest) (ModelResponse, error) {
-	if !g.authorized {
-		return ModelResponse{}, fmt.Errorf("%w: VS1 spend is not authorized", ErrGatewayUnauthorized)
-	}
-	return ModelResponse{}, fmt.Errorf("%w: the L1 lane ships only the config-gated stub", ErrGatewayUnimplemented)
-}
+// The gateway adapter (GatewayConfig, GatewayClient, NewGatewayClient, and
+// Complete) lives in gateway.go, the package's single declared network
+// boundary. client.go stays network-free so the fake, replay, ledger, and
+// recorder paths cannot reach the network.
 
 func splitEndpoint(raw string) (string, string, error) {
 	s := strings.TrimSpace(raw)

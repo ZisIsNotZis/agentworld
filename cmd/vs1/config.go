@@ -36,6 +36,23 @@ const (
 // declaredArms is the arm order of the matrix.
 var declaredArms = []string{ArmA0, ArmA1, ArmA1i, ArmA2, ArmA3}
 
+// declaredGatewayWire is the declared gateway wire of a run (spec section
+// 6.1). The hermetic matrix runs the chat wire by default, so every recorded
+// endpoint and ledger byte is unchanged; -wire selects the Responses wire (the
+// application model's only advertised endpoint) for a live run.
+var declaredGatewayWire = cognition.WireChatCompletions
+
+// hermeticEndpoint is the declared recorded endpoint host+path of the hermetic
+// cognition stack. The chat default reproduces the existing recorded endpoint
+// exactly; the responses spelling names the wire mode, so the ledger records
+// which wire a run was configured for.
+func hermeticEndpoint(mode cognition.WireMode) string {
+	if mode == cognition.WireResponses {
+		return "hermetic.local/v1/responses"
+	}
+	return "hermetic.local/v1/chat/completions"
+}
+
 // FixtureLabel labels the scripted-proposer fixtures everywhere they appear:
 // they are hand-authored scripts that make the machinery's lifecycle paths
 // reachable, not model judgments and not results tuned into the arms.
