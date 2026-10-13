@@ -171,11 +171,13 @@ func ec2(runs []*cellRun, byCell map[string]map[string]*cellRun, cellKeys []stri
 	case overCeiling > 0 || missingRows > 0 || halts > 0:
 		status = "FAIL"
 	}
-	// The construction refusal and the fail-loud ceiling are unit-exercised
-	// (internal/cognition/priority_test.go, internal/world construction guard);
-	// the band re-derives the observable accounting from the run.
+	// The construction refusal (Priority!=nil && Selector==nil) and the
+	// fail-loud (N+1)-th ceiling call are unit-exercised
+	// (internal/world/natural_cognition_priority_test.go,
+	// internal/cognition/budget_test.go); the band re-derives the observable
+	// accounting from the run.
 	return band("VS2-EC-2", criterion, status, fmt.Sprintf(
-		"budgeted cells=%d ceiling N=%d over-ceiling=%d under-budget=%d missing-ceiling-rows=%d ceiling-halts=%d missing=%s; construction refusal of Priority!=nil && Selector==nil and the fail-loud (N+1)-th call are unit-exercised (internal/cognition/priority_test.go, internal/world/natural_priority_replay_test.go)",
+		"budgeted cells=%d ceiling N=%d over-ceiling=%d under-budget=%d missing-ceiling-rows=%d ceiling-halts=%d missing=%s; construction refusal of Priority!=nil && Selector==nil and the fail-loud (N+1)-th call are unit-exercised (internal/world/natural_cognition_priority_test.go, internal/cognition/budget_test.go)",
 		budgeted, DeclaredCallCeiling, overCeiling, underBudget, missingRows, halts, joinOrNone(missing)))
 }
 
@@ -324,7 +326,7 @@ func ec4(fidelity []fidelityRow) reportBand {
 func ec5(replay map[string]string) reportBand {
 	const criterion = "VS2-EC-5 identity and replay valid across strategy updates: a priority-bearing arm (P/U/A) replays byte-exact from genesis with zero model calls -- accepted history, hourly projections, allocation decisions and both ledgers -- and the selector re-derives the identical escalation set; the checkpoint manifest's cognition block binds the full priority-policy fingerprint and a restore under a differing policy is refused."
 	if len(replay) == 0 {
-		return band("VS2-EC-5", criterion, "not-evaluable", "no priority arm was replayed; the priority checkpoint/restore round trip and the mutated-policy-fingerprint refusal are exercised in internal/world/natural_priority_replay_test.go and cmd/vs2/e2e_test.go")
+		return band("VS2-EC-5", criterion, "not-evaluable", "no priority arm was replayed; the priority checkpoint/restore round trip is exercised in internal/world/natural_priority_replay_test.go and cmd/vs2/e2e_test.go, and the mutated-policy-fingerprint refusal in internal/world/natural_cognition_priority_test.go")
 	}
 	mismatch := 0
 	keys := make([]string, 0, len(replay))
@@ -342,7 +344,7 @@ func ec5(replay map[string]string) reportBand {
 		status = "FAIL"
 	}
 	return band("VS2-EC-5", criterion, status, fmt.Sprintf(
-		"priority cells replayed=%d mismatches=%d; selection-sequence identity and the mutated-policy-fingerprint refusal are unit-exercised (internal/world/natural_priority_replay_test.go, cmd/vs2/e2e_test.go)", len(replay), mismatch))
+		"priority cells replayed=%d mismatches=%d; selection-sequence identity and the mutated-policy-fingerprint refusal are unit-exercised (internal/world/natural_priority_replay_test.go, internal/world/natural_cognition_priority_test.go, cmd/vs2/e2e_test.go)", len(replay), mismatch))
 }
 
 // ec7 is VS2-EC-7: protected exploration is present and bounded.
