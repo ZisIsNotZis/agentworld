@@ -1051,8 +1051,10 @@ resolves there.
 | NB-5 | `Selection.UniverseSize` was unpopulatable by the nil-`Priority` path. | Removed from `Selection` and `AllocationRecord`; `CandidatesSeen`/`RealizedCalls` carry the realized counts. Appendix A.1, Appendix B. |
 
 **Verification record.** Authoritative tree master `46b1b2b`; branch
-`feature/24-vs2-attention-design-v3`; base commit `7cfe01f`. `git diff --check` clean; only this file and
-`docs/adr/0007-value-based-cognitive-allocation.md` changed. Symbol checks at `46b1b2b`: `PriceTable` →
+`feature/24-vs2-attention-design-v3`; base commit `7cfe01f`; repair commit `6c924b9`. `git diff --check`
+clean; only this file and `docs/adr/0007-value-based-cognitive-allocation.md` changed. Commands run:
+`git diff --check` (clean), `git diff --stat` (only the two in-scope files), `git show --stat HEAD`
+(only the two in-scope files). Symbol checks at `46b1b2b`: `PriceTable` →
 `internal/cognition/budget.go:93`; `cognition` imports `protocol` → `internal/cognition/client.go:26`
 (import cycle proof); `NaturalObservation` → `internal/strategy/natural.go:337`; `InterventionRecord` →
 `internal/cognition/codec.go:232`; `NaturalCognition` → `internal/world/natural_cognition.go:41`; claim
