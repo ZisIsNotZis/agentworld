@@ -118,7 +118,7 @@ declared 168-hour horizon, byte-identical across the migration.
 | `go test -count=1 ./internal/experiment/... ./cmd/vs1/...` | passed (`experiment 0.008s`, `cmd/vs1 134.908s`) |
 | `gofmt -l` over every tracked `.go` file (`.tmp` pruned) | empty (clean) |
 | `git diff --check` | clean |
-| `git status --porcelain` | only the seven modified `cmd/vs1` files + new `internal/experiment/` + this ticket |
+| `git status --porcelain` | only the six modified `cmd/vs1` files + new `internal/experiment/` + this ticket |
 
 ## Revision binding
 
