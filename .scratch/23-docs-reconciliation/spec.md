@@ -140,3 +140,30 @@ the P1 scale target is unbuilt; the P0 exit criterion holds only on the later de
   marking).
 - All edited claims map to the cited source in the table above; no out-of-scope file was modified
   (`git status` shows only the six sole-writer paths considered, four edited).
+
+## Post-merge open P2 notes (independent review of the reviewed tip `a30fdda`)
+
+These four P2 notes are open at the reviewed revision; none is a blocking defect. They are recorded
+here in the ticket log only; the reviewed documents were not changed after review.
+
+1. **The item-2 deferral quotes text that does not exist in `docs/VERTICAL-SLICES.md`.** The
+   deferral above says the document "marks the fidelity metric both '(needs operator confirmation)'
+   and 'frozen as stated below'"; the current document contains neither phrase — it reads "The
+   fidelity metric is the frozen definition given in VS2" (line 190) and "declared fidelity metric
+   scaffolded for VS2" (line 219). Those quoted strings describe an earlier revision (ticket-21
+   Appendix D item 2), not current text.
+2. **The item-5 out-of-scope locus is unrecorded as deferred.** Appendix D item 5's only
+   `docs/VERTICAL-SLICES.md` locus is the C8 row (line 66, "records cause, cost, patch, and measured
+   result"); only the in-scope `docs/ROADMAP.md` locus was corrected. The C8 deferral belongs with
+   the other VERTICAL-SLICES-locus deferrals in the Deferred section above.
+3. **"Only instance" overstates the declared wake-policy state.** `docs/ARCHITECTURE.md` §4 says the
+   VS1 allocation policy's "only instance is the honest uniform/periodic baseline", but
+   `internal/cognition/protocol/wake.go` declares two instances: `VS1WakePolicy` (periodic) and
+   `FullWakePolicy` (the high-budget reference, period 1).
+4. **`docs/P0-SPEC.md` §8 keeps a present-tense escalation step.** The §8 state-change protocol still
+   lists `→ Intention or EscalationRequest` (line 131) unflagged, while §2 (line 23) and §10 (line
+   170) were marked not-yet-implemented.
+
+## Worktree incident (recorded)
+
+During this lane a docs-repair child moved the main checkout onto a v2 branch; the supervisor interrupted it and restored `master`.
