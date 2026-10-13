@@ -178,3 +178,29 @@ New test names (`internal/world/natural_cognition_priority_test.go`):
 
 - L2 commit on `feature/26-vs2-l2`: `74d8d2b972155fed0484f0908ce8d6a69a1fba97` (adds the four
   in-scope source files, the new test file, and this ticket).
+
+## Independent review observations (non-blocking)
+
+Recorded on master after the integration merge; ticket-log only, not normative (no
+requirement or acceptance change). The independent L2 review returned PASS with the following
+non-blocking observations.
+
+1. **Attribution weakness in `TestNaturalSeamRestoreRefusesMismatchedWakePolicy`.** The refusal
+   sub-case asserts `errors.Is(err, ErrNaturalCheckpoint)`, but `restoreNaturalSections`'s `fail`
+   wrapper (and several later restore steps) all surface `ErrNaturalCheckpoint`, so the assertion
+   does not by itself prove the mismatched-policy binding was the check that refused. The matched
+   sub-case passing supplies the complementary signal. A stricter future test could assert the
+   specific wake-binding refusal (message or sentinel) instead of the broad package error.
+2. **`%v` wrap in `restoreNaturalSections`.** `fail` wraps with `fmt.Errorf("%w: %v", ErrNaturalCheckpoint, err)`,
+   which preserves the outer `errors.Is(err, ErrNaturalCheckpoint)` chain but discards the inner
+   error chain (`%v` not `%w`). This is why (1) cannot attribute through `errors.Is`; it does not
+   change fail-closed behavior. Recorded as-is, matching the pre-existing convention in this file.
+3. **Confirmed cross-lane dependency for L4.** `naturalSeamReplay` (`internal/world/natural_journal.go`)
+   and the restore options path (`NaturalRestoreOptions` / `restoreNaturalSections` in
+   `internal/world/natural_checkpoint.go`) carry only the recorded seam and `WakePolicy`; neither
+   carries the arm-local `protocol.EscalationSelector`. With L2's construction refusal
+   (`WakePolicy.Priority != nil && Selector == nil`), a priority-bearing VS2 replay that goes
+   through `replayNaturalJournalWithCognitive` or the restore path is refused until L4 extends that
+   replay wiring and the restore options to supply the arm-local selector. This confirms and names
+   the dependency recorded as gap 3 above; it does not affect any existing VS1 (nil-`Priority`)
+   bundle.
