@@ -109,6 +109,16 @@ actor could not observe. (f) Costs reported per call, per actor-hour, and per ru
 Deepens C7/C8/C11/C13 from "present" to "tested". Adds the value-based priority layer
 (`expected civilizational value / expected cost`), escalation requests, and protected exploration.
 
+**Status (master `48b4882`).** The mechanism is delivered and verified hermetically: lanes L1–L4c and
+L2b landed the additive priority protocol surface and integer value model, the world escalation gate
+and checkpoint policy binding, the arm-local online allocation accumulator and its `allocation`
+records, the shared equal-budget runner and frozen fidelity metric, and the declared candidate-feature
+derivations and `vs2-escalation/1` predicate. The hermetic matrix (`FakeClient`, no spend) reports
+VS2-EC-1..9 present, with VS2-EC-3 a clean negative (adaptive dominates 6/12 cells, is mutually
+non-dominating in 6/12, and no baseline strictly dominates it). **Neither the central claim nor the M2
+milestone is accepted:** the real-model arm is blocked on the operator spend gate, and the value-model
+weights and feature derivations are a reversible operator-confirmable default.
+
 **Deliverable.** Equal-budget arms over the same world and seeds: full reference (model on every
 decision), periodic, uniform-random, and adaptive-priority.
 
@@ -155,7 +165,7 @@ reported rather than narrated.
 | Milestone | Slice | Status | Accepted when |
 |---|---|---|---|
 | **M1** | VS1 | **Implementation complete; hermetic evidence PASS on all eleven frozen exit criteria (EC-1..EC-11); the real-model arm blocked on spend authorisation.** | **A mind in the loop.** The project is no longer an LLM-free simulator: a real model drives part of the world's decisions *and* modifies behaviour logic during the run, its interventions are costed and replayed exactly, and the modification is recorded with lineage and applied or rolled back under audit. |
-| **M2** | VS2 | Not started | **First evidence on the central claim.** Selective allocation beats — or decisively fails to beat — uniform and periodic spending at equal budget, across seeds, on the declared multi-indicator fidelity metric. |
+| **M2** | VS2 | **Mechanism delivered and verified hermetically on master `48b4882` (VS2-EC-1..9 present; VS2-EC-3 a clean negative); the central claim is not accepted (real-model arm blocked on the operator spend gate; value-model weights and feature derivations await operator confirmation).** | **First evidence on the central claim.** Selective allocation beats — or decisively fails to beat — uniform and periodic spending at equal budget, across seeds, on the declared multi-indicator fidelity metric. |
 | **M3** | VS3 | Not started | **Self-improving.** Strategies measurably improve over generations under audited mutation, with provenance and rollback for every patch. |
 | **M4** | VS4 | Not started | **Stakes and scale.** The central-claim result survives heterogeneity and scale; the marginal value of reasoning is measured, not assumed. |
 | **M5** | VS5 | Not started | **Society.** Institutions and organizations arise and persist only through inspectable incentives and enforcement. |

@@ -1,8 +1,15 @@
 # VS2 — Attention (the central claim) (design, ticket 24)
 
-Status: design drafted for review; **implementation not started**. No VS2 code exists at master
-`46b1b2b`; this file is the contract the implementation lanes build against. It is the single source of
-truth for VS2 and is edited in place when the design changes; it is never a running log.
+Status: **implemented** across lanes L1–L4c and L2b on master `48b4882`; the hermetic matrix reports
+VS2-EC-1..9 present, with VS2-EC-3 a clean negative. The central claim is **not accepted**: the
+real-model arm is blocked on the operator spend gate (§11.3 item 1) and the value-model weights and
+feature derivations are a reversible operator-confirmable default (§11.3 item 5). This file is the
+single source of truth for VS2 and is edited in place when the design changes; it is never a running
+log. The dated implementation record, the gate table and the raw evidence live in
+`.scratch/33-vs2-l5/spec.md`.
+
+Implementation revision binding (master `48b4882`): L1 `8ecf4d0`, L2 `53b094a`, L3 `c72ba9d`, L4a
+`57770d2` (+ nit `e6d5466`), L4b `b97ac5b`, L4c `4a0ad28`, L2b `48b4882`.
 
 Authority: the product decisions fixed by the operator in `docs/VERTICAL-SLICES.md` (VS2 section, the
 concept inventory, the cross-cutting invariants, the product decisions, and the frozen fidelity metric
@@ -1190,7 +1197,8 @@ non-blocking policy-conformance item remained. The finding → repair map:
 | P2.6 (non-blocking, policy conformance) | Appendix E carried prior-review narrative ("returned BLOCK ...") inside the fact document. | Appendix E relabelled as the **ticket/evidence record** (not normative contract text); the review-narrative opening removed; the finding → repair map retained; the normative sections state current facts only. Appendix E. |
 
 **Verification record (design-v5).** Authoritative tree master `46b1b2b`; branch
-`feature/24-vs2-attention-design-v5`; base commit `a71dd2c`; repair commit `aebe4ef`.
+`feature/24-vs2-attention-design-v5`; base commit `a71dd2c`; repair commit `aebe4ef`; final reviewed tip
+`ed27c85` (landed as the accepted-design merge `b44ac3e`).
 `git diff --check` clean; only this file and `docs/adr/0007-value-based-cognitive-allocation.md`
 changed. Commands run: `git diff --check a71dd2c..HEAD` (clean), `git diff --stat a71dd2c..HEAD`
 (only the two in-scope files), `git show --stat aebe4ef` (the repair commit: the two in-scope files).

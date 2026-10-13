@@ -1,6 +1,9 @@
 # ADR 0007 — Value-based cognitive allocation as a deterministic, world-RNG-free policy function
 
-Status: proposed for VS2 (M2)
+Status: accepted for VS2 (M2). The value-based allocation mechanism is implemented and verified
+hermetically on master `48b4882`. The central claim is **not** accepted: the real-model arm is blocked
+on the operator spend gate, and the value-model weights, feature derivations and `vs2-escalation/1`
+predicate body remain a reversible operator-confirmable default.
 
 ## Context
 

@@ -63,3 +63,19 @@ for anything: current truth lives in the authoritative documents — the active 
 - **P15 — derive the `race` timeout from measured compute (90m) and document the `test` bound.** Revision `1605820`.
 - **Merge — the VS1 vertical slice and the ticket-20 v9 wage exchange landed on `master`.** Merge commit `586757a` (parents `8ec0aa4` + `ebe5fd1`); the merged tree is identical to the gated revision `ebe5fd1`, whose clean full `make check` (60.27 minutes, no failures, no data races) therefore applies to it.
 - **Operator decision — the application model.** The in-world model is `github-copilot/gpt-6-luna` (replacing the earlier `zai/glm-5.3-flash` choice), reached through the project's LiteLLM gateway; the gateway base URL, auth source, JSON-mode/seed support and price data are to be discovered from the environment by the gateway-binding lane, and the cognitive ceiling is declared and instrumented per P15. Recorded in `docs/VERTICAL-SLICES.md` (Product decisions) and `.scratch/21-vs1-mind-in-the-loop/spec.md` section 16.
+
+## 2026-10-13
+
+- **Ticket 22 — Gateway binding: bind the cognition client to the real LiteLLM gateway contract.** Revision `cf825b3` (reviewed tip `559ab6e`; merged-master integration evidence `46b1b2b`).
+- **Ticket 23 — Documentation reconciliation: reconcile the founding docs with the measured VS1 truth.** Revision `b968334` (reviewed tip `a30fdda`; review notes `7f66802`).
+- **Ticket 24 — VS2 attention design (the central claim).** Lands the accepted VS2 value-based cognitive allocation design and ADR `docs/adr/0007-value-based-cognitive-allocation.md`. Revision `b44ac3e` (reviewed tip `ed27c85`; review-residual record `fa4eba4`).
+- **Ticket 25 — VS2 lane L1: additive priority protocol surface and integer value model.** Revision `8ecf4d0` (reviewed tip `7d9b22d`).
+- **Ticket 26 — VS2 lane L2: world escalation gate and checkpoint policy binding.** Revision `53b094a` (reviewed tip `c02e6eb`; L2 review observations `2e4a25e`).
+- **Ticket 27 — VS2 lane L3: cognition wiring (online allocation accumulator, `allocation` records, price adapter).** Revision `c72ba9d` (reviewed tip `ce30246`).
+- **Ticket 28 — VS2 lane L4a: extract the shared experiment mechanics into `internal/experiment` and migrate `cmd/vs1`.** Revision `57770d2` (reviewed tip `7526205`; ticket-doc nit `e6d5466`).
+- **Ticket 29 — VS2 lane L4b: recorded-seam replay/restore selector wiring.** Revision `b97ac5b`.
+
+## 2026-10-14
+
+- **Ticket 30 — VS2 lane L4c: equal-budget attention experiment runner `cmd/vs2`.** Revision `4a0ad28`.
+- **Ticket 31 — VS2 lane L2b: candidate feature derivations and escalation predicate.** Revision `48b4882` (spec commit `2517e3a`, implementation commit `5c56098`).

@@ -20,7 +20,8 @@ Include:
 - explicit actor fibers represented as state plus wake conditions;
 - built-in and runtime-defined components behind one interface;
 - deterministic rules, strategies with bounded search, events, projections, checkpoints, branches, and replay;
-- escalation requests recorded for later analysis (**not yet implemented** — no `EscalationRequest` type exists; VS2 owns escalation requests per [VERTICAL-SLICES.md](VERTICAL-SLICES.md)).
+- escalation requests recorded for later analysis (implemented by VS2 as the actor-raised,
+  observation-only `EscalationRequest` predicate; [VERTICAL-SLICES.md](VERTICAL-SLICES.md), VS2).
 
 Exclude language-model calls (**superseded** — see the status note above), general institution emergence, distributed execution, molecular physics, natural-language dialogue, and claims about real policy.
 
@@ -167,7 +168,8 @@ P0 strategies can:
 - evaluate typed utility terms;
 - perform bounded search;
 - update permitted private strategy state through planned patches;
-- request escalation (**not yet implemented** — see the §2 note; VS2 owns escalation requests).
+- request escalation (the actor-raised, observation-only VS2 `EscalationRequest` predicate; see the §2
+  note).
 
 Strategies cannot inspect storage implementations, access hidden components, register schemas, commit state, or append authoritative events.
 
