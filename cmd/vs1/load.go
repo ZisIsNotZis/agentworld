@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"agentworld/internal/cognition"
+	"agentworld/internal/experiment"
 	"agentworld/internal/world"
 )
 
@@ -58,7 +59,7 @@ func loadCell(prior cellReport, spec cellSpec, fp fixture, root string) (*cellRu
 		cr.ceilingHit = &cognition.CognitiveCeilingHit{Ceiling: cognition.CognitiveCeiling(prior.CeilingHit)}
 	}
 	cr.checks = f.Checkpoints()
-	cr.proj = extractProjections(cr.checks)
+	cr.proj = experiment.ExtractProjections(cr.checks)
 	cr.journal = f.Journal()
 	handoff, err := f.Handoff()
 	if err != nil {

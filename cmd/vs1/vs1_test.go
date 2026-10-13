@@ -5,6 +5,7 @@ import (
 
 	"agentworld/internal/cognition"
 	"agentworld/internal/cognition/protocol"
+	"agentworld/internal/experiment"
 )
 
 // TestDeclaredCellInventory pins the frozen cell set (spec section 11.3).
@@ -83,10 +84,10 @@ func TestTriggerMirrorsCognitionCrossCheck(t *testing.T) {
 
 // TestTotalVariationIsBounded pins the indicator-4/5 distance normalisation.
 func TestTotalVariationIsBounded(t *testing.T) {
-	if got := totalVariation([]int64{0, 2}, []int64{0, 2}); got != 0 {
+	if got := experiment.TotalVariation([]int64{0, 2}, []int64{0, 2}); got != 0 {
 		t.Fatalf("identical histograms distance %v", got)
 	}
-	if got := totalVariation([]int64{2, 0}, []int64{0, 2}); got != 1 {
+	if got := experiment.TotalVariation([]int64{2, 0}, []int64{0, 2}); got != 1 {
 		t.Fatalf("disjoint histograms distance %v, want 1", got)
 	}
 }
