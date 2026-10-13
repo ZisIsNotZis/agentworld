@@ -1059,7 +1059,7 @@ against master `46b1b2b`; every cited symbol resolves there.
 | P2.5 | Appendix E.1 retained rows asserting the removed pre-pass / exact-`N` framing. | Removed: this appendix now holds only the current finding → repair map, with no prior-review narrative. Appendix E. |
 
 **Verification record.** Authoritative tree master `46b1b2b`; branch
-`feature/24-vs2-attention-design-v4`; base commit `46d84ae`; repair commit `REPAIR_COMMIT_HASH`.
+`feature/24-vs2-attention-design-v4`; base commit `46d84ae`; repair commit `3a7398f`.
 `git diff --check` clean; only this file and `docs/adr/0007-value-based-cognitive-allocation.md`
 changed. Commands run: `git diff --check` (clean), `git diff --stat` (only the two in-scope files),
 `git show --stat HEAD` (only the two in-scope files). Symbol checks at `46b1b2b`:
