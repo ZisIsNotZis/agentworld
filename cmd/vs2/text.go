@@ -46,6 +46,19 @@ func renderText(ev evaluation) string {
 		fmt.Fprintf(&b, "  none (no complete A/P/U vs R cell)\n")
 	}
 
+	fmt.Fprintf(&b, "\nSHORT PROJECTIONS (budgeted arms refused rather than truncated, spec section 5.3)\n")
+	if len(ev.ShortProjections) == 0 {
+		fmt.Fprintf(&b, "  none\n")
+	}
+	for _, sp := range ev.ShortProjections {
+		if sp.Reason != "" {
+			fmt.Fprintf(&b, "  %s: refused (%s)\n", sp.Arm, sp.Reason)
+			continue
+		}
+		fmt.Fprintf(&b, "  %s: projection_samples=%d required=%d missing_hours=%d\n",
+			sp.Arm, sp.ProjectionSamples, sp.RequiredSamples, sp.MissingHours)
+	}
+
 	fmt.Fprintf(&b, "\nVALUE-MODEL CALIBRATION (VS2-EC-8)\n")
 	for _, c := range ev.Cells {
 		if !isBudgeted(c.Arm) {
