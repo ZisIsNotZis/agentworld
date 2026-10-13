@@ -44,8 +44,8 @@ A bounded virtual machine executes typed strategy graphs or bytecode. Strategies
 - invoke bounded search or planning;
 - update permitted private state;
 - submit intentions;
-- request cognitive escalation (**not yet implemented** — no `EscalationRequest` type exists; VS2 owns
-  escalation requests per [VERTICAL-SLICES.md](VERTICAL-SLICES.md)).
+- request cognitive escalation (implemented by VS2 as the actor-raised, observation-only
+  `EscalationRequest` predicate; [VERTICAL-SLICES.md](VERTICAL-SLICES.md), VS2).
 
 Strategies cannot inspect hidden world state, another actor's private state, or mutate authoritative state.
 
@@ -65,7 +65,13 @@ The formula is a versioned hypothesis, not a fixed truth. It must expose feature
 
 Budget channels include exploitation of known high-value candidates, anomaly response, and protected exploration of ordinary actors.
 
-This is the VS2 (attention) target, not the implemented state: the value-based priority layer, escalation requests, and protected exploration of ordinary actors are not yet built. VS1's allocation policy is a declared wake-policy object whose only instance is the honest uniform/periodic baseline ([VERTICAL-SLICES.md](VERTICAL-SLICES.md), VS1 C7; `internal/cognition/protocol/wake.go`, `VS1WakePolicy`), and no scheduler consumes a value term.
+VS2 (attention) implements this mechanism: the value-based priority layer, actor-raised escalation
+requests, and protected exploration of ordinary actors are built on master `48b4882` and verified
+hermetically, but the mechanism is not yet accepted as the central claim (the real-model arm is blocked
+on spend authorisation, and the value model's weights and feature derivations await operator
+confirmation). VS1's baseline allocation policy remains the declared uniform/periodic `WakePolicy`
+([VERTICAL-SLICES.md](VERTICAL-SLICES.md), VS1 C7; `internal/cognition/protocol/wake.go`,
+`VS1WakePolicy`).
 
 ## 5. Model manager
 
