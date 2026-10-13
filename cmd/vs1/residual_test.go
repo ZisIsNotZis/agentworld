@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"agentworld/internal/cognition"
+	"agentworld/internal/experiment"
 	"agentworld/internal/sim"
 	"agentworld/internal/strategy"
 	"agentworld/internal/world"
@@ -115,9 +116,9 @@ func TestEC2RequiresDivergingAppliedModel(t *testing.T) {
 	byCell := func(applied, diverged int) map[string]map[string]*cellRun {
 		return map[string]map[string]*cellRun{
 			"f10-s0": {
-				ArmA0:  {proj: projections{AliveByHour: []int{1}}},
-				ArmA1:  {appliedModel: applied, divergedModel: diverged, proj: projections{AliveByHour: []int{2}}},
-				ArmA1i: {proj: projections{AliveByHour: []int{1}}},
+				ArmA0:  {proj: experiment.Projections{AliveByHour: []int{1}}},
+				ArmA1:  {appliedModel: applied, divergedModel: diverged, proj: experiment.Projections{AliveByHour: []int{2}}},
+				ArmA1i: {proj: experiment.Projections{AliveByHour: []int{1}}},
 			},
 		}
 	}
@@ -139,7 +140,7 @@ func TestEC1RequiresAllDeclaredCells(t *testing.T) {
 	dir := t.TempDir()
 	writeRecordedA0(t, dir, 10, 0)
 	byCell := map[string]map[string]*cellRun{
-		"f10-s0": {ArmA0: {spec: cellSpec{Arm: ArmA0, F: 10, Seed: 0}, proj: projections{AliveByHour: []int{}}}},
+		"f10-s0": {ArmA0: {spec: cellSpec{Arm: ArmA0, F: 10, Seed: 0}, proj: experiment.Projections{AliveByHour: []int{}}}},
 	}
 	if got := ec1(byCell, dir, len(VS1DeclaredCells())); got.Status == "PASS" {
 		t.Fatalf("EC-1 %s on 1/12 declared A0 cells; evidence %q", got.Status, got.Evidence)
@@ -165,9 +166,9 @@ func writeRecordedA0(t *testing.T, dir string, f int, seed uint64) {
 func TestEC2RequiresAllDeclaredCells(t *testing.T) {
 	byCell := map[string]map[string]*cellRun{
 		"f10-s0": {
-			ArmA0:  {proj: projections{AliveByHour: []int{1}}},
-			ArmA1:  {appliedModel: 3, divergedModel: 3, proj: projections{AliveByHour: []int{2}}},
-			ArmA1i: {proj: projections{AliveByHour: []int{1}}},
+			ArmA0:  {proj: experiment.Projections{AliveByHour: []int{1}}},
+			ArmA1:  {appliedModel: 3, divergedModel: 3, proj: experiment.Projections{AliveByHour: []int{2}}},
+			ArmA1i: {proj: experiment.Projections{AliveByHour: []int{1}}},
 		},
 	}
 	keys := []string{"f10-s0"}

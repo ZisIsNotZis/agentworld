@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"agentworld/internal/cognition/protocol"
+	"agentworld/internal/experiment"
 	"agentworld/internal/kernel"
 	"agentworld/internal/sim"
 	"agentworld/internal/world"
@@ -17,14 +18,6 @@ import (
 // function of the committed checkpoints, the accepted history, and the journal
 // that the runner already publishes (spec section 5.1): no actor-private state
 // beyond the published rows, and no world reader.
-
-// declaredKMax is the capital histogram's declared upper edge (spec section
-// 11.5 indicator 4). It is the frozen natural/7 capital gate k>=2's own
-// reading of the reference's observed maximum (8 under natural/9's k=8 arc).
-const declaredKMax = 8
-
-// granaryHistogramEdges are the declared granary-stock buckets (indicator 5).
-var granaryHistogramEdges = []int64{0, 1, 2, 3, 5, 9}
 
 // worldRuleNames names every natural rule that can appear in accepted history.
 // It mirrors cmd/natural's map; an unknown rule is a hard error, never a
@@ -100,88 +93,6 @@ func extractAccepted(handoff world.NaturalHandoff) (acceptedEvidence, error) {
 	return out, nil
 }
 
-// projections are the hourly indicator sequences the fidelity vector (spec
-// section 11.5) is built from.
-type projections struct {
-	Hours           []int
-	AliveByHour     []int
-	BirthsCum       []int64
-	DeathsStarveCum []int64
-	DeathsAgeCum    []int64
-	CapitalHist     [][]int64 // KMax+1 buckets per hour
-	GranaryHist     [][]int64 // len(granaryHistogramEdges)+1 buckets per hour
-	WagesCum        []int64
-	MaxCapital      []int64
-}
-
-func aliveActors(cp world.NaturalCheckpoint) []world.NaturalActorState {
-	out := make([]world.NaturalActorState, 0, len(cp.Founders)+len(cp.Newborns))
-	for _, a := range cp.Founders {
-		if a.Genome.DiedHour == world.NaturalNeverHour && a.Body.Energy > 0 {
-			out = append(out, a)
-		}
-	}
-	for _, nb := range cp.Newborns {
-		if nb.State.Genome.DiedHour == world.NaturalNeverHour && nb.State.Body.Energy > 0 {
-			out = append(out, nb.State)
-		}
-	}
-	return out
-}
-
-func extractProjections(checks []world.NaturalCheckpoint) projections {
-	p := projections{
-		Hours:           make([]int, len(checks)),
-		AliveByHour:     make([]int, len(checks)),
-		BirthsCum:       make([]int64, len(checks)),
-		DeathsStarveCum: make([]int64, len(checks)),
-		DeathsAgeCum:    make([]int64, len(checks)),
-		CapitalHist:     make([][]int64, len(checks)),
-		GranaryHist:     make([][]int64, len(checks)),
-		WagesCum:        make([]int64, len(checks)),
-		MaxCapital:      make([]int64, len(checks)),
-	}
-	for i, cp := range checks {
-		p.Hours[i] = cp.Hour
-		p.AliveByHour[i] = cp.Metrics.Alive
-		p.BirthsCum[i] = cp.Metrics.Births
-		p.DeathsStarveCum[i] = cp.Metrics.DeathsStarvation
-		p.DeathsAgeCum[i] = cp.Metrics.DeathsAge
-		p.WagesCum[i] = cp.Balance.WagesPaid
-		buckets := make([]int64, declaredKMax+1)
-		granary := make([]int64, len(granaryHistogramEdges)+1)
-		var maxCapital int64
-		for _, a := range aliveActors(cp) {
-			k := a.Worksite.Capital
-			if k < 0 {
-				k = 0
-			}
-			if k > declaredKMax {
-				k = declaredKMax
-			}
-			buckets[k]++
-			granary[granaryBucket(a.Granary.Stock)]++
-			if a.Worksite.Capital > maxCapital {
-				maxCapital = a.Worksite.Capital
-			}
-		}
-		p.CapitalHist[i] = buckets
-		p.GranaryHist[i] = granary
-		p.MaxCapital[i] = maxCapital
-	}
-	return p
-}
-
-func granaryBucket(stock int64) int {
-	b := 0
-	for i := 0; i < len(granaryHistogramEdges); i++ {
-		if stock >= granaryHistogramEdges[i] {
-			b = i
-		}
-	}
-	return b
-}
-
 // buildEvidence assembles the Role B aggregate packet for the window
 // [startHour, startHour+window] from the published checkpoints and journal
 // (spec section 5.1). Only world-level aggregates enter it.
@@ -211,7 +122,7 @@ func buildEvidence(checks []world.NaturalCheckpoint, journal []world.NaturalBatc
 		if cp.Metrics.Alive > ev.MaxAlive {
 			ev.MaxAlive = cp.Metrics.Alive
 		}
-		for _, a := range aliveActors(cp) {
+		for _, a := range experiment.AliveActors(cp) {
 			if a.Worksite.Capital > ev.MaxCapital {
 				ev.MaxCapital = a.Worksite.Capital
 			}
@@ -226,12 +137,12 @@ func buildEvidence(checks []world.NaturalCheckpoint, journal []world.NaturalBatc
 	ev.DeathsByCause["starvation"] = checks[last].Metrics.DeathsStarvation - checks[first].Metrics.DeathsStarvation
 	ev.DeathsByCause["age"] = checks[last].Metrics.DeathsAge - checks[first].Metrics.DeathsAge
 	ev.BirthsByCause["accepted"] = ev.BirthsTotal
-	for _, a := range aliveActors(checks[last]) {
+	for _, a := range experiment.AliveActors(checks[last]) {
 		ev.Actors = append(ev.Actors, protocol.ActorEvidence{Actor: a.Bag.Source, Capital: a.Worksite.Capital, GranaryStock: a.Granary.Stock})
 	}
 	mouths := map[sim.EntityID]int64{}
 	patchCapital := map[sim.EntityID]int64{}
-	for _, a := range aliveActors(checks[last]) {
+	for _, a := range experiment.AliveActors(checks[last]) {
 		mouths[a.Bag.Source]++
 		patchCapital[a.Bag.Source] += a.Worksite.Capital
 	}

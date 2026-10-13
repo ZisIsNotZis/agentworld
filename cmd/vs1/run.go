@@ -11,6 +11,7 @@ import (
 
 	"agentworld/internal/cognition"
 	"agentworld/internal/cognition/protocol"
+	"agentworld/internal/experiment"
 	"agentworld/internal/strategy"
 	"agentworld/internal/world"
 )
@@ -24,7 +25,7 @@ type cellRun struct {
 	branchDigest     string
 	checks           []world.NaturalCheckpoint
 	journal          []world.NaturalBatch
-	proj             projections
+	proj             experiment.Projections
 	accepted         acceptedEvidence
 	haveAccepted     bool
 	calls            []cognition.CallRecord
@@ -134,7 +135,7 @@ func runCell(ctx context.Context, spec cellSpec, fp fixture, root string, replay
 	}
 	cr.durationMS = time.Since(start).Milliseconds()
 	cr.checks = f.Checkpoints()
-	cr.proj = extractProjections(cr.checks)
+	cr.proj = experiment.ExtractProjections(cr.checks)
 	cr.journal = f.Journal()
 	for _, n := range cr.proj.AliveByHour {
 		cr.sumAliveHours += int64(n)

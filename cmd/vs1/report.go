@@ -3,14 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"sort"
 
 	"agentworld/internal/cognition"
-	"agentworld/internal/sim"
-	"agentworld/internal/world"
+	"agentworld/internal/experiment"
 )
 
 // The VS1 evaluation report: one row per arm-in-cell plus the frozen
@@ -84,21 +82,12 @@ type cellReport struct {
 	DurationMS       int64  `json:"duration_ms"`
 }
 
-type fidelityIndicator struct {
-	Index               int       `json:"index"`
-	Name                string    `json:"name"`
-	FirstDivergenceHour int       `json:"first_divergence_hour"`
-	Max                 float64   `json:"max"`
-	Mean                float64   `json:"mean"`
-	Sequence            []float64 `json:"sequence"`
-}
-
 type fidelityRow struct {
-	Arm        string              `json:"arm"`
-	F          int                 `json:"f"`
-	Seed       uint64              `json:"seed"`
-	Reference  string              `json:"reference"`
-	Indicators []fidelityIndicator `json:"indicators"`
+	Arm        string                         `json:"arm"`
+	F          int                            `json:"f"`
+	Seed       uint64                         `json:"seed"`
+	Reference  string                         `json:"reference"`
+	Indicators []experiment.FidelityIndicator `json:"indicators"`
 }
 
 type probeReport struct {
@@ -297,12 +286,31 @@ func buildFidelity(runs []*cellRun) []fidelityRow {
 		if ref == nil {
 			continue
 		}
+		indicators, err := experiment.DivergenceVector(fidelityArm(cr), fidelityArm(ref), cr.fp.Hours)
+		if err != nil {
+			// The shared metric computes over the full declared horizon and
+			// refuses a shorter projection rather than truncating to a prefix
+			// (spec section 5.3); every declared VS1 arm runs the full horizon,
+			// so a refused arm is dropped rather than compared over a prefix.
+			continue
+		}
 		out = append(out, fidelityRow{
 			Arm: cr.spec.Arm, F: cr.spec.F, Seed: cr.spec.Seed, Reference: ArmA3,
-			Indicators: divergenceVector(cr, ref),
+			Indicators: indicators,
 		})
 	}
 	return out
+}
+
+// fidelityArm adapts a gathered cell run to the shared experiment metric input.
+func fidelityArm(cr *cellRun) experiment.Arm {
+	return experiment.Arm{
+		Label:         cr.spec.String(),
+		Projections:   cr.proj,
+		Patches:       cr.fp.Patches,
+		Interventions: cr.interventions,
+		Journal:       cr.journal,
+	}
 }
 
 func referenceRun(runs []*cellRun, spec cellSpec) *cellRun {
@@ -314,199 +322,16 @@ func referenceRun(runs []*cellRun, spec cellSpec) *cellRun {
 	return nil
 }
 
-func divergenceVector(b, r *cellRun) []fidelityIndicator {
-	n := min(len(b.proj.Hours), len(r.proj.Hours))
-	perActorSlots := float64(8 * b.fp.Patches)
-	population := make([]float64, n)
-	births := make([]float64, n)
-	deathsStarve := make([]float64, n)
-	deathsAge := make([]float64, n)
-	capital := make([]float64, n)
-	granary := make([]float64, n)
-	exchange := make([]float64, n)
-	for i := 0; i < n; i++ {
-		population[i] = math.Abs(float64(b.proj.AliveByHour[i]-r.proj.AliveByHour[i])) / perActorSlots
-		births[i] = math.Abs(float64(b.proj.BirthsCum[i] - r.proj.BirthsCum[i]))
-		deathsStarve[i] = math.Abs(float64(b.proj.DeathsStarveCum[i] - r.proj.DeathsStarveCum[i]))
-		deathsAge[i] = math.Abs(float64(b.proj.DeathsAgeCum[i] - r.proj.DeathsAgeCum[i]))
-		capital[i] = totalVariation(b.proj.CapitalHist[i], r.proj.CapitalHist[i])
-		granary[i] = totalVariation(b.proj.GranaryHist[i], r.proj.GranaryHist[i])
-		exchange[i] = math.Abs(float64(b.proj.WagesCum[i] - r.proj.WagesCum[i]))
-	}
-	indicators := []fidelityIndicator{
-		summarize(1, "population", population),
-		summarize(2, "births", births),
-		summarize(3, "deaths/starvation", deathsStarve),
-		summarize(4, "deaths/age", deathsAge),
-		summarize(5, "capital-histogram", capital),
-		summarize(6, "granary-histogram", granary),
-		summarize(7, "exchange-volume", exchange),
-		decisionErrorIndicator(b, r, n),
-	}
-	return indicators
-}
-
-func summarize(index int, name string, seq []float64) fidelityIndicator {
-	ind := fidelityIndicator{Index: index, Name: name, Sequence: append([]float64(nil), seq...), FirstDivergenceHour: -1}
-	var sum float64
-	for i, v := range seq {
-		if v > ind.Max {
-			ind.Max = v
-		}
-		if v != 0 && ind.FirstDivergenceHour < 0 {
-			ind.FirstDivergenceHour = i
-		}
-		sum += v
-	}
-	if len(seq) > 0 {
-		ind.Mean = sum / float64(len(seq))
-	}
-	return ind
-}
-
-// decisionErrorIndicator is the escalation decision-error rate (indicator 7):
-// the absolute difference of the two cumulative ratios. The numerator counts
-// both level-1 (malformed/inadmissible fallback) and level-2 (typed world
-// refusal) outcomes of escalated decisions, the latter joined from the accepted
-// journal by (hour, actor).
-func decisionErrorIndicator(b, r *cellRun, n int) fidelityIndicator {
-	bSeq := make([]float64, n)
-	rSeq := make([]float64, n)
-	bec := cumulativeHourly(b.interventions, b.journal)
-	rec := cumulativeHourly(r.interventions, r.journal)
-	for i := 0; i < n; i++ {
-		hour := b.proj.Hours[i]
-		bSeq[i] = rate(bec, hour)
-		rSeq[i] = rate(rec, hour)
-	}
-	diff := make([]float64, n)
-	for i := 0; i < n; i++ {
-		diff[i] = math.Abs(bSeq[i] - rSeq[i])
-	}
-	ind := summarize(8, "decision-error-rate(level-1+level-2)", diff)
-	return ind
-}
-
-type hourlyCounts struct {
-	escalated []int
-	errors    []int
-	level2    []int
-}
-
-func cumulativeHourly(interventions []cognition.InterventionRecord, journal []world.NaturalBatch) hourlyCounts {
-	hc := hourlyCounts{escalated: make([]int, 169), errors: make([]int, 169), level2: make([]int, 169)}
-	modelEscalated := map[[2]int]bool{}
-	for _, rec := range interventions {
-		if rec.Kind != cognition.InterventionRoleA {
-			continue
-		}
-		h := rec.Cause.Hour
-		if h < 0 || h > 168 {
-			continue
-		}
-		hc.escalated[h]++
-		if rec.RoleA != nil && rec.RoleA.Source == cognition.SourceModel {
-			modelEscalated[[2]int{h, int(rec.Cause.Actor)}] = true
-		} else {
-			hc.errors[h]++
-		}
-	}
-	hc.level2 = level2RefusalCounts(journal, modelEscalated)
-	return hc
-}
-
-// level2RefusalCounts joins the accepted journal to the escalated decisions
-// whose model action was applied (source == model): an applied model claim whose
-// committed attempt carries an explicit refusal marker is a level-2 world
-// refusal (spec 4.3). A fallback/inert decision is already counted as a level-1
-// error, and the frozen path's own denials are not model decision errors, so
-// neither is double-counted here.
-func level2RefusalCounts(journal []world.NaturalBatch, modelEscalated map[[2]int]bool) []int {
-	counts := make([]int, 169)
-	for _, batch := range journal {
-		hour := int(batch.Time / sim.SimTime(world.NaturalHour))
-		if hour < 0 || hour > 168 {
-			continue
-		}
-		for _, at := range batch.Attempts {
-			switch at.Kind {
-			case "gather", "provision", "eat-stored":
-			default:
-				continue
-			}
-			if !modelEscalated[[2]int{hour, int(at.Actor)}] {
-				continue
-			}
-			if at.Rejection != world.FoodFlowGatherAdmitted || at.ProvisionRefused != "" || at.NoMeal != "" {
-				counts[hour]++
-			}
-		}
-	}
-	return counts
-}
-
 // level2RefusalTotal is the per-cell count of level-2 world refusals of
-// escalated model-applied claims.
+// escalated model-applied claims. It reads the declared horizon's sample count
+// from the cell fixture, the same full horizon the fidelity vector is computed
+// over (spec section 5.3).
 func level2RefusalTotal(cr *cellRun) int {
 	total := 0
-	for _, n := range level2RefusalCounts(cr.journal, modelEscalatedKeySet(cr.interventions)) {
+	for _, n := range experiment.Level2RefusalCounts(cr.journal, experiment.ModelEscalatedKeySet(cr.interventions), cr.fp.Hours+1) {
 		total += n
 	}
 	return total
-}
-
-func modelEscalatedKeySet(interventions []cognition.InterventionRecord) map[[2]int]bool {
-	out := map[[2]int]bool{}
-	for _, rec := range interventions {
-		if rec.Kind == cognition.InterventionRoleA && rec.RoleA != nil && rec.RoleA.Source == cognition.SourceModel {
-			out[[2]int{rec.Cause.Hour, int(rec.Cause.Actor)}] = true
-		}
-	}
-	return out
-}
-
-func rate(hc hourlyCounts, hour int) float64 {
-	esc, errs := 0, 0
-	for h := 0; h <= hour && h < len(hc.escalated); h++ {
-		esc += hc.escalated[h]
-		errs += hc.errors[h] + hc.level2[h]
-	}
-	if esc == 0 {
-		return 0
-	}
-	return float64(errs) / float64(esc)
-}
-
-func totalVariation(a, b []int64) float64 {
-	var sa, sb int64
-	for _, v := range a {
-		sa += v
-	}
-	for _, v := range b {
-		sb += v
-	}
-	if sa == 0 && sb == 0 {
-		return 0
-	}
-	var sum float64
-	for i := 0; i < len(a) && i < len(b); i++ {
-		pa, pb := 0.0, 0.0
-		if sa > 0 {
-			pa = float64(a[i]) / float64(sa)
-		}
-		if sb > 0 {
-			pb = float64(b[i]) / float64(sb)
-		}
-		sum += math.Abs(pa - pb)
-	}
-	return sum / 2
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // sortRuns orders runs by arm then cell for stable reports.
