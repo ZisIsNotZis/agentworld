@@ -322,3 +322,109 @@ Go toolchain: `GOROOT=/home/z/vibe/agentworld/.tmp/go-toolchain/root/usr/lib/go-
 - The re-run artifact `.tmp/34-vs2-evaluation.json` is produced from the source at `98f88ec`.
 - Repair-note commit: `3c29d39`; this ticket's blob at that commit:
   `2c7e29e4480afed9e51dd259de8c817e7152f18b`.
+- "HEAD `98f88ec`" above is imprecise; corrected in the O3 note below.
+
+## Citation repair — VS2 bounded EVIDENCE-CITATION fix (ticket 35 / L6 follow-up)
+
+Recorded 2026-10-14T01:58:53+08:00 (CST), actor: worker (sole writer), branch
+`feature/35-vs2-citation-fix` (base master `17bdb33`, the L6 repair merge). The final-delta review of
+`17bdb33` found a third instance of the N1 class (a report evidence string citing a file that does not
+contain the named test). Evidence-string only: no status, guard or behaviour change. No live model
+call, no spend, no frozen v5–v9 evidence touched.
+
+### O1 — VS2-EC-5 evidence cited the wrong home for the mutated-policy refusal
+
+`ec5` (both paths) attached "the mutated-policy-fingerprint refusal" to
+`internal/world/natural_priority_replay_test.go` and `cmd/vs2/e2e_test.go`. Neither file contains a
+restore refusal: `natural_priority_replay_test.go` holds
+`TestNaturalPrioritySeamCheckpointReplayRoundTrip` (:165) and
+`TestNaturalNilPriorityReplaySelectorBytesIdentical` (:258); `e2e_test.go` holds
+`TestPriorityCheckpointReplayRoundTrip` (:195). The refusal is
+`TestNaturalSeamRestoreRefusesMismatchedWakePolicy` (:406) and `TestNaturalVerifyCognitiveWakePolicy`
+(:379) in `internal/world/natural_cognition_priority_test.go`. Both strings now cite that file for the
+refusal; the round-trip / identity citations stay.
+
+### O2 — VS2-EC-2 evidence cited the wrong homes (pre-existing, same class)
+
+`ec2` attributed the `Priority!=nil && Selector==nil` construction refusal and the fail-loud `(N+1)`-th
+call to `internal/cognition/priority_test.go` and `internal/world/natural_priority_replay_test.go`. The
+construction refusal is `TestNaturalCognitionRequiresSelectorForPriorityPolicy` (:84) in
+`internal/world/natural_cognition_priority_test.go`; the fail-loud `(N+1)`-th call is
+`TestBudgetAllowCallRefusesBeforeSpend` (:10), `TestBudgetCeilingFailsLoudOnEveryAxis` (:28) and
+`TestBudgetHitIsIdempotentFailLoud` (:92) in `internal/cognition/budget_test.go`. The comment above the
+`band(...)` call was aligned to the same two files.
+
+### O3 — revision binding correction
+
+The repair note above writes "HEAD `98f88ec`" loosely. Precisely: `.tmp/34-vs2-evaluation.json` was
+built from the **source** at `98f88ec` (the last source-code commit; `cmd/vs2/bands.go` blob
+`10257916c2f6a49c9107bd97837d40e519bbdeff`). The branch `feature/34-vs2-docs-repair` tip at the moment
+that note was recorded was `3c29d39` (the note commit itself); it then advanced to `28a92a7` (the
+addendum recording the note hash) and was merged to master as `17bdb33`. So `98f88ec` is the artifact's
+source revision, not the branch tip — the two were conflated.
+
+### Citation audit (every `*_test.go` pair in `cmd/vs2/bands.go` and `cmd/vs2/report.go`)
+
+`cmd/vs2/report.go` contains no test-file citation. Each band citation maps to a real test in the cited
+file:
+
+| Band | Cited file | Named capability | Verifying test (line) |
+|---|---|---|---|
+| EC-1 | `internal/cognition/protocol/wake_test.go` | nil-priority identity bytes | `TestWakePolicyNilPriorityKeepsVS1Bytes` (:17) |
+| EC-2 | `internal/world/natural_cognition_priority_test.go` | construction refusal | `TestNaturalCognitionRequiresSelectorForPriorityPolicy` (:84) |
+| EC-2 | `internal/cognition/budget_test.go` | fail-loud `(N+1)`-th call | `TestBudgetAllowCallRefusesBeforeSpend` (:10), `TestBudgetCeilingFailsLoudOnEveryAxis` (:28), `TestBudgetHitIsIdempotentFailLoud` (:92) |
+| EC-4 | `cmd/vs2/bands_test.go` | scalar-winner / sentinel-inversion fixtures | `TestScalarWinnerNotVectorDominance` (:71), `TestSentinelInversionRegression` (:49) |
+| EC-5 | `internal/world/natural_priority_replay_test.go` | checkpoint/restore round trip, selection-sequence identity | `TestNaturalPrioritySeamCheckpointReplayRoundTrip` (:165) |
+| EC-5 | `cmd/vs2/e2e_test.go` | checkpoint/restore round trip, selection-sequence identity | `TestPriorityCheckpointReplayRoundTrip` (:195), `TestReplaySubsetIdentical` (:280) |
+| EC-5 | `internal/world/natural_cognition_priority_test.go` | mutated-policy-fingerprint refusal | `TestNaturalSeamRestoreRefusesMismatchedWakePolicy` (:406), `TestNaturalVerifyCognitiveWakePolicy` (:379) |
+| EC-7 | `internal/cognition/priority_test.go` | q>0 / q=0 fixtures | `TestPrioritySelectorAdaptiveExplorationInterleaving` (:175) |
+| EC-7 | `cmd/vs2/accounting_test.go` | q>0 / q=0 fixtures | `TestProtectedExplorationBound` (:142) |
+| EC-8 | `internal/cognition/protocol/valuemodel_test.go` | integer projection, all-zero-weight reduction | `TestPriorityFixedPointRatio` (:97), `TestExpectedValueUnknownFeatureAndZeroWeights` (:58) |
+
+No false `(file, test)` pair remains in either file.
+
+### Re-run hermetic matrix (final source, `FakeClient`, no spend)
+
+Same command/params as the ticket-34 repair run, fresh output paths, run
+2026-10-14T01:50:00+08:00 → 2026-10-14T01:58:29+08:00 (CST), wall ≈ 8m29s:
+
+```
+.tmp/35-vs2 -out .tmp/35-vs2-evaluation.json -out-txt .tmp/35-vs2-evaluation.txt \
+  -root .tmp/35-vs2-runs -recorded .tmp -src . -budget-min 50 -parallel 6
+```
+
+- Exit 0; 60/60 primary-matrix cells ran; 36/36 priority replays identical (zero model calls).
+- Artifact `/home/z/vibe/agentworld/.tmp/35-vs2-evaluation.json`
+  `sha256 87dcef8067f1e3f9f4144dfaad8a18e21153022ee39722d4623a514946e5adf7`;
+  `.tmp/35-vs2-evaluation.txt`
+  `sha256 31dce2c3b03fa4f190658884530871786551b57b3a2f3b63ab8039765d44f986`.
+- **VS2-EC-1..9 statuses unchanged** versus `.tmp/34-vs2-evaluation.json` (`6b32ef16…`): EC-1 PASS,
+  EC-2 PASS, **EC-3 `clean-negative`**, EC-4 PASS, EC-5 PASS, EC-6 PASS, EC-7 PASS, EC-8 PASS, EC-9
+  PASS. A structured diff (ignoring `duration_ms`) shows the only differences are the EC-2 and EC-5
+  evidence strings; the 60 cell rows, 36 fidelity rows, replay subset, inventory and every status are
+  unchanged.
+
+### Files changed (git blob hashes at commit `d764af0`)
+
+| File | git blob hash | Note |
+|---|---|---|
+| `cmd/vs2/bands.go` | `43b3384a991e0a440a9f24a20bace2c703e5fc22` | O1/O2 citation fixes (evidence strings + comment) |
+| `.scratch/33-vs2-l5/spec.md` | this ticket | O1/O2/O3 correction note, citation audit, re-run binding |
+
+### Gates (2026-10-14, CST; `go1.24.13 linux/amd64`)
+
+| Command | Result |
+|---|---|
+| `git diff --check` | clean |
+| `gofmt -l` | empty (clean) |
+| `go build ./...` | passed |
+| `go vet ./...` | passed |
+| `go test -count=1 -timeout 20m ./cmd/vs2/...` | passed (`ok agentworld/cmd/vs2 40.033s`) |
+
+### Revision binding (this repair)
+
+- Branch `feature/35-vs2-citation-fix`; base master `17bdb33`.
+- Source-fix commit `d764af0` (`cmd/vs2/bands.go` blob `43b3384a…`).
+- The re-run artifact `.tmp/35-vs2-evaluation.json` is produced from the source at `d764af0`.
+- The commit that records this note is the branch tip at recording time; its hash is recorded in the
+  addendum below.
