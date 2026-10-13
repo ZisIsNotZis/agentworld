@@ -45,12 +45,13 @@ new scheduler subsystem, and it obeys three invariants:
    world-level aggregate row, a declared versioned cell statistic that carries no other actor's private
    state, matching the VS1 Role B `TrajectoryEvidence` discipline). Escalation requests are a declared
    pure predicate over that observation. Selection over the candidate stream is a deterministic
-   **streaming accumulator** operating on **each arm's own realized stream**: `N` is a declared call
-   ceiling, U and A sample exactly `min(N, |U_arm|)` arm-locally with the policy PRNG, and P is
-   hour-granular and `|U|`-independent, so no arm needs the run-total candidate count (which is
-   endogenous and arm-dependent) and there is no model-free pre-pass; the accumulator's recorded state
-   (accumulated candidate count, PRNG position) makes the selection and its replay exact. The selector
-   imports no `internal/world`; the world imports no client. The projection is a versioned, integer
+   **online accumulator** operating on **each arm's own realized stream**: `N` is a declared call
+   ceiling, every budgeted arm selects online and stops once it has spent `N`, P is period-gated, and
+   U and A spend at most the declared per-hour quota `q(h)`, so no arm needs the run-total candidate
+   count (which is endogenous and arm-dependent) and there is no model-free pre-pass, no reservoir, and
+   no exact uniform size-`N` subset; the accumulator's recorded state (spent-call count, PRNG position)
+   makes the selection and its replay exact. The selector imports no `internal/world`; the world imports
+   no client. The projection is a versioned, integer
    fixed-point numerical projection (P6, ADR 0003) — never prose, never a float, never a single scalar
    objective. The projection's cost type is protocol-local (`protocol.CallPrice`), because
    `internal/cognition` imports `protocol` and a `cognition.PriceTable` parameter would cycle.
@@ -58,7 +59,7 @@ new scheduler subsystem, and it obeys three invariants:
 3. **No world RNG; a declared policy PRNG instead.** The escalation set is a deterministic function of
    the declared policy identity, the arm's own ordered candidate stream, and the budget state, plus the
    policy's own declared PRNG stream, seeded from run identity and advanced in a declared deterministic
-   order by the streaming accumulator. The uniform-random arm and protected exploration draw from that
+   order by the online accumulator. The uniform-random arm and protected exploration draw from that
    stream, not the world stream, and its seed and consumed position are recorded. A `full` reference
    (`Priority == nil`) draws nothing.
 
@@ -71,13 +72,15 @@ the full-policy fingerprint recomputation, and the restore-time refusal (L2 lane
 
 ## Alternatives considered
 
-- **Keep a stateless per-hour `Select` and fix `|U|` with a model-free pre-pass so every arm realizes
-  exactly `N`.** Rejected. Equal budget on the call axis is the experiment's foundation ("at the same
-  budget"), but `|U|` is endogenous and arm-dependent — reasoning changes the trajectory — so a
-  model-free count cannot equal a model arm's realized count and exact-`N`-everywhere is unrealizable.
-  The design instead declares `N` as a ceiling and compares arms at the **matched realized call count**,
-  which keeps the same-budget comparison honest without asserting a stream length the model arm does not
-  produce.
+- **Fix `|U|` with a model-free pre-pass (or reservoir sampling) so every arm realizes an exact
+  uniform size-`N` subset of a fixed candidate universe.** Rejected. Equal budget on the call axis is
+  the experiment's foundation ("at the same budget"), but the candidate stream is endogenous and
+  arm-dependent — reasoning changes the trajectory — so its length is unknown at start and a model-free
+  count cannot fix an exact subset online. The design instead declares `N` as a ceiling, has each arm
+  select **online** over its own stream and stop at `N` (a declared per-hour quota `q(h)` for U and A,
+  period gating for P), and reports the realized counts; the divergence is measured over the same full
+  declared horizon for every arm. This keeps the same-budget comparison honest without asserting a
+  stream length the model arm does not produce and without a matched-prefix evaluation.
 - **A free-standing scheduler beside the wake policy that reads world state directly.** Rejected. It
   violates the observation boundary (C5), creates a second allocation subsystem beside VS1's object,
   and makes replay depend on world state that only the live run held. The world already consumes the
@@ -106,11 +109,12 @@ the full-policy fingerprint recomputation, and the restore-time refusal (L2 lane
 - Equal budget becomes definable on the deterministic call axis: the model is unpriced (ADR 0006
   Addendum), so cost cannot equalize arms; calls can. The cost-equalized comparison becomes a declared
   operator gate rather than a fabricated price.
-- The selector is a deterministic streaming accumulator over each arm's own stream: `N` is a declared
-  ceiling, arm-local rules spend exactly `N` when the stream permits and report under-spend otherwise,
-  and the accumulator's recorded state (candidate count, PRNG position) makes the selection and its
-  replay well defined. Because stream lengths are endogenous, arms are compared at the **matched
-  realized call count** rather than at an asserted fixed `|U|`.
+- The selector is a deterministic **online** accumulator over each arm's own stream: `N` is a declared
+  ceiling, each arm selects online and stops at `N` (reporting a realized count below `N` when its
+  stream ends early), and the accumulator's recorded state (spent-call count, PRNG position) makes the
+  selection and its replay well defined. Divergence is measured over the same full declared horizon for
+  every arm, with realized counts disclosed; there is no matched-prefix comparison and no asserted
+  fixed `|U|`.
 - The value model is a versioned hypothesis that must be calibrated: predicted priority is compared to
   realized downstream effect, and the calibration error is reported (P6). An uninformative model is a
   measurable outcome, not a hidden default.
