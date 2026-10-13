@@ -162,3 +162,31 @@ func TestWakePolicyPriorityStrategiesAreDeclared(t *testing.T) {
 		t.Fatalf("fixed-point scales = %d/%d, want 1_000_000 each", ExplorationScale, PriorityScale)
 	}
 }
+
+// TestWakePolicyIdentityBindsFeatureSet pins that the declared feature-set
+// version rides the policy identity/fingerprint: two policies differing only in
+// ValueModel.FeatureSet have different canonical bytes and fingerprints, so the
+// checkpoint cognition block binds the feature set (VS2-EC-5, Appendix A.1).
+func TestWakePolicyIdentityBindsFeatureSet(t *testing.T) {
+	base := VS1WakePolicy()
+	base.Priority = &PriorityPolicy{
+		Strategy: StrategyAdaptive, RandSeed: 1, CallCeiling: 256,
+		ValueModel: ValueModelSpec{Version: "vs2-value/1", FeatureSet: FeatureSetVersion,
+			Weights: []FeatureWeight{{Feature: "urgency", Weight: 3}}},
+	}
+	other := base
+	otherPriority := *base.Priority
+	otherPriority.ValueModel = base.Priority.ValueModel
+	otherPriority.ValueModel.FeatureSet = "vs2-features/0"
+	other.Priority = &otherPriority
+
+	if base.Identity() == other.Identity() {
+		t.Fatal("the feature-set version did not change the canonical identity")
+	}
+	if base.Fingerprint() == other.Fingerprint() {
+		t.Fatal("the feature-set version did not change the policy fingerprint")
+	}
+	if FeatureSetVersion == "" {
+		t.Fatal("FeatureSetVersion is empty")
+	}
+}

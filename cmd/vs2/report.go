@@ -125,11 +125,17 @@ type evaluation struct {
 	ModelID       string `json:"model_id"`
 	WireMode      string `json:"wire_mode"`
 	ModelIdentity string `json:"model_identity_digest"`
-	BasePolicy    string `json:"base_policy"`
-	Mechanism     int    `json:"mechanism"`
-	HorizonHours  int    `json:"horizon_hours"`
-	CallCeiling   uint64 `json:"call_ceiling"`
-	ValueModel    string `json:"value_model_version"`
+	// ModelFeatureIdentity is the declared model+feature run-identity digest:
+	// the model identity digest folded with the candidate feature-set version
+	// (protocol.FeatureSetVersion). It is a separate digest; ModelIdentity is
+	// unchanged, so VS1's model/sampling identity digest stays byte-identical.
+	ModelFeatureIdentity string `json:"model_feature_identity_digest"`
+	FeatureSet           string `json:"feature_set"`
+	BasePolicy           string `json:"base_policy"`
+	Mechanism            int    `json:"mechanism"`
+	HorizonHours         int    `json:"horizon_hours"`
+	CallCeiling          uint64 `json:"call_ceiling"`
+	ValueModel           string `json:"value_model_version"`
 
 	Arms             []string      `json:"arms"`
 	QuotaSchedule    []int         `json:"quota_schedule"`

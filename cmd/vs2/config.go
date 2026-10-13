@@ -55,7 +55,8 @@ const VS2ValueModelVersion = "vs2-value/1"
 // unknown feature name contributes nothing to the projection.
 func declaredValueModel() protocol.ValueModelSpec {
 	return protocol.ValueModelSpec{
-		Version: VS2ValueModelVersion,
+		Version:    VS2ValueModelVersion,
+		FeatureSet: protocol.FeatureSetVersion,
 		Weights: []protocol.FeatureWeight{
 			{Feature: "decision_sensitivity", Weight: 4},
 			{Feature: "urgency", Weight: 3},

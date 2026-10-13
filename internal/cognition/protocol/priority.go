@@ -1,6 +1,9 @@
 package protocol
 
-import "agentworld/internal/sim"
+import (
+	"agentworld/internal/sim"
+	"agentworld/internal/strategy"
+)
 
 // The VS2 priority/allocation extension surface (spec section 4, Appendix A.1).
 // It extends VS1's WakePolicy additively: a nil Priority Policy is the VS1 path,
@@ -102,6 +105,67 @@ type Selection struct {
 	Quota       int              `json:"quota"`     // U/A: declared per-hour quota q(h); P: remaining budget (5.1)
 	Shortfall   int              `json:"shortfall"` // U/A: max(0, q(h) - len(roster)); P: 0 (5.1)
 	PRNGPos     uint64           `json:"prng_pos"`  // consumed position of the policy PRNG
+}
+
+// EscalationPredicateVersion is the declared version of the escalation-request
+// predicate instance evaluated over the actor's own observation (spec section
+// 4.3).
+const EscalationPredicateVersion = "vs2-escalation/1"
+
+// DeclaredEscalationPredicate is the declared versioned predicate instance the
+// world's roster builder evaluates: the actor requests escalation when it is
+// both near the survival edge (urgency at or above half the reserve) and near a
+// frozen claim boundary (decision_sensitivity at or above half its range). It is
+// a declared, reversible default pending operator confirmation (spec section
+// 11), and it names only observation-only rows, so it can never read the
+// scheduler-level prior_reliability aggregate (EC-6).
+func DeclaredEscalationPredicate() PolicyPredicate {
+	return PolicyPredicate{
+		Version: EscalationPredicateVersion,
+		Thresholds: []FeatureThreshold{
+			{Feature: "urgency", Threshold: DerivedFeatureScale / 2},
+			{Feature: "decision_sensitivity", Threshold: DerivedFeatureScale / 2},
+		},
+	}
+}
+
+// EscalationRequest is the declared pure escalation predicate (spec section
+// 4.3). It evaluates the versioned PolicyPredicate over the actor's own
+// observation only: every threshold is matched against the observation-derived
+// rows returned by ObservationFeatures, so it reads nothing else and never the
+// scheduler-level prior_reliability row (EC-6). It returns
+// (true, EscalationRequestedByActor) when every declared threshold is met; an
+// empty predicate, a predicate naming an unknown row or the world-level
+// prior_reliability, or a threshold the actor does not meet, requests nothing
+// (fail closed).
+func EscalationRequest(p PolicyPredicate, obs strategy.NaturalObservation) (bool, EscalationReason) {
+	if len(p.Thresholds) == 0 {
+		return false, ""
+	}
+	features := ObservationFeatures(obs)
+	for _, t := range p.Thresholds {
+		if !observationFeature(t.Feature) {
+			return false, ""
+		}
+		if featureValue(t.Feature, features) < t.Threshold {
+			return false, ""
+		}
+	}
+	return true, EscalationRequestedByActor
+}
+
+// observationFeature reports whether a declared feature name is an
+// observation-only row. The world-level prior_reliability aggregate and any
+// unknown name are not, so a predicate naming one fails closed rather than
+// reading a scheduler-level row (EC-6).
+func observationFeature(name string) bool {
+	switch name {
+	case "energy", "hunger", "capital", "granary_stock", "last_stored_meal_hour",
+		"stocked_home_slots", "decision_sensitivity", "urgency", "impact", "propagation_risk":
+		return true
+	default:
+		return false
+	}
 }
 
 // EscalationSelector is the deterministic arm-local online accumulator (spec

@@ -15,6 +15,7 @@ func renderText(ev evaluation) string {
 	fmt.Fprintf(&b, "status: %s\n", ev.Status)
 	fmt.Fprintf(&b, "revision: %s\n", ev.Revision)
 	fmt.Fprintf(&b, "model: %s wire: %s identity: %s\n", ev.ModelID, ev.WireMode, ev.ModelIdentity)
+	fmt.Fprintf(&b, "model+feature identity: %s feature set: %s\n", ev.ModelFeatureIdentity, ev.FeatureSet)
 	fmt.Fprintf(&b, "label: %s\n", ev.Label)
 	fmt.Fprintf(&b, "honest limit: %s\n", ev.HonestLimit)
 	fmt.Fprintf(&b, "horizon H=%d call ceiling N=%d value model=%s\n", ev.HorizonHours, ev.CallCeiling, ev.ValueModel)

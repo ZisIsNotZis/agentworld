@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"agentworld/internal/cognition"
+	"agentworld/internal/cognition/protocol"
 )
 
 // The VS2 CLI (spec sections 8-10). The declared default is the full primary
@@ -150,32 +151,35 @@ func buildEvaluation(runs []*cellRun, recordedDir string, skipped, declared []st
 	}
 	sort.Strings(mismatches)
 	identity := modelIdentityDigestBytes()
+	featureIdentity := cognition.ModelFeatureIdentityDigest(cognition.DefaultModelID, declaredGatewayWire, cognition.FrozenSampling(), protocol.FeatureSetVersion)
 	return evaluation{
-		Status:           "synthetic/model-conditional",
-		Label:            evaluationLabel,
-		HonestLimit:      honestLimit,
-		ModelID:          cognition.DefaultModelID,
-		WireMode:         string(declaredGatewayWire),
-		ModelIdentity:    hex.EncodeToString(identity[:]),
-		BasePolicy:       basePolicy().ID,
-		Mechanism:        int(mechanism()),
-		HorizonHours:     horizonHours,
-		CallCeiling:      DeclaredCallCeiling,
-		ValueModel:       declaredValueModel().Version,
-		Arms:             declaredArms,
-		QuotaSchedule:    quotaSchedule(DeclaredCallCeiling, DeclaredHorizonHours),
-		Inventory:        inventory{Declared: len(declared), Ran: len(runs), Skipped: skipped},
-		Cells:            reports,
-		Fidelity:         fidelity,
-		Bands:            evaluateBands(runs, runs, recordedDir, replay, srcRoot, fidelity),
-		ReplaySubset:     replayKeys,
-		ReplayMismatches: mismatches,
+		Status:               "synthetic/model-conditional",
+		Label:                evaluationLabel,
+		HonestLimit:          honestLimit,
+		ModelID:              cognition.DefaultModelID,
+		WireMode:             string(declaredGatewayWire),
+		ModelIdentity:        hex.EncodeToString(identity[:]),
+		ModelFeatureIdentity: hex.EncodeToString(featureIdentity[:]),
+		FeatureSet:           protocol.FeatureSetVersion,
+		BasePolicy:           basePolicy().ID,
+		Mechanism:            int(mechanism()),
+		HorizonHours:         horizonHours,
+		CallCeiling:          DeclaredCallCeiling,
+		ValueModel:           declaredValueModel().Version,
+		Arms:                 declaredArms,
+		QuotaSchedule:        quotaSchedule(DeclaredCallCeiling, DeclaredHorizonHours),
+		Inventory:            inventory{Declared: len(declared), Ran: len(runs), Skipped: skipped},
+		Cells:                reports,
+		Fidelity:             fidelity,
+		Bands:                evaluateBands(runs, runs, recordedDir, replay, srcRoot, fidelity),
+		ReplaySubset:         replayKeys,
+		ReplayMismatches:     mismatches,
 	}
 }
 
 func revisionString() string {
-	return fmt.Sprintf("vs2-hermetic-fake/1; model %s wire %s; base natural/7; mechanism v6; H=%d; N=%d; value-model %s; no authorised spend",
-		cognition.DefaultModelID, declaredGatewayWire, DeclaredHorizonHours, DeclaredCallCeiling, declaredValueModel().Version)
+	return fmt.Sprintf("vs2-hermetic-fake/1; model %s wire %s; base natural/7; mechanism v6; H=%d; N=%d; value-model %s; feature-set %s; no authorised spend",
+		cognition.DefaultModelID, declaredGatewayWire, DeclaredHorizonHours, DeclaredCallCeiling, declaredValueModel().Version, protocol.FeatureSetVersion)
 }
 
 func writeEvaluation(ev evaluation, jsonPath, textPath string) error {
