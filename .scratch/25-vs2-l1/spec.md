@@ -130,5 +130,5 @@ Go toolchain is not on the ambient PATH: use
   - `internal/cognition/protocol/valuemodel.go` `da803b51af1f7a8609afd4fcf617876b874917d9`
   - `internal/cognition/protocol/wake_test.go` `65f8cb4a75c1762ed3497b71bd846b57d3642ef9`
   - `internal/cognition/protocol/valuemodel_test.go` `f66013ed01e9dd83e6a2de2f24ef648dc82d132b`
-- L1 commit on `feature/25-vs2-l1`: recorded in the verification addendum of this ticket (the commit
-  hash cannot be embedded in the commit that creates it).
+- L1 commit on `feature/25-vs2-l1`: `41f5cc0528211fd6f0e612ee26749ea3bc083c65` (the commit that added
+  the five protocol files and this ticket; this addendum records its hash).
