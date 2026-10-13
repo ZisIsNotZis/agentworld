@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 
+	"agentworld/internal/cognition/protocol"
 	"agentworld/internal/sim"
 	"agentworld/internal/strategy"
 )
@@ -131,6 +132,7 @@ const (
 	InterventionPatchMeasure   InterventionKind = "patch-measure"
 	InterventionPatchRollback  InterventionKind = "patch-rollback"
 	InterventionNoTriggerAudit InterventionKind = "no-trigger-audit"
+	InterventionAllocation     InterventionKind = "allocation"
 )
 
 // interventionKinds is the closed set of admitted kinds.
@@ -139,6 +141,7 @@ var interventionKinds = map[InterventionKind]bool{
 	InterventionPatchPropose: true, InterventionPatchValidate: true,
 	InterventionPatchApply: true, InterventionPatchMeasure: true,
 	InterventionPatchRollback: true, InterventionNoTriggerAudit: true,
+	InterventionAllocation: true,
 }
 
 // InterventionCause records why an intervention happened (spec 9.1).
@@ -201,6 +204,27 @@ type PatchRecord struct {
 	AffectedActorsDigest string           `json:"affected_actors_digest"`
 }
 
+// AllocationRecord is the additive allocation-intervention payload (spec
+// Appendix B, C8): one record per escalated hour carrying the declared policy
+// fingerprint, the candidate roster size, the per-candidate priority scores, the
+// selected and protected-exploration sets, the budget state, the declared call
+// ceiling N, the policy-PRNG position, and the cumulative realized calls. It is
+// nil on every non-allocation record, so existing intervention bytes are
+// unchanged.
+type AllocationRecord struct {
+	PolicyFingerprint string                    `json:"policy_fingerprint"`
+	RosterSize        int                       `json:"roster_size"`
+	Quota             int                       `json:"quota"`     // U/A: declared q(h); P: remaining budget (5.1)
+	Shortfall         int                       `json:"shortfall"` // U/A: max(0, q(h) - roster size); P: 0 (5.1)
+	Selected          []sim.EntityID            `json:"selected"`
+	Exploration       []sim.EntityID            `json:"exploration"`
+	Scores            []protocol.CandidateScore `json:"scores"`
+	Budget            protocol.BudgetState      `json:"budget"`
+	CallCeiling       uint64                    `json:"call_ceiling"`
+	PRNGPos           uint64                    `json:"prng_pos"`
+	RealizedCalls     uint64                    `json:"realized_calls"`
+}
+
 // ValidationRecord records the validator's verdict and sandbox evidence.
 // Validator is the declared validator identity (spec 5.5).
 type ValidationRecord struct {
@@ -230,14 +254,18 @@ type InterventionResult struct {
 // role marker lives in Patch for Role A interventions, and Patch is reserved
 // for Role B ones (spec Appendix D.5).
 type InterventionRecord struct {
-	Seq        uint64             `json:"seq"`
-	Kind       InterventionKind   `json:"kind"`
-	Cause      InterventionCause  `json:"cause"`
-	CallRefs   []uint64           `json:"call_refs"`
-	Cost       InterventionCost   `json:"cost"`
-	RoleA      *RoleARecord       `json:"role_a,omitempty"`
-	Patch      *PatchRecord       `json:"patch,omitempty"`
-	Validation *ValidationRecord  `json:"validation,omitempty"`
+	Seq        uint64            `json:"seq"`
+	Kind       InterventionKind  `json:"kind"`
+	Cause      InterventionCause `json:"cause"`
+	CallRefs   []uint64          `json:"call_refs"`
+	Cost       InterventionCost  `json:"cost"`
+	RoleA      *RoleARecord      `json:"role_a,omitempty"`
+	Patch      *PatchRecord      `json:"patch,omitempty"`
+	Validation *ValidationRecord `json:"validation,omitempty"`
+	// Allocation is the VS2 additive allocation payload (spec Appendix B, C8).
+	// It is nil on every VS1 record, so existing intervention bytes are
+	// unchanged (VS2-EC-1).
+	Allocation *AllocationRecord  `json:"allocation,omitempty"`
 	Result     InterventionResult `json:"result"`
 	PrevHash   string             `json:"prev_hash"`
 	Hash       string             `json:"hash,omitempty"`
