@@ -351,6 +351,18 @@ quota `q(h)` (§5.1); the remaining `N − ceil(q·N)` calls are the exploitatio
 priority). It is an online rule, not a subset fixed in advance and not a reservoir held over the whole
 stream. `q = 0` is the pure-exploitation arm used to isolate the exploration channel (VS2-EC-7).
 
+**A's per-hour interleaving rule (declared, so two implementers build the same A arm).** With
+`E = ceil(q·N)` the reserved exploration calls (integer arithmetic as above), define the cumulative
+exploration target through hour `h` as `T(h+1) = ceil(E·(h+1)/H)` and hour `h`'s exploration allocation
+as `e(h) = T(h+1) − T(h)`. At hour `h`, arm A offers up to its per-hour quota `q(h)` slots over that
+hour's candidates in the declared deterministic order (roster sorted by `(actor)`); the first
+`min(e(h), slots offered)` slots are **exploration** slots and the remaining slots are **exploitation**
+slots. An exploration slot spends on a uniform draw from the hour's candidates not already selected
+that hour, using the policy PRNG; an exploitation slot spends on the highest-`Priority` remaining
+candidate (ties broken by actor id). The hour stops when its roster or quota is exhausted and the arm
+stops at `N`. `T` is a declared fixed schedule independent of any realized stream, so exploration never
+exceeds `E` and the rule is deterministic; with `q = 0`, `E = 0`, and every slot is exploitation.
+
 ### 4.6 Determinism, the policy PRNG, and no world RNG (extends EC-8)
 
 - The escalation set is a **deterministic function of the declared policy identity, the arm's own
@@ -401,11 +413,16 @@ no arm may exceed `N`.
 - **Policy rules (all online, all ending at the ceiling `N`).**
   - **P (periodic):** escalate candidates only at hours `h` satisfying the declared period/phase
     (`h ≡ PhaseHours (mod PeriodHours)`); within those hours select candidates in a declared
-    deterministic order (roster sorted by `(actor)`); stop at `N`.
+    deterministic order (roster sorted by `(actor)`); stop at `N`. P has no per-hour quota, so its
+    `Selection` and `AllocationRecord` set `Quota = remaining budget (N − CallsSpent)` and
+    `Shortfall = 0` (there is no `q(h)` for it to fall short of).
   - **U (uniform-random):** at each hour spend at most the declared per-hour quota `q(h)` on candidates
     chosen by the policy PRNG; stop at `N`.
   - **A (adaptive-priority):** rank candidates online by the declared priority `Priority` (§4.4); at
-    each hour spend at most `q(h)`; stop at `N`.
+    each hour spend at most `q(h)`; stop at `N`. Of each hour's `≤ q(h)` slots, the first
+    `min(e(h), slots offered)` are exploration slots and the rest are priority-ranked exploitation
+    slots (`e(h) = T(h+1) − T(h)`, `T(t) = ceil(E·t/H)`, `E = ceil(q·N)`), per the declared §4.5
+    interleaving rule.
 - **The per-hour quota `q(h)`** is a **declared fixed schedule** that depends on no arm's realized
   stream. Illustratively `q(h) = floor(N/H) + (1 if h < (N mod H) else 0)`, so `Σ_{h<H} q(h) = N` (at
   `N = 256`, `H = 168`: `q(h) = 2` for the first 88 hours, `1` for the rest). It is recorded once and
@@ -418,8 +435,10 @@ no arm may exceed `N`.
 `N` is a **declared experiment parameter** (P15-permitted: "a frozen experimental gate may bound an
 experiment"), frozen before any run. The proposed value is `N = 256` calls per cell (≈1/8 of the VS1 A3
 projection of ≈1 700–2 000 calls/cell; the VS1 A1 periodic-6 arm realized ≈300/cell). `N` is listed in
-§11 for operator confirmation. `N` is intentionally not derived from any candidate count (which is
-endogenous and arm-specific) so the budget is declared, not fitted.
+§11 for operator confirmation. `N` is fixed from the model-free A0 (no-AI) projection before any run
+(§5.1 "Model-free reference count") and is **not derived from any model-bearing arm's realized candidate
+count** (those are endogenous, arm-specific, and unknown before the run); the budget is declared, not
+fitted to a model arm.
 
 **Model-free reference count.** The only model-free count in the contract is the deterministic A0
 (no-AI) control trajectory's claim-wake count, computed from the frozen substrate with no model in the
@@ -467,6 +486,16 @@ its realized count disclosed; it is not silently equalized by truncating the oth
 prefix. The reference R is the comparative target for the fidelity metric (§6), never ground truth, and
 never a budgeted competitor.
 
+**The experiment layer computes over the full `H`; it does not inherit the scaffold's `min` prefix.**
+The VS1 scaffold's `divergenceVector` (`cmd/vs1/report.go:317-318`) truncates to
+`n := min(len(b.Hours), len(r.Hours))`. With every arm running the declared horizon `H` this is a no-op
+(and it is a no-op at every VS1 horizon, so `cmd/vs1`'s migration to `internal/experiment` is
+byte-unchanged), but a short arm's projection would silently shorten the comparison and contradict this
+section. The extracted `internal/experiment` mechanics (L4, §10) therefore compute the vector over the
+**full declared `H`** and **flag and refuse** any arm whose hourly projection is shorter than `H`: the
+report records the arm, its actual projection length, and the missing hours, and the cell is reported as
+an incomplete/short projection — never silently compared over `min(b, r)` hours.
+
 ## 6. The frozen fidelity metric (instantiated for VS2)
 
 The metric is `docs/VERTICAL-SLICES.md`'s VS2 definition, instantiated on the VS1 scaffold
@@ -480,7 +509,23 @@ definition:
 The **reference arm** is R (the `full` policy: model on every decision). For a budgeted arm `B` and R at
 the same fixture and seed, the metric is the per-indicator divergence **sequence** over hours plus the
 per-indicator summaries `Max` and `Mean` (both **lower-is-better** — smaller divergence is closer to the
-reference) and `FirstDivergenceHour` (**higher-is-better** — divergence begins later):
+reference) and `FirstDivergenceHour` (**higher-is-better** — divergence begins later).
+
+**No-divergence encoding (declared once, here).** The reused scaffold's `summarize`
+(`cmd/vs1/report.go:349-357`) initialises `FirstDivergenceHour` to `-1` and sets it only at the first
+hour whose hourly value is non-zero, so `-1` means "the indicator never diverged over `H`" — the
+**best** outcome, not the worst. Higher-is-better is therefore defined on a **normalised** value so the
+declared direction holds for every arm and indicator:
+
+```
+NormalizedFirstDivergenceHour = (raw == -1) ? H + 1 : raw
+```
+
+`H + 1` is strictly greater than any real first-divergence hour `≤ H`, so a never-diverged indicator is
+best under the declared direction. The direction-aware dominance comparison (§7 VS2-EC-3/EC-4) applies
+this normalisation uniformly and defines **no other** special case for the sentinel: an identical
+(better) arm with raw `-1` must not lose to a diverged arm. This is the single definition of the
+encoding; the raw `-1` and its normalised value are both reported.
 
 | # | Indicator | Hourly value | Divergence |
 |---|---|---|---|
@@ -541,8 +586,13 @@ Frozen before any run; a miss is an outcome reported verbatim, never tuned. Cell
   **strict improvement in ≥1 indicator**, in **≥ the declared number of seeds** (frozen: all of the
   cell's declared seeds; the report also shows the per-seed table). Dominance is per-summary and
   direction-aware: `Max` and `Mean` are **lower-is-better** (adaptive ≤ the other's) and
-  `FirstDivergenceHour` is **higher-is-better** (adaptive ≥ the other's). *Proof method:* dominance over
-  the frozen vector per summary with the declared directions; the per-cell, per-seed divergence tables.
+  `FirstDivergenceHour` is **higher-is-better** (adaptive ≥ the other's) **on the normalised value**
+  declared once in §6 (`raw == -1 ? H+1 : raw`). *Proof method:* dominance over the frozen vector per
+  summary with the declared directions, computed on the normalised summaries (the §6 `-1 → H+1`
+  no-divergence normalisation applied uniformly to every arm and indicator); the per-cell, per-seed
+  divergence tables must show each raw `-1` alongside its normalised value; a committed fixture in which
+  an identical (never-diverged) arm's raw `-1` is compared under the declared direction and is **not**
+  judged worse than a diverged arm (the sentinel-inversion regression).
   *Falsified by* a cell/seed in which a budgeted baseline (periodic or random) **strictly dominates**
   adaptive in a summary under its declared direction. A **clean negative** — no budgeted policy
   dominates any other, so adaptive neither dominates nor is dominated — is **not** an EC-3 miss: it is
@@ -550,10 +600,12 @@ Frozen before any run; a miss is an outcome reported verbatim, never tuned. Cell
   the "a baseline dominates adaptive" case.
 
 - **VS2-EC-4 — multi-indicator, no single scalar.** The comparison is vector dominance over all declared
-  indicators; no weighted sum is defined; a scalar win without vector dominance does **not** count as
-  beating. *Proof method:* the report carries every indicator; a committed fixture in which an arm wins
-  a scalar aggregate but fails vector dominance is reported as NOT beating.
-  *Falsified by* a gate that reduces the vector to one number.
+  indicators, each under its declared direction and the §6 no-divergence normalisation (`-1 → H+1`); no
+  weighted sum is defined; a scalar win without vector dominance does **not** count as beating.
+  *Proof method:* the report carries every indicator (raw and normalised `FirstDivergenceHour`); a
+  committed fixture in which an arm wins a scalar aggregate but fails vector dominance is reported as
+  NOT beating.
+  *Falsified by* a gate that reduces the vector to one number or drops the §6 normalisation.
 
 - **VS2-EC-5 — identity and replay valid across strategy updates.** A declared cell carrying a mid-run
   Role B apply (the VS1 lifecycle) replays byte-exact from genesis with zero model calls — accepted
@@ -586,7 +638,8 @@ Frozen before any run; a miss is an outcome reported verbatim, never tuned. Cell
 - **VS2-EC-7 — protected exploration present and bounded.** With declared `q > 0` (integer fixed-point),
   the selector reserves `ceil(q·N)` of the ceiling `N`, computed as `(N·ExplorationFraction +
   ExplorationScale − 1) / ExplorationScale` in integer arithmetic, for **uniform online draws over
-  ordinary candidates the arm meets**, inside the per-hour quota `q(h)`; the exploration set is
+  ordinary candidates the arm meets**, inside the per-hour quota `q(h)` and split across the horizon by
+  the declared §4.5 interleaving rule; the exploration set is
   non-empty whenever the arm's own stream and `N` permit; the set is deterministic from the declared
   policy PRNG and recorded on the `allocation` record; the `q = 0` arm isolates pure exploitation.
   *Proof method:* allocation records; the `q > 0` and `q = 0` fixtures.
@@ -696,7 +749,7 @@ witness, exactly as VS1.
 | L1 priority + value model (protocol) | `internal/cognition/protocol/wake.go` (additive `Priority` field + the degenerate nil-`Priority` `Select`), new `internal/cognition/protocol/{priority.go,valuemodel.go}` (the `EscalationSelector` online selector interface, `PriorityStrategy`, `PolicyPredicate`, the pure value projection) (+ tests); keeps `VS1WakePolicy`/`FullWakePolicy` bytes unchanged | — |
 | L2 world escalation gate + checkpoint binding | `internal/world/natural_cognition.go` (generalized gate + `Selector` seam + the construction-time refusal of `Priority != nil && Selector == nil`) (+ tests); the claim-loop hunks of `internal/world/natural.go` (`Natural.allocate`); `internal/world/natural_cognitive_checkpoint.go` (additive cognition-block wire extension carrying the priority-policy identity + restore-time fingerprint refusal) | L1 |
 | L3 cognition wiring: arm-local accumulator, allocation records, PRNG, price adapter | new `internal/cognition/{priority.go,allocation.go}` (the arm-local deterministic online accumulator seeded with the call ceiling `N` and `RandSeed`, adapted to `protocol.EscalationSelector`; recorded spent-call count + PRNG position); the `cognition.PriceTable` → `protocol.CallPrice` adapter; `internal/cognition/wake.go` aliases; `internal/cognition/codec.go` (additive `InterventionAllocation` kind + `AllocationRecord`) (+ tests) | L1 |
-| L4 experiment runner + arms + equal-budget gate + metric | new `cmd/vs2/**`; the shared reusable mechanics extracted once into `internal/experiment/**` (`divergenceVector`, `summarize`, `decisionErrorIndicator`, fixture/stack wiring); wires the L3 arm-local accumulator into the world's `Selector` seam and computes the equal-budget report with per-arm realized counts over the full horizon; `cmd/vs1` migrated to consume `internal/experiment` **with VS1 EC-1/EC-2 byte-identity re-proved** | L1–L3 |
+| L4 experiment runner + arms + equal-budget gate + metric | new `cmd/vs2/**`; the shared reusable mechanics extracted once into `internal/experiment/**` (`divergenceVector`, `summarize`, `decisionErrorIndicator`, fixture/stack wiring); wires the L3 arm-local accumulator into the world's `Selector` seam and computes the equal-budget report with per-arm realized counts over the full horizon; the extracted `divergenceVector` computes over the full declared `H` and flags/refuses any arm whose projection is shorter than `H` rather than inheriting the scaffold's `min(len(b), len(r))` prefix (§5.3); `cmd/vs1` migrated to consume `internal/experiment` **with VS1 EC-1/EC-2 byte-identity re-proved** | L1–L3 |
 | L5 docs | this file's evidence record and `docs/adr/0007-value-based-cognitive-allocation.md` | L4 |
 | L6 review | two fresh reviewers, no shared context with the workers | L4 |
 
@@ -740,13 +793,18 @@ layer is nil-tolerant: a nil `Priority` leaves every VS1 code path and every rec
   (VS2-EC-8) is the instrument that shows whether it is.
 - **Migrating `cmd/vs1` onto `internal/experiment`** touches frozen VS1 code; the risk is bounded by the
   EC-1/EC-2 byte-identity re-proof, and the alternative (duplication) violates one-home discipline.
-- **Temporal concentration differs across arms.** Every budgeted arm selects online over its own
-  realized stream under the same declared ceiling `N` (§8.1); U and A spend at most the per-hour quota
-  `q(h)` and stop at `N`, P is period-gated and stops at `N`. There is no selection-granularity
-  mismatch. What differs is the *temporal distribution* of the calls (periodic clusters them in its
-  selected hours; adaptive concentrates on high-priority candidates as they occur) and, when a stream
-  ends early, the realized count — reported per arm and interpreted at the full horizon (§5.3).
-  Disclosed so the report reads the divergence with this in mind.
+- **Selection granularity and temporal concentration differ across arms (residual asymmetry,
+  disclosed).** Every budgeted arm selects online over its own realized stream under the same declared
+  ceiling `N` (§8.1), but their per-hour selection rules differ: U and A carry a **hard per-hour cap
+  `q(h)`**, while P is **period-gated and has no per-hour cap** — it escalates every candidate in its
+  selected hours in the declared order until it spends `N`. Equal budget therefore means **exactly equal
+  spend only under the ample-roster condition** of §5.1/§5.3, in which every arm realizes `N` over `H`;
+  when the roster thins, P can **bank calls up to `N` in its selected hours before the thinning**,
+  while U and A can end **under-budget** if a late hour offers fewer than `q(h)` candidates or fewer
+  than the remaining budget. This is an honest residual asymmetry of an endogenous, arm-specific
+  candidate stream at a fixed ceiling, not a silently equalized comparison: every arm's realized count
+  is reported and interpreted at the full horizon `H` (§5.3), and the primary cells are chosen so the
+  roster is ample relative to `N = 256` (§11.3.2).
 - **Network latency** lands in the coordinator's pre-batch path (bounded by the VS1 declared deadlines,
   measured separately from engine compute).
 
@@ -879,8 +937,8 @@ type Selection struct {
     Exploration []sim.EntityID   `json:"exploration"`
     Scores      []CandidateScore `json:"scores"`     // per candidate, recorded
     Budget      BudgetState      `json:"budget"`     // CallsSpent/CallsRemaining/CallsBudget
-    Quota       int              `json:"quota"`      // declared per-hour quota q(h)
-    Shortfall   int              `json:"shortfall"`  // max(0, q(h) - len(roster)) (§5.1)
+    Quota       int              `json:"quota"`      // U/A: declared per-hour quota q(h); P: remaining budget (§5.1)
+    Shortfall   int              `json:"shortfall"`  // U/A: max(0, q(h) - len(roster)); P: 0 (§5.1)
     PRNGPos     uint64           `json:"prng_pos"`   // consumed position of the policy PRNG
 }
 
@@ -955,8 +1013,8 @@ existing records are byte-unchanged.
 type AllocationRecord struct {
     PolicyFingerprint string           `json:"policy_fingerprint"`
     RosterSize        int              `json:"roster_size"`     // candidates offered at this hour
-    Quota             int              `json:"quota"`           // declared q(h) for this hour
-    Shortfall         int              `json:"shortfall"`       // max(0, q(h) - roster size)
+    Quota             int              `json:"quota"`           // U/A: declared q(h); P: remaining budget (§5.1)
+    Shortfall         int              `json:"shortfall"`       // U/A: max(0, q(h) - roster size); P: 0 (§5.1)
     Selected          []sim.EntityID   `json:"selected"`
     Exploration       []sim.EntityID   `json:"exploration"`
     Scores            []CandidateScore `json:"scores"`
@@ -1036,15 +1094,14 @@ resolved rather than restated.
    equal budget on the call axis and treating cost equalization as a declared operator gate (§5, §11),
    rather than fabricating a price or silently dropping the axis.
 
-## Appendix E — Design-review repair record
+## Appendix E — Design-review repair record (ticket/evidence record)
 
-The current independent review of the VS2 design contract returned BLOCK with four blocking (P1)
-findings sharing **one root cause** — the contract kept requiring an *exact uniform size-`N` subset of
-an unknown-length, endogenous candidate stream* (through a model-free pre-pass, reservoir-style
-sampling, or an "exact-on-own-stream" `min(N, |U_arm|)`), which is not implementable online — plus
-several smaller findings. This appendix is the finding → repair map for that repair; the design is
-edited in place above and is the current truth (no prior-review narrative is retained). Design-only
-against master `46b1b2b`; every cited symbol resolves there.
+This appendix is the **ticket/evidence record** for the VS2 design repairs: it maps each review finding
+to the repair now in force in this contract. It is a change record, **not normative contract text** —
+the normative contract is §1–§12 and Appendices A–D, which state only current facts; the repair history
+lives here. Design-only against master `46b1b2b`; every cited symbol resolves there.
+
+**Prior repair round (design-v4).** Repairs carried from the previous repair commit; retained as part of the finding → repair record.
 
 | Finding | Summary | Repair (location in this contract / ADR) |
 |---|---|---|
@@ -1058,14 +1115,29 @@ against master `46b1b2b`; every cited symbol resolves there.
 | P2.4 | The declared `escalation_requested` weight (5) was not applicable: `ValueFeatures` had no such field. | Added `EscalationRequested int64` to `ValueFeatures` (0/1 from the actor's own `EscalationRequest` predicate) and named it in the C.1 feature table. Appendix A.2, Appendix C.1. |
 | P2.5 | Appendix E.1 retained rows asserting the removed pre-pass / exact-`N` framing. | Removed: this appendix now holds only the current finding → repair map, with no prior-review narrative. Appendix E. |
 
-**Verification record.** Authoritative tree master `46b1b2b`; branch
-`feature/24-vs2-attention-design-v4`; base commit `46d84ae`; repair commit `3a7398f`.
-`git diff --check` clean; only this file and `docs/adr/0007-value-based-cognitive-allocation.md`
-changed. Commands run: `git diff --check 46d84ae..HEAD` (clean), `git diff --stat 46d84ae..HEAD`
-(only the two in-scope files), `git show --stat 3a7398f` (the repair commit: the two in-scope files).
-Symbol checks at `46b1b2b`:
+**Current repair round (design-v5).** The fourth independent review returned FAIL, narrow: the
+equal-budget contract is implementable and sound; one blocking (P1) and five P2 findings plus one
+non-blocking policy-conformance item remained. The finding → repair map:
+
+| Finding | Summary | Repair (location in this contract / ADR) |
+|---|---|---|
+| P1 (blocking) | The declared dominance gate **inverts for a never-diverged indicator**. `FirstDivergenceHour` is declared higher-is-better ("divergence begins later"), but the reused scaffold initialises it to `-1` and sets it only at the first non-zero value (`cmd/vs1/report.go:349-357`): `-1` means "never diverged" = **best**. Under "adaptive ≥ other", an identical (better) arm with `-1` loses, so weak dominance can fail and a strictly closer arm can be judged non-dominating, falsely falsifying the central claim. | Declared the no-divergence encoding **once** in §6: normalise `raw == -1` → `H+1`, so never-diverged counts as best and higher-is-better holds. The direction-aware comparison in EC-3/EC-4 references that single declaration; EC-3's proof method adds the normalisation and a sentinel-inversion regression fixture; EC-4 applies the same normalisation. §6, EC-3, EC-4. |
+| P2.1 | `divergenceVector` truncates to `min(len(b.Hours), len(r.Hours))` (`cmd/vs1/report.go:317-318`); with all arms at `H` this is a no-op, but a short arm would silently contradict §5.3's full-`H` evaluation. | §5.3 and the L4 lane now state that the extracted `internal/experiment` mechanics compute over the full declared `H` and flag/refuse a short projection rather than relying on the scaffold's min-prefix. §5.3, §10 (L4). |
+| P2.2 | The per-hour exploration/exploitation interleaving for arm A was undeclared, so two implementers could produce different A arms. | Declared A's deterministic interleaving rule in §4.5 (cumulative exploration target `T(t) = ceil(E·t/H)`, `E = ceil(q·N)`, hourly exploration `e(h) = T(h+1) − T(h)`; the first `e(h)` slots are exploration, the rest priority-ranked exploitation), referenced from §5.1 (A bullet) and EC-7. §4.5, §5.1, EC-7. |
+| P2.3 | `Selection.Quota`/`Selection.Shortfall` were undefined for P (period-gated, no per-hour quota). | Declared P's encoding: `Quota = remaining budget (N − CallsSpent)`, `Shortfall = 0`; the field comments in Appendix A.1 and Appendix B updated. §5.1, Appendix A.1, Appendix B. |
+| P2.4 | §5.1 contradicted itself on `N`'s provenance ("intentionally not derived from any candidate count" vs the A0 claim-wake count used to choose `N`). | Reworded: `N` is fixed from the model-free A0 (no-AI) projection before any run and is **not derived from any model-bearing arm's realized candidate count**. §5.1, ADR 0007 (Consequences). |
+| P2.5 | §11.1 overclaimed "no selection-granularity mismatch": P has an uncapped per-hour schedule while U/A have a hard `q(h)` cap, so equal budget is exact only under the ample-roster condition, and P can bank `N` before a thinning roster while U/A may end under-budget. | Replaced with the honest residual asymmetry (hard per-hour cap vs period-gated uncapped schedule; exact equality only under the ample-roster condition), disclosed with the realized-count reporting. §11.1. |
+| P2.6 (non-blocking, policy conformance) | Appendix E carried prior-review narrative ("returned BLOCK ...") inside the fact document. | Appendix E relabelled as the **ticket/evidence record** (not normative contract text); the review-narrative opening removed; the finding → repair map retained; the normative sections state current facts only. Appendix E. |
+
+**Verification record (design-v5).** Authoritative tree master `46b1b2b`; branch
+`feature/24-vs2-attention-design-v5`; base commit `a71dd2c`; repair commit: recorded in the following
+record commit. `git diff --check` clean; only this file and
+`docs/adr/0007-value-based-cognitive-allocation.md` changed. Commands run: `git diff --check
+a71dd2c..HEAD` (clean), `git diff --stat a71dd2c..HEAD` (only the two in-scope files). Symbol checks at
+`46b1b2b`:
 `NaturalCognition.validate` half-wired refusal → `internal/world/natural_cognition.go:46-60`;
 `ErrNaturalRunner` → `internal/world/natural.go:85`; `CognitiveCeilingHitError` →
 `internal/cognition/budget.go:82`; `NaturalObservation` → `internal/strategy/natural.go:337`; claim
-wakes → `internal/world/natural.go:1794-1804` (`WakeNeedThreshold`/`WakeBirth`). All VS2 symbols are
-design-level (no VS2 code exists at `46b1b2b`).
+wakes → `internal/world/natural.go:1794-1804` (`WakeNeedThreshold`/`WakeBirth`);
+`summarize`/`FirstDivergenceHour` sentinel → `cmd/vs1/report.go:349-357`; `divergenceVector` min-prefix
+→ `cmd/vs1/report.go:317-318`. All VS2 symbols are design-level (no VS2 code exists at `46b1b2b`).

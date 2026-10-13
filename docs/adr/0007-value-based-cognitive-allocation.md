@@ -46,9 +46,10 @@ new scheduler subsystem, and it obeys three invariants:
    state, matching the VS1 Role B `TrajectoryEvidence` discipline). Escalation requests are a declared
    pure predicate over that observation. Selection over the candidate stream is a deterministic
    **online accumulator** operating on **each arm's own realized stream**: `N` is a declared call
-   ceiling, every budgeted arm selects online and stops once it has spent `N`, P is period-gated, and
-   U and A spend at most the declared per-hour quota `q(h)`, so no arm needs the run-total candidate
-   count (which is endogenous and arm-dependent) and there is no model-free pre-pass, no reservoir, and
+   ceiling (fixed from the model-free A0 (no-AI) projection before any run, never derived from a
+   model-bearing arm's realized count), every budgeted arm selects online and stops once it has spent
+   `N`, P is period-gated, and U and A spend at most the declared per-hour quota `q(h)`, so no arm
+   needs the run-total candidate count (which is endogenous and arm-dependent) and there is no model-free pre-pass, no reservoir, and
    no exact uniform size-`N` subset; the accumulator's recorded state (spent-call count, PRNG position)
    makes the selection and its replay exact. The selector imports no `internal/world`; the world imports
    no client. The projection is a versioned, integer
@@ -114,7 +115,9 @@ the full-policy fingerprint recomputation, and the restore-time refusal (L2 lane
   stream ends early), and the accumulator's recorded state (spent-call count, PRNG position) makes the
   selection and its replay well defined. Divergence is measured over the same full declared horizon for
   every arm, with realized counts disclosed; there is no matched-prefix comparison and no asserted
-  fixed `|U|`.
+  fixed `|U|`. The value vector is computed over the full declared `H`, and an arm whose hourly
+  projection is shorter than `H` is flagged and refused rather than silently truncated to the
+  scaffold's `min(b, r)` prefix.
 - The value model is a versioned hypothesis that must be calibrated: predicted priority is compared to
   realized downstream effect, and the calibration error is reported (P6). An uninformative model is a
   measurable outcome, not a hidden default.
