@@ -46,7 +46,10 @@ Exit criteria:
 - invariants hold over long seeded runs;
 - state and event storage are measured per actor-year;
 - CPU and memory profiles identify actual bottlenecks;
-- distinct strategies produce measurable and causally explainable population outcomes.
+- distinct strategies produce measurable and causally explainable population outcomes — met only on
+  the later density axis the ticket-18 founding-band fixture introduced (f≤13); at the saturated f=16
+  fixture every organic policy is populationally indistinguishable, differing only in ledgers (see
+  the decision-sensitivity map under "Current status" below).
 
 ### Current status (pre-pivot substrate)
 
@@ -82,7 +85,11 @@ implementation is complete with hermetic evidence PASS on all eleven frozen exit
 (EC-1..EC-11); the real-model arm is blocked on spend authorisation, and the allocation experiment
 this phase anticipated is M2/VS2.
 
-Target: approximately 10,000 explicit people with selective model intervention.
+Target: approximately 10,000 explicit people with selective model intervention. This target is
+unbuilt and unmeasured: the recorded substrate is 16 actors in the fixed fixtures, and the 256-founder
+scale probe halted the harness at h66–h70 at 38–44× the predeclared CPU budget
+([VALIDATION.md](VALIDATION.md), v5 F record); the P0 target of approximately 1,000 people over
+decades is likewise not built.
 
 Include:
 
@@ -98,7 +105,9 @@ Include:
 Exit criteria:
 
 - no detected cross-case private-information leakage in the test suite;
-- every model intervention records cause, cost, patch, and measured result;
+- every model intervention records cause, cost, and measured result; a Role B strategy intervention
+  additionally records the patch, while a Role A decision has no patch and carries the explicit role
+  marker plus the applied-version head instead (`internal/cognition/intervention.go`);
 - at equal budget, at least one adaptive scheduler outperforms periodic and random baselines on declared metrics;
 - performance holds across seeds and does not depend on one scalar objective;
 - identity and replay remain valid across strategy updates.

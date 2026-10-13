@@ -42,6 +42,8 @@ Text-only judgments cannot be the terminal input to scheduling, rollout, beam se
 
 Language models wake for novelty, uncertainty, strategy failure, high decision sensitivity, high propagation potential, explicit escalation, or audit sampling. Rate limits, shared budgets, deduplication, and measured marginal value prevent uncontrolled self-invocation.
 
+This is the VS2 target: in VS1 the wake policy is a declared object with only the honest uniform/periodic baseline ([VERTICAL-SLICES.md](VERTICAL-SLICES.md), VS1 C7), and value-based selective waking, escalation requests, and protected exploration are not yet implemented.
+
 Structural importance is not sufficient. A protected exploration budget samples ordinary actors so low-probability innovation is not systematically excluded.
 
 ## P8 — Isolated batched management
