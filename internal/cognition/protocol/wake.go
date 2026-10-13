@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	"agentworld/internal/sim"
 )
 
 // The C7 cognitive-allocation policy object (spec section 11.1). It is a
@@ -17,11 +19,15 @@ import (
 // over actors" property.
 var ErrInvalidWakePolicy = errors.New("invalid wake policy")
 
-// WakePolicy is the declared escalation policy (spec section 11.1).
+// WakePolicy is the declared escalation policy (spec section 11.1). VS2 adds
+// one additive, omitempty field: a nil Priority is omitted from the canonical
+// identity, so the VS1 canonical bytes and fingerprint are unchanged and every
+// recorded VS1 policy, manifest, and run stays valid (VS2-EC-1).
 type WakePolicy struct {
-	Name        string `json:"name"`
-	PeriodHours int    `json:"period_hours"`
-	PhaseHours  int    `json:"phase_hours"`
+	Name        string          `json:"name"`
+	PeriodHours int             `json:"period_hours"`
+	PhaseHours  int             `json:"phase_hours"`
+	Priority    *PriorityPolicy `json:"priority,omitempty"` // VS2; nil == VS1
 }
 
 // VS1WakePolicy is the declared VS1 instance: uniform over actors, periodic in
@@ -61,6 +67,23 @@ func (p WakePolicy) Escalates(hour int) bool {
 		offset += p.PeriodHours
 	}
 	return offset == 0
+}
+
+// Select is the degenerate selector used when Priority is nil: a pure function
+// of (policy, hour, roster, budget state) that consumes no world random stream
+// and selects every candidate of an escalated hour (all claim-wake actors in
+// the selected hour). It serves the declared full reference R (FullWakePolicy)
+// and the VS1 path. A budgeted arm carries a non-nil Priority and is served by
+// the deterministic arm-local online accumulator of EscalationSelector, not by
+// this method.
+func (p WakePolicy) Select(hour int, roster []EscalationCandidate, budget BudgetState) (Selection, error) {
+	selected := make([]sim.EntityID, 0, len(roster))
+	if p.Escalates(hour) {
+		for _, c := range roster {
+			selected = append(selected, c.Actor)
+		}
+	}
+	return Selection{Hour: hour, Selected: selected, Budget: budget}, nil
 }
 
 // Identity is the canonical wire identity of the policy, for the checkpoint
