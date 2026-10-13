@@ -173,3 +173,8 @@ New test names (`internal/world/natural_cognition_priority_test.go`):
   - `internal/world/natural_checkpoint.go` `d2bfea3f1a95a3d47508c0d15c01819f7610a85b`
   - `internal/world/natural_cognition_priority_test.go` `d6efa20233e40e1cee6b35bb960007bc92c2edcf`
 - Commit hash on `feature/26-vs2-l2`: recorded in the revision addendum below.
+
+## Revision addendum
+
+- L2 commit on `feature/26-vs2-l2`: `74d8d2b972155fed0484f0908ce8d6a69a1fba97` (adds the four
+  in-scope source files, the new test file, and this ticket).
