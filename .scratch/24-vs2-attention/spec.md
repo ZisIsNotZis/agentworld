@@ -753,8 +753,9 @@ witness, exactly as VS1.
   evidence that proves the gateway contract and the allocation wiring against the real model. Gated on
   the spend authorisation (VS2-EC-9).
 - **Matrix.** §8.2 cells per arm, each run fresh (new checkpoint directory, no clobber), one report per
-  cell, evaluator output written to `.tmp/24-*`, evidence quoted verbatim in the ticket's evidence
-  record.
+  cell, evaluator output written to `.tmp/30-vs2-evaluation.json` (L4c) and
+  `.tmp/31-vs2-evaluation.json` (L2b), evidence quoted verbatim in the ticket's evidence
+  record; the docs/evidence repair re-run writes `.tmp/34-vs2-evaluation.json`.
 - **Fixtures.** A scripted value-model fixture (deterministic candidate scores) exercising
   R/P/U/A-select end to end and replaying byte-exact; a **broken value-model fixture** (out-of-domain
   weight, unknown feature, non-monotone cost) rejected with a typed reason and zero world mutation; a
@@ -1154,8 +1155,10 @@ resolved rather than restated.
    operator confirmation)"; it states the metric as frozen ("Metric definition (frozen)") and the
    product-decisions section repeats "the frozen definition given in VS2". No disagreement remains.
 4. **Resolved at `46b1b2b`.** `README.md` carries no present-tense "wake selectively" claim (the phrase
-   does not appear); it describes only the implemented substrate. VS2, once delivered, may state the
-   claim as fact. No disagreement remains.
+   does not appear); it describes only the implemented substrate. VS2 may state the claim as fact only
+   once the central claim itself is accepted — the real-model arm evidenced and the operator spend gate
+   passed (§11.3); landing the mechanism alone does not earn it, and the claim remains **not accepted**
+   (status above). No disagreement remains.
 5. **`docs/adr/0006` (Addendum) records the application model as unpriced; the founding budget
    discipline (`docs/PRINCIPLES.md` P15) assumes a costed budget.** VS2 resolves the tension by defining
    equal budget on the call axis and treating cost equalization as a declared operator gate (§5, §11),

@@ -137,7 +137,7 @@ func buildEvaluation(runs []*cellRun, recordedDir string, skipped, declared []st
 	for _, cr := range runs {
 		reports = append(reports, cellReportOf(cr))
 	}
-	fidelity, _ := buildFidelity(runs, horizonHours)
+	fidelity, shortProjections := buildFidelity(runs, horizonHours)
 	replayKeys := make([]string, 0, len(replay))
 	for k := range replay {
 		replayKeys = append(replayKeys, k)
@@ -171,6 +171,7 @@ func buildEvaluation(runs []*cellRun, recordedDir string, skipped, declared []st
 		Inventory:            inventory{Declared: len(declared), Ran: len(runs), Skipped: skipped},
 		Cells:                reports,
 		Fidelity:             fidelity,
+		ShortProjections:     shortProjections,
 		Bands:                evaluateBands(runs, runs, recordedDir, replay, srcRoot, fidelity),
 		ReplaySubset:         replayKeys,
 		ReplayMismatches:     mismatches,

@@ -8,11 +8,13 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
 	"agentworld/internal/cognition"
 	"agentworld/internal/cognition/protocol"
+	"agentworld/internal/experiment"
 	"agentworld/internal/sim"
 	"agentworld/internal/world"
 )
@@ -285,6 +287,64 @@ func TestReplaySubsetIdentical(t *testing.T) {
 		if v != "identical" {
 			t.Fatalf("%s: %s", k, v)
 		}
+	}
+}
+
+// TestShortProjectionRecordedInReport pins that an arm whose hourly projection
+// is shorter than the declared horizon is named in the report's
+// short_projections field rather than silently absent: the arm, its actual
+// projection length and the missing hours are recorded, and the divergence
+// vector is refused (never truncated, spec section 5.3).
+func TestShortProjectionRecordedInReport(t *testing.T) {
+	full := experiment.Projections{Hours: make([]int, testHorizon+1)}
+	for i := range full.Hours {
+		full.Hours[i] = i
+	}
+	const missing = 3
+	short := experiment.Projections{Hours: make([]int, testHorizon+1-missing)}
+	for i := range short.Hours {
+		short.Hours[i] = i
+	}
+	runs := []*cellRun{
+		{spec: cellSpec{Arm: ArmR, F: 10, Seed: 0}, fp: fixture{Patches: 2, Hours: testHorizon}, proj: full},
+		{spec: cellSpec{Arm: ArmU, F: 10, Seed: 0}, fp: fixture{Patches: 2, Hours: testHorizon}, proj: short},
+	}
+	rows, shorts := buildFidelity(runs, testHorizon)
+	if len(rows) != 0 {
+		t.Fatalf("fidelity rows = %d, want 0 (the short arm is refused, not truncated)", len(rows))
+	}
+	if len(shorts) != 1 {
+		t.Fatalf("short projections = %d, want 1", len(shorts))
+	}
+	got := shorts[0]
+	if got.Arm != "U-f10-s0" || got.ProjectionSamples != testHorizon+1-missing ||
+		got.RequiredSamples != testHorizon+1 || got.MissingHours != missing {
+		t.Fatalf("short projection %+v, want U-f10-s0 %d of %d missing %d",
+			got, testHorizon+1-missing, testHorizon+1, missing)
+	}
+
+	// The report carries the short arm in its declared field and round-trips.
+	ev := buildEvaluation(runs, t.TempDir(), nil, []string{"R-f10-s0", "U-f10-s0"}, nil, filepath.Join("..", ".."), testHorizon)
+	if len(ev.ShortProjections) != 1 || ev.ShortProjections[0].Arm != "U-f10-s0" {
+		t.Fatalf("report short_projections = %+v, want the short U arm", ev.ShortProjections)
+	}
+	out := filepath.Join(t.TempDir(), "eval.json")
+	if err := writeEvaluation(ev, out, filepath.Join(t.TempDir(), "eval.txt")); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"short_projections"`) {
+		t.Fatal("report JSON omits short_projections")
+	}
+	var back evaluation
+	if err := json.Unmarshal(data, &back); err != nil {
+		t.Fatalf("report JSON does not round-trip: %v", err)
+	}
+	if len(back.ShortProjections) != 1 || back.ShortProjections[0].MissingHours != missing {
+		t.Fatalf("round-tripped short_projections = %+v", back.ShortProjections)
 	}
 }
 

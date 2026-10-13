@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 
@@ -37,6 +38,19 @@ type fidelityRow struct {
 	Seed       uint64            `json:"seed"`
 	Reference  string            `json:"reference"`
 	Indicators []indicatorReport `json:"indicators"`
+}
+
+// shortProjection records one budgeted arm whose hourly projection did not
+// reach the declared horizon, so the divergence vector was refused rather than
+// silently truncated to a shorter prefix (spec section 5.3). The arm, its
+// actual projection length and the missing horizon samples are named so a
+// short arm is visible in the report instead of silently absent.
+type shortProjection struct {
+	Arm               string `json:"arm"`
+	ProjectionSamples int    `json:"projection_samples"`
+	RequiredSamples   int    `json:"required_samples"`
+	MissingHours      int    `json:"missing_hours"`
+	Reason            string `json:"reason,omitempty"`
 }
 
 // direction is the declared lower/higher-is-better direction of a fidelity
@@ -137,14 +151,15 @@ type evaluation struct {
 	CallCeiling          uint64 `json:"call_ceiling"`
 	ValueModel           string `json:"value_model_version"`
 
-	Arms             []string      `json:"arms"`
-	QuotaSchedule    []int         `json:"quota_schedule"`
-	Inventory        inventory     `json:"inventory"`
-	Cells            []cellReport  `json:"cells"`
-	Fidelity         []fidelityRow `json:"fidelity"`
-	Bands            []reportBand  `json:"bands"`
-	ReplaySubset     []string      `json:"replay_subset"`
-	ReplayMismatches []string      `json:"replay_mismatches"`
+	Arms             []string          `json:"arms"`
+	QuotaSchedule    []int             `json:"quota_schedule"`
+	Inventory        inventory         `json:"inventory"`
+	Cells            []cellReport      `json:"cells"`
+	Fidelity         []fidelityRow     `json:"fidelity"`
+	ShortProjections []shortProjection `json:"short_projections"`
+	Bands            []reportBand      `json:"bands"`
+	ReplaySubset     []string          `json:"replay_subset"`
+	ReplayMismatches []string          `json:"replay_mismatches"`
 }
 
 const evaluationLabel = "synthetic/model-conditional; hermetic FakeClient (no network, no authorised spend); cost fields are MODELLED price-table charges over the fake usage, not real spend; the run demonstrates the equal-budget ALLOCATION MECHANISM is load-bearing, never the central claim, which awaits real-model spend authorisation (spec section 1.3/9, VS2-EC-9)"
@@ -266,23 +281,34 @@ func shortfallTotal(records []cognition.InterventionRecord) int {
 
 // buildFidelity computes the divergence vector of every budgeted arm against
 // the R reference at the same cell, over the full declared horizon. An arm
-// whose projection is shorter than H is reported by the band layer (the shared
-// metric refuses instead of silently truncating, spec section 5.3).
-func buildFidelity(runs []*cellRun, horizonHours int) ([]fidelityRow, []string) {
+// whose projection is shorter than H is refused (never silently truncated, spec
+// section 5.3) and returned as a structured short-projection record so the
+// report can name the arm, its actual projection length and the missing hours.
+func buildFidelity(runs []*cellRun, horizonHours int) ([]fidelityRow, []shortProjection) {
 	var out []fidelityRow
-	var short []string
+	var short []shortProjection
 	for _, cr := range runs {
 		if !isBudgeted(cr.spec.Arm) {
 			continue
 		}
 		ref := referenceRun(runs, cr.spec)
 		if ref == nil {
-			short = append(short, cr.spec.String()+":no-reference")
+			short = append(short, shortProjection{Arm: cr.spec.String(), Reason: "no-reference"})
 			continue
 		}
 		indicators, err := experiment.DivergenceVector(fidelityArm(cr), fidelityArm(ref), horizonHours)
 		if err != nil {
-			short = append(short, cr.spec.String()+":"+err.Error())
+			var shortErr *experiment.ShortProjectionError
+			if errors.As(err, &shortErr) {
+				short = append(short, shortProjection{
+					Arm:               shortErr.Label,
+					ProjectionSamples: shortErr.ActualSamples,
+					RequiredSamples:   shortErr.RequiredSamples,
+					MissingHours:      shortErr.RequiredSamples - shortErr.ActualSamples,
+				})
+			} else {
+				short = append(short, shortProjection{Arm: cr.spec.String(), Reason: err.Error()})
+			}
 			continue
 		}
 		out = append(out, fidelityRow{
