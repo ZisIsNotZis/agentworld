@@ -217,6 +217,18 @@ func (f *Natural) ExportJournal() ([]byte, error) {
 // run supplies the ledger-resolved Role A seam (ADR 0006 section 7.3) so the
 // trusted replay reproduces its escalated decisions without a model call.
 func (f *Natural) ExportJournalWithReplay(seam ClaimSeam, wake protocol.WakePolicy) ([]byte, error) {
+	return f.exportJournalWithReplay(seamReplayOf(seam, wake))
+}
+
+// ExportJournalWithReplaySelector is ExportJournalWithReplay for a
+// priority-bearing VS2 run: newSelector is the per-replay factory for the
+// arm-local escalation selector (see naturalSeamReplay). Passing a nil factory
+// is byte-identical to ExportJournalWithReplay (the VS1 path).
+func (f *Natural) ExportJournalWithReplaySelector(seam ClaimSeam, wake protocol.WakePolicy, newSelector func() protocol.EscalationSelector) ([]byte, error) {
+	return f.exportJournalWithReplay(seamReplayOfSelector(seam, wake, newSelector))
+}
+
+func (f *Natural) exportJournalWithReplay(seamReplay *naturalSeamReplay) ([]byte, error) {
 	if f == nil {
 		return nil, ErrNaturalJournal
 	}
@@ -233,7 +245,6 @@ func (f *Natural) ExportJournalWithReplay(seam ClaimSeam, wake protocol.WakePoli
 	if err != nil || schedulerHead != head {
 		return nil, ErrNaturalJournal
 	}
-	seamReplay := seamReplayOf(seam, wake)
 	cognitive := f.cognitiveJournalReplay()
 	data, err := encodeNaturalJournalWithSeam(f.journal, f.k, head, f.sched.Time(), f.journalConfig(), seamReplay, cognitive)
 	if err != nil {
@@ -562,9 +573,17 @@ func replayNaturalJournal(batches []NaturalBatch, config NaturalJournalConfig) (
 // produced under (ADR 0006 section 7.3). The seam resolves each escalated
 // claim instant from the recorded-call ledger and never calls a model; the
 // reference replay wires it so a seam-active journal reproduces exactly.
+//
+// newSelector is the optional arm-local escalation selector a priority-bearing
+// VS2 run was produced under. It is a per-replay factory, not a live selector:
+// every reference replay walks the journal from genesis, so it must start from
+// the selector's genesis state, and one save, export, or restore runs the
+// reference replay more than once. A nil factory (every nil-Priority VS1 path)
+// wires no selector, so the replay is byte-identical to the pre-L4b behaviour.
 type naturalSeamReplay struct {
-	seam ClaimSeam
-	wake protocol.WakePolicy
+	seam        ClaimSeam
+	wake        protocol.WakePolicy
+	newSelector func() protocol.EscalationSelector
 }
 
 func seamReplayOf(seam ClaimSeam, wake protocol.WakePolicy) *naturalSeamReplay {
@@ -572,6 +591,19 @@ func seamReplayOf(seam ClaimSeam, wake protocol.WakePolicy) *naturalSeamReplay {
 		return nil
 	}
 	return &naturalSeamReplay{seam: seam, wake: wake}
+}
+
+// seamReplayOfSelector is seamReplayOf plus the arm-local selector factory a
+// priority-bearing VS2 replay needs (VS2-EC-2: a priority policy without a
+// selector is refused, and a genesis-state selector reproduces the recorded
+// selection sequence). A nil seam yields nil exactly as seamReplayOf: a
+// selector is only meaningful on a cognitive path, which requires a seam.
+func seamReplayOfSelector(seam ClaimSeam, wake protocol.WakePolicy, newSelector func() protocol.EscalationSelector) *naturalSeamReplay {
+	replay := seamReplayOf(seam, wake)
+	if replay != nil {
+		replay.newSelector = newSelector
+	}
+	return replay
 }
 
 // cognitiveJournalReplay carries the active Role B generation a cognitive
@@ -597,9 +629,15 @@ func replayNaturalJournalWithCognitive(batches []NaturalBatch, config NaturalJou
 	}
 	// The recorded Role A seam, when present, is wired before the first step so
 	// the reference re-decides every escalated claim instant exactly as the
-	// live run did, with no model call (ADR 0006 section 7.3).
+	// live run did, with no model call (ADR 0006 section 7.3). A
+	// priority-bearing replay also wires a fresh arm-local selector per replay,
+	// so the recorded selection sequence re-derives from genesis state.
 	if seamReplay != nil && seamReplay.seam != nil {
-		if err := reference.SetCognition(&NaturalCognition{Seam: seamReplay.seam, WakePolicy: seamReplay.wake}); err != nil {
+		wired := &NaturalCognition{Seam: seamReplay.seam, WakePolicy: seamReplay.wake}
+		if seamReplay.newSelector != nil {
+			wired.Selector = seamReplay.newSelector()
+		}
+		if err := reference.SetCognition(wired); err != nil {
 			return nil, ErrNaturalJournal
 		}
 	}

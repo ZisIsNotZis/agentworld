@@ -170,6 +170,17 @@ type NaturalRestoreOptions struct {
 	// machinery, not live state: the returned runner carries no live seam.
 	CognitiveReplaySeam ClaimSeam
 	CognitiveReplayWake protocol.WakePolicy
+
+	// CognitiveReplaySelector, when set for a priority-bearing cognitive
+	// bundle, builds a fresh arm-local escalation selector (the L3
+	// protocol.EscalationSelector) for each reference replay, so a VS2 priority
+	// arm's checkpoint restores and journal-replays with its own deterministic
+	// selection sequence and no model call (VS2-EC-2/VS2-EC-5). Like
+	// CognitiveReplaySeam it is replay machinery, not live state: the replay
+	// walks from genesis, so each call must return a genesis-state selector.
+	// A nil factory wires no selector, which is the nil-Priority VS1 path and
+	// is byte-identical to the pre-L4b behaviour.
+	CognitiveReplaySelector func() protocol.EscalationSelector
 }
 
 // policyRef resolves the declared policy identity: the zero value is the
@@ -2451,6 +2462,16 @@ func (f *Natural) SaveResumeCheckpointWithReplay(path string, seam ClaimSeam, wa
 	return f.saveResumeCheckpoint(path, seamReplayOf(seam, wake))
 }
 
+// SaveResumeCheckpointWithReplaySelector is SaveResumeCheckpointWithReplay for
+// a priority-bearing VS2 run: newSelector is the per-replay factory for the
+// arm-local escalation selector (see naturalSeamReplay). Passing a nil factory
+// makes it exactly SaveResumeCheckpointWithReplay (the VS1 path). The live
+// runner's own selector has already advanced, so the factory must return a
+// genesis-state selector for each reference replay.
+func (f *Natural) SaveResumeCheckpointWithReplaySelector(path string, seam ClaimSeam, wake protocol.WakePolicy, newSelector func() protocol.EscalationSelector) ([32]byte, error) {
+	return f.saveResumeCheckpoint(path, seamReplayOfSelector(seam, wake, newSelector))
+}
+
 func (f *Natural) saveResumeCheckpoint(path string, seamReplay *naturalSeamReplay) ([32]byte, error) {
 	if f == nil {
 		return [32]byte{}, ErrNaturalCheckpoint
@@ -2645,7 +2666,7 @@ func restoreNaturalSections(sections []checkpoint.Section, m naturalManifest, ex
 		return fail(err)
 	}
 	identityConfig.PolicyFingerprint = fingerprint
-	seamReplay := seamReplayOf(expected.CognitiveReplaySeam, expected.CognitiveReplayWake)
+	seamReplay := seamReplayOfSelector(expected.CognitiveReplaySeam, expected.CognitiveReplayWake, expected.CognitiveReplaySelector)
 	// A cognitive manifest re-activates its recorded generation from the apply
 	// boundary before the journal reconciles, so a generation that changed the
 	// recorded decisions (spec section 5.4) still reproduces without a model
