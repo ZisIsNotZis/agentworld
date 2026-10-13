@@ -950,8 +950,8 @@ exists yet, so the repair is design-only against master `46b1b2b`; every cited s
 | P2.10 | `ExplorationFraction float64` in the run-identity policy contradicts the no-float rule. | Replaced by `ExplorationFraction int64` fixed-point over `ExplorationScale = 1_000_000`; §4.5/EC-7 give the integer `ceil(q·N)`; Appendix C.2 records `250000` for `q = 0.25`. |
 
 **Verification record.** Authoritative tree master `46b1b2b` (parent of `bf77198`); branch
-`feature/24-vs2-attention-design-v2`. `git diff --check` clean; only this file and
-`docs/adr/0007-value-based-cognitive-allocation.md` changed. Symbol checks at `46b1b2b`: `Usage` →
+`feature/24-vs2-attention-design-v2`; repair commit `0e21dea`. `git diff --check` clean; only this file
+and `docs/adr/0007-value-based-cognitive-allocation.md` changed. Symbol checks at `46b1b2b`: `Usage` →
 `internal/cognition/client.go:114`; `evaluateBands` → `cmd/vs1/bands.go:17`; `privacyBand` →
 `cmd/vs1/privacy.go:296`; scaffold indicators → `cmd/vs1/report.go:336-345` (`deaths/starvation`,
 `deaths/age`); cognition-block wire → `internal/world/natural_cognitive_checkpoint.go:55-135`
