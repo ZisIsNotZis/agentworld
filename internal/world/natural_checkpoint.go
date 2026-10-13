@@ -2589,6 +2589,13 @@ func restoreNaturalSections(sections []checkpoint.Section, m naturalManifest, ex
 	fail := func(err error) (*Natural, error) {
 		return nil, fmt.Errorf("%w: %v", ErrNaturalCheckpoint, err)
 	}
+	// The recorded wake-policy fingerprint binds the restore to the policy run
+	// identity (VS2-EC-5): a bundle whose decoded policy disagrees with its
+	// recorded fingerprint, or a restore under a different supplied policy, is
+	// refused before any world is rebuilt.
+	if err := verifyCognitiveWakePolicy(m.cognitive, expected.CognitiveReplayWake); err != nil {
+		return fail(err)
+	}
 	// The reference runner binds the manifest's own declared policy ref: the
 	// strategy section, the fingerprint pin, and the journal identity below
 	// are all verified against it, so a forged slot/content pairing fails

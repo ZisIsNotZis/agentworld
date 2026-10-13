@@ -3,6 +3,7 @@ package world
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"agentworld/internal/cognition/protocol"
 	"agentworld/internal/sim"
@@ -41,10 +42,18 @@ type ClaimSeam interface {
 type NaturalCognition struct {
 	Seam       ClaimSeam
 	WakePolicy protocol.WakePolicy
+	// Selector is optional. When non-nil the runner-provided online
+	// accumulator (protocol.EscalationSelector) owns the policy PRNG, the
+	// spent-call count, and the budget state; when nil the world uses the pure
+	// WakePolicy.Select (or the VS1 hour gate when Priority is nil). Either way
+	// the escalation set is reproducible and consumes no world random stream.
+	Selector protocol.EscalationSelector
 }
 
 // validate refuses a half-wired seam: entering the seam without a decider or a
-// declared wake policy is a construction-time error, not a runtime surprise.
+// declared wake policy is a construction-time error, not a runtime surprise. A
+// priority-bearing policy without its escalation selector is refused too, so a
+// budgeted arm can never silently degrade to the VS1 hour gate (VS2-EC-2).
 func (c *NaturalCognition) validate() error {
 	if c == nil {
 		return nil
@@ -55,7 +64,19 @@ func (c *NaturalCognition) validate() error {
 	if err := c.WakePolicy.Validate(); err != nil {
 		return fmt.Errorf("%w: %v", ErrNaturalRunner, err)
 	}
+	if c.WakePolicy.Priority != nil && c.Selector == nil {
+		return fmt.Errorf("%w: priority policy requires an escalation selector", ErrNaturalRunner)
+	}
 	return nil
+}
+
+// naturalClaimWake is one claim-wake actor and the frozen observation the
+// claim step computes: the exact set VS1's allocate enumerates (a
+// WakeNeedThreshold or WakeBirth wake at the claim instant).
+type naturalClaimWake struct {
+	id    sim.EntityID
+	actor NaturalActorState
+	obs   strategy.NaturalObservation
 }
 
 // naturalClaimActions is the escalated action set: a property of the seam and
@@ -68,23 +89,107 @@ func naturalClaimActions(mechanism NaturalMechanism) []string {
 	return []string{"gather", "eat-stored", "wait"}
 }
 
-// naturalSeamEscalates reports whether the declared wake policy selects the
-// hour and a seam is wired. It is the only gate into the seam.
-func (f *Natural) naturalSeamEscalates(hour int) bool {
-	return f.cognition != nil && f.cognition.WakePolicy.Escalates(hour)
+// naturalSeamSelection resolves the actors the declared wake policy escalates
+// for one candidate hour. It generalizes the VS1 hour-only gate
+// (WakePolicy.Escalates) to the per-roster selection of the protocol surface: a
+// wired EscalationSelector (a VS2 budgeted arm) owns the selection, and the
+// degenerate WakePolicy.Select serves the nil-Priority path (the full
+// reference and the VS1 path). A nil cognition selects nothing, so the frozen
+// no-cognition path is byte-identical. The selection is a pure function of the
+// policy, the hour, the roster, and the declared budget state: it consumes no
+// world random stream.
+func (f *Natural) naturalSeamSelection(hour int, roster []protocol.EscalationCandidate) (map[sim.EntityID]bool, error) {
+	if f.cognition == nil {
+		return nil, nil
+	}
+	budget := f.naturalSeamBudget()
+	var (
+		selection protocol.Selection
+		err       error
+	)
+	if f.cognition.Selector != nil {
+		selection, err = f.cognition.Selector.Select(hour, roster, budget)
+	} else {
+		selection, err = f.cognition.WakePolicy.Select(hour, roster, budget)
+	}
+	if err != nil {
+		return nil, err
+	}
+	selected := make(map[sim.EntityID]bool, len(selection.Selected))
+	for _, id := range selection.Selected {
+		selected[id] = true
+	}
+	return selected, nil
+}
+
+// naturalSeamBudget is the declared budget view of one hour's selection: the
+// declared call ceiling N of a priority policy, or the zero budget on the
+// nil-Priority VS1 path. The selector owns the mutating spent-call count; this
+// is the declared ceiling the selection is seeded from, not run state.
+func (f *Natural) naturalSeamBudget() protocol.BudgetState {
+	if f.cognition == nil || f.cognition.WakePolicy.Priority == nil {
+		return protocol.BudgetState{}
+	}
+	ceiling := f.cognition.WakePolicy.Priority.CallCeiling
+	return protocol.BudgetState{CallsBudget: ceiling, CallsRemaining: ceiling}
+}
+
+// naturalEscalationRoster builds the per-hour escalation candidate roster from
+// the claim-wake set, in the declared order (ascending actor id, spec section
+// 4.5/8.1). Each candidate carries the actor's own observation-derived feature
+// vector; the roster is a pure read of the frozen observation and mutates
+// nothing.
+func naturalEscalationRoster(hour int, wakes []naturalClaimWake) []protocol.EscalationCandidate {
+	roster := make([]protocol.EscalationCandidate, 0, len(wakes))
+	for _, w := range wakes {
+		roster = append(roster, protocol.EscalationCandidate{
+			Actor: w.id, Hour: hour, Features: naturalCandidateFeatures(w.obs),
+		})
+	}
+	sort.Slice(roster, func(i, j int) bool { return roster[i].Actor < roster[j].Actor })
+	return roster
+}
+
+// naturalCandidateFeatures derives a candidate's declared observation-only
+// feature rows (Appendix C.1) from the actor's own claim observation. The raw
+// rows are read directly; the derived rows (decision_sensitivity, urgency,
+// impact, propagation_risk), the world-level aggregate prior_reliability, the
+// last_denial string encoding, and the actor-raised escalation_requested bit
+// (its predicate is not yet declared) stay zero.
+func naturalCandidateFeatures(obs strategy.NaturalObservation) protocol.ValueFeatures {
+	var features protocol.ValueFeatures
+	features.Energy = naturalFeatureInt(obs.Energy)
+	features.Hunger = naturalFeatureInt(obs.Hunger)
+	features.Capital = naturalFeatureInt(obs.Capital)
+	features.GranaryStock = naturalFeatureInt(obs.GranaryStock)
+	features.LastStoredMealHour = naturalFeatureInt(obs.LastStoredMealHour)
+	for _, slot := range obs.HomeSlots {
+		if naturalFeatureInt(slot.Stock) >= 1 {
+			features.StockedHomeSlots++
+		}
+	}
+	return features
+}
+
+// naturalFeatureInt reads an observation value as its integer projection. A
+// non-integer observation value contributes zero, matching the frozen
+// stocked-slot read (naturalLowestStockedSlot).
+func naturalFeatureInt(v sim.Value) int64 {
+	n, err := v.Integer()
+	if err != nil {
+		return 0
+	}
+	return n
 }
 
 // naturalSeamOverride replaces the frozen claim choice with the seam decision
 // for a selected actor-hour and records the effective choice for the
-// evaluation phase. It is a no-op when the seam is nil or the hour is not
-// selected, so the frozen path is byte-identical with a nil seam. A level-3
-// transport failure is returned to the caller as a fail-loud halt; a level-1
-// (malformed/inadmissible) failure returns the declared fallback and leaves
-// the frozen choice in place, mutating nothing.
+// evaluation phase. The caller selects the actor through naturalSeamSelection,
+// so a nil seam never reaches it. A level-3 transport failure is returned to
+// the caller as a fail-loud halt; a level-1 (malformed/inadmissible) failure
+// returns the declared fallback and leaves the frozen choice in place, mutating
+// nothing.
 func (f *Natural) naturalSeamOverride(ctx context.Context, id sim.EntityID, hour int, version sim.WorldVersion, obs strategy.NaturalObservation, choice *strategy.NaturalChoice) error {
-	if !f.naturalSeamEscalates(hour) {
-		return nil
-	}
 	// Record the frozen cascade's own action before the override: it is the
 	// comparison baseline for the load-bearing check (EC-2). The seam request
 	// carries it for the intervention record; it is not part of the canonical

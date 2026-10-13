@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"os"
 	"sort"
@@ -106,6 +107,16 @@ func encodeNaturalCognitiveBlock(b naturalCognitiveBlock) ([]byte, error) {
 		payload = binary.BigEndian.AppendUint64(payload, uint64(binding.Actor))
 		payload = appendNaturalRef(payload, binding.Ref)
 	}
+	// The VS2 trailing extension (VS2-EC-5): a priority-bearing wake policy
+	// carries its canonical full-policy identity (which embeds the priority
+	// policy) so a restore recomputes the fingerprint over the full policy and
+	// refuses a mismatch. A nil Priority writes nothing, so every VS1 cognition
+	// bundle stays byte-identical.
+	if b.WakePolicy.Priority != nil {
+		identity := []byte(b.WakePolicy.Identity())
+		payload = binary.BigEndian.AppendUint32(payload, uint32(len(identity)))
+		payload = append(payload, identity...)
+	}
 	out := append([]byte(nil), naturalCognitiveBlockMagic...)
 	out = binary.BigEndian.AppendUint32(out, uint32(len(payload)))
 	return append(out, payload...), nil
@@ -154,6 +165,24 @@ func decodeNaturalCognitiveBlock(data []byte) (naturalCognitiveBlock, int, error
 	bindingCount := int(r.u32())
 	for i := 0; i < bindingCount; i++ {
 		b.Bindings = append(b.Bindings, naturalCognitiveBinding{Actor: sim.EntityID(r.u64()), Ref: readNaturalRef(&r)})
+	}
+	// The VS2 trailing extension (VS2-EC-5): the canonical full-policy identity
+	// carried by a priority-bearing policy. A nil-Priority VS1 bundle has no
+	// trailing bytes and decodes with a nil Priority unchanged.
+	if r.remaining() > 0 {
+		length := int(r.u32())
+		identity := r.take(length)
+		if r.bad || len(identity) != length || r.remaining() != 0 {
+			return naturalCognitiveBlock{}, 0, ErrNaturalCognitiveBlock
+		}
+		var policy protocol.WakePolicy
+		if err := json.Unmarshal(identity, &policy); err != nil || policy.Priority == nil {
+			return naturalCognitiveBlock{}, 0, ErrNaturalCognitiveBlock
+		}
+		if policy.Name != b.WakePolicy.Name || policy.PeriodHours != b.WakePolicy.PeriodHours || policy.PhaseHours != b.WakePolicy.PhaseHours {
+			return naturalCognitiveBlock{}, 0, ErrNaturalCognitiveBlock
+		}
+		b.WakePolicy.Priority = policy.Priority
 	}
 	if r.bad || r.remaining() != 0 {
 		return naturalCognitiveBlock{}, 0, ErrNaturalCognitiveBlock
@@ -301,6 +330,27 @@ func restoreCognitiveState(f *Natural, block *naturalCognitiveBlock) error {
 		return nil
 	}
 	return f.activateCognitiveGenerationLocked(replay.generation, replay.actors, block.Lineage)
+}
+
+// verifyCognitiveWakePolicy binds a restore to the recorded wake-policy
+// fingerprint (VS2-EC-5). The decoded block reconstructs the full wake policy
+// (including the VS2 priority policy) from its trailing identity, so the
+// fingerprint is recomputed over the full policy and must equal the recorded
+// one; a supplied policy, when present, must match the recorded fingerprint
+// too, so a restore under a different declared policy is refused rather than
+// silently re-derived. Existing VS1 blocks decode with a nil priority and
+// satisfy this unchanged. A nil block (no cognition) verifies nothing.
+func verifyCognitiveWakePolicy(block *naturalCognitiveBlock, supplied protocol.WakePolicy) error {
+	if block == nil {
+		return nil
+	}
+	if block.WakePolicy.Fingerprint() != block.WakeFingerprint {
+		return ErrNaturalCognitiveBlock
+	}
+	if supplied != (protocol.WakePolicy{}) && supplied.Fingerprint() != block.WakeFingerprint {
+		return ErrNaturalCognitiveBlock
+	}
+	return nil
 }
 
 // cognitiveReplayFromBlock resolves the head generation and its bound actors

@@ -3257,6 +3257,10 @@ func (f *Natural) allocate(ctx context.Context, at sim.SimTime) error {
 		}
 	}
 	var claims []FoodFlowGatherClaim
+	// The claim-wake set for this hour: exactly the set the VS1 loop
+	// enumerates. Each actor's frozen observation is computed once and reused
+	// by the escalation selection and the claim evaluation.
+	var wakes []naturalClaimWake
 	for _, wake := range f.sched.Snapshot().Wakes {
 		if wake.At != at || (wake.Cause != scheduler.WakeNeedThreshold && wake.Cause != scheduler.WakeBirth) {
 			continue
@@ -3273,19 +3277,36 @@ func (f *Natural) allocate(ctx context.Context, at sim.SimTime) error {
 		if err != nil {
 			return err
 		}
-		choice, err := f.naturalEvaluate(id, obs, naturalLabourOfferGuard(a))
+		wakes = append(wakes, naturalClaimWake{id: id, actor: a, obs: obs})
+	}
+	// Generalize the VS1 hour-only gate to a per-roster selection: the wired
+	// selector (or the degenerate WakePolicy.Select on the nil-Priority path)
+	// is consulted once for the hour's claim-wake set, and only the selected
+	// actors enter the seam. A nil cognition selects nil, so the frozen path is
+	// byte-identical.
+	var selected map[sim.EntityID]bool
+	if f.cognition != nil {
+		selected, err = f.naturalSeamSelection(h, naturalEscalationRoster(h, wakes))
+		if err != nil {
+			return err
+		}
+	}
+	for _, cw := range wakes {
+		choice, err := f.naturalEvaluate(cw.id, cw.obs, naturalLabourOfferGuard(cw.actor))
 		if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
 			return ErrNaturalRunner
 		}
-		if err := f.naturalSeamOverride(ctx, id, h, view.Version, obs, &choice); err != nil {
-			return err
+		if selected[cw.id] {
+			if err := f.naturalSeamOverride(ctx, cw.id, h, view.Version, cw.obs, &choice); err != nil {
+				return err
+			}
 		}
 		switch choice.Kind {
 		case strategy.NaturalGather:
 			if choice.TargetSlot == 0 {
 				return ErrNaturalRunner
 			}
-			claims = append(claims, FoodFlowGatherClaim{Actor: id, TargetPatch: a.Bag.Source, TargetSlot: choice.TargetSlot, Energy: a.Body.Energy, BagUnits: a.Bag.Units, LastGatherHour: a.Body.LastGatherHour})
+			claims = append(claims, FoodFlowGatherClaim{Actor: cw.id, TargetPatch: cw.actor.Bag.Source, TargetSlot: choice.TargetSlot, Energy: cw.actor.Body.Energy, BagUnits: cw.actor.Bag.Units, LastGatherHour: cw.actor.Body.LastGatherHour})
 		case strategy.NaturalEatStored, strategy.NaturalWait, strategy.NaturalProvision:
 			// No allocation needed; the worker re-evaluates and commits. A
 			// provision converts granary stock, not a slot; the slot rotation
