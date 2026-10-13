@@ -1061,8 +1061,9 @@ against master `46b1b2b`; every cited symbol resolves there.
 **Verification record.** Authoritative tree master `46b1b2b`; branch
 `feature/24-vs2-attention-design-v4`; base commit `46d84ae`; repair commit `3a7398f`.
 `git diff --check` clean; only this file and `docs/adr/0007-value-based-cognitive-allocation.md`
-changed. Commands run: `git diff --check` (clean), `git diff --stat` (only the two in-scope files),
-`git show --stat HEAD` (only the two in-scope files). Symbol checks at `46b1b2b`:
+changed. Commands run: `git diff --check 46d84ae..HEAD` (clean), `git diff --stat 46d84ae..HEAD`
+(only the two in-scope files), `git show --stat 3a7398f` (the repair commit: the two in-scope files).
+Symbol checks at `46b1b2b`:
 `NaturalCognition.validate` half-wired refusal → `internal/world/natural_cognition.go:46-60`;
 `ErrNaturalRunner` → `internal/world/natural.go:85`; `CognitiveCeilingHitError` →
 `internal/cognition/budget.go:82`; `NaturalObservation` → `internal/strategy/natural.go:337`; claim
