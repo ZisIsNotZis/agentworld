@@ -44,7 +44,8 @@ A bounded virtual machine executes typed strategy graphs or bytecode. Strategies
 - invoke bounded search or planning;
 - update permitted private state;
 - submit intentions;
-- request cognitive escalation.
+- request cognitive escalation (**not yet implemented** — no `EscalationRequest` type exists; VS2 owns
+  escalation requests per [VERTICAL-SLICES.md](VERTICAL-SLICES.md)).
 
 Strategies cannot inspect hidden world state, another actor's private state, or mutate authoritative state.
 
@@ -63,6 +64,8 @@ Candidate features include numerical estimates of impact, uncertainty, decision 
 The formula is a versioned hypothesis, not a fixed truth. It must expose feature values, uncertainty, selected action, cost, and realized downstream value.
 
 Budget channels include exploitation of known high-value candidates, anomaly response, and protected exploration of ordinary actors.
+
+This is the VS2 (attention) target, not the implemented state: the value-based priority layer, escalation requests, and protected exploration of ordinary actors are not yet built. VS1's allocation policy is a declared wake-policy object whose only instance is the honest uniform/periodic baseline ([VERTICAL-SLICES.md](VERTICAL-SLICES.md), VS1 C7; `internal/cognition/protocol/wake.go`, `VS1WakePolicy`), and no scheduler consumes a value term.
 
 ## 5. Model manager
 
