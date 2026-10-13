@@ -1141,3 +1141,19 @@ Symbol checks at `46b1b2b`:
 wakes → `internal/world/natural.go:1794-1804` (`WakeNeedThreshold`/`WakeBirth`);
 `summarize`/`FirstDivergenceHour` sentinel → `cmd/vs1/report.go:349-357`; `divergenceVector` min-prefix
 → `cmd/vs1/report.go:317-318`. All VS2 symbols are design-level (no VS2 code exists at `46b1b2b`).
+
+**Non-blocking review residuals carried from the design-v5 review (recorded 2026-10-13T20:32:02+08:00, CST, by the integrating worker; ticket-log note only, not normative contract text).** The fifth independent review
+passed the design at reviewed tip `ed27c85` and recorded three non-blocking residuals for the
+implementation lanes. They are logged here as evidence; the normative sections and the ADR stay
+unchanged at the reviewed revision, and each names the section a later repair round would touch:
+
+1. **§5.1 `N` provenance.** The `N`-magnitude parenthetical ("≈1/8 of the VS1 A3 projection of
+   ≈1 700–2 000 calls/cell; the VS1 A1 periodic-6 arm realized ≈300/cell") rests on VS1 model-arm
+   figures that are not normative inputs. A later repair should anchor the magnitude on the **A0
+   (no-AI) projection** — the only model-free count the contract admits — and label the A3/A1 figures
+   explicitly as **non-normative scale context**.
+2. **EC-3 falsifier.** EC-3's *Falsified by* clause should read as **vector-level strict dominance** (a
+   budgeted baseline strictly dominating adaptive across the divergence vector), consistent with §8.4's
+   vector comparison, rather than "in a summary under its declared direction".
+3. **Appendix E revision binding.** The verification record above names the base `a71dd2c` and repair
+   `aebe4ef`; it should also name the **final reviewed tip `ed27c85`**.
