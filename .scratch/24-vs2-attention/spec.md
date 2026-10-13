@@ -48,13 +48,15 @@ baseline** — a uniform/periodic `WakePolicy` — which the roadmap states the 
   `internal/cognition/ledger.go` (`Ledger.AppendIntervention`, `VerifyLedgerData`).
 - **C11 present.** A declared, instrumented, fail-loud cognitive budget:
   `internal/cognition/budget.go` (`CognitiveBudget`, `CognitiveAccount`, `CognitiveCeiling`,
-  `CognitiveRow`, `CognitiveCeilingHit`, `PriceTable`, `Usage`), with the four ceiling rows
+  `CognitiveRow`, `CognitiveCeilingHit`, `PriceTable`) and `internal/cognition/client.go` (`Usage`), with
+  the four ceiling rows
   `cognitive-calls` / `cognitive-prompt-tokens` / `cognitive-completion-tokens` / `cognitive-cost`; the
   arm ceilings are declared in `cmd/vs1/config.go` (`budgetFor`).
 - **C13 present.** Paired arms `ArmA0/A1/A1i/A2/A3` (`cmd/vs1/config.go`, `declaredArms`), the frozen
-  seven-plus-one-indicator divergence-vector scaffold (`cmd/vs1/report.go`: `fidelityRow`,
-  `fidelityIndicator`, `buildFidelity`, `divergenceVector`, `summarize`, `decisionErrorIndicator`) and
-  the frozen exit-criteria bands (`cmd/vs1/bands.go`: `evaluateBands`, `ec1`..`ec11`).
+  eight-indicator divergence-vector scaffold (`cmd/vs1/report.go`: `fidelityRow`, `fidelityIndicator`,
+  `buildFidelity`, `divergenceVector`, `summarize`, `decisionErrorIndicator`) and the frozen
+  exit-criteria bands (`cmd/vs1/bands.go`: `evaluateBands`, `ec1`..`ec5`, `ec7`..`ec11`; EC-6 is
+  `privacyBand` in `cmd/vs1/privacy.go`, not an `ec6`).
 - **VS1 evidence.** Hermetic evidence PASS on all eleven frozen VS1 criteria (EC-1..EC-11) at revision
   `vs1-hermetic-fake/2`; the full `make check` passed at the gated revision. **Its declared reductions
   are carried into this contract**, because VS2 builds on the same surface
@@ -72,8 +74,8 @@ baseline** — a uniform/periodic `WakePolicy` — which the roadmap states the 
 - **Protected exploration**: a declared fraction of the budget samples ordinary (non-high-priority)
   actors so low-probability innovation is not systematically excluded (P7, `docs/ARCHITECTURE.md` §4).
 - **Equal-budget arms over the same world and seeds**: a full reference (model on every decision),
-  periodic, uniform-random, and adaptive-priority, each on the identical world, seed, and candidate
-  universe.
+  periodic, uniform-random, and adaptive-priority, each on the identical world, seed, mechanism, base
+  policy, and horizon (the candidate universe is matched by construction, not asserted identical; §5.3).
 - The **frozen fidelity metric** instantiated as VERTICAL-SLICES VS2 defines it (the per-indicator
   divergence sequence from the high-budget reference, never a single scalar), used as a **gating**
   criterion rather than the VS1 scaffold.
@@ -155,8 +157,13 @@ form (C9/C10 the single-round Role B lifecycle, C16 model-conditional labelling 
 
 The design constraint (task and `docs/ARCHITECTURE.md` §4) is that this be an **extension of VS1's
 declared `WakePolicy` object**, not a parallel scheduler subsystem, and that the escalation set remain a
-**pure function of `(policy, hour, roster, budget state)` that consumes no world RNG** (extending VS1
-EC-8).
+**deterministic, world-RNG-free function of the declared policy identity, the ordered candidate stream,
+and the budget state** (extending VS1 EC-8). The value projection (`ExpectedValue` / `ExpectedCost` /
+`Priority`) is a pure integer fixed-point function; selection over the candidate stream is a
+**deterministic streaming accumulator** whose accumulated candidate count and policy-PRNG position are
+recorded run state (§4.6). A stateless per-hour gate cannot realize the period arms' exact-`N` budgets
+without the endogenous run-total `|U|`, so the accumulator — not a pure method — is the declared
+priority selector (Appendix E, P1).
 
 ### 4.1 Extension surface over VS1's `WakePolicy`
 
@@ -168,39 +175,56 @@ canonical wire identity (`Identity`, `Fingerprint`) over its struct fields, cons
    `priority,omitempty` (Appendix A.1). When nil, the struct's canonical bytes are **unchanged**, so
    `VS1WakePolicy().Identity()`, `VS1WakePolicy().Fingerprint()`, and every recorded VS1 cognitive
    manifest stay byte-identical (VS2-EC-1). `VS1WakePolicy()` and `FullWakePolicy()` are untouched.
-2. A new `PriorityPolicy` struct holds the declared allocation instance: the strategy name, the
-   exploration fraction, the declared policy-PRNG seed, and the value-model spec (Appendix A.1).
-3. `WakePolicy` gains a pure selection method that generalizes `Escalates(hour)`:
+2. A new `PriorityPolicy` struct holds the declared allocation instance: the strategy
+   (`PriorityStrategy`), the integer fixed-point exploration fraction, the declared policy-PRNG seed,
+   the value-model spec, and the declared matched call budget `N` (Appendix A.1).
+3. `WakePolicy` keeps a pure selection method for the degenerate path (nil `Priority`), which
+   generalizes `Escalates(hour)` to the roster:
 
 ```go
-// In internal/cognition/protocol/wake.go (VC2 extension surface).
-// Select is the roster- and budget-aware escalation gate. It is a pure function
-// of (policy, hour, roster, budget state) and the policy's own declared PRNG
-// stream; it never consumes the world random stream. A nil Priority is the
-// degenerate VS1 selector: every candidate, i.e. all claim-wake actors in a
-// selected hour.
+// In internal/cognition/protocol/wake.go (VS2 extension surface).
+// Select is the degenerate selector used when Priority is nil: it is a pure
+// function of (policy, hour, roster, budget state), consumes no world random
+// stream, and selects every candidate (all claim-wake actors in a selected
+// hour). The priority-bearing selection is the deterministic accumulator of
+// protocol.EscalationSelector (item 4): a stateless per-hour gate cannot realize
+// the period arms' exact-N budgets.
 func (p WakePolicy) Select(hour int, roster []EscalationCandidate, budget BudgetState) (Selection, error)
+```
+
+4. The priority-bearing selection is a **deterministic streaming accumulator** declared by
+   `protocol.EscalationSelector`. It is seeded from the declared pre-pass (run-total `|U|`), the declared
+   budget `N`, and the policy PRNG seed; its accumulated candidate count and PRNG position are recorded
+   run state. The pure `WakePolicy.Select` above is its degenerate nil-`Priority` case.
+
+```go
+// In internal/cognition/protocol/priority.go (new).
+type EscalationSelector interface {
+    Select(hour int, roster []EscalationCandidate, budget BudgetState) (Selection, error)
+}
+```
+
+5. `NaturalCognition` gains an optional selector seam but keeps the nil-tolerant VS1 path:
+
+```go
+// In internal/world/natural_cognition.go (VS2 extension surface).
+type NaturalCognition struct {
+    Seam       ClaimSeam
+    WakePolicy protocol.WakePolicy
+    // Selector is optional. When non-nil the runner-provided accumulator owns
+    // the policy PRNG, the accumulated candidate count, and the budget state;
+    // when nil the world uses the pure WakePolicy.Select (or the VS1 hour gate
+    // when Priority is nil). Either way the escalation set is reproducible and
+    // consumes no world random stream.
+    Selector protocol.EscalationSelector // nil => protocol/WakePolicy path
+}
 ```
 
    The world builds `roster []EscalationCandidate` from the claim-wake set (the exact set VS1's
    `allocate` enumerates) and calls `Select` once per candidate hour. `Selection` carries the selected
-   actor set, the protected-exploration set, the recorded scores, and the PRNG position (Appendix A.1).
-
-4. `NaturalCognition` gains an optional selector seam but keeps the nil-tolerant VS1 path:
-
-```go
-// In internal/world/natural_cognition.go (VC2 extension surface).
-type NaturalCognition struct {
-    Seam       ClaimSeam
-    WakePolicy protocol.WakePolicy
-    // Selector is optional. When non-nil the runner-provided selector owns the
-    // policy PRNG and the budget state; when nil the world uses
-    // WakePolicy.Select via the protocol (or the VS1 hour gate when Priority is
-    // nil). Either way the escalation set is reproducible and consumes no world
-    // random stream.
-    Selector protocol.EscalationSelector // nil => protocol/WakePolicy path
-}
-```
+   actor set, the protected-exploration set, the recorded scores, the accumulated candidate count, and
+   the PRNG position (Appendix A.1). Because the accumulator's state is a function of the deterministic
+   candidate stream and the declared policy identity, replay re-derives the identical sequence.
 
    `naturalSeamEscalates(hour)` and the claim loop of `Natural.allocate`
    (`internal/world/natural.go`, the loop over `f.sched.Snapshot().Wakes` for
@@ -216,6 +240,15 @@ create a second allocation subsystem beside VS1's object.
 **Candidate universe** `U(cell)`: the set of `(actor, hour)` the frozen claim topology wakes with an
 empty bag — exactly the set VS1's `Natural.allocate` enumerates and `FullWakePolicy` escalates. The
 reference arm escalates all of `U`; budgeted arms select from `U`.
+
+**Declared candidate pre-pass.** Selection is defined over the whole run's ordered candidate sequence,
+and exact-`N` periodic and uniform sampling both need the run-total count, so the harness runs a
+declared, model-free pre-pass over the deterministic claim topology that fixes `|U|` and the ordered
+global index of every candidate *before any model call*. `|U|` is then part of the declared run
+identity. The pre-pass issues no model call and mutates no world state; it only enumerates the same
+candidate set `FullWakePolicy` escalates. This is what makes an exact-`N` periodic arm realizable
+through a per-hour interface without depending on an endogenous, arm-dependent `|U|` discovered
+mid-run (Appendix E, P1).
 
 Every candidate carries a **feature vector derived only from that actor's own
 `strategy.NaturalObservation`** (C5) plus the declared world-level aggregate rows already published by
@@ -285,16 +318,21 @@ func Priority(m ValueModelSpec, f ValueFeatures, price PriceTable) int64
 ### 4.5 Protected exploration
 
 P7: "a protected exploration budget samples ordinary actors so low-probability innovation is not
-systematically excluded." The selector reserves `ceil(ExplorationFraction · N)` calls (declared
-`q ∈ [0,1)`) for **uniform sampling over the candidate universe** using the **policy's own declared
+systematically excluded." The selector reserves `ceil(q·N)` calls, with `q ∈ [0,1)` declared as an
+integer fixed-point fraction (`ExplorationFraction` scaled by `ExplorationScale = 1_000_000`, so
+`ceil(q·N) = (N·ExplorationFraction + ExplorationScale − 1) / ExplorationScale` in integer
+arithmetic), for **uniform sampling over the candidate universe** using the **policy's own declared
 PRNG**, independent of priority. The remaining `N − ceil(q·N)` calls are the exploitation quota (top
 priority). `q = 0` is the pure-exploitation arm used to isolate the exploration channel (VS2-EC-7).
 
-### 4.6 Purity, the policy PRNG, and no world RNG (extends EC-8)
+### 4.6 Determinism, the policy PRNG, and no world RNG (extends EC-8)
 
-- The escalation set is a **pure function of `(policy, hour, roster, budget state)`** plus the policy's
-  own declared PRNG stream. It **consumes no world random stream**, so the frozen substrate's RNG
-  positions are untouched, exactly as VS1 EC-8 requires.
+- The escalation set is a **deterministic function of the declared policy identity, the ordered
+  candidate stream, and the budget state** plus the policy's own declared PRNG stream, evaluated by the
+  streaming accumulator whose state (accumulated candidate count, PRNG position) is recorded run state.
+  It **consumes no world random stream**, so the frozen substrate's RNG positions are untouched, exactly
+  as VS1 EC-8 requires. The value projection (`Priority`) is a pure function; only selection over the
+  stream is stateful.
 - **uniform-random** and **protected exploration** draw from a declared PRNG (`PriorityPolicy.RandSeed`,
   part of run identity) advanced in a declared deterministic order (the candidate roster sorted by
   `(actor)` within the hour). The stream is **not** the world stream and is **not** drawn from world
@@ -302,9 +340,9 @@ priority). `q = 0` is the pure-exploitation arm used to isolate the exploration 
   the identical selection.
 - The `full` reference (`FullWakePolicy`, period 1, `Priority == nil`) is byte-identical to VS1's A3
   selection: every candidate, no PRNG.
-- Because the selection is reproducible from reproduced world state (roster, budget state) and the
-  recorded policy identity, **replay re-derives the escalation set without a model call** and verifies
-  it against the recorded `allocation` records (VS2-EC-5).
+- Because the selection is reproducible from the deterministic candidate stream, the recorded policy
+  identity, and the recorded accumulator state, **replay re-derives the escalation set without a model
+  call** and verifies it against the recorded `allocation` records (VS2-EC-5).
 
 ## 5. Equal-budget accounting
 
@@ -336,6 +374,11 @@ projection of ≈1 700–2 000 calls/cell; the VS1 A1 periodic-6 arm realized �
 §11 for operator confirmation. `N` is intentionally not derived from `|U|` (which is endogenous) so the
 budget is declared, not fitted.
 
+`|U|` is fixed by the declared model-free pre-pass (§4.2) before the first call and recorded as part of
+run identity. Every budgeted arm's selection rule is defined to realize exactly `N` given `|U|` and `N`,
+so exact-`N` is achievable through the per-hour accumulator interface (§8.1); without that pre-pass the
+periodic stride would depend on the endogenous, arm-dependent `|U|` (Appendix E, P1).
+
 ### 5.2 Enforcement (fail-loud, P15)
 
 - The budgeted arms' fail-loud ceiling is set to exactly `N` (`CognitiveBudget.MaxCalls = N`): any
@@ -355,9 +398,12 @@ budget is declared, not fitted.
 
 ### 5.3 Fair comparison
 
-All arms run on the **identical world, seed, mechanism, base policy, and horizon**, so they face the
-identical candidate universe `U`. The budgeted arms face the identical call budget `N`. The comparison
-therefore isolates exactly one variable — *which* `N` decisions got reasoning. The reference R is the
+All arms run on the **identical world, seed, mechanism, base policy, and horizon**, and the budgeted
+arms face the identical declared call budget `N`. The candidate universe `U` is **not** asserted
+identical across arms: it is derived per run from that run's own claim wakes and is therefore
+policy-dependent (an arm that reasons differently changes the trajectory and hence later wakes). The
+match is on declared world/seed/mechanism/base-policy/horizon identity and on the call budget, which is
+sufficient to isolate exactly one variable — *which* `N` decisions got reasoning. The reference R is the
 comparative target for the fidelity metric (§6), never ground truth, and never a budgeted competitor.
 
 ## 6. The frozen fidelity metric (instantiated for VS2)
@@ -372,17 +418,23 @@ definition:
 
 The **reference arm** is R (the `full` policy: model on every decision). For a budgeted arm `B` and R at
 the same fixture and seed, the metric is the per-indicator divergence **sequence** over hours plus the
-per-indicator summaries (max, mean, first-divergence hour):
+per-indicator summaries `Max` and `Mean` (both **lower-is-better** — smaller divergence is closer to the
+reference) and `FirstDivergenceHour` (**higher-is-better** — divergence begins later):
 
 | # | Indicator | Hourly value | Divergence |
 |---|---|---|---|
 | 1 | population | `alive(h)` | `abs(B−R) / (8P)` |
 | 2 | births | cumulative births | absolute difference over the horizon |
-| 3 | deaths | cumulative by cause | as (2), per cause |
-| 4 | wealth distribution | capital histogram over `k ∈ [0, KMax]` | total-variation distance |
-| 5 | wealth distribution | granary-stock histogram over declared buckets | total-variation distance |
-| 6 | exchange volume | cumulative wage settlements | as (2) |
-| 7 | decision-error rate | cumulative escalated decisions with a malformed/inadmissible/refused outcome over cumulative escalated decisions | absolute difference of the two ratios |
+| 3 | deaths/starvation | cumulative starvation deaths | as (2) |
+| 4 | deaths/age | cumulative age deaths | as (2) |
+| 5 | capital histogram | capital histogram over `k ∈ [0, KMax]` | total-variation distance |
+| 6 | granary-stock histogram | granary-stock histogram over declared buckets | total-variation distance |
+| 7 | exchange volume | cumulative wage settlements | as (2) |
+| 8 | decision-error rate | cumulative escalated decisions with a malformed/inadmissible/refused outcome over cumulative escalated decisions | absolute difference of the two ratios |
+
+The scaffold emits these **eight** indicators (`cmd/vs1/report.go: divergenceVector`), with deaths split
+by cause into `deaths/starvation` and `deaths/age` (indices 3 and 4); the founding
+`docs/VERTICAL-SLICES.md` metric definition groups them as "births/deaths". VS2 gates on all eight.
 
 The vector is the metric; **a weighted sum is explicitly not defined** (ADR 0003). VS2 uses the vector
 as a gate by **dominance** (§7 VS2-EC-3/EC-4).
@@ -396,30 +448,38 @@ VS2 result is `synthetic/model-conditional`.
 
 Frozen before any run; a miss is an outcome reported verbatim, never tuned. Cells are §8 unless stated.
 
-- **VS2-EC-1 — allocation purity, no world RNG (extends EC-8).** The escalation set is a pure function of
-  `(policy, hour, roster, budget state, policy-PRNG state)` and consumes no world random stream; the
-  nil-priority `WakePolicy` canonical identity bytes are unchanged from VS1
+- **VS2-EC-1 — deterministic allocation, no world RNG (extends EC-8).** The escalation set is a
+  **deterministic, world-RNG-free** function of the declared policy identity, the ordered candidate
+  stream, the budget state, and the recorded accumulator state (accumulated candidate count + policy-PRNG
+  position); it consumes no world random stream. The value projection (`Priority`) is a pure integer
+  fixed-point function. The nil-priority `WakePolicy` canonical identity bytes are unchanged from VS1
   (`VS1WakePolicy().Identity()` and `.Fingerprint()` byte-identical); the A0 control through the VS2
   harness is byte-identical to VS1's recorded A0 (`.tmp/natural9-n7-*`, per the VS1 EC-1 substrate).
-  *Proof method:* RNG-state/position identity test on the no-priority path; a policy-identity byte test;
-  A0 tip/branch digest identity.
+  *Proof method:* RNG-state/position identity test on the no-priority path; replay re-derivation of the
+  accumulator from recorded state; a policy-identity byte test; A0 tip/branch digest identity.
   *Falsified by* any world-RNG consumption difference, any policy-identity byte change, or any A0 drift.
+  (The earlier "pure function of `(policy, hour, roster, budget state)`" wording was unrealizable for an
+  exact-`N` periodic arm; the selector is a deterministic accumulator, Appendix E, P1.)
 
-- **VS2-EC-2 — equal budget enforced fail-loud.** Every budgeted arm (P, U, A) realizes exactly `N`
-  calls per cell; the reference arm realizes `|U|` calls; any realized count ≠ `N` is a typed gate
-  failure reported verbatim; the four cognitive-ceiling rows are present per cell; a ceiling breach is
-  the typed fail-loud halt (`CognitiveCeilingHitError`). *Proof method:* per-arm realized-call counts
-  from the call ledger; ceiling rows; the fail-loud fixture.
+- **VS2-EC-2 — equal budget enforced fail-loud.** `|U|` is fixed by the declared model-free pre-pass
+  and each budgeted arm's rule is defined to select exactly `N` candidates, so every budgeted arm (P, U,
+  A) realizes exactly `N` calls per cell; the reference arm realizes `|U|` calls; any realized count ≠ `N`
+  is a typed gate failure reported verbatim; the four cognitive-ceiling rows are present per cell; a
+  ceiling breach is the typed fail-loud halt (`CognitiveCeilingHitError`). *Proof method:* per-arm
+  realized-call counts from the call ledger; the pre-pass count equals the reference's realized count;
+  ceiling rows; the fail-loud fixture.
   *Falsified by* a budgeted cell with a realized count ≠ `N` silently accepted, a missing ceiling row,
   or a silent overflow.
 
 - **VS2-EC-3 — adaptive dominates periodic and random across seeds on the vector.** For each declared
-  cell, adaptive's per-indicator divergence vector **weakly dominates** both periodic's and random's
-  (every per-indicator summary for the budgeted arm ≤ the other's) with **strict improvement in ≥1
-  indicator**, in **≥ the declared number of seeds** (frozen: all of the cell's declared seeds; the
-  report also shows the per-seed table). *Proof method:* dominance over the frozen vector; the per-cell,
-  per-seed divergence tables.
-  *Falsified by* any cell/seed where adaptive fails to dominate one of the two baselines. A clean
+  cell, adaptive's per-indicator divergence vector **weakly dominates** both periodic's and random's with
+  **strict improvement in ≥1 indicator**, in **≥ the declared number of seeds** (frozen: all of the
+  cell's declared seeds; the report also shows the per-seed table). Dominance is per-summary and
+  direction-aware: `Max` and `Mean` are **lower-is-better** (adaptive ≤ the other's) and
+  `FirstDivergenceHour` is **higher-is-better** (adaptive ≥ the other's). *Proof method:* dominance over
+  the frozen vector per summary with the declared directions; the per-cell, per-seed divergence tables.
+  *Falsified by* any cell/seed where adaptive fails to weakly-dominate one of the two baselines in any
+  summary under its declared direction. A clean
   negative (no policy dominates any other) is **not** a falsification of the criterion-as-written only
   in the sense that it is the declared decisive outcome of VS2-EC-9; the band reports it verbatim
   (§8.4).
@@ -433,9 +493,16 @@ Frozen before any run; a miss is an outcome reported verbatim, never tuned. Cell
 - **VS2-EC-5 — identity and replay valid across strategy updates.** A declared cell carrying a mid-run
   Role B apply (the VS1 lifecycle) replays byte-exact from genesis with zero model calls — accepted
   history, hourly projections, **allocation decisions**, and both ledgers — and the selector re-derives
-  the identical escalation set during replay; the checkpoint manifest binds the policy fingerprint and a
-  mismatched fingerprint refuses restore. *Proof method:* the replay lane; a mutated-policy-fingerprint
-  negative test.
+  the identical escalation set during replay. The checkpoint manifest's cognition block records the
+  policy fingerprint; **at master `46b1b2b` the block wire carries only `Name`/`PeriodHours`/`PhaseHours`
+  and restore never compares a supplied policy against the recorded fingerprint** (`internal/world/`
+  `natural_cognitive_checkpoint.go`; the 32-byte `WakeFingerprint` is written and decoded but not
+  compared). VS2 adds, as new work owned by L2 (§10): an additive, byte-compatible extension of the
+  cognition-block wire carrying the canonical priority-policy identity, fingerprint recomputation over
+  the full policy (so the priority policy is bound), and a restore-time refusal when the
+  declared/supplied policy fingerprint differs from the recorded one. Existing VS1 cognitive bundles
+  decode unchanged. *Proof method:* the replay lane; a mutated-policy-fingerprint negative test (changed
+  `Priority`, refused restore).
   *Falsified by* any replay mismatch, any model call during replay, or an accepted mismatched policy.
 
 - **VS2-EC-6 — escalation requests observation-bounded (C5, extends EC-6).** Every escalation request and
@@ -446,11 +513,12 @@ Frozen before any run; a miss is an outcome reported verbatim, never tuned. Cell
   predicate's observation-only type signature.
   *Falsified by* one marker or one structural violation.
 
-- **VS2-EC-7 — protected exploration present and bounded.** With declared `q > 0`, the selector spends
-  exactly `ceil(q·N)` calls on uniform sampling of ordinary candidates and the exploration set is
-  non-empty whenever `|U|` and `N` permit; the set is deterministic from the declared policy PRNG and
-  recorded on the `allocation` record; the `q = 0` arm isolates pure exploitation. *Proof method:*
-  allocation records; the `q > 0` and `q = 0` fixtures.
+- **VS2-EC-7 — protected exploration present and bounded.** With declared `q > 0` (integer fixed-point),
+  the selector spends exactly `ceil(q·N)` calls, computed as `(N·ExplorationFraction + ExplorationScale
+  − 1) / ExplorationScale` in integer arithmetic, on uniform sampling of ordinary candidates and the
+  exploration set is non-empty whenever `|U|` and `N` permit; the set is deterministic from the declared
+  policy PRNG and recorded on the `allocation` record; the `q = 0` arm isolates pure exploitation.
+  *Proof method:* allocation records; the `q > 0` and `q = 0` fixtures.
   *Falsified by* an absent, over-budget, or non-reproducible exploration set.
 
 - **VS2-EC-8 — value model declared and calibrated (P6/ADR 0003).** The value model is a versioned,
@@ -475,18 +543,21 @@ Frozen before any run; a miss is an outcome reported verbatim, never tuned. Cell
 |---|---|---|---|---|
 | A0 no-AI | none | — | 0 | control; must reproduce the recorded ticket-19 `natural/7 × v6` evidence byte-exact (VS2-EC-1) |
 | R reference | `FullWakePolicy` (every candidate) | nil | `|U|` (ceiling 4 096) | the high-budget reference for the fidelity vector; comparative, never ground truth |
-| P periodic | time-stride over the candidate sequence | nil | `N` | uniform/periodic baseline the central claim must beat |
+| P periodic | even index sampling of the candidate sequence | nil | `N` | uniform/periodic baseline the central claim must beat |
 | U uniform-random | uniform draw of `N` from `U` | none | `N` | random-sampling baseline |
 | A adaptive-priority | top priority + protected exploration | `PriorityPolicy` | `N` | the candidate under test |
 
 `N = 256` (§5.1) for P, U, A, frozen before any run; `q = 0.25` protected exploration for A (with a
 declared `q = 0` ablation at the primary cell).
 
-**P (periodic), defined exactly:** order `U` by `(hour, actor)`; stride `s = ceil(|U|/N)`; select
-`U[i]` for `i ≡ 0 (mod s)`; if the count is `< N`, append the earliest unselected candidates; if `> N`,
-drop the latest — realizing **exactly `N`**, uniform-in-time, deterministic. This declared top-up/trim is
-a calibration and its effect is reported; the alternative (hour-granular period `h ≡ phase (mod P)`) is
-listed in §11.
+**P (periodic), defined exactly:** order `U` by `(hour, actor)` with the global index fixed by the
+declared pre-pass (§4.2), then select the candidates at global indices `floor((k + ½)·|U| / N)` for
+`k = 0 … N−1` — **exactly `N`** candidates (requires `|U| ≥ N`; otherwise the §5.2 under-budget case
+applies), uniform-in-time, deterministic, with **no top-up/trim**.
+`|U|` comes from the pre-pass, never from a run-time discovery; the earlier stride-plus-"append the
+earliest unselected"/"drop the latest" calibration is removed because it front-loaded P and was not
+realizable through a per-hour gate (Appendix E, P1). The hour-granular period `h ≡ phase (mod P)` is the
+alternative if an exact-`N` budget is not required (§11).
 
 ### 8.2 Cells and seeds
 
@@ -545,10 +616,10 @@ witness, exactly as VS1.
 
 | Lane | Scope (sole writer) | Depends on |
 |---|---|---|
-| L1 priority + value model (protocol) | `internal/cognition/protocol/wake.go` (additive `Priority` field + `Select`), new `internal/cognition/protocol/{priority.go,valuemodel.go}` (+ tests); keeps `VS1WakePolicy`/`FullWakePolicy` bytes unchanged | — |
-| L2 world escalation gate | `internal/world/natural_cognition.go` (Generalized gate + `Selector` seam), new `internal/world/natural_cognition_priority.go` (+ tests); the claim-loop hunks of `internal/world/natural.go` (`Natural.allocate`) | L1 |
-| L3 cognition wiring: selector, allocation records, PRNG | new `internal/cognition/{priority.go,allocation.go}`; `internal/cognition/wake.go` aliases; `internal/cognition/codec.go` (additive `InterventionAllocation` kind + `AllocationRecord`) (+ tests) | L1 |
-| L4 experiment runner + arms + equal-budget gate + metric | new `cmd/vs2/**`; the shared reusable mechanics extracted once into `internal/experiment/**` (`divergenceVector`, `summarize`, `decisionErrorIndicator`, fixture/stack wiring); `cmd/vs1` migrated to consume `internal/experiment` **with VS1 EC-1/EC-2 byte-identity re-proved** | L1–L3 |
+| L1 priority + value model (protocol) | `internal/cognition/protocol/wake.go` (additive `Priority` field + the degenerate nil-`Priority` `Select`), new `internal/cognition/protocol/{priority.go,valuemodel.go}` (the `EscalationSelector` accumulator interface, `PriorityStrategy`, `PolicyPredicate`, the pure value projection) (+ tests); keeps `VS1WakePolicy`/`FullWakePolicy` bytes unchanged | — |
+| L2 world escalation gate + candidate pre-pass + checkpoint binding | `internal/world/natural_cognition.go` (Generalized gate + `Selector` seam), new `internal/world/natural_cognition_priority.go` (the model-free candidate pre-pass that fixes `|U|` and the global candidate order) (+ tests); the claim-loop hunks of `internal/world/natural.go` (`Natural.allocate`); `internal/world/natural_cognitive_checkpoint.go` (additive cognition-block wire extension carrying the priority-policy identity + restore-time fingerprint refusal) | L1 |
+| L3 cognition wiring: accumulator, allocation records, PRNG | new `internal/cognition/{priority.go,allocation.go}` (the deterministic accumulator seeded with `|U|`; recorded candidate count + PRNG position); `internal/cognition/wake.go` aliases; `internal/cognition/codec.go` (additive `InterventionAllocation` kind + `AllocationRecord`) (+ tests) | L1 |
+| L4 experiment runner + arms + equal-budget gate + metric | new `cmd/vs2/**`; the shared reusable mechanics extracted once into `internal/experiment/**` (`divergenceVector`, `summarize`, `decisionErrorIndicator`, fixture/stack wiring); wires the L2 pre-pass (`|U|`) into the L3 accumulator; `cmd/vs1` migrated to consume `internal/experiment` **with VS1 EC-1/EC-2 byte-identity re-proved** | L1–L3 |
 | L5 docs | this file's evidence record and `docs/adr/0007-value-based-cognitive-allocation.md` | L4 |
 | L6 review | two fresh reviewers, no shared context with the workers | L4 |
 
@@ -558,12 +629,19 @@ layer is nil-tolerant: a nil `Priority` leaves every VS1 code path and every rec
 
 **Interfaces and dependencies.**
 
-- L1 owns the pure protocol surface. L2 and L3 both consume it; L2 must not import L3 (the world calls an
-  interface, exactly as VS1's `ClaimSeam`).
-- L3 owns the stateful selector (policy PRNG + budget view) that implements `protocol.EscalationSelector`
-  and the `allocation` record producer; L4 wires it.
-- L4 is the integrator: it owns `cmd/vs2`, the shared `internal/experiment` extraction, and the one
-  migration of `cmd/vs1`; it re-runs VS1's EC-1/EC-2 to prove the migration changed no world byte.
+- L1 owns the pure protocol surface (types + the pure value projection + the degenerate
+  nil-`Priority` `Select`). L2 and L3 both consume the `protocol.EscalationSelector` interface; L2 must
+  not import L3 (the world calls an interface, exactly as VS1's `ClaimSeam`).
+- L2 owns the candidate pre-pass (`|U|` and the global candidate order) and the checkpoint binding work
+  VS2 adds: the additive cognition-block wire extension, the full-policy fingerprint recomputation, and
+  the restore-time refusal (VS2-EC-5). At `46b1b2b` the block binds only `Name`/`PeriodHours`/`PhaseHours`
+  and restore compares no supplied policy, so this is new work with a named owner, not existing
+  behaviour.
+- L3 owns the deterministic accumulator (recorded candidate count + policy PRNG position + budget view)
+  that implements `protocol.EscalationSelector` and the `allocation` record producer; L4 wires it.
+- L4 is the integrator: it owns `cmd/vs2`, the shared `internal/experiment` extraction, the wiring of the
+  L2 pre-pass into the L3 accumulator, and the one migration of `cmd/vs1`; it re-runs VS1's EC-1/EC-2 to
+  prove the migration changed no world byte.
 - The extraction of the fidelity vector and mechanics into `internal/experiment` has **one home** (no
   duplicate copy); `cmd/vs1`'s migration is the price of that single home and is gated by byte-identity
   re-proof. The alternative (leave `cmd/vs1` untouched and duplicate) is recorded in §11.
@@ -583,10 +661,11 @@ layer is nil-tolerant: a nil `Priority` leaves every VS1 code path and every rec
   (VS2-EC-8) is the instrument that shows whether it is.
 - **Migrating `cmd/vs1` onto `internal/experiment`** touches frozen VS1 code; the risk is bounded by the
   EC-1/EC-2 byte-identity re-proof, and the alternative (duplication) violates one-home discipline.
-- **Equal-budget topology mismatch**: periodic selects whole-hour roster sets while random/adaptive
-  select actor subsets; the call-axis budget equalizes the spend but not the selection granularity. This
-  is intrinsic to comparing the four required arms and is disclosed; the alternative periodic definition
-  is an open question below.
+- **Temporal concentration differs across arms.** All budgeted arms select individual candidates on the
+  same ordered candidate stream and spend exactly `N` calls (§8.1), so there is no selection-granularity
+  mismatch. What differs is the *temporal distribution* of the `N` calls (periodic spreads them evenly;
+  adaptive concentrates on high-priority candidates when they occur), which is exactly the variable under
+  test, not a fairness defect. Disclosed so the report reads the divergence with this in mind.
 - **Network latency** lands in the coordinator's pre-batch path (bounded by the VS1 declared deadlines,
   measured separately from engine compute).
 
@@ -606,10 +685,10 @@ report; any band, constant, `N`, or cell edited after its first run.
    explicitly waive the cost ceiling and accept call/token equalization only).
 2. **The matched budget `N`.** Confirm `N = 256` calls/cell (or name another declared value) and whether
    the `N = 512` budget-sensitivity extension should run.
-3. **The periodic definition.** Confirm the P arm as the declared **uniform-in-time stride sampling of
-   the candidate sequence with exact-`N` top-up/trim**, or require the hour-granular
-   `h ≡ phase (mod P)` form (which does not realize exactly `N` and would need a matched-realized-call
-   comparison instead).
+3. **The periodic definition.** Confirm the P arm as the declared **even index sampling of the ordered
+   candidate sequence with exact `N`** (indices `floor((k + ½)·|U| / N)`, `|U|` from the declared
+   pre-pass), or require the hour-granular `h ≡ phase (mod P)` form (which does not realize exactly `N`
+   and would need a matched-realized-call comparison instead).
 4. **Protected exploration fraction.** Confirm `q = 0.25`, and whether a `q`-sensitivity sweep is wanted.
 5. **The value-model feature set and weights** (Appendix C): confirm the declared feature list, the
    integer fixed-point weights, and the cost proxy, or name the additional observation-visible features
@@ -636,7 +715,7 @@ VS2 builds on VS1's delivered surface, so VS1's declared reductions
   calibration are therefore proven on fake usage, and the central-claim result awaits the real model.
 - A Role A intervention records the level-1 outcome, not the world verdict (VS1 §14.1.9); the
   `allocation` record is likewise appended before the world commits and its `result` is the level-1
-  allocation outcome, joined to the committed journal for the indicator-7 rate.
+  allocation outcome, joined to the committed journal for the indicator-8 rate.
 - The sandbox gating regression is halt-or-extinction, not a per-band comparison (VS1 §14.1.7); VS2
   does not change the sandbox and does not gate on it.
 
@@ -654,13 +733,36 @@ type WakePolicy struct {
     Priority    *PriorityPolicy `json:"priority,omitempty"` // VS2; nil == VS1
 }
 
+// PriorityStrategy is the closed set of declared allocation strategies.
+type PriorityStrategy string
+
+const (
+    StrategyPeriodic      PriorityStrategy = "periodic"
+    StrategyUniformRandom PriorityStrategy = "uniform-random"
+    StrategyAdaptive      PriorityStrategy = "adaptive"
+    StrategyFull          PriorityStrategy = "full"
+)
+
+// ExplorationScale is the fixed-point denominator of ExplorationFraction.
+const ExplorationScale int64 = 1_000_000
+
 type PriorityPolicy struct {
-    Strategy            PriorityStrategy `json:"strategy"`              // "periodic" | "uniform-random" | "adaptive" | "full"
-    ExplorationFraction float64          `json:"exploration_fraction"`  // q in [0,1)
-    RandSeed            uint64           `json:"rand_seed"`             // policy PRNG seed, from run identity
+    Strategy            PriorityStrategy `json:"strategy"`
+    ExplorationFraction int64            `json:"exploration_fraction"` // q = frac/ExplorationScale, q in [0,1)
+    RandSeed            uint64           `json:"rand_seed"`            // policy PRNG seed, from run identity
     ValueModel          ValueModelSpec   `json:"value_model"`
-    MatchedCalls        uint64           `json:"matched_calls"`         // N; 0 for the reference
+    MatchedCalls        uint64           `json:"matched_calls"`        // N; 0 for the reference
 }
+
+// PolicyPredicate is the versioned declared escalation-request predicate
+// evaluated over the actor's own observation (§4.3); integer fixed-point and
+// observation-only.
+type PolicyPredicate struct {
+    Version    string             `json:"version"`
+    Thresholds []FeatureThreshold `json:"thresholds"`
+}
+
+type FeatureThreshold struct { Feature string; Threshold int64 } // integer fixed-point
 
 type BudgetState struct {
     CallsSpent     uint64 `json:"calls_spent"`
@@ -685,14 +787,20 @@ type EscalationCandidate struct {
 }
 
 type Selection struct {
-    Hour       int                `json:"hour"`
-    Selected   []sim.EntityID     `json:"selected"`
-    Exploration []sim.EntityID    `json:"exploration"`
-    Scores     []CandidateScore   `json:"scores"`     // per candidate, recorded
-    Budget     BudgetState        `json:"budget"`
-    PRNGPos    uint64             `json:"prng_pos"`   // consumed position of the policy PRNG
+    Hour           int              `json:"hour"`
+    Selected       []sim.EntityID   `json:"selected"`
+    Exploration    []sim.EntityID   `json:"exploration"`
+    Scores         []CandidateScore `json:"scores"`          // per candidate, recorded
+    Budget         BudgetState      `json:"budget"`
+    UniverseSize   uint64           `json:"universe_size"`   // |U|, fixed by the pre-pass (§4.2)
+    CandidatesSeen uint64           `json:"candidates_seen"` // accumulated candidates consumed
+    PRNGPos        uint64           `json:"prng_pos"`        // consumed position of the policy PRNG
 }
 
+// EscalationSelector is the deterministic streaming accumulator (§4.1 item 4).
+// Seeded from the declared pre-pass (UniverseSize |U|), the declared budget N
+// (CallsBudget), and RandSeed; CandidatesSeen and PRNGPos are recorded run
+// state, so replay re-derives the identical selection sequence.
 type EscalationSelector interface {
     Select(hour int, roster []EscalationCandidate, budget BudgetState) (Selection, error)
 }
@@ -744,14 +852,16 @@ existing records are byte-unchanged.
 
 ```go
 type AllocationRecord struct {
-    PolicyFingerprint string            `json:"policy_fingerprint"`
-    RosterSize        int               `json:"roster_size"`
-    Selected          []sim.EntityID    `json:"selected"`
-    Exploration       []sim.EntityID    `json:"exploration"`
-    Scores            []CandidateScore  `json:"scores"`
-    Budget            BudgetState       `json:"budget"`
-    PRNGPos           uint64            `json:"prng_pos"`
-    RealizedCalls     uint64            `json:"realized_calls"`
+    PolicyFingerprint string           `json:"policy_fingerprint"`
+    RosterSize        int              `json:"roster_size"`
+    Selected          []sim.EntityID   `json:"selected"`
+    Exploration       []sim.EntityID   `json:"exploration"`
+    Scores            []CandidateScore `json:"scores"`
+    Budget            BudgetState      `json:"budget"`
+    UniverseSize      uint64           `json:"universe_size"`   // |U|, fixed by the pre-pass
+    CandidatesSeen    uint64           `json:"candidates_seen"` // accumulated candidates consumed
+    PRNGPos           uint64           `json:"prng_pos"`
+    RealizedCalls     uint64           `json:"realized_calls"`
 }
 ```
 
@@ -788,6 +898,7 @@ type AllocationRecord struct {
 | `Weight(escalation_requested)` | 5 |
 | `CostProxy.Version` | `vs2-cost-proxy/1` |
 | `CostProxy.ConstantMicrosPerCall` | 1 |
+| `ExplorationFraction` | `250000` (q = 0.25 over `ExplorationScale = 1_000_000`, integer fixed-point) |
 | `Priority` | integer fixed-point `expected_value·SCALE / max(1, expected_cost)` |
 
 The all-zero weight vector must reduce the priority to the uniform-random baseline (a pinned reduction
@@ -795,23 +906,53 @@ test), and the `q = 0` arm must isolate exploitation.
 
 ## Appendix D — Contradictions and gaps found in the founding documents
 
-Recorded for the reconciliation pass; none is resolved here except where stated.
+Current disagreements at master `46b1b2b`; items resolved by the ticket-23 reconciliation are marked
+resolved rather than restated.
 
-1. **`docs/ARCHITECTURE.md` §3 and `docs/P0-SPEC.md` §2/§10 name an `EscalationRequest` type that does
-   not exist at `46b1b2b`.** VS2 is the first slice to define it (§4.3, Appendix A.1). Recorded here so
-   the promised concept and the code are now reconciled.
+1. **`docs/ARCHITECTURE.md` §3/§4 and `docs/P0-SPEC.md` §2/§10 already record `EscalationRequest` as
+   "not yet implemented" and VS2 owns it; `docs/P0-SPEC.md` §8 (the state-change diagram) still names
+   `EscalationRequest` without that annotation.** The code has no `EscalationRequest` type at
+   `46b1b2b`; VS2 defines it (§4.3, Appendix A.1). The only remaining disagreement is the unannotated
+   §8 diagram line.
 2. **`docs/ARCHITECTURE.md` §4 / `docs/PRINCIPLES.md` P7 describe value-based priority, escalation
    requests, and protected exploration as the target end state; VS1 implements the declared baseline
    only.** VS2 is that target; the "present in every version" invariant is read as "the concept's object
    exists", and VS2 raises C7 from present to tested.
-3. **`docs/VERTICAL-SLICES.md` marks the fidelity metric both "(needs operator confirmation)" and, in
-   its product-decisions section, "frozen as stated below".** VS2 follows the frozen reading; the
-   document should be made consistent in the reconciliation pass (the same contradiction VS1 spec
-   Appendix D.2 records).
-4. **`README.md` present-tense claim that language models "wake selectively".** No such mechanism exists
-   in VS1 and VS2 is the first slice that can make it true; until VS2's real-model matrix reports, the
-   sentence remains premature (the same item VS1 spec Appendix D.3 records).
+3. **Resolved at `46b1b2b`.** `docs/VERTICAL-SLICES.md` no longer marks the fidelity metric "(needs
+   operator confirmation)"; it states the metric as frozen ("Metric definition (frozen)") and the
+   product-decisions section repeats "the frozen definition given in VS2". No disagreement remains.
+4. **Resolved at `46b1b2b`.** `README.md` carries no present-tense "wake selectively" claim (the phrase
+   does not appear); it describes only the implemented substrate. VS2, once delivered, may state the
+   claim as fact. No disagreement remains.
 5. **`docs/adr/0006` (Addendum) records the application model as unpriced; the founding budget
    discipline (`docs/PRINCIPLES.md` P15) assumes a costed budget.** VS2 resolves the tension by defining
    equal budget on the call axis and treating cost equalization as a declared operator gate (§5, §11),
    rather than fabricating a price or silently dropping the axis.
+
+## Appendix E — Design-review repair record (review of `bf77198`)
+
+An independent design review of `bf77198` returned FAIL with one P1 and ten P2 findings. The findings are
+repaired in place above; this appendix is the finding → repair map and the verification record. No code
+exists yet, so the repair is design-only against master `46b1b2b`; every cited symbol resolves there.
+
+| Finding | Summary | Repair (location in this contract / ADR) |
+|---|---|---|
+| P1 (blocking) | Periodic arm P was defined by a whole-run stride `s = ceil(|U|/N)` with top-up/drop — unrealizable through the declared per-hour `Select` because `|U|` is endogenous and arm-dependent, and the top-up front-loaded P. | Fixed by option (b): `Select` is declared a **deterministic streaming accumulator** whose accumulated candidate count and PRNG position are recorded run state, with run-total `|U|` fixed by a declared model-free pre-pass. §4.1 (`Select`/`EscalationSelector`), §4.2 (pre-pass), §4.6 (determinism), §5.1 (budget basis), §8.1 (exact-`N` even index sampling, no top-up/trim), EC-1/EC-2 (§7), §11.3.3, Appendix A.1/B, ADR 0007. |
+| P2.1 | `Usage` cited as declared in `budget.go`; it is declared in `client.go`. | §1.1 C11 row now cites `Usage` in `internal/cognition/client.go` (removed from the `budget.go` symbol list). |
+| P2.2 | Bands cited as `ec1`..`ec11`; there is no `ec6`. | §1.1 C13 citation now reads `ec1`..`ec5`, `ec7`..`ec11`, with EC-6 as `privacyBand` in `cmd/vs1/privacy.go`. |
+| P2.3 | Appendix D items 1/3/4 were stale at `46b1b2b`. | Appendix D items 1, 3, 4 rewritten: item 1 → only `docs/P0-SPEC.md` §8 remains unannotated; items 3 and 4 marked resolved. |
+| P2.4 | EC-3 dominance undefined for `FirstDivergenceHour` (later divergence is better). | §6 names `Max`/`Mean` (lower-is-better) and `FirstDivergenceHour` (higher-is-better); EC-3 dominance is per-summary and direction-aware. |
+| P2.5 | §6 table listed 7 indicators while the scaffold emits 8. | §6 table now lists 8 (deaths split into `deaths/starvation` and `deaths/age`, indices 3/4) with a reconciliation note; the decision-error index is 8. |
+| P2.6 | §11.1 said periodic selects whole-hour roster sets, contradicting §8.1. | §11.1 bullet rewritten: all budgeted arms select individual candidates and spend exactly `N`; only temporal distribution differs. |
+| P2.7 | "Identical candidate universe `U`" fairness claim was inaccurate. | §1.2 and §5.3 narrowed to matched world/seed/mechanism/base-policy/horizon and call budget; `U` is policy-dependent; ADR relationship paragraph aligned. |
+| P2.8 | EC-5 claimed the manifest binds the policy fingerprint and refuses a mismatch, but restore compares nothing and no lane owned the work. | EC-5 now states the `46b1b2b` truth (wire carries `Name`/`PeriodHours`/`PhaseHours`; no comparison) and assigns the additive wire extension + full-policy fingerprint recomputation + restore refusal to lane L2 (§10). |
+| P2.9 | Appendix A referenced undeclared `PriorityStrategy` and `PolicyPredicate`. | Both declared in Appendix A.1 (`PriorityStrategy` with its constant set; `PolicyPredicate` + `FeatureThreshold`). |
+| P2.10 | `ExplorationFraction float64` in the run-identity policy contradicts the no-float rule. | Replaced by `ExplorationFraction int64` fixed-point over `ExplorationScale = 1_000_000`; §4.5/EC-7 give the integer `ceil(q·N)`; Appendix C.2 records `250000` for `q = 0.25`. |
+
+**Verification record.** Authoritative tree master `46b1b2b` (parent of `bf77198`); branch
+`feature/24-vs2-attention-design-v2`. `git diff --check` clean; only this file and
+`docs/adr/0007-value-based-cognitive-allocation.md` changed. Symbol checks at `46b1b2b`: `Usage` →
+`internal/cognition/client.go:114`; `evaluateBands` → `cmd/vs1/bands.go:17`; `privacyBand` →
+`cmd/vs1/privacy.go:296`; scaffold indicators → `cmd/vs1/report.go:336-345` (`deaths/starvation`,
+`deaths/age`); cognition-block wire → `internal/world/natural_cognitive_checkpoint.go:55-135`
+(`WakeFingerprint` written/decoded, never compared at restore).
