@@ -198,4 +198,5 @@ clean negative at the declared substrate, not evidence that selective reasoning 
 
 ## Revision addendum
 
-- Ticket commit on `feature/31-vs2-l2b`: recorded below once this ticket is committed.
+- Ticket commit on `feature/31-vs2-l2b`: `9caf03a74a7cee87839d2d7517303908f4e98d19` (adds this
+ticket and the L4c-ticket cmd/vs2-delta addendum).
