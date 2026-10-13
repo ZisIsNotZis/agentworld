@@ -16,6 +16,9 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "gateway-probe" {
+		os.Exit(runGatewayProbe(os.Args[2:]))
+	}
 	var (
 		arms       = flag.String("arms", strings.Join(declaredArms, ","), "comma-separated arms to run")
 		cells      = flag.String("cells", "", "comma-separated cells as f<founders>-s<seed> (default: the 12 declared cells)")
@@ -31,11 +34,17 @@ func main() {
 		runTwins   = flag.Bool("twin", true, "run the declared workers-4 determinism twins (EC-8)")
 		runFixture = flag.Bool("fixture", true, "run the scripted-proposer fixture cell (EC-5a)")
 		reuse      = flag.String("reuse", "", "prior evaluation JSON: reuse its committed matrix cells (restore each final bundle) instead of re-simulating; A0 cells are re-run because the control keeps no final bundle")
+		wire       = flag.String("wire", string(cognition.WireChatCompletions), "declared gateway wire recorded by the cognition stack: chat-completions (default) or responses")
 	)
 	flag.Parse()
 	if *parallel < 1 {
 		*parallel = 1
 	}
+	mode, err := cognition.ParseWireMode(*wire)
+	if err != nil {
+		fail("wire: %v", err)
+	}
+	declaredGatewayWire = mode
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*budgetMin)*time.Minute)
 	defer cancel()

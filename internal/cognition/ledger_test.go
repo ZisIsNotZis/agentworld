@@ -125,7 +125,7 @@ func TestLedgerDetectsTamperedField(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tampered := bytes.Replace(data, []byte("zai/glm-5.3-flash"), []byte("zai/glm-5.3-flasX"), 1)
+	tampered := bytes.Replace(data, []byte(cognition.DefaultModelID), []byte(cognition.DefaultModelID+"X"), 1)
 	if bytes.Equal(tampered, data) {
 		t.Fatal("tamper probe did not change the bytes")
 	}

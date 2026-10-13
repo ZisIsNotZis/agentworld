@@ -36,7 +36,7 @@ This ticket produces the contract and the ADR. Implementation is the follow-on l
 - One **Role B mechanism**: in-run proposal, validation, sandbox counterfactual, application,
   measurement, and rollback of a **versioned strategy patch** expressed as data (§5, §10).
 - A **model-call protocol** through the project's LiteLLM gateway for the application model
-  `github-copilot/gpt-6-luna`, specified as an interface; the implementation is a later lane (§6).
+  `github_copilot/gpt-6-luna`, specified as an interface; the adapter is the ticket-22 lane (§6).
 - A **recorded-call ledger** with request hashes, response bytes, model identity, usage, cost,
   sampling parameters, and latency; replay reads the ledger and never calls a model (§7).
 - **Cost accounting and an instrumented, fail-loud cognitive budget ceiling** under the P15
@@ -91,7 +91,7 @@ later slices raise the ceiling of a row without creating it.
 | C3 | Resources and economy | Unchanged: production, consumption, storage, spoilage, transfer, conservation-checked ledgers | recorded natural lane, G1–G3 gates |
 | C4 | Strategy as versioned data | Extended: the frozen `natural/*` refs plus the **patched generation format** of §5.2 (typed parameter vectors, byte-pinned, fingerprinted, parent-linked) | §5.2, §10.1, Appendix C |
 | C5 | Observation boundary | Asserted and now consumed by a real decider: every Role A request is built from the frozen `strategy.NaturalObservation` value only, by an allow-list encoder | §4.5, §6.2, EC-6 |
-| C6 | Language-model intervention | New: a real `github-copilot/gpt-6-luna` call at the declared seam changes what an actor does, with the prompt/request and the response bytes recorded | §4, §6, §7 |
+| C6 | Language-model intervention | New: a real `github_copilot/gpt-6-luna` call at the declared seam changes what an actor does, with the prompt/request and the response bytes recorded | §4, §6, §7 |
 | C7 | Cognitive allocation | New: a declared `WakePolicy` object; the VS1 instance is the honest uniform/periodic baseline (all actors in selected hours) | §11.1 |
 | C8 | Intervention ledger | New: one append-only, hash-chained record per intervention with cause/cost/patch/result | §9, EC-4 |
 | C9 | Strategy self-modification | New: the system emits a new strategy version with a parent ref, validated before use | §5.2, §5.3 |
@@ -313,12 +313,19 @@ validation result, rollout state, affected actors), and it is what an outside pa
 
 ## 6. The model-call protocol
 
-### 6.1 Gateway and interface (specified, not implemented)
+### 6.1 Gateway and interface (discovered; the adapter is the ticket-22 lane)
 
-- **Model**: `github-copilot/gpt-6-luna` (operator decision), reached through the project's
-  **LiteLLM gateway** over an OpenAI-compatible `POST {base}/v1/chat/completions`. The gateway base
-  URL, auth source, JSON-mode/seed support and price data are discovered from the environment, never
-  assumed.
+- **Model**: the application model is exposed by the gateway as `github_copilot/gpt-6-luna`
+  (**underscore**; an earlier draft of this spec wrote the hyphen spelling
+  `github-copilot/gpt-6-luna`, which the gateway does not expose). It is reached through the
+  project's **LiteLLM gateway**, whose metadata (`GET /v1/models`, no spend) advertises
+  `mode=responses` with `supported_endpoints=['/v1/responses']` only (no `/v1/chat/completions`),
+  `max_input_tokens` 272000, `max_output_tokens` 128000, response-schema/reasoning/streaming/
+  function-calling support, and **no** input/output cost fields (the proxy cannot price it).
+- **Wire**: the client speaks both declared wires and records which one it used through the recorded
+  endpoint host+path. The chat wire (`POST {base}/v1/chat/completions`, the originally assumed wire)
+  remains the hermetic default; the Responses wire (`POST {base}/v1/responses`) is the application
+  model's only advertised endpoint and is the declared wire for a real-model run.
 - **Interface** (the world never sees the client implementation; direction of dependency in §6.6):
 
 ```go
@@ -330,9 +337,12 @@ type SeamDecider interface {
 }
 ```
 
-- **Configuration** (environment, never recorded): `AGENTWORLD_MODEL_GATEWAY` (base URL),
-  credential from the environment. The ledger records the endpoint **host+path** (no query, no
-  credential) and `credential_present: true`; **no secret material is ever recorded**.
+- **Configuration** (environment, never recorded): the gateway base URL from `$LITELLM_BASE_URL`
+  (superseding the earlier `AGENTWORLD_MODEL_GATEWAY` name), the credential from
+  `$LITELLM_API_KEY`, the wire model from `$LITELLM_MODEL` (default the discovered
+  `github_copilot/gpt-6-luna`), and the wire from `AGENTWORLD_GATEWAY_WIRE`. The ledger records the
+  endpoint **host+path** (no query, no credential — the path names the wire) and
+  `credential_present: true`; **no secret material is ever recorded**.
 
 ### 6.2 Request schema and observation-boundary construction
 
@@ -345,7 +355,7 @@ written by name; no reflection over structs, no map iteration, no world reader i
   "role": "actor-decision",
   "seam": "natural.claim",
   "prompt_template": "natural-claim/v1",
-  "model": "github-copilot/gpt-6-luna",
+  "model": "github_copilot/gpt-6-luna",
   "run": { "fixture": {"patches": 2, "r": 8, "founders": 12, "mechanism": 6, "births": true},
             "seed": 0, "base_ref": {"id": "natural", "version": 7},
             "head_ref": {"id": "natural", "version": 7},
@@ -402,8 +412,10 @@ digest and length as `oversized` and takes the fallback. `usage.prompt_tokens` a
 
 VS1 instance, part of run identity and recorded per call: `temperature 0.7`, `top_p 1.0`,
 `max_tokens 128`, `seed` absent (sent only if the gateway supports it; recorded as sent or absent
-either way), `response_format {"type": "json_object"}` requested where the gateway accepts it, with
-the declared fallback of a plain completion plus local JSON extraction (recorded per call). A
+either way), and the JSON output mode requested where the gateway accepts it, with the declared
+fallback of a plain completion plus local JSON extraction (recorded per call). The JSON mode is
+`response_format {"type": "json_object"}` on the chat wire and `text {"format": {"type":
+"json_object"}}` on the Responses wire; a plain completion is requested with the format omitted. A
 temperature above zero is deliberate and permitted: the ledger captures whatever the model returns,
 so the run is reproducible from its recorded events even though the model is not reproducible (§7).
 
@@ -840,15 +852,19 @@ privileged state; an unlabelled report; any band, constant, or cell edited after
 
 ## 16. Open questions for the operator
 
-1. **Gateway contract and the cognitive ceiling — PARTLY RESOLVED (current truth).** The operator has
-   fixed the application model at `github-copilot/gpt-6-luna`. Still to be established, by DISCOVERY
-   from the environment rather than assumption: the gateway base URL, the auth key source, whether it
-   honours `response_format: json_object` and a `seed`, and the price data used to convert usage to
-   cost. The cognitive ceiling is built as a declared, instrumented, fail-loud P15 limit with at least
-   1.5x headroom over the declared matrix need (the arithmetic in §11.2 gives roughly 32 k calls for
-   the full plan — ≈11 k across A1, A1i and A2, ≈22 k for A3 — up to ×3 worst case with retries, plus
-   deterministic sandbox compute). Until that budget is declared and a real-call smoke test passes, the
-   A3 reduction of §11.3 applies and **no real model call has been made**.
+1. **Gateway contract and the cognitive ceiling — RESOLVED for the wire, open for spend (current
+   truth).** The operator has fixed the application model, exposed by the gateway as
+   `github_copilot/gpt-6-luna` (**underscore**; earlier drafts wrote the hyphen spelling). DISCOVERY
+   from the environment (ticket 22) fixed the rest of the contract: the gateway base URL is
+   `$LITELLM_BASE_URL`, the auth key source is `$LITELLM_API_KEY`, the model's only advertised
+   endpoint is `POST /v1/responses` (`mode=responses`; no `/v1/chat/completions`), and the metadata
+   carries **no** input/output cost fields, so its cost is recorded as the typed *unpriced* state
+   rather than a fabricated price. The cognitive ceiling is built as a declared, instrumented,
+   fail-loud P15 limit with at least 1.5x headroom over the declared matrix need (the arithmetic in
+   §11.2 gives roughly 32 k calls for the full plan — ≈11 k across A1, A1i and A2, ≈22 k for A3 — up
+   to ×3 worst case with retries, plus deterministic sandbox compute). Until a price is declared and
+   a real-call smoke test passes, the A3 reduction of §11.3 applies and **no real model call has been
+   made**.
 2. **One seam or two.** This design escalates exactly one decision (the claim instant) so the model's
    causal footprint is exactly one instant per selected actor-hour. If the operator intends the
    unit-conversion decision (bag decision, `h+20m+2µs`) to be model-decided in VS1 as well, that is a
@@ -872,8 +888,9 @@ implementation and its frozen evidence: exactly one seam (the claim instant) is 
 patchable set is the Appendix C strategy-side threshold vector only; the rebind is runner state
 recorded in the ledger, manifest and strategy section; and the declared cells are f=10/11/12 × seeds
 0–3 with the recorded ticket-19 evidence reused as the no-AI arm, reproduced byte-identically through
-the VS1 harness (EC-1). Item 1's gateway contract and the real-model evidence are the only open work:
-the real-model arm is blocked on the gateway binding and the declared budget.
+the VS1 harness (EC-1). Item 1's wire contract is discovered and bound (ticket 22); the real-model
+evidence is the only open work, blocked on authorised spend and a declared (or explicitly waived)
+price.
 
 ## Appendix A — Types (the implementable contract)
 

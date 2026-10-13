@@ -130,7 +130,7 @@ func wireStack(f *world.Natural, spec cellSpec, fp fixture, dir string, budget c
 	if err != nil {
 		return nil, err
 	}
-	endpoint := "hermetic.local/v1/chat/completions"
+	endpoint := hermeticEndpoint(declaredGatewayWire)
 	wake := wakeFor(spec.Arm)
 	var seam world.ClaimSeam
 	if spec.Arm == ArmA1i {

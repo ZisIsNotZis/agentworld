@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -387,13 +386,17 @@ func runAudit(ctx context.Context, f *world.Natural, stack *cognitionStack, dir 
 	return nil
 }
 
-// modelIdentityDigest pins the declared model/sampling identity recorded in
-// the checkpoint binding.
+// modelIdentityDigest pins the declared model+wire/sampling identity recorded
+// in the checkpoint binding.
 func modelIdentityDigest() string {
 	d := modelIdentityDigestBytes()
 	return hex.EncodeToString(d[:])
 }
 
+// modelIdentityDigestBytes derives the recorded model identity from the
+// declared application model and the declared gateway wire, so the
+// manifest/checkpoint identity names the model and wire a run actually used and
+// two runs on different models or wires cannot share an identity.
 func modelIdentityDigestBytes() [32]byte {
-	return sha256.Sum256([]byte(cognition.DefaultModelID + "|temperature=0.7|top_p=1|max_tokens=128|seed=absent"))
+	return cognition.ModelIdentityDigest(cognition.DefaultModelID, declaredGatewayWire, cognition.FrozenSampling())
 }

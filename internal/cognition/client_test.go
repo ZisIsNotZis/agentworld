@@ -261,16 +261,23 @@ func TestGatewayStubIsConfigGatedAndCannotReachNetwork(t *testing.T) {
 	}
 }
 
+// gatewayNetworkFile is the package's single declared network boundary: the
+// real LiteLLM gateway transport. Every other source file stays network-free,
+// so the fake, replay, ledger, and recorder paths cannot reach the network; the
+// world import is forbidden everywhere.
+const gatewayNetworkFile = "gateway.go"
+
 // TestCognitionSourcesImportNoNetworkOrWorld is the structural privacy and
-// hermeticity guard: the client package declares no network and no world
-// dependency, so the gateway stub cannot make a network call and the world
-// package cannot import the client.
+// hermeticity guard: the only network dependency in the package is the
+// declared gateway transport, so every hermetic path cannot make a network
+// call, and the world package cannot import the client.
 func TestCognitionSourcesImportNoNetworkOrWorld(t *testing.T) {
 	entries, err := os.ReadDir(".")
 	if err != nil {
 		t.Fatal(err)
 	}
 	checked := 0
+	networkFiles := map[string]bool{}
 	for _, entry := range entries {
 		name := entry.Name()
 		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
@@ -284,15 +291,21 @@ func TestCognitionSourcesImportNoNetworkOrWorld(t *testing.T) {
 		checked++
 		for _, imp := range file.Imports {
 			path := strings.Trim(imp.Path.Value, `"`)
-			if path == "net" || strings.HasPrefix(path, "net/") {
-				t.Fatalf("%s imports %q: the client must not depend on the network", name, path)
-			}
 			if path == "agentworld/internal/world" {
 				t.Fatalf("%s imports internal/world: the observation boundary is violated", name)
+			}
+			if path == "net" || strings.HasPrefix(path, "net/") {
+				if name != gatewayNetworkFile {
+					t.Fatalf("%s imports %q: only %s may depend on the network", name, path, gatewayNetworkFile)
+				}
+				networkFiles[name] = true
 			}
 		}
 	}
 	if checked == 0 {
 		t.Fatal("no source files checked")
+	}
+	if !networkFiles[gatewayNetworkFile] {
+		t.Fatalf("the declared network boundary %s imports no network package", gatewayNetworkFile)
 	}
 }

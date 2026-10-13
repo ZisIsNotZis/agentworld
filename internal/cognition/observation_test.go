@@ -183,3 +183,25 @@ func TestRunIdentityDigestIsStable(t *testing.T) {
 		t.Fatal("identity digest ignores the seed")
 	}
 }
+
+// TestActorSeamRequestEncoderUsesTheDeclaredApplicationModel pins the ticket-22
+// repair: the canonical request's model field is the unified declared
+// application-model identity, not the superseded zai/glm id.
+func TestActorSeamRequestEncoderUsesTheDeclaredApplicationModel(t *testing.T) {
+	body, err := cognition.EncodeActorSeamRequest(sampleSeamRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded struct {
+		Model string `json:"model"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Model != cognition.DefaultModelID {
+		t.Fatalf("canonical request model = %q, want the declared application model", decoded.Model)
+	}
+	if cognition.DefaultModelID != "github_copilot/gpt-6-luna" {
+		t.Fatalf("declared application model = %q, want the gateway-exposed underscore id", cognition.DefaultModelID)
+	}
+}

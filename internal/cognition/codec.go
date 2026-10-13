@@ -30,29 +30,39 @@ const callRecordKind = "call"
 // ResponseLength carry the oversized-body digest and length; HTTPStatus records
 // the transport's code so retry classification is auditable.
 type CallRecord struct {
-	Seq                 uint64     `json:"seq"`
-	Kind                string     `json:"kind"`
-	Role                string     `json:"role"`
-	RequestHash         string     `json:"request_hash"`
-	RequestBytes        []byte     `json:"request_bytes"`
-	ResponseBody        []byte     `json:"response_body,omitempty"`
-	Content             []byte     `json:"content,omitempty"`
-	ModelID             string     `json:"model_id"`
-	Endpoint            string     `json:"endpoint"`
-	CredentialPresent   bool       `json:"credential_present"`
-	Sampling            Sampling   `json:"sampling"`
-	Usage               Usage      `json:"usage"`
-	CostMicros          int64      `json:"cost_micros"`
-	PriceVersion        string     `json:"price_version"`
-	Attempt             int        `json:"attempt"`
-	Status              CallStatus `json:"status"`
-	HTTPStatus          int        `json:"http_status,omitempty"`
-	ResponseDigest      string     `json:"response_digest,omitempty"`
-	ResponseLength      int        `json:"response_length,omitempty"`
-	StartedAtUnixMicros int64      `json:"started_at_unix_micros"`
-	LatencyMicros       int64      `json:"latency_micros"`
-	PrevHash            string     `json:"prev_hash"`
-	Hash                string     `json:"hash,omitempty"`
+	Seq               uint64   `json:"seq"`
+	Kind              string   `json:"kind"`
+	Role              string   `json:"role"`
+	RequestHash       string   `json:"request_hash"`
+	RequestBytes      []byte   `json:"request_bytes"`
+	ResponseBody      []byte   `json:"response_body,omitempty"`
+	Content           []byte   `json:"content,omitempty"`
+	ModelID           string   `json:"model_id"`
+	Endpoint          string   `json:"endpoint"`
+	CredentialPresent bool     `json:"credential_present"`
+	Sampling          Sampling `json:"sampling"`
+	Usage             Usage    `json:"usage"`
+	CostMicros        int64    `json:"cost_micros"`
+	PriceVersion      string   `json:"price_version"`
+	// OutputMode records the requested JSON output mode of an attempt when the
+	// transport declares one (the real gateway: json_object or plain text).
+	// Hermetic transports declare none, so this field stays empty and their
+	// recorded bytes are unchanged.
+	OutputMode     string     `json:"output_mode,omitempty"`
+	Attempt        int        `json:"attempt"`
+	Status         CallStatus `json:"status"`
+	HTTPStatus     int        `json:"http_status,omitempty"`
+	ResponseDigest string     `json:"response_digest,omitempty"`
+	ResponseLength int        `json:"response_length,omitempty"`
+	// ResponseTruncatedPrefix marks ResponseDigest/ResponseLength as describing
+	// only the leading prefix the transport buffered for an oversized body, not
+	// the full body, so an auditor knows the digest is recomputable from the
+	// first ResponseLength bytes of the response.
+	ResponseTruncatedPrefix bool   `json:"response_truncated_prefix,omitempty"`
+	StartedAtUnixMicros     int64  `json:"started_at_unix_micros"`
+	LatencyMicros           int64  `json:"latency_micros"`
+	PrevHash                string `json:"prev_hash"`
+	Hash                    string `json:"hash,omitempty"`
 }
 
 // EncodeCallRecord returns the canonical full-record bytes including the hash.
