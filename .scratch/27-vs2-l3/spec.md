@@ -161,4 +161,5 @@ Go toolchain is not on the ambient PATH: use
   - `internal/cognition/wake.go` `98fb1bb893769344576f76dcb66d43c127997961`
   - `internal/cognition/priority_test.go` `4ab2ca471fb188783b7b99f47260a558c9b2e38a`
   - `internal/cognition/allocation_test.go` `8477e27abc9b64592c66d1509f05d8f58b649f04`
-- L3 commit on `feature/27-vs2-l3`: recorded in the addendum below.
+- L3 commit on `feature/27-vs2-l3`: `5651ba389d952221cef0518353cb522a2524610f` (the commit that
+  added the six in-scope files and this ticket; this addendum records its hash).
