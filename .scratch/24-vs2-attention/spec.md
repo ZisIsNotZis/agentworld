@@ -277,6 +277,19 @@ escalation-request predicate itself (EC-6) never reads it. Features (Appendix C.
 derived `decision_sensitivity`, `urgency`, `impact`, `propagation_risk`, `prior_reliability`, and the
 `escalation_requested` bit of §4.3.
 
+**Feature-set version and declared derivations (Appendix C.1).** The feature set is versioned
+`vs2-features/1`; the version rides `ValueModelSpec.FeatureSet`, so it is bound into the policy
+identity/fingerprint (and the checkpoint cognition block, VS2-EC-5) and named by the report. The
+derived rows are **declared exact integer fixed-point functions of the actor's own observation**:
+`decision_sensitivity` is the summed proximity of the actor's own rows to the frozen claim/birth
+decision boundaries; `urgency` is the fraction of the combined survival reserve already consumed;
+`impact` is the fraction of the frozen birth/consent margins met; `propagation_risk` is the stocked
+fraction of the frozen home-slot resource; `last_denial` is the declared string encoding.
+`prior_reliability` is the one scheduler-level row: the declared versioned world-level aggregate (a
+neutral prior cell statistic in this instance), the same for every candidate of a cell and never read
+by the escalation predicate (EC-6). The derivations and the §4.3 predicate body are a declared,
+versioned, reversible default pending operator confirmation (Appendix C.1/C.2, §11).
+
 ### 4.3 Escalation requests from the actor's own observation (C5)
 
 At the existing claim instant (`h·3600s + 1µs`) the frozen claim evaluation already produces the
@@ -289,6 +302,12 @@ actor's `strategy.NaturalObservation`. VS2 adds one declared, pure predicate ove
 // feature vector. It can read nothing else.
 func EscalationRequest(p PolicyPredicate, obs strategy.NaturalObservation) (bool, EscalationReason)
 ```
+
+The declared instance is `vs2-escalation/1`: the actor requests escalation when `urgency ≥ 500` and
+`decision_sensitivity ≥ 500` (the exact body and the fixed-point derivations are in Appendix C.1).
+The predicate evaluates only the observation-only rows returned by `ObservationFeatures` and **fails
+closed** for an empty predicate or for any row it may not read (`prior_reliability`, an unknown name),
+so it can never read the scheduler-level aggregate (EC-6).
 
 It is not a new phase instant (VS1 adds none), not a new kernel rule, and not model-emitted code. It is
 recorded with its typed reason on the candidate and, when it leads to an allocation decision, on the
@@ -304,6 +323,7 @@ model:
 // Appendix A.2 / C.2.
 type ValueModelSpec struct {
     Version        string          // run identity; the versioned hypothesis
+    FeatureSet     string          // declared candidate feature-set version (Appendix C.1); part of run identity
     Weights        []FeatureWeight // integer fixed-point weights, declared
     CostProxy      CostProxy       // how a call's cost is estimated (§5)
 }
@@ -831,9 +851,13 @@ edited after its first run.
    selected hours supply at least `N` candidates) and the quota schedule `q(h) = floor(N/H) + (1 if
    h < (N mod H) else 0)` for U and A (§5.1), or name another declared period and schedule.
 4. **Protected exploration fraction.** Confirm `q = 0.25`, and whether a `q`-sensitivity sweep is wanted.
-5. **The value-model feature set and weights** (Appendix C): confirm the declared feature list, the
-   integer fixed-point weights, and the cost proxy, or name the additional observation-visible features
-   (C5-compatible) that should be in the contract.
+5. **The value-model feature set, its declared derivations, and weights** (Appendix C.1/C.2): confirm
+   the declared feature list, the exact integer fixed-point derivations (including the
+   `prior_reliability` aggregate, the `last_denial` encoding, and the `vs2-escalation/1` predicate
+   body), the integer fixed-point weights, the feature-set version `vs2-features/1`, and the cost
+   proxy, or name the additional observation-visible features (C5-compatible) that should be in the
+   contract. The derivations and weights are a declared, versioned, reversible default pending this
+   confirmation (§4.2, Appendix C.1/C.2).
 6. **`cmd/vs1` migration vs. duplication.** Confirm the single-home extraction into `internal/experiment`
    with the gated VS1 migration, or require `cmd/vs1` to stay untouched (accepting a temporary duplicate
    copy of the fidelity mechanics).
@@ -978,9 +1002,10 @@ type CostProxy struct {
 }
 
 type ValueModelSpec struct {
-    Version   string
-    Weights   []FeatureWeight
-    CostProxy CostProxy
+    Version    string
+    FeatureSet string // declared candidate feature-set version (Appendix C.1)
+    Weights    []FeatureWeight
+    CostProxy  CostProxy
 }
 
 // CallPrice is the protocol-local cost type for the value projection. The
@@ -1049,11 +1074,46 @@ other actor's private state (EC-6).
 | `prior_reliability` | declared world-level aggregate row (versioned cell statistic) | prior realized value in this region |
 | `escalation_requested` | `EscalationRequest` predicate over own `NaturalObservation`, materialized as `ValueFeatures.EscalationRequested` (0/1) | the actor's own explicit request |
 
+**Declared derivations (fixed point).** The feature set is `vs2-features/1`
+(`ValueModelSpec.FeatureSet`, part of run identity). The declared constants mirror the frozen claim
+thresholds and are cross-checked against the world's exported frozen constants: `DerivedFeatureScale =
+1000`; `FeatureEnergyCapacity = 12`; `FeatureHungerCapacity = 24`; `FeatureSlotsPerPatch = 8`;
+`FeatureBuildEnergyFloor = 5`; `FeatureConsentMinEnergy = 3`; `FeatureConsentMinCapital = 2`;
+`FeatureConsentMinGranary = 3`; `FeatureStoredMealGranary = 1`; `FeatureBoundaryWindow = 2`.
+Division is integer division (Go `/` on non-negative values); `min` is the integer minimum.
+
+- `urgency` = `DerivedFeatureScale · ((FeatureEnergyCapacity − energy) + hunger) /
+  (FeatureEnergyCapacity + FeatureHungerCapacity)` — survival proximity, monotone non-increasing in
+  `energy` and non-decreasing in `hunger`.
+- `impact` = `DerivedFeatureScale · (min(capital, FeatureConsentMinCapital) +
+  min(granary_stock, FeatureConsentMinGranary)) /
+  (FeatureConsentMinCapital + FeatureConsentMinGranary)` — birth-gate / investment proximity, saturating
+  when the consent gate (`capital ≥ 2`, `granary_stock ≥ 3`) is met.
+- `propagation_risk` = `DerivedFeatureScale · min(stocked_home_slots, FeatureSlotsPerPatch) /
+  FeatureSlotsPerPatch` — contested-slot risk, monotone non-decreasing in `stocked_home_slots`.
+- `decision_sensitivity` = `DerivedFeatureScale · (Σ_τ max(0, FeatureBoundaryWindow − |value_τ −
+  threshold_τ|)) / (FeatureBoundaryWindow · 8)`, over the eight declared `(row, frozen threshold)`
+  pairs `τ` = `(energy, 5)`, `(energy, 3)`, `(granary_stock, 1)`, `(granary_stock, 3)`, `(capital, 2)`,
+  `(hunger, 24)`, `(stocked_home_slots, 1)`, `(last_stored_meal_hour, hour)` — the bag build-energy
+  floor, the two consent floors, the stored-meal availability floor, the gather-availability floor, the
+  starvation clock edge, and the stored-meal freshness boundary (`last_stored_meal_hour < hour`). A row
+  rises as any own value approaches a boundary, in either direction.
+- `last_denial` (string): `""` for no denial, `"gather"` for a gather denial, `"build"` for a build
+  denial.
+- `prior_reliability` = the declared neutral world-level prior `DeclaredPriorReliability =
+  DerivedFeatureScale/2 = 500` (version `vs2-prior/1`): a declared, versioned, reversible default; the
+  scheduler-level row, identical for every candidate of a cell and never read by the predicate.
+- `escalation_requested` = 1 iff the declared predicate `vs2-escalation/1` holds, i.e. `urgency ≥ 500`
+  **and** `decision_sensitivity ≥ 500`; the predicate returns `EscalationRequestedByActor`. It
+  evaluates only the observation-only rows and fails closed for an empty predicate or any row it may
+  not read (`prior_reliability`, an unknown name).
+
 ### C.2 Value-model contract (frozen instance to be confirmed, §11)
 
 | Field | Value |
 |---|---|
 | `Version` | `vs2-value/1` |
+| `FeatureSet` | `vs2-features/1` (the declared feature-set version of Appendix C.1; part of run identity) |
 | `Weight(decision_sensitivity)` | 4 |
 | `Weight(urgency)` | 3 |
 | `Weight(impact)` | 2 |
