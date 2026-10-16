@@ -1,5 +1,80 @@
 # Ticket 34 — VS2 live matrix (the central claim, real-model arm)
 
+## Wire constraint discovered at smoke gate (2026-10-16, first live smoke run)
+
+Status: discovered and repaired under supervisor authorisation; the primary matrix had not started.
+The first live smoke run (`-cells f12-s0 -arms P -live`, budget 30 min, run 1) FAILED the gate: all
+256 Role A calls were recorded `http-error` (HTTP 400), zero tokens, and every Role A intervention
+carried `result.status = "rejected"`, `reason = "malformed"`, `role_a.source = "fallback"`. The world
+therefore ran the frozen cascade on every escalated decision — a fallback-only trajectory, exactly
+what VS1 EC-2 names a falsifier, never evidence. The ledger recorded every refusal faithfully
+(fail-loud behaviour working as declared); the report still emitted with 256 spent calls and 0
+applied model actions, so the run is evidence of the constraint, not a VS2 result. The run-1
+artefacts are preserved at `.tmp/34-vs2-smoke-run1-refused/`
+(`calls.jsonl` sha256 `1ace3e1ca5d30a2b8e05bc1db8f12c61f8cd95a858bae894bab6adc9b87c48fe`,
+evaluation JSON `afda972a9db14f360b15b37a5d6a1b771e5634b2d947a10228b4be47c4ad6f1e`, text
+`6adc3905d2b6311928ddaf46f81803058f9519f76599f6eb2a02e2a158020e4a`).
+
+**Root cause (decoded from the ledger's base64 response body, run 1 call 1):**
+
+> `litellm.BadRequestError: Github_copilotException - {"error":{"message":"Unsupported parameter:
+> 'temperature' is not supported with this model.","code":"invalid_request_body"}}` — model group
+> `github_copilot/gpt-6-luna` failed; no fallback attempted.
+
+The declared `FrozenSampling()` (`internal/cognition/client.go`, temperature 0.7, top_p 1, max_tokens
+128) is emitted verbatim by the responses wire codec; the application model rejects `temperature`
+on the `github_copilot` wire, and the gateway's per-model `drop_params: true` does not cover it.
+This is a gateway wire constraint, not a spend or auth failure (gateway answered 200 on probes).
+
+**Authorised repair (supervisor, minimal scope):** omit `temperature` from the outgoing responses-wire
+request in `internal/cognition/gateway.go`; omit `top_p` too if a raw probe shows the same refusal.
+Raw probes on `/v1/responses` (before the repair): (1) without `temperature`, with `top_p: 1` →
+HTTP 400, verbatim `Unsupported parameter: 'top_p' is not supported with this model.`; (2) without
+both, with a system prompt not containing the word `json` → HTTP 400, the `json_object` mode
+requirement that input mention json (probe artifact only — the shipped `GatewaySystemPrompt`
+does contain "JSON"); (3) without both, with the json-mentioning prompt → HTTP 200 `completed`,
+usage flowing. So the repair omits BOTH `temperature` and `top_p` from `responsesRequestBody`
+(pointer + omitempty, never set); `FrozenSampling()` itself is UNCHANGED (the declared instance
+still rides every call record's `sampling` field and the model identity digest); the
+chat-completions codec is untouched; no frozen evidence changed. Constraint recorded here as the
+discovered wire fact: **the declared application model accepts no `temperature` and no `top_p` on
+the responses wire; the declared sampling instance is therefore recorded-but-not-applied for the
+two rejected fields, and `max_output_tokens` (from the frozen `MaxTokens: 128`) is applied.**
+Three probe calls (≈200 tokens) were spent on the raw probes outside the harness and are recorded
+here and nowhere else.
+
+Also recorded (honesty caveat, no code change authorised): the report's static labels are hermetic
+constants baked at L4c — `Status: "synthetic/model-conditional"`, `Revision: "…no authorised spend"`,
+and the VS2-EC-9 evidence string "real-model arm: blocked on spend" — all three are inaccurate for a
+live run. The true status of this ticket's runs (live, spend authorised, model
+`github_copilot/gpt-6-luna` via the local gateway) is recorded here in the ticket; the acceptance
+verdict belongs to the milestone review.
+
+## Environment repairs before the smoke (2026-10-16)
+
+The dispatch's environment facts were stale in three ways; each was repaired before the run and none
+touched `internal/**`/`cmd/**` source (until the authorised gateway repair above):
+
+1. **Go toolchain.** `.tmp/go-toolchain` was wiped with the rest of `.tmp`; no Go existed on the
+   machine. Re-provisioned `go1.24.13 linux/amd64` from `go.dev/dl` into the recorded GOROOT path
+   `.tmp/go-toolchain/root/usr/lib/go-1.24`, tarball sha256 verified against the published value
+   `1fc94b57134d51669c72173ad5d49fd62afb0f1db9bf3f798fd98ee423f8d730` before extraction.
+2. **Recorded ticket-19 evidence (VS2-EC-1 comparison target).** `.tmp/natural9-n7-f{10,11,12}-s{0..3}-w1.json`
+   were wiped. Regenerated deterministically from the frozen substrate at `00de40f` with the exact
+   ticket-19 command shape (`cmd/natural -mechanism v6 -policy natural/7 -r 8 -hours 168 -births both
+   -founders f -seed s -workers 1`, patches default 2, one fresh checkpoint dir per cell), 12/12 OK.
+   Substrate identity corroborated by the committed digest pins
+   (`go test ./internal/world -run TestNaturalFounders -count=1` → ok, 68.99s). Residual, disclosed:
+   the originals are gone, so byte-comparison against them is impossible; the regenerated files are
+   the declared evidence home (`.tmp/**` is in this ticket's scope; VS1 spec §11.3 declared the
+   no-AI-rerun fallback for exactly this loss).
+3. **Gateway auth.** The local litellm (pid 174194, config `~/litellm.yml`) exposes
+   `github_copilot/gpt-6-luna` (mode `responses`, only `/v1/responses`) with no master key; runs need
+   no `LITELLM_API_KEY`. `LITELLM_BASE_URL=http://127.0.0.1:4000`,
+   `LITELLM_MODEL=github_copilot/gpt-6-luna`.
+
+Preflight at branch tip: `go build ./...` PASS (60s), `go vet ./...` PASS (44s).
+
 Status: dispatched 2026-10-16T15:52+08:00, actor: supervisor, worker: sole writer on branch
 `feature/34-vs2-live`. Operator authorised real-model spend in-session (2026-10-16); all §11.3
 operator decisions were delegated to the agent and are recorded below as confirmed defaults.

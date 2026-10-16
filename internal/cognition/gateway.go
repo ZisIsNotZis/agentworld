@@ -221,12 +221,17 @@ type responsesText struct {
 }
 
 type responsesRequestBody struct {
-	Model           string               `json:"model"`
-	Input           []responsesInputItem `json:"input"`
-	Temperature     float64              `json:"temperature"`
-	TopP            float64              `json:"top_p"`
-	MaxOutputTokens int                  `json:"max_output_tokens"`
-	Text            *responsesText       `json:"text,omitempty"`
+	Model string               `json:"model"`
+	Input []responsesInputItem `json:"input"`
+	// Temperature and TopP are never sent on the responses wire: the declared
+	// application model (github_copilot/gpt-6-luna) rejects each as an
+	// unsupported parameter (HTTP 400 invalid_request_body, ticket 34 smoke
+	// gate). The declared Sampling instance stays recorded unchanged on every
+	// call record; only the outgoing request construction omits the two fields.
+	Temperature     *float64       `json:"temperature,omitempty"`
+	TopP            *float64       `json:"top_p,omitempty"`
+	MaxOutputTokens int            `json:"max_output_tokens"`
+	Text            *responsesText `json:"text,omitempty"`
 }
 
 func (responsesCodec) Encode(req ModelRequest, model string, output OutputMode) ([]byte, error) {
@@ -236,8 +241,6 @@ func (responsesCodec) Encode(req ModelRequest, model string, output OutputMode) 
 			{Role: "system", Content: []responsesTextPart{{Type: "input_text", Text: GatewaySystemPrompt}}},
 			{Role: "user", Content: []responsesTextPart{{Type: "input_text", Text: string(req.Request)}}},
 		},
-		Temperature:     req.Sampling.Temperature,
-		TopP:            req.Sampling.TopP,
 		MaxOutputTokens: req.Sampling.MaxTokens,
 	}
 	if output == OutputJSON {
