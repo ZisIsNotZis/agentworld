@@ -129,6 +129,83 @@ references. Scheduling note: the runner's cell start order follows semaphore han
 order (observed: first acquirers were tasks 1, 3, 36, 59); harmless — cells are independent and
 bands aggregate per cell; the declared inventory is what the report records.
 
+## Primary live matrix — result (2026-10-16T17:12 → 2026-10-17T03:12+08:00, declared bound consumed)
+
+Command (as declared above): all 12 primary cells × arms `A0,R,P,U,A`, `-live`, `-budget-min 600
+-parallel 4`, root `.tmp/34-vs2-runs`, outputs `.tmp/34-vs2-evaluation.{json,txt}`, binary from
+commit `3e9a878`. Wall 600 min (the declared bound expired during the replay phase and one cell);
+exit 0; report emitted. **Inventory: 59/60 declared cells ran; 1 skipped, verbatim:**
+`R-f11-s0: model unavailable: 3 attempts exhausted` — the budget-expiry context cancellation cut the
+cell in flight at ≈ 687 calls (partial ledger preserved in its run dir; no final bundle). Its
+P/U/A partners ran and are recorded with `reason: no-reference` rows.
+
+Aggregate ledger (all 60 run dirs): 26 337 call records, 10 237 596 prompt tokens, 7 038 503
+completion tokens — reported, never spend (unpriced model; operator decision 6).
+
+Realized calls per arm (live): R 1 262–1 794 (ceiling 4 096; 11 cells, all complete references);
+P 235–256 (one cell halted, below); U 226–256; A 226–256; under-budget budgeted cells 28/36 (the
+population and claim-wake stream thin under live decisions — reported, never equalized, §5.3).
+
+**VS2-EC-1..9 statuses, verbatim from the live report:**
+
+- `VS2-EC-1` **PASS** — A0 byte-identical at all 12 cells (branch digests, event counts/body bytes,
+  hourly population) against the regenerated ticket-19 recordings.
+- `VS2-EC-2` **FAIL** — `budgeted cells=36 ceiling N=256 over-ceiling=0 under-budget=28
+  missing-ceiling-rows=0 ceiling-halts=1 missing=none`. The one halt: `P-f10-s1`, typed
+  `CognitiveCeilingHitError` on `cognitive-calls`. Anatomy (from its ledger, preserved): 256 call
+  records = 253 logical calls + 3 retried transport timeouts (each 30.0 s, `status: timeout`,
+  `attempt: 1`, retried once as `attempt: 2`); the budget charges every physical attempt while the
+  P selector schedules logical calls, so the 257th attempted call was refused by the fail-loud
+  ceiling — the §5.2 instrument firing on a live-only condition (the hermetic FakeClient never
+  times out, so retries never occurred there). The cell's export was refused (short projection
+  145/169 recorded). Verbatim band outcome: FAIL. The milestone review owns the reading
+  (attempt-charged vs logical-call ceiling); no source edit was authorised or made.
+- `VS2-EC-3` **FAIL** — `complete A/P/U cells=10/12; adaptive-dominates=0;
+  clean-negative(mutually non-dominating)=9; baseline-strictly-dominates-adaptive=1; falsified at
+  f10-s0`. On the live matrix adaptive NEVER dominates and is strictly dominated once (f10-s0). Per
+  spec §8.4 this is the declared falsifying outcome, distinct from the clean negative: it falsifies
+  the value model `vs2-value/1` as instantiated on this substrate+model at equal budget. The
+  declared acceptance rule for the central claim does not fire.
+- `VS2-EC-4` **FAIL** — `fidelity rows=32 each carrying 8 indicators …; incomplete=28`. All 32 rows
+  DO carry 8 indicators; the band's completeness counter flags any row whose §6-normalised
+  FirstDivergenceHour is < 1 — i.e. raw first divergence at hour 0 (normalised 0 by the declared
+  `raw == -1 ? H+1 : raw` rule — legitimate for live runs where budgeted arms diverge from R at the
+  first decision hour) plus the three `no-reference` f11-s0 rows. Anatomy recorded; verbatim band
+  outcome: FAIL.
+- `VS2-EC-5` **FAIL** — `priority cells replayed=35 mismatches=35`. The replay phase started after
+  the budget expired: every replay task is recorded `skipped:budget` (the report's replay list is
+  verbatim below), and the band counts non-`identical` outcomes as mismatches. This is an evidence
+  GAP from the declared bound, not a replay divergence: live replay evidence exists only for the
+  smoke cell (`P-f12-s0: identical`, zero model calls); the hermetic matrix carried 36/36 identical.
+  The CLI has no replay-only mode; completing the 35 live replays would re-run the budgeted matrix
+  (~9 000 calls) and was not authorised. Recorded as a disclosed gap for the milestone review.
+- `VS2-EC-6` **PASS** — `import closure … violations=0; sentinel+recorded Role A requests
+  scanned=24940 (recorded=24939) … privileged markers=0; allocation records scanned=3733, markers=0`.
+- `VS2-EC-7` **PASS** — `A cells=12 reserved E=ceil(q*N)=64 recorded exploration sum=672; P/U
+  exploration empty; violations=0` (672 ≤ 12×64 = 768).
+- `VS2-EC-8` **PASS** — `value model vs2-value/1 … budgeted cells=36 with recorded candidate
+  scores=35` (the halted cell's scores live in its ledger; the report counts 35).
+- `VS2-EC-9` **PASS** — band emitted per its hermetic wording; see the honesty caveat above: the
+  report's static `status`/`revision`/EC-9 strings are L4c hermetic constants and are WRONG for a
+  live run. The true status of THIS run is: live, real gateway calls, spend authorised
+  (VS2_SPEND_AUTHORIZATION set for the run only), model `github_copilot/gpt-6-luna` via
+  `http://127.0.0.1:4000`, wire `responses`.
+
+**Primary-matrix verdict inputs (for the milestone review, not praise):** the declared central-claim
+acceptance rule does not fire — EC-3 is falsified at f10-s0 with adaptive never dominating on the
+live matrix; the real-model arm is no longer blocked: it ran, and the result is the falsifying
+outcome §8.4 declares reportable. Central claim: **NOT accepted; value model as instantiated
+falsified at equal budget on f10-s0, mutually non-dominating elsewhere.**
+
+Artefacts: `.tmp/34-vs2-evaluation.json` sha256
+`83ced3b3e3911292c0051f5fce87b507608352437950ba7f7fc774d5a80dae7e`; `.tmp/34-vs2-evaluation.txt`
+sha256 `ccf13a40f8b0b2c8646fbbf068f98988ec13f477ed090dca704043ac605b58ad`; per-cell run dirs with
+hash-chained ledgers under `.tmp/34-vs2-runs/`. Bindings: revision (branch tip) `3e9a878` (source
+fix commits `95c80b1`, `6006e98`); model identity digest
+`66f1270482c7472ac66022c1c4d31ac48620b0e4129b065cb65ae11fde260a62`; model+feature identity digest
+`55f368ad603928e625c6f39d0a30ffa64c199c3b6365371b93b573f89a45919f`; seeds: primary `f ∈ {10,11,12} ×
+s ∈ {0..3}`, sensitivity `f=12 × s ∈ {4..7}`; wall 600 min declared bound (consumed).
+
 ## Environment repairs before the smoke (2026-10-16)
 
 The dispatch's environment facts were stale in three ways; each was repaired before the run and none
