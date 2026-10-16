@@ -74,6 +74,37 @@ bounds reasoning with the same field; the chat-completions codec still sends the
 option to omit the bound entirely (model default 128 000) was rejected for per-call spend risk; a
 different model and stopping the lane were rejected as unnecessary.
 
+## Live smoke gate (run 3) — PASSED (2026-10-16)
+
+Run 3 (post repair 2): `-cells f12-s0 -arms P -live`, `VS2_SPEND_AUTHORIZATION` env (value set for
+the run only), `LITELLM_BASE_URL=http://127.0.0.1:4000`, `LITELLM_MODEL=github_copilot/gpt-6-luna`,
+`-budget-min 30 -parallel 1`, binary built from commit `6006e98`. Wall ≈ 18 min (1075 s cell
+duration), exit 0, report emitted. **Gate PASS:** 256 real gateway calls recorded in the hash-chained
+ledger (240 `ok`, 16 `malformed` — reasoning-incomplete at the approved 512 bound, each recorded
+fail-loud and counted as decision errors, indicator 8); 182 model actions applied (`role_a.source =
+"model"`), 74 fallback (16 malformed + 58 other refused/inert reasons) — not fallback-only; no auth
+or wire error. Priority replay `P-f12-s0: identical` (zero model calls, VS2-EC-5). Bindings: model
+`github_copilot/gpt-6-luna`, wire `responses`, model identity digest
+`66f1270482c7472ac66022c1c4d31ac48620b0e4129b065cb65ae11fde260a62`, model+feature identity digest
+`55f368ad603928e625c6f39d0a30ffa64c199c3b6365371b93b573f89a45919f` — both identical to the recorded
+hermetic binding (ticket 33). The cell's branch digest `c4c20c4b8e085a0836485ecf91affd33fce8785cafaa
+6d159e9203052bf8f555` matches the regenerated ticket-19 recording for f12-s0 — the VS2-EC-1
+continuity witness holds at this cell. Tokens: 102 563 prompt / 67 767 completion (reported, never
+spend — the model is unpriced, cost accounting waived per operator decision 6). Smoke run-3
+artefacts: `.tmp/34-vs2-smoke-evaluation.json` sha256
+`94edee9dcfbe159306ea0e8e382ba295836310ed76eaf4d7672005d5bdfc479e`, `.tmp/34-vs2-smoke-evaluation.txt`
+sha256 `24a78411045c2f0544ac93e3582ccf0c54b6d248ba8154ce57444662656cc5bf`, ledger
+`6a625a3cecb1426faa34eadad344a17a40eccc6f2899b12b03138a496baca997`. Bands (partial smoke inventory,
+recorded verbatim): EC-1 not-evaluable, EC-2 PASS, EC-3 not-evaluable, EC-4 not-evaluable, EC-5 PASS,
+EC-6 PASS, EC-7 not-evaluable, EC-8 PASS, EC-9 PASS.
+
+**Primary matrix declared before starting** (contract step 3): all 12 declared primary cells
+(`f ∈ {10,11,12}` × `s ∈ {0..3}`), arms `A0,R,P,U,A`, `-live`, **`-budget-min 600`, `-parallel 4`**
+(generous sizing above the 480 suggestion for measured live latency ≈ 4.1 s/call: R ≈ 12 cells ×
+≈ 1 340 calls ≈ 92 min serial each ⇒ ≈ 3 waves ≈ 4.6 h, budgeted arms ≈ 2.5 h, replay + report
+margin; total ≈ 7.3 h < 8 h bound; 48 h lane deadline governs). Root `.tmp/34-vs2-runs`, outputs
+`.tmp/34-vs2-evaluation.{json,txt}`.
+
 ## Environment repairs before the smoke (2026-10-16)
 
 The dispatch's environment facts were stale in three ways; each was repaired before the run and none
