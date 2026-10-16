@@ -234,6 +234,19 @@ type responsesRequestBody struct {
 	Text            *responsesText `json:"text,omitempty"`
 }
 
+// responsesOutputTokenBound is the fixed outgoing `max_output_tokens` of the
+// responses wire. The declared application model (github_copilot/gpt-6-luna)
+// is a reasoning model: on /v1/responses the bound covers reasoning + text
+// together, and the frozen sampling MaxTokens (128) is consumed entirely by
+// reasoning, returning status "incomplete" with no message text (ticket 34
+// smoke gate, second wire constraint). Raw probes with the exact recorded
+// request payload: 512 -> completed, 227 output tokens (207 reasoning + 20
+// text), valid schema JSON; 1024 -> completed, 299; 128 + reasoning effort
+// low -> still incomplete (the gateway ignores the reasoning parameter). 512
+// is the approved applied bound (~2.3x probe headroom); the declared sampling
+// instance stays frozen and recorded unchanged on every call record.
+const responsesOutputTokenBound = 512
+
 func (responsesCodec) Encode(req ModelRequest, model string, output OutputMode) ([]byte, error) {
 	body := responsesRequestBody{
 		Model: model,
@@ -241,7 +254,7 @@ func (responsesCodec) Encode(req ModelRequest, model string, output OutputMode) 
 			{Role: "system", Content: []responsesTextPart{{Type: "input_text", Text: GatewaySystemPrompt}}},
 			{Role: "user", Content: []responsesTextPart{{Type: "input_text", Text: string(req.Request)}}},
 		},
-		MaxOutputTokens: req.Sampling.MaxTokens,
+		MaxOutputTokens: responsesOutputTokenBound,
 	}
 	if output == OutputJSON {
 		body.Text = &responsesText{Format: responsesTextFormat{Type: string(OutputJSON)}}

@@ -50,6 +50,30 @@ live run. The true status of this ticket's runs (live, spend authorised, model
 `github_copilot/gpt-6-luna` via the local gateway) is recorded here in the ticket; the acceptance
 verdict belongs to the milestone review.
 
+**Second wire constraint (reasoning output bound), same section, discovered at smoke run 2.** After the
+temperature/top_p omission, smoke run 2 (`-cells f12-s0 -arms P -live`, 30-min bound) reached the
+gateway (200s, ~2.1 s average, tokens flowing) but decoded 252/256 calls `malformed` (4 `ok` by
+luck): every Role A action fell back — `role_a.source = "fallback"` on all 256 interventions — a
+fallback-only run, not a live VS2 result. Root cause: `github_copilot/gpt-6-luna` is a reasoning
+model; on `/v1/responses` the outgoing `max_output_tokens` bounds reasoning + text together, and the
+frozen `MaxTokens: 128` is consumed entirely by reasoning (`reasoning_tokens: 128`), returning
+status `incomplete` with no message text. Run-2 artefacts preserved at
+`.tmp/34-vs2-smoke-run2-refused/` (`calls.jsonl` sha256
+`ca454badae6a3cac8ff94b4d477f3fac90f116082aa441589d7f04d771ad194f`, evaluation JSON
+`7677062c880b072fb666d129ef611adf21d5d8bf4524e0ea3d463ef3e9486c7b`).
+
+**Authorised repair 2 (supervisor, option A):** the responses codec sends a fixed
+`max_output_tokens: 512` (`responsesOutputTokenBound`, `internal/cognition/gateway.go`); probe
+evidence with the exact recorded request payload: 512 → `completed`, 227 output tokens (207
+reasoning + 20 text), valid schema JSON; 1024 → completed, 299; 128 + `reasoning:{effort:"low"}` →
+still incomplete (the gateway ignores the reasoning parameter). 512 is ~2.3× the observed need. The
+**applied output bound (512) now differs from the declared `FrozenSampling().MaxTokens` (128)**:
+`FrozenSampling()` and every call record's `sampling` field stay byte-unchanged; the declared
+instance records intent, the responses wire applies the approved 512 bound because the model+wire
+bounds reasoning with the same field; the chat-completions codec still sends the declared 128. The
+option to omit the bound entirely (model default 128 000) was rejected for per-call spend risk; a
+different model and stopping the lane were rejected as unnecessary.
+
 ## Environment repairs before the smoke (2026-10-16)
 
 The dispatch's environment facts were stale in three ways; each was repaired before the run and none
