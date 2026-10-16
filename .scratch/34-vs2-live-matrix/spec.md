@@ -206,6 +206,29 @@ fix commits `95c80b1`, `6006e98`); model identity digest
 `55f368ad603928e625c6f39d0a30ffa64c199c3b6365371b93b573f89a45919f`; seeds: primary `f ∈ {10,11,12} ×
 s ∈ {0..3}`, sensitivity `f=12 × s ∈ {4..7}`; wall 600 min declared bound (consumed).
 
+## Sensitivity-seed extension — attempt 1 (partial; gateway outage) and attempt 2
+
+Attempt 1 (`-cells f12-s4,f12-s5,f12-s6,f12-s7 -arms R,P,U,A -live`, `-budget-min 420 -parallel 4`,
+root `.tmp/34-vs2-sens-runs`, binary from commit `85d422e`, run 2026-10-17T03:21 → 07:39+08:00):
+exit 0, report emitted, **inventory 7/16 ran, 9 skipped verbatim** — `R-f12-s4`, `R-f12-s5`,
+`R-f12-s6`, `R-f12-s7`, `U-f12-s5`, `U-f12-s6`, `A-f12-s4`, `A-f12-s5`, `A-f12-s6`, each
+`model unavailable: 3 attempts exhausted`. Anatomy (ledgers preserved): the cells that started late
+hit a transport timeout-storm (30 s timeouts, 3 attempts each, zero-byte responses) in the
+07:2x–07:3x window; the litellm process did not restart (up since 2026-10-16T15:37), so the outage
+was upstream/load, not local. Ran: P f12-s4..s7 all realized 256; U s4 (226) s7 (244); A s7 (256).
+With all four R cells lost, the artifact computes zero fidelity rows: EC-1/EC-3/EC-4 not-evaluable,
+EC-2 PASS (7 budgeted cells, 0 over-ceiling, 0 halts), EC-5 PASS (7/7 replays identical, zero model
+calls), EC-6/7/8/9 PASS. Artefacts: `.tmp/34-vs2-sensitivity-evaluation.json` sha256
+`367a44fc7242b49c2f9b27d40eead14988ca928b5d194aaa3f2a028d0422b225`, text
+`e64587faa2162e7b7a808c6ce4aa05af70beaf207cffe01acea19c50f075e067`; failed-cell ledgers + report
+preserved at `.tmp/34-vs2-sens-attempt1-partial/` (the runner would RemoveAll its root on a rerun).
+The extension cannot inform the declared seed-robustness question (§8.2) without references, and the
+no-progress root-error condition (gateway unavailable) has since cleared (probe: HTTP 200, 2.1 s).
+**Attempt 2 declared before starting:** identical command shape, fresh root `.tmp/34-vs2-sens2-runs`,
+outputs `.tmp/34-vs2-sensitivity2-evaluation.{json,txt}`, `-budget-min 420 -parallel 4`, binary from
+the then-current branch tip. If attempt 2 fails wholesale with the same root error, the lane stops
+and reports per the no-progress rule.
+
 ## Environment repairs before the smoke (2026-10-16)
 
 The dispatch's environment facts were stale in three ways; each was repaired before the run and none
