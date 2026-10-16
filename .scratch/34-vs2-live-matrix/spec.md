@@ -74,6 +74,22 @@ bounds reasoning with the same field; the chat-completions codec still sends the
 option to omit the bound entirely (model default 128 000) was rejected for per-call spend risk; a
 different model and stopping the lane were rejected as unnecessary.
 
+## Secondary lane skipped by declared note: the N = 512 budget-sensitivity extension
+
+Operator decision 3 authorised the `N = 512` extension as a SECONDARY lane, skippable with a declared
+skip note. **Skipped, declared:** the runner CLI exposes no declared ceiling override —
+`DeclaredCallCeiling` is a frozen constant (`cmd/vs2/config.go`, spec §11.2 forbids editing a
+declared constant after its first run) and the flag set (`cmd/vs2/main.go`: arms, cells, sensitivity,
+out, out-txt, root, recorded, src, budget-min, parallel, replay, live, wire) carries no `-ceiling`.
+Running the extension would require a `cmd/**` source edit outside this ticket's authorised repair
+scope (two gateway-wire repairs only), so the lane is not taken. No claim is made about `N = 512`.
+
+Probe-call accounting (all live calls spent outside the harness, recorded nowhere else): 1
+connectivity probe pre-repair-1 (≈ 92 tokens), 3 repair-1 probes (temperature/top_p/json_object,
+≈ 200 tokens), 3 repair-2 probes (output bound 512/1024/128+low, ≈ 1 500 tokens). Harness runs:
+smoke run 1 (256 refused calls, 0 tokens), smoke run 2 (256 malformed, ≈ 87 000 tokens), smoke run 3
+(256 calls, ≈ 170 000 tokens), plus the primary matrix and the sensitivity extension declared below.
+
 ## Live smoke gate (run 3) — PASSED (2026-10-16)
 
 Run 3 (post repair 2): `-cells f12-s0 -arms P -live`, `VS2_SPEND_AUTHORIZATION` env (value set for
