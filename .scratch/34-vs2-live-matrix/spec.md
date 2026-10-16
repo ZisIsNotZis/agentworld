@@ -121,6 +121,14 @@ EC-6 PASS, EC-7 not-evaluable, EC-8 PASS, EC-9 PASS.
 margin; total ≈ 7.3 h < 8 h bound; 48 h lane deadline governs). Root `.tmp/34-vs2-runs`, outputs
 `.tmp/34-vs2-evaluation.{json,txt}`.
 
+Primary matrix progress note (2026-10-16 ~19:40+08:00, ≈ 2.5 h into the 600-min bound): process
+alive, 27 cell dirs created, 10 cells finalised, R wave 3 of 4 running. Sampled finished R cells:
+1 330–1 602 realized calls each, ≈ 92 % `ok`, ≈ 8 % `malformed` (reasoning-incomplete at the approved
+512 bound, recorded as decision errors), all far under the 4 096 reference ceiling — complete
+references. Scheduling note: the runner's cell start order follows semaphore handoff, not spawn
+order (observed: first acquirers were tasks 1, 3, 36, 59); harmless — cells are independent and
+bands aggregate per cell; the declared inventory is what the report records.
+
 ## Environment repairs before the smoke (2026-10-16)
 
 The dispatch's environment facts were stale in three ways; each was repaired before the run and none
