@@ -45,6 +45,7 @@ func main() {
 		respBound    = flag.Int("response-bound", 0, "applied recorded-response byte bound (0: the spec's 64 KiB hermetic default); a live max-effort run declares 1 MiB because reasoning items exceed 64 KiB")
 		curveIn      = flag.String("curve-in", "", "comma-separated evaluation JSON paths: do not run cells, emit the curve report over them instead")
 		curveOut     = flag.String("curve-out", "", "curve report text output path (default: <out-txt> with a -curve suffix)")
+		relabelIn    = flag.String("relabel", "", "comma-separated evaluation JSON paths: re-emit their reports from the recorded data with the mode-corrected status/label/EC-9 text (no cells run, no spend); writes <name>-relabelled.{json,txt}")
 	)
 	flag.Parse()
 	if *parallel < 1 {
@@ -82,6 +83,24 @@ func main() {
 		fail("wire: %v", err)
 	}
 	declaredGatewayWire = mode
+
+	// The relabel mode re-emits recorded reports with the mode-corrected
+	// status/label/EC-9 text: a report-only regeneration path that runs no cell and
+	// spends nothing, so a report produced by an older binary can be corrected
+	// without re-running the experiment or rewriting the original artefact.
+	if *relabelIn != "" {
+		for _, path := range splitList(*relabelIn) {
+			out, changes, err := relabelEvaluationFile(path)
+			if err != nil {
+				fail("relabel %s: %v", path, err)
+			}
+			fmt.Printf("%s -> %s\n", path, out)
+			for _, change := range changes {
+				fmt.Printf("  changed: %s\n", change)
+			}
+		}
+		return
+	}
 
 	// The curve report mode reads recorded evaluations and runs nothing: it
 	// computes the declared band, stability, SNR, first-separation and
@@ -229,6 +248,7 @@ func buildEvaluation(runs []*cellRun, recordedDir string, skipped, declared []st
 		FeatureSet:           protocol.FeatureSetVersion,
 		BasePolicy:           basePolicy().ID,
 		Mechanism:            int(mechanism()),
+		Live:                 activeLive != nil,
 		HorizonHours:         horizonHours,
 		CallCeiling:          DeclaredCallCeiling,
 		DeclaredEffort:       declaredReasoningEffort,

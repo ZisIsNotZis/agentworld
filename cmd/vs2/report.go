@@ -1,9 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 
 	"agentworld/internal/cognition"
 	"agentworld/internal/experiment"
@@ -167,8 +171,12 @@ type evaluation struct {
 	FeatureSet           string `json:"feature_set"`
 	BasePolicy           string `json:"base_policy"`
 	Mechanism            int    `json:"mechanism"`
-	HorizonHours         int    `json:"horizon_hours"`
-	CallCeiling          uint64 `json:"call_ceiling"`
+	// Live records whether the report came from a live gateway run (real calls)
+	// or the hermetic fake, so a recorded evaluation can be re-labelled honestly
+	// without the process that produced it.
+	Live         bool   `json:"live"`
+	HorizonHours int    `json:"horizon_hours"`
+	CallCeiling  uint64 `json:"call_ceiling"`
 	// The applied wire settings and replicate count of the run (ticket 35):
 	// declared effort, applied output bound, samples per decision, and repeated
 	// runs per cell. DeclaredEffort empty means the model default was left to
@@ -443,3 +451,75 @@ func joinOrNone(items []string) string {
 }
 
 func fmtFloat(v float64) string { return fmt.Sprintf("%.4f", v) }
+
+// anyCellLive reports whether any cell carries the applied wire settings only a
+// live gateway run records.
+func anyCellLive(cells []cellReport) bool {
+	for _, c := range cells {
+		if c.ResponseBound > 0 || c.MaxOutputTokens > 0 || c.Effort != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// relabelEvaluationFile re-emits one recorded evaluation with the mode-corrected
+// report text. Measured fields are carried through untouched; only the fields
+// that describe the run mode are recomputed, and the difference is returned so
+// the caller can record it beside the original artefact.
+func relabelEvaluationFile(jsonPath string) (string, []string, error) {
+	raw, err := os.ReadFile(jsonPath)
+	if err != nil {
+		return "", nil, err
+	}
+	var ev evaluation
+	if err := json.Unmarshal(raw, &ev); err != nil {
+		return "", nil, err
+	}
+	changes := make([]string, 0, 4)
+	effort := ev.DeclaredEffort
+	// Legacy evaluations predate the recorded Live field; a live run is still
+	// identifiable from its cells, because only a live run applies a non-default
+	// output bound or response bound and records an effort.
+	if !ev.Live && (ev.AppliedResponseBound > 0 || ev.AppliedMaxOutput > 0 || anyCellLive(ev.Cells)) {
+		ev.Live = true
+		changes = append(changes, "live: true (inferred from the recorded applied bounds; the evaluation predates the recorded live flag)")
+	}
+	if ev.Live {
+		label := liveEvaluationLabel(liveEndpoint(), effort, ev.AppliedMaxOutput, ev.AppliedResponseBound,
+			"spend was authorised in-session by the supervisor within the lane's declared hard cap")
+		if ev.Label != label {
+			changes = append(changes, "label: hermetic text -> live/real-model text naming model, wire, applied effort/output/response bounds, run-only spend authorisation and the unpriced cost state")
+			ev.Label = label
+		}
+		if ev.Status != "live/real-model" {
+			changes = append(changes, "status: "+ev.Status+" -> live/real-model")
+			ev.Status = "live/real-model"
+		}
+	}
+	for i := range ev.Bands {
+		if ev.Bands[i].ID != "VS2-EC-9" {
+			continue
+		}
+		status, evidence := ec9Evidence(ev.Label, ev.Live, liveEndpoint())
+		if ev.Bands[i].Evidence != evidence {
+			changes = append(changes, "VS2-EC-9 arm text: 'blocked on spend' -> the live-model arm RAN, no acceptance claimed here")
+			ev.Bands[i].Evidence = evidence
+			ev.Bands[i].Status = status
+		}
+	}
+	base := strings.TrimSuffix(jsonPath, filepath.Ext(jsonPath))
+	jsonOut := base + "-relabelled.json"
+	textOut := base + "-relabelled.txt"
+	body, err := json.MarshalIndent(ev, "", "  ")
+	if err != nil {
+		return "", nil, err
+	}
+	if err := os.WriteFile(jsonOut, append(body, '\n'), 0o644); err != nil {
+		return "", nil, err
+	}
+	if err := os.WriteFile(textOut, []byte(renderText(ev)), 0o644); err != nil {
+		return "", nil, err
+	}
+	return jsonOut, changes, nil
+}

@@ -427,21 +427,40 @@ func ec8(runs []*cellRun) reportBand {
 		"value model version=%s bound in run identity and in the allocation-record policy_fingerprint; budgeted cells=%d with recorded candidate scores=%d; the float-free projection and the all-zero-weight uniform reduction are unit-exercised (internal/cognition/protocol/valuemodel_test.go)", VS2ValueModelVersion, withModel, withScores))
 }
 
-// ec9 is VS2-EC-9: honest labels, the real-model gate, and a valid negative.
-func ec9() reportBand {
-	const criterion = "VS2-EC-9 honest labels, real-model gate, negative valid: every report is synthetic/model-conditional; the real-model arm is labelled blocked on spend authorisation and no acceptance is claimed without it; a clean negative is reported verbatim and is a valid, decisive outcome."
-	labelled := contains(evaluationLabel, "synthetic/model-conditional") || contains(evaluationLabel, "live/real-model")
+// ec9Evidence is the EC-9 outcome for one report: it checks that the report's
+// label matches the run's actual mode and states the real-model arm truthfully.
+// It is shared by the live report path and the report-only relabel path, so a
+// recorded live evaluation can be re-emitted with the correct arm text without
+// re-running anything.
+func ec9Evidence(label string, live bool, endpoint string) (string, string) {
+	labelled := contains(label, "synthetic/model-conditional") || contains(label, "live/real-model")
 	gate := contains(liveSpendRequirement, "spend") && contains(liveSpendRequirement, "refus")
 	status := "PASS"
 	if !labelled || !gate {
 		status = "FAIL"
 	}
 	arm := "blocked on spend; the hermetic label states no spend was authorised"
-	if activeLive != nil {
-		arm = "RAN: live gateway " + activeLive.endpoint + ", spend authorised for the run only; no acceptance is claimed here, the verdict belongs to the milestone review"
+	if live {
+		arm = "RAN: live gateway " + endpoint + ", spend authorised for the run only; no acceptance is claimed here, the verdict belongs to the milestone review"
 	}
-	return band("VS2-EC-9", criterion, status, fmt.Sprintf(
-		"label=%q labelled=%t (matched to the run mode); honest limit=%q; real-model arm: %s; live gate=%q (refuses to start without the operator spend authorisation)", evaluationLabel, labelled, honestLimit, arm, liveSpendRequirement))
+	return status, fmt.Sprintf(
+		"label=%q labelled=%t (matched to the run mode); honest limit=%q; real-model arm: %s; live gate=%q (refuses to start without the operator spend authorisation)", label, labelled, honestLimit, arm, liveSpendRequirement)
+}
+
+// liveEndpoint is the recorded endpoint host+path of the live transport, or the
+// declared local gateway when no transport is configured in this process.
+func liveEndpoint() string {
+	if activeLive != nil {
+		return activeLive.endpoint
+	}
+	return "the declared local LiteLLM gateway (host not recorded in the evaluation JSON)"
+}
+
+// ec9 is VS2-EC-9: honest labels, the real-model gate, and a valid negative.
+func ec9() reportBand {
+	const criterion = "VS2-EC-9 honest labels, real-model gate, negative valid: every report is synthetic/model-conditional; the real-model arm is labelled blocked on spend authorisation and no acceptance is claimed without it; a clean negative is reported verbatim and is a valid, decisive outcome."
+	status, evidence := ec9Evidence(evaluationLabel, activeLive != nil, liveEndpoint())
+	return band("VS2-EC-9", criterion, status, evidence)
 }
 
 func sortedCellKeys(byCell map[string]map[string]*cellRun) []string {
