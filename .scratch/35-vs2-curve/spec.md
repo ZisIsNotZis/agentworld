@@ -238,3 +238,21 @@ Relaunch 00:21, truly detached: `setsid nohup sh .tmp/35-run-stage1.sh > .tmp/35
 13.3/min over the next 8 min, 6.5/min over the next 8 min (mean latency ~74 s/call under real load
 versus the probe's 17.7 s at `-parallel 8`); at the measured rate stage 1 needs ~10 h wall, so the run
 is left detached and polled. No non-`ok` status recorded so far.
+
+Poll log (stage 1, detached pid 1475000; `python3 .tmp/35-poll.py` appends to
+`.tmp/35-stage1.progress`, one line per poll: epoch, total calls, calls/min since the previous poll,
+projected hours remaining, status histogram):
+
+| local time | total calls | calls/min (since prev poll) | statuses | projection |
+|---|---|---|---|---|
+| 00:56 | 332 | — | all `ok` | — (first sample) |
+| 01:05 | 409 | 8.53 | all `ok` (409/409) | ~6.8 h remaining |
+
+Concurrency check (supervisor request): one throwaway probe at `-parallel 2`, cell `f10-s9` (not a
+declared cell), H=4, max effort, run while stage 1 was live → 21 calls in 307.9 s = 4.09 calls/min
+(0.5 calls/worker/min ≈ 29 s/call). Stage 1 at that moment ran 7.06 calls/min across 6 cells
+(0.88 calls/worker/min ≈ 68 s/call). Stage 1 has only 6 cells, so `-parallel 8` yields at most 6
+concurrent calls: the concurrency knob is already saturated by the cell count, and the per-call
+latency (29-68 s at max effort under live load, versus 17.7 s in the idle probe) is provider-side.
+Conclusion: no throughput gain is available from raising `-parallel`; the stage runs at what the
+provider gives, and the projection stands at ~7 h from 01:05.
