@@ -135,7 +135,7 @@ func wireStack(f *world.Natural, spec cellSpec, fp fixture, dir string, budget c
 	wake := declaredPolicy(spec.Arm, spec.Seed)
 	seam, err := cognition.NewRoleASeam(cognition.RoleASeamConfig{
 		Recorder: recorder, Ledger: ledger, Endpoint: endpoint,
-		CredentialPresent: false, WakePolicy: wake,
+		CredentialPresent: false, WakePolicy: wake, Votes: declaredVotes,
 	})
 	if err != nil {
 		return nil, err

@@ -91,8 +91,27 @@ type cellReport struct {
 	BranchDigest   string `json:"branch_digest,omitempty"`
 	TipHash        string `json:"tip_hash,omitempty"`
 	ProjectionHash string `json:"projection_hash,omitempty"`
-	Hours          []int  `json:"hours,omitempty"`
-	AliveByHour    []int  `json:"alive_by_hour,omitempty"`
+	// Replicate is the 1-based replicate index of a repeated run (0 when the run
+	// was not replicated); Effort and MaxOutputTokens are the applied wire
+	// settings of this cell's calls, recorded per cell so a curve comparison
+	// never has to assume them from the command line.
+	Replicate       int    `json:"replicate,omitempty"`
+	Effort          string `json:"effort"`
+	MaxOutputTokens int    `json:"max_output_tokens"`
+
+	// The full hourly KPI series of the cell (ALIVE/BIRTHS/STARVATION/AGE
+	// deaths/capital histogram/granary histogram/wages/max capital). The bands
+	// only ever reported alive_by_hour; the curve criterion (ticket 35) needs
+	// every KPI, so all of them are exported from experiment.Projections.
+	Hours           []int     `json:"hours,omitempty"`
+	AliveByHour     []int     `json:"alive_by_hour,omitempty"`
+	BirthsCum       []int64   `json:"births_cum,omitempty"`
+	DeathsStarveCum []int64   `json:"deaths_starve_cum,omitempty"`
+	DeathsAgeCum    []int64   `json:"deaths_age_cum,omitempty"`
+	CapitalHist     [][]int64 `json:"capital_hist,omitempty"`
+	GranaryHist     [][]int64 `json:"granary_hist,omitempty"`
+	WagesCum        []int64   `json:"wages_cum,omitempty"`
+	MaxCapital      []int64   `json:"max_capital,omitempty"`
 
 	// Equal-budget accounting (VS2-EC-2): the declared ceiling N and the
 	// realized call count from the call ledger. No arm's realized count is
@@ -149,7 +168,15 @@ type evaluation struct {
 	Mechanism            int    `json:"mechanism"`
 	HorizonHours         int    `json:"horizon_hours"`
 	CallCeiling          uint64 `json:"call_ceiling"`
-	ValueModel           string `json:"value_model_version"`
+	// The applied wire settings and replicate count of the run (ticket 35):
+	// declared effort, applied output bound, samples per decision, and repeated
+	// runs per cell. DeclaredEffort empty means the model default was left to
+	// itself, which is a recorded state, not an inference.
+	DeclaredEffort   string `json:"declared_effort"`
+	AppliedMaxOutput int    `json:"applied_max_output_tokens"`
+	Votes            int    `json:"votes"`
+	Replicates       int    `json:"replicates"`
+	ValueModel       string `json:"value_model_version"`
 
 	Arms             []string          `json:"arms"`
 	QuotaSchedule    []int             `json:"quota_schedule"`
@@ -195,7 +222,11 @@ func cellReportOf(cr *cellRun) cellReport {
 	rep := cellReport{
 		Arm: cr.spec.Arm, F: cr.spec.F, Seed: cr.spec.Seed, Workers: cr.fp.effectiveWorkers(), Ran: true,
 		RootDigest: cr.rootDigest, BranchDigest: cr.branchDigest,
+		Replicate: cr.spec.Replicate, Effort: declaredReasoningEffort, MaxOutputTokens: appliedOutputBound(),
 		Hours: cr.proj.Hours, AliveByHour: cr.proj.AliveByHour,
+		BirthsCum: cr.proj.BirthsCum, DeathsStarveCum: cr.proj.DeathsStarveCum,
+		DeathsAgeCum: cr.proj.DeathsAgeCum, CapitalHist: cr.proj.CapitalHist,
+		GranaryHist: cr.proj.GranaryHist, WagesCum: cr.proj.WagesCum, MaxCapital: cr.proj.MaxCapital,
 		Escalated: cr.escalated, AppliedModel: cr.appliedModel, DivergedModel: cr.divergedModel,
 		DecisionErrors: cr.decisionErrors, AllocationRecords: cr.allocationRecords,
 		PromptTokens: cr.totals.PromptTokens, CompletionTokens: cr.totals.CompletionTokens,

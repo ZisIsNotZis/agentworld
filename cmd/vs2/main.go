@@ -35,16 +35,64 @@ func main() {
 		runReplay   = flag.Bool("replay", true, "run the priority-arm replay lane (VS2-EC-5)")
 		live        = flag.Bool("live", false, "run against the real gateway; refused unless "+EnvSpendAuthorization+" is the declared token (spend is NOT authorised)")
 		wire        = flag.String("wire", string(cognition.WireResponses), "declared gateway wire recorded by the cognition stack: responses (default) or chat-completions")
+		effort      = flag.String("effort", "", "applied reasoning effort of a live run: none|low|medium|high|xhigh|max (empty leaves the model default); recorded in run identity and in every call record")
+		maxOutput   = flag.Int("max-output", 0, "applied output-token bound of a live run (0: the wire default, 512 on responses); the applied value is recorded in run identity and every call record")
+		reps        = flag.Int("reps", 1, "repeated runs per arm-in-cell, each in its own <arm>-f<F>-s<S>-r<N> directory with its own ledger and bundles")
+		votes       = flag.Int("votes", 1, "recorded samples per escalated Role A decision combined by majority (default 1, the declared single-call seam)")
+		hours       = flag.Int("hours", DeclaredHorizonHours, "declared horizon H of the run (default 168, the frozen VS2 horizon)")
+		curveIn     = flag.String("curve-in", "", "comma-separated evaluation JSON paths: do not run cells, emit the curve report over them instead")
+		curveOut    = flag.String("curve-out", "", "curve report text output path (default: <out-txt> with a -curve suffix)")
 	)
 	flag.Parse()
 	if *parallel < 1 {
 		*parallel = 1
 	}
+	if *reps < 1 {
+		*reps = 1
+	}
+	if *votes < 1 {
+		*votes = 1
+	}
+	appliedEffort, err := cognition.ParseReasoningEffort(*effort)
+	if err != nil {
+		fail("effort: %v", err)
+	}
+	declaredReasoningEffort = appliedEffort
+	declaredOutputBound = *maxOutput
+	declaredVotes = *votes
+	declaredReplicates = *reps
+	if *hours < 1 {
+		fail("hours: %d", *hours)
+	}
+	declaredHorizonHours = *hours
 	mode, err := cognition.ParseWireMode(*wire)
 	if err != nil {
 		fail("wire: %v", err)
 	}
 	declaredGatewayWire = mode
+
+	// The curve report mode reads recorded evaluations and runs nothing: it
+	// computes the declared band, stability, SNR, first-separation and
+	// Wasserstein statistics over the replicates already on disk.
+	if *curveIn != "" {
+		report, err := curveReportFromFiles(splitList(*curveIn))
+		if err != nil {
+			fail("curve report: %v", err)
+		}
+		text := renderCurveReport(report)
+		path := *curveOut
+		if path == "" {
+			path = strings.TrimSuffix(*outText, ".txt") + "-curve.txt"
+		}
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			fail("curve report: %v", err)
+		}
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			fail("curve report: %v", err)
+		}
+		fmt.Print(text)
+		return
+	}
 
 	if err := authorizeLive(*live); err != nil {
 		fail("%v", err)
@@ -69,12 +117,15 @@ func main() {
 		}
 	}
 
-	declared := make([]string, 0, len(armList)*len(cellList))
+	declared := make([]string, 0, len(armList)*len(cellList)*declaredReplicates)
 	var tasks []cellSpec
 	for _, arm := range armList {
 		for _, c := range cellList {
-			declared = append(declared, fmt.Sprintf("%s-f%d-s%d", arm, c[0], c[1]))
-			tasks = append(tasks, cellSpec{Arm: arm, F: int(c[0]), Seed: c[1]})
+			for rep := 1; rep <= declaredReplicates; rep++ {
+				spec := cellSpec{Arm: arm, F: int(c[0]), Seed: c[1], Replicate: rep}
+				declared = append(declared, spec.String())
+				tasks = append(tasks, spec)
+			}
 		}
 	}
 
@@ -121,7 +172,7 @@ func main() {
 	if *runReplay {
 		replay = runReplaySubset(ctx, runs, *root, *parallel)
 	}
-	eval := buildEvaluation(runs, *recorded, skipped, declared, replay, *srcRoot, DeclaredHorizonHours)
+	eval := buildEvaluation(runs, *recorded, skipped, declared, replay, *srcRoot, declaredHorizonHours)
 	eval.Revision = revisionString()
 	if err := writeEvaluation(eval, *outJSON, *outText); err != nil {
 		fail("write evaluation: %v", err)
@@ -165,9 +216,13 @@ func buildEvaluation(runs []*cellRun, recordedDir string, skipped, declared []st
 		Mechanism:            int(mechanism()),
 		HorizonHours:         horizonHours,
 		CallCeiling:          DeclaredCallCeiling,
+		DeclaredEffort:       declaredReasoningEffort,
+		AppliedMaxOutput:     appliedOutputBound(),
+		Votes:                declaredVotes,
+		Replicates:           declaredReplicates,
 		ValueModel:           declaredValueModel().Version,
 		Arms:                 declaredArms,
-		QuotaSchedule:        quotaSchedule(DeclaredCallCeiling, DeclaredHorizonHours),
+		QuotaSchedule:        quotaSchedule(DeclaredCallCeiling, declaredHorizonHours),
 		Inventory:            inventory{Declared: len(declared), Ran: len(runs), Skipped: skipped},
 		Cells:                reports,
 		Fidelity:             fidelity,
@@ -179,8 +234,25 @@ func buildEvaluation(runs []*cellRun, recordedDir string, skipped, declared []st
 }
 
 func revisionString() string {
-	return fmt.Sprintf("vs2-hermetic-fake/1; model %s wire %s; base natural/7; mechanism v6; H=%d; N=%d; value-model %s; feature-set %s; no authorised spend",
-		cognition.DefaultModelID, declaredGatewayWire, DeclaredHorizonHours, DeclaredCallCeiling, declaredValueModel().Version, protocol.FeatureSetVersion)
+	spend := "no authorised spend"
+	if activeLive != nil {
+		spend = "live gateway run, spend authorised for the run only"
+	}
+	effort := declaredReasoningEffort
+	if effort == "" {
+		effort = "model-default"
+	}
+	return fmt.Sprintf("vs2-hermetic-fake/1; model %s wire %s; effort %s; output-bound %d; votes %d; replicates %d; base natural/7; mechanism v6; H=%d; N=%d; value-model %s; feature-set %s; %s",
+		cognition.DefaultModelID, declaredGatewayWire, effort, appliedOutputBound(), declaredVotes, declaredReplicates,
+		declaredHorizonHours, DeclaredCallCeiling, declaredValueModel().Version, protocol.FeatureSetVersion, spend)
+}
+
+// appliedOutputBound is the output-token bound the run applies: the declared
+// -max-output when one was given, otherwise the wire's own default (0 means the
+// transport's declared bound). It is recorded so run identity names what the
+// wire carried.
+func appliedOutputBound() int {
+	return declaredOutputBound
 }
 
 func writeEvaluation(ev evaluation, jsonPath, textPath string) error {

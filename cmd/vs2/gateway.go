@@ -72,7 +72,8 @@ func newLiveConfig() (*liveConfig, error) {
 		BaseURL: base, APIKey: key, CredentialPresent: key != "",
 		Authorized: true, WireMode: cognition.WireResponses,
 		Model: cognition.DefaultModelID, OutputMode: cognition.OutputJSON,
-		HTTPClient: &http.Client{Timeout: 60 * time.Second},
+		ReasoningEffort: declaredReasoningEffort, MaxOutputTokens: declaredOutputBound,
+		HTTPClient: &http.Client{Timeout: 300 * time.Second},
 	})
 	if err != nil {
 		return nil, err

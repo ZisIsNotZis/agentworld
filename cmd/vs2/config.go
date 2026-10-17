@@ -146,6 +146,26 @@ func budgetFor(arm string) cognition.CognitiveBudget {
 // and the model+wire identity digest name the wire a run was configured for.
 var declaredGatewayWire = cognition.WireResponses
 
+// The declared applied wire settings of a live run (ticket 35). They are run
+// identity, not world mechanisms: DeclaredReasoningEffort is the applied
+// `reasoning.effort`, DeclaredOutputBound the applied `max_output_tokens`
+// (32768 by supervisor decision, so the bound is never the truncation cause),
+// DeclaredVotes the samples per escalated decision (`-votes`, default 1), and
+// DeclaredReplicates the number of repeated runs per cell (`-reps`, default 1).
+// Every one of them is recorded in the revision string and in each cell's
+// report row; the applied effort and bound also reach every call record.
+var (
+	declaredReasoningEffort = ""
+	declaredOutputBound     = 0
+	declaredVotes           = 1
+	declaredReplicates      = 1
+)
+
+// DeclaredOutputBoundDefault is the output-token bound of the curve study
+// (ticket 35 supervisor decision 1). A cap is free headroom: the measured max
+// effort p99 is 13 826 output tokens, so this bound truncates no measured call.
+const DeclaredOutputBoundDefault = 32768
+
 // hermeticEndpoint is the declared recorded endpoint host+path of the hermetic
 // cognition stack; it names the wire mode.
 func hermeticEndpoint(mode cognition.WireMode) string {
@@ -161,6 +181,12 @@ func hermeticEndpoint(mode cognition.WireMode) string {
 // DeclaredHorizonHours is H, the single declared horizon every arm's divergence
 // vector is computed over (spec section 5.3).
 const DeclaredHorizonHours = 168
+
+// declaredHorizonHours is the horizon a run uses: the declared H by default, the
+// -hours override for a shorter declared study horizon (ticket 35 runs 96 h, or
+// 72 h when the measured max-effort latency makes 96 h exceed the declared wall
+// bound). It is recorded in the revision string and in every cell's fixture.
+var declaredHorizonHours = DeclaredHorizonHours
 
 // declaredFounders and declaredSeeds are the declared primary cells (spec
 // section 8.2): f in {10,11,12} x seeds {0,1,2,3}.
@@ -190,17 +216,24 @@ func VS2DeclaredCells() [][2]uint64 {
 	return out
 }
 
-// cellSpec names one declared cell plus the arm that ran in it.
+// cellSpec names one declared cell plus the arm that ran in it. Replicate is
+// the 1-based replicate index of a repeated run (0 for a single unreplicated
+// run), so a replicate is a distinct run directory, ledger, and checkpoint
+// bundle.
 type cellSpec struct {
-	Arm     string
-	F       int
-	Seed    uint64
-	Workers int
+	Arm       string
+	F         int
+	Seed      uint64
+	Workers   int
+	Replicate int
 }
 
 func (c cellSpec) String() string {
 	if c.Workers > 1 {
 		return fmt.Sprintf("%s-f%d-s%d-w%d", c.Arm, c.F, c.Seed, c.Workers)
+	}
+	if c.Replicate >= 1 {
+		return fmt.Sprintf("%s-f%d-s%d-r%d", c.Arm, c.F, c.Seed, c.Replicate)
 	}
 	return fmt.Sprintf("%s-f%d-s%d", c.Arm, c.F, c.Seed)
 }
@@ -225,7 +258,7 @@ func (f fixture) effectiveWorkers() int {
 
 // declaredFixture is the declared (f, seed) world shape at the declared H.
 func declaredFixture(f int, seed uint64) fixture {
-	return fixture{Patches: 2, R: 8, Founders: f, Seed: seed, Hours: DeclaredHorizonHours, Workers: 1}
+	return fixture{Patches: 2, R: 8, Founders: f, Seed: seed, Hours: declaredHorizonHours, Workers: 1}
 }
 
 // basePolicy is the declared base policy natural/7 (spec section 8.2).
