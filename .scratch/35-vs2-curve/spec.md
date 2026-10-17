@@ -362,3 +362,28 @@ response-bound, the run-only spend authorisation and the UNPRICED cost state (ne
 spend), and an EC-9 arm line that says the real-model arm RAN and that no acceptance is claimed here.
 Hermetic reports keep their exact previous text, and EC-9 now checks the label against the run mode
 instead of the frozen hermetic constant.
+
+## Defect recorded, not hidden: the running stages used the pre-label binary
+
+`.tmp/35-vs2-bin` was built at 00:26, before the mode-parameterised label commit (`df54d93`, 04:55), so
+the reports emitted by stage 1 and by stages 2/3 carry the stale hermetic header: `status:
+synthetic/model-conditional`, `label: … hermetic FakeClient (no network, no authorised spend) … awaits
+real-model spend authorisation`, and an EC-9 arm line saying the real-model arm is blocked on spend —
+all FALSE for a live run. **The data is sound**: per-call ledgers, KPI series, call/token counts and
+curve statistics are produced by unchanged code paths and are correct. Only the report header, label
+and EC-9 arm text are stale. Repair after the runs finish, without re-spending: rebuild with the label
+fix, regenerate each stage's report from its recorded evaluation JSON through a report-only path, and
+record the sha256 of the original and the regenerated artefacts side by side with the exact difference.
+The originals stay in place; nothing is silently rewritten.
+
+Correction of an intermediate reading (supervisor, then corrected): a count of 3634 "calls in
+`.tmp/35-stage2-none-runs`" was the SUM over the three replicate directories, not one run. The per-run
+count under `none` is 1280–1442 calls over 144 h, i.e. ~9.4 calls per simulated hour for a population
+of ~10–12, and there is no evidence of population growth under `none`. Per-run, not per-root, is the
+unit everywhere in this ticket.
+
+Stage-2 result format (fixed before reading the data, so it is not fitted to it): for each effort level
+and each replicate, report population at hours 0/24/48/72/96/120/143, final births, starvation deaths,
+age deaths, and realised calls/tokens; state the effective effect size next to the replicate band,
+because the 72 h band was ~1 actor and the dynamic range lives in the 144 h crash. No level is called
+better; separation and noise are reported side by side.
