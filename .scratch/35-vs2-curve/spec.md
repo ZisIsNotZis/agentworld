@@ -247,6 +247,10 @@ projected hours remaining, status histogram):
 |---|---|---|---|---|
 | 00:56 | 332 | — | all `ok` | — (first sample) |
 | 01:05 | 409 | 8.53 | all `ok` (409/409) | ~6.8 h remaining |
+| 01:15 | 479 | 7.42 | all `ok` | ~7.7 h |
+| 01:24 | 560 | 8.58 | all `ok` | ~6.5 h |
+| 01:34 | 638 | 8.23 | all `ok` | ~6.6 h |
+| 01:43 | 732 | 10.13 | all `ok` (732/732) | ~5.2 h |
 
 Concurrency check (supervisor request): one throwaway probe at `-parallel 2`, cell `f10-s9` (not a
 declared cell), H=4, max effort, run while stage 1 was live → 21 calls in 307.9 s = 4.09 calls/min
