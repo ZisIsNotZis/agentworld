@@ -436,3 +436,57 @@ it carries no information here and is reported as such rather than dropped.
   stream and its error mix differ), so these are curves of the same fixture under different decision
   policies, not an equal-contribution comparison; the call-count axis (realised calls, reported above)
   is the declared budget axis and is not equalised.
+
+## Stage 3 result (live, 144 h, cell f10-s0, 3 replicates; arms A0/P/U/A at `low`)
+
+Command: `.tmp/35-run-stage3.sh` → `-arms A0,P,U,A -cells f10-s0 -reps 3 -hours 144 -effort low
+-max-output 32768 -response-bound 1048576 -attempt-timeout 300 -call-deadline 900 -live -parallel 8
+-budget-min 720`; root `.tmp/35-stage3-runs`, report `.tmp/35-stage3-evaluation.{json,txt}`. 12/12 cells
+ran, 2265 call records, all `ok`.
+
+| arm | rep | population h0/24/48/72/96/120/143 | births | starvation | age deaths | calls | in/out tokens | errors |
+|---|---|---|---|---|---|---|---|---|
+| A0 | r1–r3 | 10 12 12 12 12 5 2 | 2 | 0 | 11 | 0 | 0/0 | — |
+| P | r1 | 10 12 12 12 12 5 2 | 2 | 0 | 11 | 244 | 105 233 / 49 738 | 127/244 |
+| P | r2 | 10 12 12 12 12 5 2 | 2 | 0 | 11 | 244 | 105 233 / 50 560 | 125/244 |
+| P | r3 | 10 12 12 12 12 5 2 | 2 | 0 | 11 | 244 | 105 233 / 50 543 | 121/244 |
+| U | r1 | 10 11 10 10 9 5 3 | 3 | 4 | 6 | 256 | 110 442 / 54 376 | 100/256 |
+| U | r2 | 10 11 10 10 10 4 1 | 1 | 1 | 9 | 256 | 110 379 / 53 585 | 113/256 |
+| U | r3 | 10 9 9 8 7 5 2 | 3 | 6 | 6 | 256 | 110 439 / 54 728 | 69/256 |
+| A | r1 | 10 12 12 12 12 5 2 | 2 | 0 | 11 | 256 | 110 434 / 58 070 | 105/256 |
+| A | r2 | 10 12 12 12 12 5 2 | 2 | 0 | 10 | 256 | 110 407 / 52 069 | 106/256 |
+| A | r3 | 10 10 10 10 10 3 0 | 0 | 0 | 10 | 253 | 109 054 / 53 881 | 134/253 |
+
+**The finding stage 3 exposes is the decision contract, not the allocation policy.** Per-arm role-a
+tallies from `.tmp/35-stage3-runs/*/calls.jsonl` (summed over replicates, `python3 .tmp/35-admis.py`):
+
+| arm | applied | rejected | inadmissible | malformed | rejected share |
+|---|---|---|---|---|---|
+| A | 420 | 345 | 321 | 24 | 45 % |
+| P | 359 | 373 | 338 | 35 | 51 % |
+| U | 486 | 282 | 258 | 24 | 37 % |
+
+40–53 % of every arm's model answers are **well-formed JSON proposing an action the world refuses**, and
+schema-malformed is only 2–6 %. This corrects the ticket-34 reading that "100 % of model failures were
+truncation": at `low` effort with a 32768 bound truncation is gone, and the dominant loss is
+admissibility. The proposed-action × refusing-gate table is unambiguous:
+
+| proposed action | refusing gate | count |
+|---|---|---|
+| `eat-stored` | no granary stock, or a stored meal was already taken this hour | 882 |
+| `gather` | no stocked home slot | 32 |
+| `provision` | bag not empty, or no granary stock, or a meal already taken | 3 |
+
+So the model answers `eat-stored` almost always, and that action is inadmissible for most hours. The
+consequence is that this matrix compares **admissibility luck, not allocation quality**: P's applied
+decisions turn its world into A0's world exactly (12→2, 2 births, 0 starvation, 11 age deaths in every
+replicate), A reproduces A0 in two replicates and diverges once (0 births, 0 alive at h143), and U — the
+arm with the most applied decisions (486) — diverges hardest (3/2/1 alive, 3/3/1 births, 4/6/1
+starvation deaths). Recorded as the stage-3 result; no arm is called better, and the capacity to
+distinguish allocation policies is not demonstrated by this data.
+
+Corresponding curve comparison (`-curve-in` stage 3 report): A vs A0 is **not distinguishable** (the
+model adds nothing the aggregate curve can see), P vs A0 **not distinguishable**, U vs A0 and U vs P
+**distinguishable** through population/births/starvation deaths; A vs U distinguishable. Those outcomes
+are a statement about how much of the model's answer survives admissibility, not about which policy is
+better.
