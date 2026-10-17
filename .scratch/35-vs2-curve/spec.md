@@ -223,3 +223,18 @@ channel). No new status class appeared. Artefacts: `.tmp/35-smoke-live-runs/`, `
 `.tmp/35-smoke-live.txt`, log `.tmp/35-smoke-live.log`; unit check
 `internal/cognition/client_applied_bound_test.go` (1 MiB bound accepts a 100 KiB body and records
 bound+length; the hermetic default still records `oversized`).
+
+## Stage 1 progress (2026-10-18, live)
+
+First launch (00:10) was healthy but was killed by my own cleanup: `pkill -f 35-vs2-bin` matched the
+wrapper's own `bash -c` command line and terminated the shell that owned the run. 193 calls, ~$0.22 of
+max-effort probe-grade spend, abandoned — not replicate data. The pid file named the wrapper
+`bash -c`, not the binary, and an empty log until exit is normal (the report is printed at the end), so
+"empty log + missing pid" was a bad liveness test, not evidence of death.
+
+Relaunch 00:21, truly detached: `setsid nohup sh .tmp/35-run-stage1.sh > .tmp/35-stage1.log 2>&1 <
+/dev/null &`, binary pid 1475000 with `sid=pgid=1475000`, root wiped first (`rm -rf
+.tmp/35-stage1-runs`), same declared command. Observed throughput: 25.5 calls/min in the first 2:42,
+13.3/min over the next 8 min, 6.5/min over the next 8 min (mean latency ~74 s/call under real load
+versus the probe's 17.7 s at `-parallel 8`); at the measured rate stage 1 needs ~10 h wall, so the run
+is left detached and polled. No non-`ok` status recorded so far.
