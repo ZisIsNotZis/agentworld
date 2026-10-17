@@ -22,30 +22,31 @@ import (
 // declared subset, which the report records honestly as a partial inventory.
 func main() {
 	var (
-		arms         = flag.String("arms", strings.Join(declaredArms, ","), "comma-separated arms to run")
-		cells        = flag.String("cells", "", "comma-separated cells as f<founders>-s<seed> (default: the 12 declared primary cells)")
-		sensitivity  = flag.Bool("sensitivity", false, "also run the declared f=12 sensitivity-seed extension (seeds 4..7)")
-		outJSON      = flag.String("out", ".tmp/30-vs2-evaluation.json", "evaluation JSON output path")
-		outText      = flag.String("out-txt", ".tmp/30-vs2-evaluation.txt", "evaluation text output path")
-		root         = flag.String("root", ".tmp/30-vs2-runs", "per-cell run directory root")
-		recorded     = flag.String("recorded", ".tmp", "recorded ticket-19 evidence directory (VS2-EC-1)")
-		srcRoot      = flag.String("src", ".", "module root for the VS2-EC-6 import-closure scan")
-		budgetMin    = flag.Int("budget-min", 60, "wall-clock budget for the matrix in minutes; unrun cells are declared skipped")
-		parallel     = flag.Int("parallel", 6, "cells to run concurrently (each cell is deterministic and writes its own directory)")
-		runReplay    = flag.Bool("replay", true, "run the priority-arm replay lane (VS2-EC-5)")
-		live         = flag.Bool("live", false, "run against the real gateway; refused unless "+EnvSpendAuthorization+" is the declared token (spend is NOT authorised)")
-		wire         = flag.String("wire", string(cognition.WireResponses), "declared gateway wire recorded by the cognition stack: responses (default) or chat-completions")
-		effort       = flag.String("effort", "", "applied reasoning effort of a live run: none|low|medium|high|xhigh|max (empty leaves the model default); recorded in run identity and in every call record")
-		maxOutput    = flag.Int("max-output", 0, "applied output-token bound of a live run (0: the wire default, 512 on responses); the applied value is recorded in run identity and every call record")
-		reps         = flag.Int("reps", 1, "repeated runs per arm-in-cell, each in its own <arm>-f<F>-s<S>-r<N> directory with its own ledger and bundles")
-		votes        = flag.Int("votes", 1, "recorded samples per escalated Role A decision combined by majority (default 1, the declared single-call seam)")
-		hours        = flag.Int("hours", DeclaredHorizonHours, "declared horizon H of the run (default 168, the frozen VS2 horizon)")
-		attemptSecs  = flag.Int("attempt-timeout", 30, "per-attempt transport timeout in seconds (the frozen harness default is 30; a live max-effort run declares a longer bound)")
-		deadlineSecs = flag.Int("call-deadline", 90, "per-call deadline across attempts in seconds (the frozen harness default is 90)")
-		respBound    = flag.Int("response-bound", 0, "applied recorded-response byte bound (0: the spec's 64 KiB hermetic default); a live max-effort run declares 1 MiB because reasoning items exceed 64 KiB")
-		curveIn      = flag.String("curve-in", "", "comma-separated evaluation JSON paths: do not run cells, emit the curve report over them instead")
-		curveOut     = flag.String("curve-out", "", "curve report text output path (default: <out-txt> with a -curve suffix)")
-		relabelIn    = flag.String("relabel", "", "comma-separated evaluation JSON paths: re-emit their reports from the recorded data with the mode-corrected status/label/EC-9 text (no cells run, no spend); writes <name>-relabelled.{json,txt}")
+		arms          = flag.String("arms", strings.Join(declaredArms, ","), "comma-separated arms to run")
+		cells         = flag.String("cells", "", "comma-separated cells as f<founders>-s<seed> (default: the 12 declared primary cells)")
+		sensitivity   = flag.Bool("sensitivity", false, "also run the declared f=12 sensitivity-seed extension (seeds 4..7)")
+		outJSON       = flag.String("out", ".tmp/30-vs2-evaluation.json", "evaluation JSON output path")
+		outText       = flag.String("out-txt", ".tmp/30-vs2-evaluation.txt", "evaluation text output path")
+		root          = flag.String("root", ".tmp/30-vs2-runs", "per-cell run directory root")
+		recorded      = flag.String("recorded", ".tmp", "recorded ticket-19 evidence directory (VS2-EC-1)")
+		srcRoot       = flag.String("src", ".", "module root for the VS2-EC-6 import-closure scan")
+		budgetMin     = flag.Int("budget-min", 60, "wall-clock budget for the matrix in minutes; unrun cells are declared skipped")
+		parallel      = flag.Int("parallel", 6, "cells to run concurrently (each cell is deterministic and writes its own directory)")
+		runReplay     = flag.Bool("replay", true, "run the priority-arm replay lane (VS2-EC-5)")
+		live          = flag.Bool("live", false, "run against the real gateway; refused unless "+EnvSpendAuthorization+" is the declared token (spend is NOT authorised)")
+		wire          = flag.String("wire", string(cognition.WireResponses), "declared gateway wire recorded by the cognition stack: responses (default) or chat-completions")
+		effort        = flag.String("effort", "", "applied reasoning effort of a live run: none|low|medium|high|xhigh|max (empty leaves the model default); recorded in run identity and in every call record")
+		maxOutput     = flag.Int("max-output", 0, "applied output-token bound of a live run (0: the wire default, 512 on responses); the applied value is recorded in run identity and every call record")
+		reps          = flag.Int("reps", 1, "repeated runs per arm-in-cell, each in its own <arm>-f<F>-s<S>-r<N> directory with its own ledger and bundles")
+		votes         = flag.Int("votes", 1, "recorded samples per escalated Role A decision combined by majority (default 1, the declared single-call seam)")
+		hours         = flag.Int("hours", DeclaredHorizonHours, "declared horizon H of the run (default 168, the frozen VS2 horizon)")
+		attemptSecs   = flag.Int("attempt-timeout", 30, "per-attempt transport timeout in seconds (the frozen harness default is 30; a live max-effort run declares a longer bound)")
+		deadlineSecs  = flag.Int("call-deadline", 90, "per-call deadline across attempts in seconds (the frozen harness default is 90)")
+		respBound     = flag.Int("response-bound", 0, "applied recorded-response byte bound (0: the spec's 64 KiB hermetic default); a live max-effort run declares 1 MiB because reasoning items exceed 64 KiB")
+		curveIn       = flag.String("curve-in", "", "comma-separated evaluation JSON paths: do not run cells, emit the curve report over them instead")
+		curveOut      = flag.String("curve-out", "", "curve report text output path (default: <out-txt> with a -curve suffix)")
+		claimContract = flag.String("claim-contract", "natural-claim/v1", "declared Role A request contract: natural-claim/v1 (legal action set only) or natural-claim/v2 (also states the observation's admissible action subset); recorded in run identity")
+		relabelIn     = flag.String("relabel", "", "comma-separated evaluation JSON paths: re-emit their reports from the recorded data with the mode-corrected status/label/EC-9 text (no cells run, no spend); writes <name>-relabelled.{json,txt}")
 	)
 	flag.Parse()
 	if *parallel < 1 {
@@ -78,6 +79,11 @@ func main() {
 		fail("response-bound must not be negative")
 	}
 	declaredResponseBound = *respBound
+	contract, err := cognition.ParseClaimContract(*claimContract)
+	if err != nil {
+		fail("claim-contract: %v", err)
+	}
+	declaredClaimContract = contract
 	mode, err := cognition.ParseWireMode(*wire)
 	if err != nil {
 		fail("wire: %v", err)
@@ -252,6 +258,7 @@ func buildEvaluation(runs []*cellRun, recordedDir string, skipped, declared []st
 		HorizonHours:         horizonHours,
 		CallCeiling:          DeclaredCallCeiling,
 		DeclaredEffort:       declaredReasoningEffort,
+		ClaimContract:        string(declaredClaimContract),
 		AppliedMaxOutput:     appliedOutputBound(),
 		AppliedResponseBound: appliedResponseBound(),
 		Votes:                declaredVotes,
@@ -278,8 +285,8 @@ func revisionString() string {
 	if effort == "" {
 		effort = "model-default"
 	}
-	return fmt.Sprintf("vs2-hermetic-fake/1; model %s wire %s; effort %s; output-bound %d; response-bound %d; votes %d; replicates %d; attempt-timeout %s; call-deadline %s; base natural/7; mechanism v6; H=%d; N=%d; value-model %s; feature-set %s; %s",
-		cognition.DefaultModelID, declaredGatewayWire, effort, appliedOutputBound(), appliedResponseBound(), declaredVotes, declaredReplicates,
+	return fmt.Sprintf("vs2-hermetic-fake/1; model %s wire %s; effort %s; output-bound %d; response-bound %d; claim-contract %s; votes %d; replicates %d; attempt-timeout %s; call-deadline %s; base natural/7; mechanism v6; H=%d; N=%d; value-model %s; feature-set %s; %s",
+		cognition.DefaultModelID, declaredGatewayWire, effort, appliedOutputBound(), appliedResponseBound(), declaredClaimContract, declaredVotes, declaredReplicates,
 		declaredAttemptTimeout, declaredCallDeadline,
 		declaredHorizonHours, DeclaredCallCeiling, declaredValueModel().Version, protocol.FeatureSetVersion, spend)
 }

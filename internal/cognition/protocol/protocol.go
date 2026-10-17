@@ -24,6 +24,20 @@ const (
 	SeamNaturalClaim = "natural.claim"
 	// NaturalClaimPromptTemplate is the versioned gateway prompt template.
 	NaturalClaimPromptTemplate = "natural-claim/v1"
+
+	// NaturalClaimPromptTemplateAdmissible is the SECOND declared Role A request
+	// contract: identical to v1 except that the request states, next to the legal
+	// action set, the subset of actions the frozen gates admit for this
+	// observation. It exists because 40-53% of v1 answers propose an action the
+	// world refuses (ticket 35 stage 3: 882 of 917 rejections were `eat-stored`
+	// with no granary stock or a meal already taken). The admissible set is
+	// derived only from the actor's own observation and the frozen gates, so the
+	// observation boundary (EC-6) is unchanged. v1 stays the declared default; a
+	// run opts in and records which contract it used.
+	NaturalClaimPromptTemplateAdmissible = "natural-claim/v2"
+	// ActorSeamSchemaVersionAdmissible is the request schema version of that
+	// second contract.
+	ActorSeamSchemaVersionAdmissible = 2
 )
 
 // Source values recorded on ActorSeamDecision.Source (spec section 4.3).

@@ -62,6 +62,9 @@ type RoleASeamConfig struct {
 	Endpoint          string
 	CredentialPresent bool
 	WakePolicy        WakePolicy
+	// Contract is the declared request contract (v1 default, v2 states the
+	// observation's admissible action subset). It is run identity.
+	Contract ClaimContract
 	// Votes is k, the number of recorded samples taken per escalated decision and
 	// combined by majority (`-votes k`, default 1). k <= 1 is one sample and the
 	// declared single-call seam.
@@ -77,6 +80,7 @@ type RoleASeam struct {
 	endpoint          string
 	credentialPresent bool
 	wakePolicy        WakePolicy
+	contract          ClaimContract
 	votes             int
 }
 
@@ -101,6 +105,7 @@ func NewRoleASeam(cfg RoleASeamConfig) (*RoleASeam, error) {
 		endpoint:          cfg.Endpoint,
 		credentialPresent: cfg.CredentialPresent,
 		wakePolicy:        cfg.WakePolicy,
+		contract:          cfg.Contract,
 		votes:             votes,
 	}, nil
 }
@@ -136,7 +141,7 @@ func (s *RoleASeam) DecideActorSeamVotes(ctx context.Context, req ActorSeamReque
 	if s == nil || s.recorder == nil || s.ledger == nil {
 		return VotedDecision{}, ErrRoleASeamNoLedger
 	}
-	canonical, err := EncodeActorSeamRequest(req)
+	canonical, err := EncodeActorSeamRequestFor(req, s.contract)
 	if err != nil {
 		return VotedDecision{}, err
 	}
@@ -155,7 +160,7 @@ func (s *RoleASeam) DecideActorSeamVotes(ctx context.Context, req ActorSeamReque
 		if err != nil {
 			return VotedDecision{}, err
 		}
-		decision, err := ValidateActorSeamContent(call.Content, req)
+		decision, err := ValidateActorSeamContentFor(call.Content, req, s.contract.ResponseSchemaVersion())
 		if err != nil {
 			return VotedDecision{}, err
 		}
@@ -237,6 +242,13 @@ type actorDecisionContent struct {
 // the request's own observation is undecodable (a caller defect), never a
 // model outcome.
 func ValidateActorSeamContent(content []byte, req ActorSeamRequest) (ActorSeamDecision, error) {
+	return ValidateActorSeamContentFor(content, req, ActorSeamSchemaVersion)
+}
+
+// ValidateActorSeamContentFor is the level-1 ladder for a declared request
+// contract: the response must declare that contract's schema version, and every
+// other check is unchanged.
+func ValidateActorSeamContentFor(content []byte, req ActorSeamRequest, schemaVersion int) (ActorSeamDecision, error) {
 	dec := json.NewDecoder(bytes.NewReader(content))
 	dec.DisallowUnknownFields()
 	var body actorDecisionContent
@@ -246,7 +258,7 @@ func ValidateActorSeamContent(content []byte, req ActorSeamRequest) (ActorSeamDe
 	if err := dec.Decode(&struct{}{}); err != io.EOF {
 		return fallbackDecision(FallbackReasonMalformed), nil
 	}
-	if body.SchemaVersion == nil || *body.SchemaVersion != ActorSeamSchemaVersion ||
+	if body.SchemaVersion == nil || *body.SchemaVersion != schemaVersion ||
 		body.Action == "" || len(body.Rationale) > 512 ||
 		(body.Confidence != nil && (*body.Confidence < 0 || *body.Confidence > 1)) {
 		return fallbackDecision(FallbackReasonMalformed), nil
@@ -329,4 +341,23 @@ var _ = func(s *RoleASeam) interface {
 	DecideActorSeam(context.Context, ActorSeamRequest) (ActorSeamDecision, error)
 } {
 	return s
+}
+
+// admissibleActions is the observation-derived admissible subset of the request's
+// legal action set: it runs the same level-1 admissibility ladder the response
+// check runs, over the request's own observation only. It is what the v2 claim
+// contract tells the model, so no privileged state and no other actor's data
+// enters the request (EC-6), and there is exactly one ladder in the codebase.
+func admissibleActions(req ActorSeamRequest) ([]string, error) {
+	out := make([]string, 0, len(req.Actions))
+	for _, action := range req.Actions {
+		ok, err := admissibleAction(action, req)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			out = append(out, action)
+		}
+	}
+	return out, nil
 }

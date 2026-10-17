@@ -3,6 +3,7 @@ package cognition
 import (
 	"crypto/sha256"
 	"fmt"
+	"strings"
 
 	"agentworld/internal/cognition/protocol"
 	"agentworld/internal/sim"
@@ -29,6 +30,10 @@ const (
 	ActorSeamSchemaVersion     = protocol.ActorSeamSchemaVersion
 	SeamNaturalClaim           = protocol.SeamNaturalClaim
 	NaturalClaimPromptTemplate = protocol.NaturalClaimPromptTemplate
+	// ActorSeamSchemaVersionAdmissible and NaturalClaimPromptTemplateAdmissible
+	// name the second declared request contract (see protocol).
+	ActorSeamSchemaVersionAdmissible     = protocol.ActorSeamSchemaVersionAdmissible
+	NaturalClaimPromptTemplateAdmissible = protocol.NaturalClaimPromptTemplateAdmissible
 
 	// Role A declared metadata (spec section 6.2); part of run identity.
 	roleActorDecision = RoleActorDecision
@@ -89,7 +94,11 @@ type seamRequestWire struct {
 	Observation    observationWire `json:"observation"`
 	Strategy       strategyWire    `json:"strategy"`
 	Actions        []string        `json:"actions"`
-	Sampling       Sampling        `json:"sampling"`
+	// AdmissibleActions is the observation-derived subset of Actions the frozen
+	// gates admit this hour (the v2 contract). It is omitted for v1, so v1 request
+	// bytes are unchanged.
+	AdmissibleActions []string `json:"admissible_actions,omitempty"`
+	Sampling          Sampling `json:"sampling"`
 }
 
 type runWire struct {
@@ -147,6 +156,46 @@ type strategyWire struct {
 // the declared seam or with an undecodable observation is a typed error, never
 // a silently narrowed request.
 func EncodeActorSeamRequest(req ActorSeamRequest) ([]byte, error) {
+	return EncodeActorSeamRequestFor(req, ClaimContractV1)
+}
+
+// ClaimContract names one declared Role A request contract.
+type ClaimContract string
+
+const (
+	// ClaimContractV1 is the declared default contract: the legal action set only.
+	ClaimContractV1 ClaimContract = ClaimContract("natural-claim/v1")
+	// ClaimContractV2 additionally states the actions the observation admits.
+	ClaimContractV2 ClaimContract = ClaimContract("natural-claim/v2")
+)
+
+// ParseClaimContract validates a declared contract spelling; the empty string is
+// the declared v1 default.
+func ParseClaimContract(s string) (ClaimContract, error) {
+	switch ClaimContract(strings.TrimSpace(s)) {
+	case "", ClaimContractV1:
+		return ClaimContractV1, nil
+	case ClaimContractV2:
+		return ClaimContractV2, nil
+	default:
+		return "", fmt.Errorf("%w: unknown claim contract %q", ErrInvalidModelRequest, s)
+	}
+}
+
+// ResponseSchemaVersion is the schema version a response to this contract must
+// declare.
+func (c ClaimContract) ResponseSchemaVersion() int {
+	if c == ClaimContractV2 {
+		return ActorSeamSchemaVersionAdmissible
+	}
+	return ActorSeamSchemaVersion
+}
+
+// EncodeActorSeamRequestFor is the allow-list encoder for one declared contract.
+// It returns the canonical request bytes whose SHA-256 is the recorded request
+// hash. A request outside the declared seam or with an undecodable observation is
+// a typed error, never a silently narrowed request.
+func EncodeActorSeamRequestFor(req ActorSeamRequest, contract ClaimContract) ([]byte, error) {
 	if req.Seam != SeamNaturalClaim {
 		return nil, fmt.Errorf("%w: unknown seam %q", ErrInvalidModelRequest, req.Seam)
 	}
@@ -157,11 +206,21 @@ func EncodeActorSeamRequest(req ActorSeamRequest) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	schemaVersion := contract.ResponseSchemaVersion()
+	promptTemplate := NaturalClaimPromptTemplate
+	var admissible []string
+	if contract == ClaimContractV2 {
+		promptTemplate = NaturalClaimPromptTemplateAdmissible
+		admissible, err = admissibleActions(req)
+		if err != nil {
+			return nil, err
+		}
+	}
 	wire := seamRequestWire{
-		SchemaVersion:  ActorSeamSchemaVersion,
+		SchemaVersion:  schemaVersion,
 		Role:           roleActorDecision,
 		Seam:           req.Seam,
-		PromptTemplate: NaturalClaimPromptTemplate,
+		PromptTemplate: promptTemplate,
 		Model:          DefaultModelID,
 		Run: runWire{
 			Fixture: fixtureWire{
@@ -174,11 +233,12 @@ func EncodeActorSeamRequest(req ActorSeamRequest) ([]byte, error) {
 			HeadRef:        refWire{ID: req.Identity.HeadRef.ID, Version: req.Identity.HeadRef.Version},
 			IdentityDigest: formatHash(RunIdentityDigest(req.Identity)),
 		},
-		Actor:       actorWire{ID: uint64(req.Actor), Hour: req.Hour},
-		Observation: obs,
-		Strategy:    strategyWire{Parameters: encodeParameters(req.Strategy)},
-		Actions:     append([]string(nil), req.Actions...),
-		Sampling:    FrozenSampling(),
+		Actor:             actorWire{ID: uint64(req.Actor), Hour: req.Hour},
+		Observation:       obs,
+		Strategy:          strategyWire{Parameters: encodeParameters(req.Strategy)},
+		Actions:           append([]string(nil), req.Actions...),
+		AdmissibleActions: admissible,
+		Sampling:          FrozenSampling(),
 	}
 	return canonicalJSON(wire)
 }

@@ -103,6 +103,7 @@ type cellReport struct {
 	Effort          string `json:"effort"`
 	MaxOutputTokens int    `json:"max_output_tokens"`
 	ResponseBound   int    `json:"response_bound"`
+	ClaimContract   string `json:"claim_contract"`
 
 	// The full hourly KPI series of the cell (ALIVE/BIRTHS/STARVATION/AGE
 	// deaths/capital histogram/granary histogram/wages/max capital). The bands
@@ -184,6 +185,7 @@ type evaluation struct {
 	DeclaredEffort       string `json:"declared_effort"`
 	AppliedMaxOutput     int    `json:"applied_max_output_tokens"`
 	AppliedResponseBound int    `json:"applied_response_bound"`
+	ClaimContract        string `json:"claim_contract"`
 	Votes                int    `json:"votes"`
 	Replicates           int    `json:"replicates"`
 	ValueModel           string `json:"value_model_version"`
@@ -251,7 +253,7 @@ func cellReportOf(cr *cellRun) cellReport {
 	rep := cellReport{
 		Arm: cr.spec.Arm, F: cr.spec.F, Seed: cr.spec.Seed, Workers: cr.fp.effectiveWorkers(), Ran: true,
 		RootDigest: cr.rootDigest, BranchDigest: cr.branchDigest,
-		Replicate: cr.spec.Replicate, Effort: declaredReasoningEffort, MaxOutputTokens: appliedOutputBound(), ResponseBound: appliedResponseBound(),
+		Replicate: cr.spec.Replicate, Effort: declaredReasoningEffort, MaxOutputTokens: appliedOutputBound(), ResponseBound: appliedResponseBound(), ClaimContract: string(declaredClaimContract),
 		Hours: cr.proj.Hours, AliveByHour: cr.proj.AliveByHour,
 		BirthsCum: cr.proj.BirthsCum, DeathsStarveCum: cr.proj.DeathsStarveCum,
 		DeathsAgeCum: cr.proj.DeathsAgeCum, CapitalHist: cr.proj.CapitalHist,
