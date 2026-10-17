@@ -256,3 +256,33 @@ concurrent calls: the concurrency knob is already saturated by the cell count, a
 latency (29-68 s at max effort under live load, versus 17.7 s in the idle probe) is provider-side.
 Conclusion: no throughput gain is available from raising `-parallel`; the stage runs at what the
 provider gives, and the projection stands at ~7 h from 01:05.
+
+## Resume instructions (state at 01:15, stage 1 live and detached)
+
+Running: stage 1, binary `.tmp/35-vs2-bin` (sha256 recorded below), pid in `.tmp/35-stage1.pid`, log
+`.tmp/35-stage1.log`, root `.tmp/35-stage1-runs`, outputs `.tmp/35-stage1-evaluation.{json,txt}`.
+Liveness: `python3 .tmp/35-poll.py` (prints total, rate, ETA, status histogram and appends to
+`.tmp/35-stage1.progress`). Kill by the exact pid only; never `pkill -f`.
+
+Remaining work, in order:
+
+1. **Stage 1 gate.** When `.tmp/35-stage1-evaluation.json` exists: record its sha256 and the text's, and
+   reject the stage if any cell is short of H=72, halted, or carries non-`ok` statuses beyond genuine
+   model failures (`incomplete`/transport reported with counts). Report the stage-1 noise floor
+   (`-curve-in .tmp/35-stage1-evaluation.json`).
+2. **Stage 2.** `setsid nohup sh .tmp/35-run-stage2.sh > .tmp/35-stage2.log 2>&1 < /dev/null &` — four
+   declared invocations (R at none/low/medium/high), 2 cells × 3 reps each, roots
+   `.tmp/35-stage2-<effort>-runs`.
+3. **Stage 3.** `setsid nohup sh .tmp/35-run-stage3.sh > .tmp/35-stage3.log 2>&1 < /dev/null &` — A0/P/U/A
+   at low, 2 cells × 3 reps, root `.tmp/35-stage3-runs`.
+4. **Curve report over every stage**:
+   `.tmp/35-vs2-bin -curve-in .tmp/35-stage1-evaluation.json,.tmp/35-stage2-none-evaluation.json,.tmp/35-stage2-low-evaluation.json,.tmp/35-stage2-medium-evaluation.json,.tmp/35-stage2-high-evaluation.json,.tmp/35-stage3-evaluation.json -curve-out .tmp/35-curve-report.txt`
+   (each file's path names its stage, which is how the report groups comparisons).
+5. **Gates**: `go build ./...`, `go vet ./...`, `gofmt -l`, `git diff --check`, and
+   `go test -timeout 30m ./...` (the `internal/world` package alone takes ~13.5 min; a 600 s
+   per-package timeout is a false failure — ticket 34 recorded 814.994 s).
+6. **Docs**: `CHANGELOG.md` (dated entries for this ticket), `docs/VERTICAL-SLICES.md` (M2 row and the VS2
+   section: depth and redundancy are now first-class axes, the acceptance criterion is curve-based, the
+   ticket-34 NOT-accepted status stands), and `.scratch/24-vs2-attention/spec.md` only if a status line
+   must point here.
+7. **Record** every artefact's sha256 and the exact commands in this file, then commit; do not push.
