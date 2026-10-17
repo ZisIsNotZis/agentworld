@@ -36,6 +36,13 @@ type RoleAInterventionInput struct {
 	FrozenAction  string
 	Decision      ActorSeamDecision
 	Call          CallResult
+	// Samples are every recorded sample of a k-sample decision (k > 1). Empty
+	// means the single-sample seam, and the record's call refs are Call's own
+	// attempt range.
+	Samples []CallResult
+	// Distribution is the vote distribution of a k-sample decision, recorded so
+	// a reader can see how nearly the samples tied.
+	Distribution []RoleAVote
 }
 
 // AppendRoleAIntervention appends the role-a intervention record and returns
@@ -48,6 +55,20 @@ func AppendRoleAIntervention(l *Ledger, in RoleAInterventionInput) (Intervention
 	if in.Decision.Source != SourceModel {
 		status, reason = RoleAResultRejected, in.Decision.Reason
 	}
+	refs := callRefRange(in.Call)
+	calls := uint64(1)
+	promptTokens, completionTokens, costMicros := in.Call.Usage.PromptTokens, in.Call.Usage.CompletionTokens, in.Call.CostMicros
+	if len(in.Samples) > 1 {
+		refs = refs[:0]
+		calls = uint64(len(in.Samples))
+		promptTokens, completionTokens, costMicros = 0, 0, 0
+		for _, sample := range in.Samples {
+			refs = append(refs, callRefRange(sample)...)
+			promptTokens += sample.Usage.PromptTokens
+			completionTokens += sample.Usage.CompletionTokens
+			costMicros += sample.CostMicros
+		}
+	}
 	record := InterventionRecord{
 		Kind: InterventionRoleA,
 		Cause: InterventionCause{
@@ -57,12 +78,12 @@ func AppendRoleAIntervention(l *Ledger, in RoleAInterventionInput) (Intervention
 			Hour:          in.Hour,
 			SimTimeMicros: in.SimTimeMicros,
 		},
-		CallRefs: callRefRange(in.Call),
+		CallRefs: refs,
 		Cost: InterventionCost{
-			Calls:            1,
-			PromptTokens:     in.Call.Usage.PromptTokens,
-			CompletionTokens: in.Call.Usage.CompletionTokens,
-			CostMicros:       in.Call.CostMicros,
+			Calls:            calls,
+			PromptTokens:     promptTokens,
+			CompletionTokens: completionTokens,
+			CostMicros:       costMicros,
 		},
 		Patch: &PatchRecord{
 			ParentRef: NaturalRefRecordOf(in.Ref),
@@ -76,6 +97,7 @@ func AppendRoleAIntervention(l *Ledger, in RoleAInterventionInput) (Intervention
 			Confidence:     in.Decision.Confidence,
 			FallbackReason: fallbackReasonOf(in.Decision),
 			FrozenAction:   in.FrozenAction,
+			Votes:          in.Distribution,
 		},
 		Result: InterventionResult{Status: status, Reason: reason, IndicatorDeltas: []IndicatorDelta{}},
 	}

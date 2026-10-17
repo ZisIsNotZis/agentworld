@@ -62,6 +62,10 @@ type RoleASeamConfig struct {
 	Endpoint          string
 	CredentialPresent bool
 	WakePolicy        WakePolicy
+	// Votes is k, the number of recorded samples taken per escalated decision and
+	// combined by majority (`-votes k`, default 1). k <= 1 is one sample and the
+	// declared single-call seam.
+	Votes int
 }
 
 // RoleASeam is the concrete recorded Role A decider. It implements the
@@ -73,6 +77,7 @@ type RoleASeam struct {
 	endpoint          string
 	credentialPresent bool
 	wakePolicy        WakePolicy
+	votes             int
 }
 
 // NewRoleASeam validates and builds the recorded seam.
@@ -86,52 +91,129 @@ func NewRoleASeam(cfg RoleASeamConfig) (*RoleASeam, error) {
 	if err := cfg.WakePolicy.Validate(); err != nil {
 		return nil, err
 	}
+	votes := cfg.Votes
+	if votes < 1 {
+		votes = 1
+	}
 	return &RoleASeam{
 		recorder:          cfg.Recorder,
 		ledger:            cfg.Ledger,
 		endpoint:          cfg.Endpoint,
 		credentialPresent: cfg.CredentialPresent,
 		wakePolicy:        cfg.WakePolicy,
+		votes:             votes,
 	}, nil
 }
 
 // WakePolicy is the declared escalation policy this seam was built under.
 func (s *RoleASeam) WakePolicy() WakePolicy { return s.wakePolicy }
 
-// DecideActorSeam encodes the canonical request, performs exactly one recorded
-// call, runs the level-1 ladder, and appends exactly one intervention record.
-// It returns the model decision when the output is admissible, and the typed
-// fallback otherwise; a transport failure is the fail-loud ErrModelUnavailable
-// error, never a substituted decision.
+// VotedDecision is the outcome of one k-sample majority decision: the winning
+// decision, the samples behind it, and the recorded vote distribution.
+type VotedDecision struct {
+	Decision ActorSeamDecision
+	Calls    []CallResult
+	Votes    []RoleAVote
+}
+
+// DecideActorSeam encodes the canonical request, takes the declared number of
+// recorded samples (one by default), combines them by majority, runs the level-1
+// ladder, and appends exactly one intervention record referencing every sample.
+// It returns the model decision when the winning output is admissible, and the
+// typed fallback otherwise; a transport failure is the fail-loud
+// ErrModelUnavailable error, never a substituted decision.
 func (s *RoleASeam) DecideActorSeam(ctx context.Context, req ActorSeamRequest) (ActorSeamDecision, error) {
+	voted, err := s.DecideActorSeamVotes(ctx, req)
+	if err != nil {
+		return ActorSeamDecision{}, err
+	}
+	return voted.Decision, nil
+}
+
+// DecideActorSeamVotes is DecideActorSeam returning the samples and the vote
+// distribution as well, so a caller can report them without a second seam.
+func (s *RoleASeam) DecideActorSeamVotes(ctx context.Context, req ActorSeamRequest) (VotedDecision, error) {
 	if s == nil || s.recorder == nil || s.ledger == nil {
-		return ActorSeamDecision{}, ErrRoleASeamNoLedger
+		return VotedDecision{}, ErrRoleASeamNoLedger
 	}
 	canonical, err := EncodeActorSeamRequest(req)
 	if err != nil {
-		return ActorSeamDecision{}, err
+		return VotedDecision{}, err
 	}
-	call, err := s.recorder.Call(ctx, CallRequest{
-		Role: RoleActorDecision, Hour: req.Hour, Model: DefaultModelID,
-		Endpoint: s.endpoint, CredentialPresent: s.credentialPresent,
-		Sampling: FrozenSampling(), Request: canonical,
-	})
-	if err != nil {
-		return ActorSeamDecision{}, err
+	votes := s.votes
+	if votes < 1 {
+		votes = 1
 	}
-	decision, err := ValidateActorSeamContent(call.Content, req)
-	if err != nil {
-		return ActorSeamDecision{}, err
+	calls := make([]CallResult, 0, votes)
+	decisions := make([]ActorSeamDecision, 0, votes)
+	for i := 0; i < votes; i++ {
+		call, err := s.recorder.Call(ctx, CallRequest{
+			Role: RoleActorDecision, Hour: req.Hour, Model: DefaultModelID,
+			Endpoint: s.endpoint, CredentialPresent: s.credentialPresent,
+			Sampling: FrozenSampling(), Request: canonical,
+		})
+		if err != nil {
+			return VotedDecision{}, err
+		}
+		decision, err := ValidateActorSeamContent(call.Content, req)
+		if err != nil {
+			return VotedDecision{}, err
+		}
+		calls = append(calls, call)
+		decisions = append(decisions, decision)
 	}
-	decision.CallRef = call.Seq
+	winner, distribution := majorityDecision(decisions)
+	winner.CallRef = calls[len(calls)-1].Seq
+	out := VotedDecision{Decision: winner, Calls: calls, Votes: distribution}
 	if _, err := AppendRoleAIntervention(s.ledger, RoleAInterventionInput{
 		WakePolicy: s.wakePolicy, Seam: req.Seam, Actor: req.Actor, Hour: req.Hour,
 		SimTimeMicros: roleASimTimeMicros(req.Hour), Ref: req.Identity.HeadRef,
-		FrozenAction: req.FrozenAction, Decision: decision, Call: call,
+		FrozenAction: req.FrozenAction, Decision: winner, Call: calls[len(calls)-1],
+		Samples: calls, Distribution: distribution,
 	}); err != nil {
-		return ActorSeamDecision{}, err
+		return VotedDecision{}, err
 	}
-	return decision, nil
+	return out, nil
+}
+
+// decisionOutcome names one sampled outcome for voting: a model decision by its
+// action, a fallback by its typed reason. Two fallbacks with different reasons
+// are different outcomes, so a truncated sample is never counted as a vote for
+// an admissible model action.
+func decisionOutcome(d ActorSeamDecision) string {
+	if d.Source == SourceModel {
+		return "model:" + d.Action
+	}
+	return "fallback:" + d.Reason
+}
+
+// majorityDecision returns the modal decision and the vote distribution in
+// first-appearance order. A tie is resolved by first appearance, so the result
+// is deterministic for a given sample sequence; the distribution records every
+// outcome so a tie is visible rather than hidden.
+func majorityDecision(decisions []ActorSeamDecision) (ActorSeamDecision, []RoleAVote) {
+	order := make([]string, 0, len(decisions))
+	byOutcome := map[string]ActorSeamDecision{}
+	counts := map[string]int{}
+	for _, d := range decisions {
+		key := decisionOutcome(d)
+		if _, seen := counts[key]; !seen {
+			order = append(order, key)
+			byOutcome[key] = d
+		}
+		counts[key]++
+	}
+	winner := order[0]
+	for _, key := range order {
+		if counts[key] > counts[winner] {
+			winner = key
+		}
+	}
+	distribution := make([]RoleAVote, 0, len(order))
+	for _, key := range order {
+		distribution = append(distribution, RoleAVote{Outcome: key, Count: counts[key]})
+	}
+	return byOutcome[winner], distribution
 }
 
 func roleASimTimeMicros(hour int) int64 {

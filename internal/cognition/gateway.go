@@ -110,24 +110,69 @@ type wireCompletion struct {
 }
 
 func codecFor(mode WireMode) (wireCodec, error) {
+	return codecForConfig(mode, "", 0)
+}
+
+// codecForConfig builds the codec of a wire with the applied reasoning effort
+// and output-token bound a live run declared. An empty effort means the field is
+// omitted (the model default); a zero bound means the wire's declared default
+// bound. The two settings are wire facts, not world mechanisms: they change
+// what the request bounds and records, never what the world computes.
+func codecForConfig(mode WireMode, effort string, maxOutputTokens int) (wireCodec, error) {
+	if maxOutputTokens < 0 {
+		return nil, fmt.Errorf("%w: max_output_tokens %d", ErrInvalidModelRequest, maxOutputTokens)
+	}
 	switch mode {
 	case WireChatCompletions:
-		return chatCompletionsCodec{}, nil
+		return chatCompletionsCodec{maxOutputTokens: maxOutputTokens}, nil
 	case WireResponses:
-		return responsesCodec{}, nil
+		return responsesCodec{effort: effort, maxOutputTokens: maxOutputTokens}, nil
 	default:
 		return nil, fmt.Errorf("%w: unknown wire mode %q", ErrInvalidModelRequest, mode)
 	}
+}
+
+// DeclaredReasoningEfforts are the reasoning-effort values the declared
+// application model accepts on the responses wire, measured 2026-10-17:
+// `minimal` and `auto` are rejected with HTTP 400, every value below is
+// honoured. The ladder is the declared effort axis of the curve study.
+var DeclaredReasoningEfforts = []string{"none", "low", "medium", "high", "xhigh", "max"}
+
+// ParseReasoningEffort validates a declared reasoning-effort spelling. The empty
+// string means "not sent" (the model's own default), which is a declared state
+// and never a fabricated effort.
+func ParseReasoningEffort(s string) (string, error) {
+	e := strings.TrimSpace(strings.ToLower(s))
+	if e == "" {
+		return "", nil
+	}
+	for _, declared := range DeclaredReasoningEfforts {
+		if declared == e {
+			return e, nil
+		}
+	}
+	return "", fmt.Errorf("%w: reasoning effort %q is not one of %v", ErrInvalidModelRequest, s, DeclaredReasoningEfforts)
 }
 
 // chatCompletionsCodec is the OpenAI-compatible chat wire (the existing
 // behaviour): POST {base}/v1/chat/completions with a system + user message pair,
 // `response_format: {"type":"json_object"}` in JSON mode, and usage under
 // `prompt_tokens`/`completion_tokens`.
-type chatCompletionsCodec struct{}
+type chatCompletionsCodec struct {
+	// maxOutputTokens is the applied `max_tokens` bound; zero sends the request's
+	// declared Sampling.MaxTokens unchanged.
+	maxOutputTokens int
+}
 
 func (chatCompletionsCodec) Mode() WireMode { return WireChatCompletions }
 func (chatCompletionsCodec) Path() string   { return "/v1/chat/completions" }
+
+func (c chatCompletionsCodec) appliedMaxTokens(sampling Sampling) int {
+	if c.maxOutputTokens > 0 {
+		return c.maxOutputTokens
+	}
+	return sampling.MaxTokens
+}
 
 type chatMessage struct {
 	Role    string `json:"role"`
@@ -148,7 +193,7 @@ type chatRequestBody struct {
 	ResponseFormat *chatResponseFormat `json:"response_format,omitempty"`
 }
 
-func (chatCompletionsCodec) Encode(req ModelRequest, model string, output OutputMode) ([]byte, error) {
+func (c chatCompletionsCodec) Encode(req ModelRequest, model string, output OutputMode) ([]byte, error) {
 	body := chatRequestBody{
 		Model: model,
 		Messages: []chatMessage{
@@ -157,7 +202,7 @@ func (chatCompletionsCodec) Encode(req ModelRequest, model string, output Output
 		},
 		Temperature: req.Sampling.Temperature,
 		TopP:        req.Sampling.TopP,
-		MaxTokens:   req.Sampling.MaxTokens,
+		MaxTokens:   c.appliedMaxTokens(req.Sampling),
 		Seed:        req.Sampling.Seed,
 	}
 	if output == OutputJSON {
@@ -197,10 +242,26 @@ func (chatCompletionsCodec) Decode(body []byte) (wireCompletion, error) {
 // advertised endpoint): POST {base}/v1/responses with an `input` list,
 // `text.format.type = "json_object"` in JSON mode, and usage under
 // `input_tokens`/`output_tokens`.
-type responsesCodec struct{}
+type responsesCodec struct {
+	// effort is the applied `reasoning.effort`; empty omits the field and leaves
+	// the model its own default.
+	effort string
+	// maxOutputTokens is the applied `max_output_tokens`; zero sends the wire's
+	// declared default bound (responsesOutputTokenBound).
+	maxOutputTokens int
+}
 
 func (responsesCodec) Mode() WireMode { return WireResponses }
 func (responsesCodec) Path() string   { return "/v1/responses" }
+
+// appliedMaxOutputTokens is the outgoing output bound: the run's declared bound
+// when one was applied, otherwise the wire's fixed bound.
+func (c responsesCodec) appliedMaxOutputTokens() int {
+	if c.maxOutputTokens > 0 {
+		return c.maxOutputTokens
+	}
+	return responsesOutputTokenBound
+}
 
 type responsesTextPart struct {
 	Type string `json:"type"`
@@ -220,6 +281,13 @@ type responsesText struct {
 	Format responsesTextFormat `json:"format"`
 }
 
+// responsesReasoning is the declared reasoning block of the responses wire. The
+// effort is the only field sent: it is honoured by the declared application
+// model (measured 2026-10-17), unlike the sampling parameters above.
+type responsesReasoning struct {
+	Effort string `json:"effort"`
+}
+
 type responsesRequestBody struct {
 	Model string               `json:"model"`
 	Input []responsesInputItem `json:"input"`
@@ -228,10 +296,11 @@ type responsesRequestBody struct {
 	// unsupported parameter (HTTP 400 invalid_request_body, ticket 34 smoke
 	// gate). The declared Sampling instance stays recorded unchanged on every
 	// call record; only the outgoing request construction omits the two fields.
-	Temperature     *float64       `json:"temperature,omitempty"`
-	TopP            *float64       `json:"top_p,omitempty"`
-	MaxOutputTokens int            `json:"max_output_tokens"`
-	Text            *responsesText `json:"text,omitempty"`
+	Temperature     *float64            `json:"temperature,omitempty"`
+	TopP            *float64            `json:"top_p,omitempty"`
+	MaxOutputTokens int                 `json:"max_output_tokens"`
+	Reasoning       *responsesReasoning `json:"reasoning,omitempty"`
+	Text            *responsesText      `json:"text,omitempty"`
 }
 
 // responsesOutputTokenBound is the fixed outgoing `max_output_tokens` of the
@@ -247,14 +316,17 @@ type responsesRequestBody struct {
 // instance stays frozen and recorded unchanged on every call record.
 const responsesOutputTokenBound = 512
 
-func (responsesCodec) Encode(req ModelRequest, model string, output OutputMode) ([]byte, error) {
+func (c responsesCodec) Encode(req ModelRequest, model string, output OutputMode) ([]byte, error) {
 	body := responsesRequestBody{
 		Model: model,
 		Input: []responsesInputItem{
 			{Role: "system", Content: []responsesTextPart{{Type: "input_text", Text: GatewaySystemPrompt}}},
 			{Role: "user", Content: []responsesTextPart{{Type: "input_text", Text: string(req.Request)}}},
 		},
-		MaxOutputTokens: responsesOutputTokenBound,
+		MaxOutputTokens: c.appliedMaxOutputTokens(),
+	}
+	if c.effort != "" {
+		body.Reasoning = &responsesReasoning{Effort: c.effort}
 	}
 	if output == OutputJSON {
 		body.Text = &responsesText{Format: responsesTextFormat{Type: string(OutputJSON)}}
@@ -335,6 +407,14 @@ type GatewayConfig struct {
 	APIKey string
 	// OutputMode selects the JSON output mode; empty means OutputJSON.
 	OutputMode OutputMode
+	// ReasoningEffort is the applied reasoning effort of the wire request; empty
+	// omits the field and leaves the model its own default. It is a declared
+	// wire setting of a run, validated against DeclaredReasoningEfforts.
+	ReasoningEffort string
+	// MaxOutputTokens is the applied output-token bound of the wire request; zero
+	// sends the wire's own default bound. On the responses wire the bound covers
+	// reasoning plus text together.
+	MaxOutputTokens int
 	// HTTPClient is the transport. A nil client keeps the adapter a
 	// network-incapable stub (an authorized call fails with
 	// ErrGatewayUnimplemented).
@@ -354,6 +434,8 @@ type GatewayClient struct {
 	codec             wireCodec
 	model             string
 	output            OutputMode
+	effort            string
+	maxOutputTokens   int
 	baseURL           string
 	apiKey            string
 	httpClient        *http.Client
@@ -371,7 +453,14 @@ func NewGatewayClient(cfg GatewayConfig) (*GatewayClient, error) {
 	if mode == "" {
 		mode = WireChatCompletions
 	}
-	codec, err := codecFor(mode)
+	effort, err := ParseReasoningEffort(cfg.ReasoningEffort)
+	if err != nil {
+		return nil, err
+	}
+	if effort != "" && mode != WireResponses {
+		return nil, fmt.Errorf("%w: reasoning effort is only applied on the %s wire", ErrInvalidModelRequest, WireResponses)
+	}
+	codec, err := codecForConfig(mode, effort, cfg.MaxOutputTokens)
 	if err != nil {
 		return nil, err
 	}
@@ -394,6 +483,8 @@ func NewGatewayClient(cfg GatewayConfig) (*GatewayClient, error) {
 		codec:             codec,
 		model:             model,
 		output:            output,
+		effort:            effort,
+		maxOutputTokens:   cfg.MaxOutputTokens,
 		apiKey:            cfg.APIKey,
 		httpClient:        cfg.HTTPClient,
 	}
@@ -425,6 +516,26 @@ func (g *GatewayClient) WireModel() string { return g.model }
 // OutputMode is the configured JSON output mode. It satisfies
 // TransportOutputMode, so the Recorder records the requested mode per call.
 func (g *GatewayClient) OutputMode() OutputMode { return g.output }
+
+// AppliedReasoningEffort and AppliedMaxOutputTokens are the reasoning effort and
+// output-token bound the wire request actually carries. They satisfy
+// TransportAppliedSampling, so every call record names the applied wire settings
+// instead of only the frozen declared Sampling instance (the provenance lie the
+// ticket-34 ledger carried: sampling.max_tokens 128 recorded, 512 sent). Empty
+// effort and zero bound mean the request applied the declared state unchanged.
+func (g *GatewayClient) AppliedReasoningEffort() string { return g.effort }
+
+// AppliedMaxOutputTokens is the applied output-token bound of the configured
+// wire.
+func (g *GatewayClient) AppliedMaxOutputTokens() int {
+	if g.maxOutputTokens > 0 {
+		return g.maxOutputTokens
+	}
+	if g.codec.Mode() == WireResponses {
+		return responsesOutputTokenBound
+	}
+	return 0
+}
 
 // Complete performs exactly one physical attempt. A refusal (unauthorized or no
 // transport) is typed and opens no connection; an HTTP status is returned both
@@ -632,6 +743,18 @@ type TransportIdentity interface {
 // unchanged.
 type TransportOutputMode interface {
 	OutputMode() OutputMode
+}
+
+// TransportAppliedSampling is implemented by transports that apply a reasoning
+// effort and/or an output-token bound that supersedes the request's declared
+// Sampling instance (the responses wire bounds reasoning and text with one
+// field, ticket 34). The Recorder records the applied values per call, so the
+// ledger names what the wire carried rather than only what was declared. The
+// hermetic fake, the replay transport, and a wire that applies the declared
+// sampling unchanged report none, so their recorded bytes are unchanged.
+type TransportAppliedSampling interface {
+	AppliedReasoningEffort() string
+	AppliedMaxOutputTokens() int
 }
 
 // Pricer converts one attempt's usage to a cost and declares the price-table

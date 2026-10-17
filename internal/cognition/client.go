@@ -356,8 +356,7 @@ func (r *Recorder) Call(ctx context.Context, req CallRequest) (CallResult, error
 		if err != nil {
 			return CallResult{}, err
 		}
-		priceVersion := r.price.PriceVersion()
-		// `unpriced` is the reserved price-table version; the typed Cost.Unpriced
+		priceVersion := r.price.PriceVersion() // `unpriced` is the reserved price-table version; the typed Cost.Unpriced
 		// state and the recorded version must agree, so the recorded unpriced
 		// flag can be derived from the version without a dead field.
 		if cost.Unpriced != (priceVersion == UnpricedPriceVersion) {
@@ -365,6 +364,7 @@ func (r *Recorder) Call(ctx context.Context, req CallRequest) (CallResult, error
 				"%w: pricer is inconsistent: Unpriced=%t but PriceVersion=%q (the reserved unpriced version is %q)",
 				ErrInvalidModelRequest, cost.Unpriced, priceVersion, UnpricedPriceVersion)
 		}
+		effort, outputBound := r.recordedAppliedSampling()
 		rec, err := r.ledger.AppendCall(CallRecord{
 			Role:                    req.Role,
 			RequestHash:             formatHash(requestHash),
@@ -379,6 +379,8 @@ func (r *Recorder) Call(ctx context.Context, req CallRequest) (CallResult, error
 			CostMicros:              cost.Micros,
 			PriceVersion:            priceVersion,
 			OutputMode:              r.recordedOutputMode(),
+			AppliedReasoningEffort:  effort,
+			AppliedMaxOutputTokens:  outputBound,
 			Attempt:                 attempt,
 			Status:                  status,
 			HTTPStatus:              httpStatus,
@@ -434,6 +436,17 @@ func (r *Recorder) recordedOutputMode() string {
 		return string(mode.OutputMode())
 	}
 	return ""
+}
+
+// recordedAppliedSampling is the reasoning effort and output-token bound the
+// transport applied, recorded per call. A transport that applies the declared
+// Sampling instance unchanged reports none, so the recorded state stays
+// "declared sampling was sent".
+func (r *Recorder) recordedAppliedSampling() (string, int) {
+	if applied, ok := r.client.(TransportAppliedSampling); ok {
+		return applied.AppliedReasoningEffort(), applied.AppliedMaxOutputTokens()
+	}
+	return "", 0
 }
 
 // classifyCall turns one transport outcome into a recorded status. An oversized

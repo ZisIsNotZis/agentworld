@@ -55,6 +55,14 @@ type CallRecord struct {
 	HTTPStatus     int        `json:"http_status,omitempty"`
 	ResponseDigest string     `json:"response_digest,omitempty"`
 	ResponseLength int        `json:"response_length,omitempty"`
+	// AppliedReasoningEffort and AppliedMaxOutputTokens record the wire settings
+	// an attempt actually carried when the transport applied settings other than
+	// the declared Sampling instance above (the responses wire bounds reasoning
+	// plus text with one token field and takes a reasoning effort). Empty and
+	// zero mean the declared sampling instance was sent unchanged, so hermetic
+	// records and wired records that apply the declared state keep their bytes.
+	AppliedReasoningEffort string `json:"applied_reasoning_effort,omitempty"`
+	AppliedMaxOutputTokens int    `json:"applied_max_output_tokens,omitempty"`
 	// ResponseTruncatedPrefix marks ResponseDigest/ResponseLength as describing
 	// only the leading prefix the transport buffered for an oversized body, not
 	// the full body, so an auditor knows the digest is recomputable from the
@@ -165,6 +173,15 @@ type InterventionCost struct {
 }
 
 // RoleARecord is the Role A decision recorded on an intervention.
+// RoleAVote is one outcome bucket of a k-sample Role A decision: the outcome
+// name (model action or typed fallback reason) and how many samples backed it.
+// It is recorded on the role-a intervention, so a near-tie is visible.
+type RoleAVote struct {
+	Outcome string `json:"outcome"`
+	Count   int    `json:"count"`
+}
+
+// RoleARecord is the Role A decision block of an intervention record
 type RoleARecord struct {
 	Action         string  `json:"action"`
 	Source         string  `json:"source"`
@@ -175,6 +192,9 @@ type RoleARecord struct {
 	// instant, recorded so the load-bearing check can verify the applied model
 	// action diverged from it (spec EC-2). Empty on an unrecorded/frozen path.
 	FrozenAction string `json:"frozen_action,omitempty"`
+	// Votes is the vote distribution of a k-sample decision (k > 1). Empty on
+	// the single-sample seam, so those records keep their bytes.
+	Votes []RoleAVote `json:"votes,omitempty"`
 }
 
 // NaturalRefRecord is the canonical wire form of a strategy reference.
