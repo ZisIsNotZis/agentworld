@@ -54,6 +54,18 @@ type ValueModelSpec struct {
 	FeatureSet string // declared candidate feature-set version (Appendix C.1); "" == unspecified
 	Weights    []FeatureWeight
 	CostProxy  CostProxy
+	// StalenessRefreshHours declares the marginal/staleness term of
+	// `vs2-value/2`: an actor reasoned about `d` hours ago keeps a priority
+	// factor that ramps linearly from StalenessFloorBasisPoints at d = 0 to the
+	// full PriorityScale at d >= StalenessRefreshHours. Zero disables the term
+	// (the vs2-value/1 behaviour), so a v1 spec selects exactly as before.
+	StalenessRefreshHours     int
+	StalenessFloorBasisPoints int64
+	// CoverageFloor declares the per-actor coverage floor of `vs2-value/2`: an
+	// actor whose realised call count is below its fair share of the spent budget
+	// (spent / roster size) is boosted by (1 + belowShare), so the boost vanishes
+	// exactly at share. False disables the term.
+	CoverageFloor bool
 }
 
 // CallPrice is the protocol-local cost type for the value projection. The
@@ -74,6 +86,11 @@ type CandidateScore struct {
 	ExpectedCost  int64        `json:"expected_cost"`
 	Priority      int64        `json:"priority"`
 	Requested     bool         `json:"requested"`
+	// AdjustedPriority is the state-adjusted priority the selector actually
+	// ranked by under a value model that declares the staleness or coverage
+	// terms. It is omitted for vs2-value/1, whose ranking is the pure projection,
+	// so those records keep their bytes.
+	AdjustedPriority int64 `json:"adjusted_priority,omitempty"`
 }
 
 // featureValue maps a declared Appendix C.1 feature name to its scalar feature
@@ -134,6 +151,39 @@ func ExpectedCost(m ValueModelSpec, f ValueFeatures, price CallPrice) int64 {
 		return price.PromptMicrosPerToken*promptTokens + price.CompletionMicrosPerToken*completionTokens
 	}
 	return m.CostProxy.ConstantMicrosPerCall + promptTokens + completionTokens
+}
+
+// DefaultStalenessFloorBasisPoints is the declared floor of the staleness term:
+// an actor reasoned about in the current hour keeps 25% of its projected
+// priority.
+const DefaultStalenessFloorBasisPoints int64 = 250_000
+
+// DefaultStalenessRefreshHours is the declared refresh window of the staleness
+// term: after this many hours without a call the actor's full priority returns.
+const DefaultStalenessRefreshHours = 12
+
+// AdjustedPriority is the declared vs2-value/2 selection priority: the pure
+// projection scaled down by the staleness term and up by the coverage floor, in
+// integer fixed point. Both terms are inert when the spec does not declare them,
+// so a vs2-value/1 spec returns Priority unchanged. hoursSinceCall is the elapsed
+// hours since this actor was last selected (a large value when never selected);
+// calls and fairShare are the actor's realised call count and the roster's fair
+// share of the spent budget.
+func AdjustedPriority(m ValueModelSpec, f ValueFeatures, price CallPrice, hoursSinceCall int, calls, fairShare int64) int64 {
+	base := Priority(m, f, price)
+	if m.StalenessRefreshHours > 0 {
+		factor := PriorityScale
+		if hoursSinceCall < m.StalenessRefreshHours {
+			floor := m.StalenessFloorBasisPoints
+			factor = floor + (PriorityScale-floor)*int64(hoursSinceCall)/int64(m.StalenessRefreshHours)
+		}
+		base = base * factor / PriorityScale
+	}
+	if m.CoverageFloor && fairShare > 0 && calls < fairShare {
+		boost := PriorityScale + PriorityScale*(fairShare-calls)/fairShare
+		base = base * boost / PriorityScale
+	}
+	return base
 }
 
 // Priority is the declared integer fixed-point ratio (no floats): expected

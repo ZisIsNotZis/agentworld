@@ -47,6 +47,7 @@ type cellRun struct {
 	realizedCalls  uint64
 
 	allocationRecords int
+	actorCalls        map[uint64]int
 	ceilingRows       []cognition.CognitiveRow
 	selectorSteps     []selectionStep
 	finalCallsSpent   uint64
@@ -241,10 +242,12 @@ func replaySeamFor(stack *cognitionStack, fp fixture) (world.ClaimSeam, func() p
 }
 
 func (cr *cellRun) countInterventions() {
+	cr.actorCalls = map[uint64]int{}
 	for _, rec := range cr.interventions {
 		switch rec.Kind {
 		case cognition.InterventionRoleA:
 			cr.escalated++
+			cr.actorCalls[uint64(rec.Cause.Actor)]++
 			if rec.RoleA != nil {
 				if rec.RoleA.Source == cognition.SourceModel {
 					cr.appliedModel++
@@ -297,3 +300,13 @@ func equalInts(a, b []int) bool {
 
 func hexString(b []byte) string      { return hex.EncodeToString(b) }
 func digestString(d [32]byte) string { return hex.EncodeToString(d[:]) }
+
+// valueModelVersion is the value-model version this cell's declared wake policy
+// carried (empty for the arms with no priority policy).
+func (cr *cellRun) valueModelVersion() string {
+	wake := declaredPolicy(cr.spec.Arm, cr.spec.Seed)
+	if wake.Priority == nil {
+		return ""
+	}
+	return wake.Priority.ValueModel.Version
+}

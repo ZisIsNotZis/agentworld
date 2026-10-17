@@ -44,6 +44,53 @@ type fidelityRow struct {
 	Indicators []indicatorReport `json:"indicators"`
 }
 
+// actorCoverage is one actor's realised call count in a cell.
+type actorCoverage struct {
+	Actor uint64 `json:"actor"`
+	Calls int    `json:"calls"`
+}
+
+// coverageStats returns the per-actor counts (actor ascending), their min and max,
+// and the Gini coefficient over the counts: 0 means perfectly even coverage, 1
+// means one actor took everything.
+func coverageStats(counts map[uint64]int) ([]actorCoverage, int, int, float64) {
+	if len(counts) == 0 {
+		return nil, 0, 0, 0
+	}
+	actors := make([]uint64, 0, len(counts))
+	for actor := range counts {
+		actors = append(actors, actor)
+	}
+	sort.Slice(actors, func(i, j int) bool { return actors[i] < actors[j] })
+	out := make([]actorCoverage, 0, len(actors))
+	min, max := counts[actors[0]], counts[actors[0]]
+	values := make([]int, 0, len(actors))
+	total := 0
+	for _, actor := range actors {
+		calls := counts[actor]
+		out = append(out, actorCoverage{Actor: actor, Calls: calls})
+		values = append(values, calls)
+		total += calls
+		if calls < min {
+			min = calls
+		}
+		if calls > max {
+			max = calls
+		}
+	}
+	sort.Ints(values)
+	gini := 0.0
+	if total > 0 {
+		n := float64(len(values))
+		var weighted float64
+		for i, v := range values {
+			weighted += float64(i+1) * float64(v)
+		}
+		gini = 2*weighted/(n*float64(total)) - (n+1)/n
+	}
+	return out, min, max, gini
+}
+
 // shortProjection records one budgeted arm whose hourly projection did not
 // reach the declared horizon, so the divergence vector was refused rather than
 // silently truncated to a shorter prefix (spec section 5.3). The arm, its
@@ -131,6 +178,17 @@ type cellReport struct {
 	// on the allocation records (VS2 section 5.1).
 	QuotaSum       int `json:"quota_sum"`
 	ShortfallTotal int `json:"shortfall_total"`
+
+	// ValueModel is the value-model version this arm's policy carried, so a v2 run
+	// that mixes vs2-value/1 and /2 records which is which per cell.
+	ValueModel string `json:"value_model,omitempty"`
+	// ActorCoverage is the per-actor realised call count (the number of escalated
+	// decisions per actor), with its min/max and Gini coefficient: the instrument
+	// the vs2-value/2 coverage floor must move (ticket 35, supervisor decision B).
+	ActorCoverage []actorCoverage `json:"actor_coverage,omitempty"`
+	CoverageMin   int             `json:"coverage_min,omitempty"`
+	CoverageMax   int             `json:"coverage_max,omitempty"`
+	CoverageGini  float64         `json:"coverage_gini,omitempty"`
 
 	Escalated         int `json:"escalated_decisions"`
 	AppliedModel      int `json:"applied_model_decisions"`
@@ -258,13 +316,16 @@ func cellReportOf(cr *cellRun) cellReport {
 		BirthsCum: cr.proj.BirthsCum, DeathsStarveCum: cr.proj.DeathsStarveCum,
 		DeathsAgeCum: cr.proj.DeathsAgeCum, CapitalHist: cr.proj.CapitalHist,
 		GranaryHist: cr.proj.GranaryHist, WagesCum: cr.proj.WagesCum, MaxCapital: cr.proj.MaxCapital,
-		Escalated: cr.escalated, AppliedModel: cr.appliedModel, DivergedModel: cr.divergedModel,
+		ValueModel: cr.valueModelVersion(),
+		Escalated:  cr.escalated, AppliedModel: cr.appliedModel, DivergedModel: cr.divergedModel,
 		DecisionErrors: cr.decisionErrors, AllocationRecords: cr.allocationRecords,
 		PromptTokens: cr.totals.PromptTokens, CompletionTokens: cr.totals.CompletionTokens,
 		CostMicros: cr.totals.CostMicros, CeilingRows: cr.ceilingRows,
 		Halted: cr.halted, FinalBundleError: cr.finalBundleError, DurationMS: cr.durationMS,
 		Calibration: calibrationOf(cr),
 	}
+	coverage, covMin, covMax, gini := coverageStats(cr.actorCalls)
+	rep.ActorCoverage, rep.CoverageMin, rep.CoverageMax, rep.CoverageGini = coverage, covMin, covMax, gini
 	if cr.haveAccepted {
 		rep.TipHash = cr.accepted.TipHash
 		rep.ProjectionHash = cr.accepted.ProjectionHash

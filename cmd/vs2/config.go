@@ -19,6 +19,10 @@ const (
 	ArmP  = "P"  // periodic: period-gated, stop at N
 	ArmU  = "U"  // uniform-random: per-hour quota via the policy PRNG
 	ArmA  = "A"  // adaptive-priority: protected exploration + priority ranking
+	// ArmA1 is the same adaptive arm under the SAME request contract but the
+	// vs2-value/1 model: it isolates the value-model change from the claim-contract
+	// change, so a v2 run reports the cost-benefit pair (ticket 35).
+	ArmA1 = "A1"
 )
 
 // declaredArms is the arm order of the matrix (spec section 8.1).
@@ -50,11 +54,43 @@ const PeriodHours = 6
 // identity (VS2-EC-8).
 const VS2ValueModelVersion = "vs2-value/1"
 
+// VS2ValueModelVersionV2 is the second declared value model (ticket 35): the
+// vs2-value/1 projection plus a marginal/staleness term and a per-actor coverage
+// floor. It exists because the vs2-value/1 ranking collapsed coverage (43-49
+// calls on five actors, 1-3 on three others at f10-s0).
+const VS2ValueModelVersionV2 = "vs2-value/2"
+
 // declaredValueModel returns the declared Appendix C.2 value-model instance:
 // the versioned integer fixed-point weights and the unpriced cost proxy. The
 // derived feature rows are produced by the world's roster builder (lane L2); an
 // unknown feature name contributes nothing to the projection.
 func declaredValueModel() protocol.ValueModelSpec {
+	return declaredValueModelV2()
+}
+
+// declaredValueModelV2 is the declared vs2-value/2 instance: the same features,
+// the same weights and the same cost proxy, plus the two declared selection
+// terms. Only the ranking changes; the feature set version is untouched.
+func declaredValueModelV2() protocol.ValueModelSpec {
+	spec := declaredValueModelV1()
+	spec.Version = VS2ValueModelVersionV2
+	spec.StalenessRefreshHours = protocol.DefaultStalenessRefreshHours
+	spec.StalenessFloorBasisPoints = protocol.DefaultStalenessFloorBasisPoints
+	spec.CoverageFloor = true
+	return spec
+}
+
+// valueModelFor is the declared value model of an arm: ArmA1 keeps vs2-value/1 so
+// a v2 run can isolate the value-model change; every other arm uses vs2-value/2.
+func valueModelFor(arm string) protocol.ValueModelSpec {
+	if arm == ArmA1 {
+		return declaredValueModelV1()
+	}
+	return declaredValueModelV2()
+}
+
+// declaredValueModelV1 is the declared Appendix C.2 vs2-value/1 instance.
+func declaredValueModelV1() protocol.ValueModelSpec {
 	return protocol.ValueModelSpec{
 		Version:    VS2ValueModelVersion,
 		FeatureSet: protocol.FeatureSetVersion,
@@ -84,7 +120,7 @@ func declaredPriorityPolicy(arm string, seed uint64) *protocol.PriorityPolicy {
 	switch arm {
 	case ArmU:
 		strategy = protocol.StrategyUniformRandom
-	case ArmA:
+	case ArmA, ArmA1:
 		strategy = protocol.StrategyAdaptive
 		fraction = DeclaredExplorationFraction
 	}
@@ -92,7 +128,7 @@ func declaredPriorityPolicy(arm string, seed uint64) *protocol.PriorityPolicy {
 		Strategy:            strategy,
 		ExplorationFraction: fraction,
 		RandSeed:            seed,
-		ValueModel:          declaredValueModel(),
+		ValueModel:          valueModelFor(arm),
 		CallCeiling:         DeclaredCallCeiling,
 	}
 }
@@ -114,8 +150,13 @@ func declaredPolicy(arm string, seed uint64) protocol.WakePolicy {
 	}
 }
 
-// isBudgeted reports whether an arm carries the declared call ceiling N.
+// isBudgeted reports whether an arm carries the declared call ceiling N. ArmA1 is
+// budgeted like ArmA but is not part of the declared matrix inventory, so the
+// declared-arms list is unchanged.
 func isBudgeted(arm string) bool {
+	if arm == ArmA1 {
+		return true
+	}
 	for _, a := range budgetedArms {
 		if a == arm {
 			return true

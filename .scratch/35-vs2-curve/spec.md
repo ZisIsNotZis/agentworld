@@ -556,3 +556,43 @@ in this sample (and costs *fewer* output tokens: 3 987 versus 5 013). Per instru
 fix (`vs2-value/2`: marginal/staleness term plus a per-actor coverage floor) and any re-run are NOT
 started; they await the supervisor's go-ahead. This probe is a 30-request sample at one effort level on
 one cell's requests, not a matrix result, and it does not by itself establish a between-arm effect.
+
+## Second declared study: `natural-claim/v2` + `vs2-value/2` (supervisor go-ahead, declared before running)
+
+Two declarations, both fixed before the run:
+
+1. **`vs2-value/2`** = `vs2-value/1` plus exactly two terms, integer fixed point, no other change:
+   (i) **marginal/staleness**: an actor reasoned about `d` hours ago keeps a priority factor ramping
+   linearly from `DefaultStalenessFloorBasisPoints` (25 %) at `d = 0` to full at
+   `DefaultStalenessRefreshHours = 12`; (ii) **coverage floor**: an actor below its fair share of the
+   realised budget (`spent / roster size`) is boosted by `1 + belowShare`, so the boost vanishes exactly
+   at share. The feature set version is untouched; selection/weighting only. Unit-tested:
+   `TestValueModelV2KeepsCoverageNonDegenerate` (static-observation actor set with persistent urgency:
+   vs2-value/1 covers only the first slots and collapses, vs2-value/2 covers every actor within one call
+   of every other), and the all-zero-weight uniform reduction still holds.
+2. **Coverage is now a reported instrument** (supervisor decision B): every cell carries
+   `actor_coverage` (per-actor realised call count), `coverage_min`, `coverage_max` and `coverage_gini`,
+   for every budgeted arm.
+
+**Arm set and contract.** One run, contract `natural-claim/v2`, effort `low`, H=144, cell f10-s0, 3
+replicates: `A0` (no model), `R` (full-wake reference), `P`, `U`, `A` (`vs2-value/2`), and **`A1`** —
+the same adaptive arm and the same request contract but `vs2-value/1`, the cost-benefit pair that
+isolates the value-model change from the contract change. `A1` is budgeted like `A` but is not part of
+the declared matrix inventory, so the declared-arms list is unchanged.
+
+Command: `.tmp/35-run-v2.sh` → `.tmp/35-vs2-v2bin -arms A0,R,P,U,A,A1 -cells f10-s0 -reps 3 -hours 144
+-effort low -max-output 32768 -response-bound 1048576 -attempt-timeout 300 -call-deadline 900
+-claim-contract natural-claim/v2 -live -parallel 8 -budget-min 720 -root .tmp/35-v2-runs`,
+outputs `.tmp/35-v2-evaluation.{json,txt}`. Expected ≈ 7 000 calls ≈ $1.2, taking lane spend to ≈ $18 of
+the $25 cap.
+
+**Acceptance framing (pre-declared).** Compare each budgeted arm against the v2 `R` reference and
+against each other on the KPI curves, using the replicate band as the denominator (SNR), stating the
+horizon's dynamic range; report coverage and admissibility per arm alongside. No arm is called better:
+the outcome is whether a separation exceeds the replicate band and by how much. If `A` under
+`vs2-value/2` still cannot separate from `P` or from `A0` while its coverage is flat, that is a decisive
+negative for this value model as instantiated and is reported as such.
+
+**Cross-contract rule.** No v1 run is compared with any v2 run. Every stage-2 result stands as a
+statement about thinking depth under contract v1, with the declared caveat that ~50 % of v1 answers
+were inadmissible.

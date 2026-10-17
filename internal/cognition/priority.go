@@ -39,6 +39,14 @@ type PrioritySelector struct {
 	prng    *rand.Rand
 	spent   uint64
 	prngPos uint64
+
+	// lastSelectedHour and callsPerActor are the declared vs2-value/2 selector
+	// state: when each actor was last reasoned about, and how many calls it has
+	// realised. One selector owns both, so replay re-derives them from the
+	// recorded selection sequence. They are inert for a spec that declares no
+	// staleness or coverage term.
+	lastSelectedHour map[sim.EntityID]int
+	callsPerActor    map[sim.EntityID]int64
 }
 
 // NewPrioritySelector builds the arm-local accumulator for a priority-bearing
@@ -82,6 +90,9 @@ func NewPrioritySelector(policy protocol.WakePolicy, horizonHours int, price pro
 		valueModel:   p.ValueModel,
 		price:        price,
 		prng:         rand.New(rand.NewSource(int64(p.RandSeed))),
+
+		lastSelectedHour: map[sim.EntityID]int{},
+		callsPerActor:    map[sim.EntityID]int64{},
 	}, nil
 }
 
@@ -126,7 +137,7 @@ func (s *PrioritySelector) Select(hour int, roster []protocol.EscalationCandidat
 // section 5.1).
 func (s *PrioritySelector) selectPeriodic(hour int, roster []protocol.EscalationCandidate, remaining uint64) protocol.Selection {
 	order := sortedRoster(roster)
-	scores := s.scoreCandidates(order)
+	scores := s.scoreCandidates(order, hour)
 	selected := make([]sim.EntityID, 0, len(order))
 	if periodGate(s.periodHours, s.phaseHours, hour) {
 		for _, c := range order {
@@ -136,6 +147,7 @@ func (s *PrioritySelector) selectPeriodic(hour int, roster []protocol.Escalation
 			selected = append(selected, c.Actor)
 		}
 		s.spent += uint64(len(selected))
+		s.recordSelection(selected, hour)
 	}
 	return s.finish(hour, selected, nil, scores, int(remaining), 0)
 }
@@ -146,7 +158,7 @@ func (s *PrioritySelector) selectPeriodic(hour int, roster []protocol.Escalation
 // at N.
 func (s *PrioritySelector) selectUniform(hour int, roster []protocol.EscalationCandidate, remaining uint64) protocol.Selection {
 	order := sortedRoster(roster)
-	scores := s.scoreCandidates(order)
+	scores := s.scoreCandidates(order, hour)
 	quota := s.quota(hour)
 	shortfall := shortfallOf(quota, len(order))
 	selected := []sim.EntityID{}
@@ -157,6 +169,7 @@ func (s *PrioritySelector) selectUniform(hour int, roster []protocol.EscalationC
 		pool = append(pool[:idx], pool[idx+1:]...)
 	}
 	s.spent += uint64(len(selected))
+	s.recordSelection(selected, hour)
 	return s.finish(hour, selected, nil, scores, quota, shortfall)
 }
 
@@ -171,7 +184,7 @@ func (s *PrioritySelector) selectUniform(hour int, roster []protocol.EscalationC
 // exploitation.
 func (s *PrioritySelector) selectAdaptive(hour int, roster []protocol.EscalationCandidate, remaining uint64) protocol.Selection {
 	order := sortedRoster(roster)
-	scores := s.scoreCandidates(order)
+	scores := s.scoreCandidates(order, hour)
 	quota := s.quota(hour)
 	shortfall := shortfallOf(quota, len(order))
 	slots := min(quota, int(remaining), len(order))
@@ -180,18 +193,20 @@ func (s *PrioritySelector) selectAdaptive(hour int, roster []protocol.Escalation
 	pool := append([]protocol.EscalationCandidate(nil), order...)
 	selected := []sim.EntityID{}
 	exploration := []sim.EntityID{}
+	fairShare := s.fairShare(len(order))
 	for i := 0; i < slots; i++ {
 		var idx int
 		if i < exploreSlots {
 			idx = s.draw(len(pool))
 			exploration = append(exploration, pool[idx].Actor)
 		} else {
-			idx = s.bestPriorityIndex(pool)
+			idx = s.bestAdjustedIndex(pool, hour, fairShare)
 		}
 		selected = append(selected, pool[idx].Actor)
 		pool = append(pool[:idx], pool[idx+1:]...)
 	}
 	s.spent += uint64(len(selected))
+	s.recordSelection(selected, hour)
 	return s.finish(hour, selected, exploration, scores, quota, shortfall)
 }
 
@@ -276,30 +291,78 @@ func (s *PrioritySelector) draw(n int) int {
 	return idx
 }
 
-// bestPriorityIndex returns the index of the highest-Priority candidate in the
-// actor-sorted pool, so an equal-priority tie keeps the smallest actor id.
-func (s *PrioritySelector) bestPriorityIndex(pool []protocol.EscalationCandidate) int {
-	best, bestPriority := 0, protocol.Priority(s.valueModel, pool[0].Features, s.price)
+// bestAdjustedIndex returns the index of the highest adjusted-priority candidate
+// in the actor-sorted pool, so an equal-priority tie keeps the smallest actor id.
+// Under vs2-value/2 the adjustment folds in the staleness and coverage terms;
+// under vs2-value/1 it is the pure projection.
+func (s *PrioritySelector) bestAdjustedIndex(pool []protocol.EscalationCandidate, hour int, fairShare int64) int {
+	best, bestPriority := 0, s.adjustedPriority(pool[0].Actor, pool[0].Features, hour, fairShare)
 	for i := 1; i < len(pool); i++ {
-		if p := protocol.Priority(s.valueModel, pool[i].Features, s.price); p > bestPriority {
+		if p := s.adjustedPriority(pool[i].Actor, pool[i].Features, hour, fairShare); p > bestPriority {
 			best, bestPriority = i, p
 		}
 	}
 	return best
 }
 
+// adjustedPriority is one candidate's selection priority under the declared value
+// model. hoursSinceCall is the elapsed hours since the actor was last selected;
+// an actor never selected is treated as fully stale so the coverage floor, not
+// the staleness term, gives it its first slot.
+func (s *PrioritySelector) adjustedPriority(actor sim.EntityID, features protocol.ValueFeatures, hour int, fairShare int64) int64 {
+	since := s.horizonHours + 1
+	if last, ok := s.lastSelectedHour[actor]; ok {
+		since = hour - last
+	}
+	return protocol.AdjustedPriority(s.valueModel, features, s.price, since, s.callsPerActor[actor], fairShare)
+}
+
+// fairShare is the realised per-actor fair share of the spent budget: the calls
+// already spent divided by the roster size of this hour. It is the coverage
+// floor's reference point, so the boost vanishes once an actor is at share.
+func (s *PrioritySelector) fairShare(rosterSize int) int64 {
+	if rosterSize <= 0 {
+		return 0
+	}
+	return int64(s.spent) / int64(rosterSize)
+}
+
+// recordSelection records the vs2-value/2 selection state for one hour's selected
+// actors: each selected actor's last-selected hour and realised call count.
+func (s *PrioritySelector) recordSelection(selected []sim.EntityID, hour int) {
+	for _, actor := range selected {
+		s.lastSelectedHour[actor] = hour
+		s.callsPerActor[actor]++
+	}
+}
+
+// CallsPerActor is the recorded per-actor realised call count of the selector
+// (the coverage the vs2-value/2 floor acts on).
+func (s *PrioritySelector) CallsPerActor() map[sim.EntityID]int64 {
+	out := make(map[sim.EntityID]int64, len(s.callsPerActor))
+	for k, v := range s.callsPerActor {
+		out[k] = v
+	}
+	return out
+}
+
 // scoreCandidates records the declared per-candidate projection for every
 // roster candidate, in the declared actor-sorted order.
-func (s *PrioritySelector) scoreCandidates(order []protocol.EscalationCandidate) []protocol.CandidateScore {
+func (s *PrioritySelector) scoreCandidates(order []protocol.EscalationCandidate, hour int) []protocol.CandidateScore {
 	scores := make([]protocol.CandidateScore, 0, len(order))
+	fairShare := s.fairShare(len(order))
 	for _, c := range order {
-		scores = append(scores, protocol.CandidateScore{
+		score := protocol.CandidateScore{
 			Actor:         c.Actor,
 			ExpectedValue: protocol.ExpectedValue(s.valueModel, c.Features),
 			ExpectedCost:  protocol.ExpectedCost(s.valueModel, c.Features, s.price),
 			Priority:      protocol.Priority(s.valueModel, c.Features, s.price),
 			Requested:     c.Requested,
-		})
+		}
+		if s.valueModel.StalenessRefreshHours > 0 || s.valueModel.CoverageFloor {
+			score.AdjustedPriority = s.adjustedPriority(c.Actor, c.Features, hour, fairShare)
+		}
+		scores = append(scores, score)
 	}
 	return scores
 }
