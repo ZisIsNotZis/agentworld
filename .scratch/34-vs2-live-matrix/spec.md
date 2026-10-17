@@ -253,6 +253,29 @@ sensitivity-seed extension is therefore INCOMPLETE (7/16 + 5/16 cells across two
 no complete A/P/U-vs-R cell in either)** and makes no seed-robustness claim; completing it needs a
 declared re-run in a healthy-gateway window (a milestone-review decision, not a worker one).
 
+## Completion record (2026-10-17, branch tip `afef7d2`)
+
+Lane executed on branch `feature/34-vs2-live` (base `00de40f`); commits in order: `bd9945c`
+(dispatch), `95c80b1` (wire-constraint repair 1 + smoke run 1 record), `6006e98` (wire-constraint
+repair 2 + smoke run 2 record), `3e9a878` (smoke gate PASS + matrix declaration), progress + matrix
+result `85d422e`, sensitivity stop `53ff3a0`, docs `afef7d2`. Gates at the tip: `go build ./...`,
+`go vet ./...`, `gofmt -l` (tracked .go files), `git diff --check` — all clean.
+
+Delivered: live smoke gate PASS; primary live matrix 59/60 cells with VS2-EC statuses recorded
+verbatim (EC-1/6/7/8/9 PASS; EC-2/3/4/5 FAIL with anatomy); sensitivity extension stopped by the
+no-progress rule after two declared attempts (artifacts preserved); CHANGELOG, VERTICAL-SLICES M2
+row + VS2 status, and the VS2 spec status/revision binding updated. The central claim is **not
+accepted**: the declared acceptance rule did not fire; the live evidence falsifies `vs2-value/1` as
+instantiated at f10-s0 (mutually non-dominating in the other 9 complete cells). The acceptance
+verdict belongs to the milestone review.
+
+Open items for review (recorded, not decided): the attempt-charged vs logical-call reading of the
+call ceiling (EC-2 halt anatomy); the EC-4 completeness counter's treatment of hour-0 divergence
+(normalised 0 < 1); the EC-5 replay gap on the live matrix (replay phase lost to the declared bound;
+CLI has no replay-only mode); the incomplete sensitivity extension (needs a healthy-gateway window);
+the report's hermetic-baked static labels (`status`/`revision`/EC-9 evidence string) that are wrong
+for live runs.
+
 ## Environment repairs before the smoke (2026-10-16)
 
 The dispatch's environment facts were stale in three ways; each was repaired before the run and none
