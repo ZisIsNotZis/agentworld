@@ -134,6 +134,30 @@ For a shared (cell, KPI) and every hour with all replicates present:
 the data does and does not establish. Direction/dominance language is reserved to the frozen EC-3
 instrument and to the milestone review, and the ticket-34 verdict is not rejudged here.
 
+## Declared before the first live call: horizon, throughput, wall-time
+
+Measured single-call latency at `max` effort with the 32768 bound (probe calls spent outside the
+harness, recorded here and nowhere else; `.tmp/35-latency.py`, `.tmp/35-latency2.py`,
+`.tmp/35-latency8.py` with their `.out` files):
+
+| probe | n | mean latency | median | p90 | max | throughput |
+|---|---|---|---|---|---|---|
+| max, cap 32768, parallel 4, 12 mixed requests | 12 | 37.7 s | 22.1 s | — | 94.9 s | 6.4 calls/min |
+| max, cap 32768, parallel 4, 24 random ticket-34 requests | 24 | 28.0 s | 20.6 s | 36.6 s | 154.6 s | 6.98 calls/min |
+| max, cap 32768, parallel 8, 32 random ticket-34 requests | 32 | 17.7 s | 13.7 s | 29.6 s | 62.5 s | 22.62 calls/min |
+
+**Decisions (supervisor, before any Stage-1 cell ran):**
+
+1. **Horizon 72 h for ALL stages.** At 96 h the full-wake arm is ~864 calls/run and Stage 1 projects to
+   >6 h wall at the measured p4 rate; the pre-declared rule above fires, so every stage runs at 72 h
+   (≈648 calls per full-wake run, 3888 calls for Stage 1). The criterion is unchanged: changing a
+   declared design parameter is not a criterion change.
+2. **`-parallel 8` for all live stages.** Throughput scales 3.24× from p4 to p8 (6.98 → 22.62
+   calls/min) with zero 429s and zero errors measured, so the declared concurrency is 8. Stage 1
+   projects to ~2.9 h wall (3888 calls at 22.6 calls/min).
+3. Probe cost: 68 real calls at `max` (~$0.9 at the measured $1.13 per 1000), spent outside the
+   harness and recorded as probe spend, never as study data.
+
 ## Design and cost
 
 | stage | condition | cells | reps | runs | ~calls | est. spend |
