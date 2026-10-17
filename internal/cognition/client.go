@@ -274,10 +274,10 @@ type RecorderConfig struct {
 // attempt (flushed before the result is consumed), charges the budget, and
 // returns the used attempt.
 type Recorder struct {
-	ledger         *Ledger
-	client         ModelClient
-	budget         *CognitiveAccount
-	price          Pricer
+	ledger           *Ledger
+	client           ModelClient
+	budget           *CognitiveAccount
+	price            Pricer
 	maxAttempts      int
 	attemptTimeout   time.Duration
 	callDeadline     time.Duration
@@ -298,13 +298,13 @@ func NewRecorder(cfg RecorderConfig) (*Recorder, error) {
 		return nil, err
 	}
 	r := &Recorder{
-		ledger:         cfg.Ledger,
-		client:         cfg.Client,
-		budget:         cfg.Budget,
-		price:          cfg.Price,
-		maxAttempts:    cfg.MaxAttempts,
-		attemptTimeout: cfg.AttemptTimeout,
-		callDeadline:   cfg.CallDeadline,
+		ledger:           cfg.Ledger,
+		client:           cfg.Client,
+		budget:           cfg.Budget,
+		price:            cfg.Price,
+		maxAttempts:      cfg.MaxAttempts,
+		attemptTimeout:   cfg.AttemptTimeout,
+		callDeadline:     cfg.CallDeadline,
 		now:              cfg.Now,
 		sleep:            cfg.Sleep,
 		maxResponseBytes: cfg.MaxResponseBytes,
