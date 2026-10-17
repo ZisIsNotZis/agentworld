@@ -92,7 +92,7 @@ for anything: current truth lives in the authoritative documents — the active 
   rejects `temperature` and `top_p` on the responses wire, and its reasoning output consumed the
   declared 128-token bound, so the responses codec omits the two parameters and applies a fixed
   `max_output_tokens: 512` (declared `FrozenSampling()` unchanged, recorded on every call record).
-  Evidence record: `.scratch/34-vs2-live-matrix/spec.md`; branch tip `53ff3a0`.
+  Evidence record: `.scratch/34-vs2-live-matrix/spec.md`; branch tip `48090d0` (docs finalised at `afef7d2`; the run record's lane tip `53ff3a0` precedes the docs commits).
 
 ## 2026-10-14
 
