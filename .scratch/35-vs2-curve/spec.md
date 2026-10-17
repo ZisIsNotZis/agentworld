@@ -485,8 +485,21 @@ arm with the most applied decisions (486) — diverges hardest (3/2/1 alive, 3/3
 starvation deaths). Recorded as the stage-3 result; no arm is called better, and the capacity to
 distinguish allocation policies is not demonstrated by this data.
 
-Corresponding curve comparison (`-curve-in` stage 3 report): A vs A0 is **not distinguishable** (the
-model adds nothing the aggregate curve can see), P vs A0 **not distinguishable**, U vs A0 and U vs P
-**distinguishable** through population/births/starvation deaths; A vs U distinguishable. Those outcomes
-are a statement about how much of the model's answer survives admissibility, not about which policy is
-better.
+Corresponding curve comparison (`-curve-in .tmp/35-stage3-evaluation.json`, `.tmp/35-stage3-curve.txt`),
+verbatim per pair and with the numbers that matter:
+
+- **A0 vs P: every population/birth/starvation/age-death curve is identical** (RMSE 0.0000, "both
+  deterministic (identical curves)"); the only KPI that separates is `granary_hist[0]`. P's world *is*
+  the no-model world on the primary KPIs.
+- **A0 vs A: population SNR 0.918, births 0.920, age deaths 1.633 — none separates**; the pair is
+  distinguishable only through `max_capital` (SNR 8.522, first separation h17, 109 consecutive hours
+  from h35), i.e. a structural capital difference, not a demographic one.
+- **P vs U: population SNR 3.430 (first separation h6, 95-hour run from h20)** and starvation deaths
+  SNR 2.122 (120-hour run from h25) — U is separated from both P and A0.
+- **A vs U** separates through starvation deaths; **A vs P** only through `max_capital`.
+
+Methodological caveat this exposes: against the deterministic A0 control the denominator is a one-sided
+noise floor, so any structural difference at all reaches SNR ≥ 2 (max capital 0 vs 2). "Distinguishable
+from A0" is therefore weak evidence; the informative comparisons are between two stochastic arms (A vs
+U, P vs U), where the replicate band is real. Those outcomes measure how much of each arm's model answer
+survives admissibility, not which policy is better.
