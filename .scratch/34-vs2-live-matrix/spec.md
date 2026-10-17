@@ -229,6 +229,30 @@ outputs `.tmp/34-vs2-sensitivity2-evaluation.{json,txt}`, `-budget-min 420 -para
 the then-current branch tip. If attempt 2 fails wholesale with the same root error, the lane stops
 and reports per the no-progress rule.
 
+**Attempt 2 (declared above) — STOPPED by the no-progress rule.** Run 2026-10-17T07:51 → 09:1x+08:00,
+same declared shape, root `.tmp/34-vs2-sens2-runs`, binary from commit `85d422e`. Exit 0, report
+emitted, **inventory 5/16 ran, 11 skipped, all `model unavailable: 3 attempts exhausted`**
+(`R-f12-s4/s5/s6/s7`, `P-f12-s6`, `P-f12-s7`, `U-f12-s4`, `U-f12-s5`, `A-f12-s5/s6/s7`); of the 5
+that ran, 4 hit the retry-charged fail-loud ceiling halt (same anatomy as the matrix's `P-f10-s1`:
+30 s transport timeouts retried, each physical attempt budget-charged) → EC-2 FAIL
+(`budgeted cells=5 … ceiling-halts=4`); EC-5 PASS (1/1 replay identical); EC-6/7/8/9 PASS;
+EC-1/3/4 not-evaluable (no references ran). Failing request/response record (from
+`.tmp/34-vs2-sens2-runs/R-f12-s7/calls.jsonl`, preserved): three consecutive attempts at 07:58:37,
+07:59:07, 07:59:37+08:00, each `status: timeout`, `http_status: null`, empty response body,
+30.0 s apart — the transport hung and was cut at 30 s per attempt. The litellm process did not
+restart; the failure pattern is upstream throttling/flapping under sustained load (the same 30 s
+timeout signature appeared sporadically in the matrix and attempt 1, and dominated both sensitivity
+attempts). Attempt 2 followed attempt 1 with the same root error across consecutive failed cells —
+**the declared no-progress stop condition fired; the sensitivity lane stops here and reports.**
+Both attempts' reports and every failed cell's ledger are preserved:
+`.tmp/34-vs2-sens-attempt1-partial/` (attempt 1), `.tmp/34-vs2-sens2-runs/` + report files
+`.tmp/34-vs2-sensitivity2-evaluation.json` sha256
+`b983259c7e1d1ec4524d55c47f02f7dc285ac3930114ef6fac2344909b98f103`, text
+`bd1dcdb16c46ea3f998c0e57e040586b8227090820b4d7a591c231bf65aa0fe1` (attempt 2). **The §8.2
+sensitivity-seed extension is therefore INCOMPLETE (7/16 + 5/16 cells across two declared attempts;
+no complete A/P/U-vs-R cell in either)** and makes no seed-robustness claim; completing it needs a
+declared re-run in a healthy-gateway window (a milestone-review decision, not a worker one).
+
 ## Environment repairs before the smoke (2026-10-16)
 
 The dispatch's environment facts were stale in three ways; each was repaired before the run and none
