@@ -387,3 +387,52 @@ and each replicate, report population at hours 0/24/48/72/96/120/143, final birt
 age deaths, and realised calls/tokens; state the effective effect size next to the replicate band,
 because the 72 h band was ~1 actor and the dynamic range lives in the 144 h crash. No level is called
 better; separation and noise are reported side by side.
+
+## Stage 2 results (live, 144 h, cell f10-s0, 3 replicates; effort ladder at full wake)
+
+Declared command per effort: `.tmp/35-run-stage2.sh` → `-arms R -cells f10-s0 -reps 3 -hours 144
+-effort <e> -max-output 32768 -response-bound 1048576 -attempt-timeout 300 -call-deadline 900 -live
+-parallel 8 -budget-min 720`; roots `.tmp/35-stage2-<effort>-runs`, reports
+`.tmp/35-stage2-<effort>-evaluation.{json,txt}`.
+
+Per-replicate curves (population at h 0/24/48/72/96/120/143, final cumulative births/starvation/age
+deaths, realised calls and tokens):
+
+| effort | rep | population | births | starvation | age deaths | calls | in/out tokens | decision errors |
+|---|---|---|---|---|---|---|---|---|
+| none | r1 | 10 11 11 11 11 5 2 | 2 | 1 | 10 | 1363 | 587 353 / 26 893 | 803/1362 |
+| none | r2 | 10 12 12 12 12 5 2 | 2 | 0 | 10 | 1442 | 620 968 / 28 381 | 818/1441 |
+| none | r3 | 10 11 10 10 10 5 2 | 2 | 2 | 9 | 1280 | 551 147 / 24 733 | 616/1279 |
+| low | r1 | 10 11 11 11 11 4 1 | 1 | 0 | 11 | 1306 | 562 642 / 287 179 | 713/1305 |
+| low | r2 | 10 10 10 10 10 3 0 | 0 | 0 | 10 | 1166 | 502 588 / 248 240 | 704/1166 |
+| low | r3 | 10 10 10 10 10 3 0 | 0 | 0 | 10 | 1170 | 502 587 / 248 172 | 678/1166 |
+| high | r1 | 10 11 11 11 11 4 1 | 1 | 0 | 10 | 1304 | 562 209 / 624 125 | 586/1304 |
+| high | r2 | 10 10 10 10 10 3 0 | 0 | 0 | 10 | 1168 | 502 589 / 562 693 | 520/1166 |
+| high | r3 | 10 10 10 10 10 3 0 | 0 | 0 | 10 | 1166 | 502 588 / 568 924 | 458/1166 |
+| max | — | *pending (still running; report when it lands)* | | | | | | |
+
+Exchange volume (`wages_cum`) is identically zero at every effort and every replicate at this cell, so
+it carries no information here and is reported as such rather than dropped.
+
+**Effect size against the replicate band, stated side by side (no level is called better):**
+
+- `none` vs `low`: births cumulative differs by 1.6 RMSE over hours (SNR 4.04, first separation at hour
+  7, 138 consecutive separating hours); max capital SNR 4.81 (first separation hour 6, 115 hours);
+  population SNR 1.74 with a non-contiguous 44-hour run; starvation deaths SNR 1.42 and age deaths SNR
+  1.43 do not separate. So the pair is **distinguishable** under the pre-declared rule via births and
+  max capital, and the replicate band for those KPIs is small (noise 0.40 and 0.35) relative to the
+  difference (1.63 and 1.68).
+- `none` vs `high`: the same picture — births SNR 4.06 (separation running 138 hours from hour 7), max
+  capital SNR 4.81; population 1.74. **Distinguishable** via births and max capital.
+- `low` vs `high`: **not distinguishable at this noise floor** — no KPI reaches SNR 2 with a sustained
+  separation. Their per-replicate population curves are effectively the same shape (h143 = 0/1/0 at
+  both), and the decision-error rates differ (low 55–60 %, high 39–45 %) without that difference
+  resolving into the aggregate KPIs.
+- The replicate band at this horizon is larger than at 72 h: population noise 0.66 actors and births
+  noise 0.40 births, because the crash amplifies sampling differences (h120→h143 differ by one to two
+  actors between replicates). The 72 h band (~1 actor ceiling, ≤5 % relative) was therefore the wrong
+  yardstick for comparisons, which is exactly why the horizon was corrected to 144 h.
+- Comparability caveat, recorded: the *volume* of model decisions differs by effort (the escalation
+  stream and its error mix differ), so these are curves of the same fixture under different decision
+  policies, not an equal-contribution comparison; the call-count axis (realised calls, reported above)
+  is the declared budget axis and is not equalised.
