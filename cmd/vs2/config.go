@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"agentworld/internal/cognition"
 	"agentworld/internal/cognition/protocol"
@@ -181,6 +182,17 @@ func hermeticEndpoint(mode cognition.WireMode) string {
 // DeclaredHorizonHours is H, the single declared horizon every arm's divergence
 // vector is computed over (spec section 5.3).
 const DeclaredHorizonHours = 168
+
+// The declared call-liveness bounds of a live run (ticket 35). The frozen
+// harness defaults (30 s per attempt, 90 s per call) were sized for the hermetic
+// fake and for medium-effort calls; a measured max-effort call reaches 155 s at
+// the 32768 bound, so a live run declares a longer attempt timeout and call
+// deadline. Both are recorded in the revision string and in the report. A
+// shorter bound is the frozen default.
+var (
+	declaredAttemptTimeout = 30 * time.Second
+	declaredCallDeadline   = 90 * time.Second
+)
 
 // declaredHorizonHours is the horizon a run uses: the declared H by default, the
 // -hours override for a shorter declared study horizon (ticket 35 runs 96 h, or

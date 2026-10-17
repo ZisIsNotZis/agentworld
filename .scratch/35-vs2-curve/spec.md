@@ -175,3 +175,26 @@ Live spend cap **$25**; the table totals ~$12.5. Per-cell run directories are
 `LITELLM_BASE_URL=http://127.0.0.1:4000`, `LITELLM_MODEL=github_copilot/gpt-6-luna`, wire
 `responses`. Go: `. .tmp/go-env.sh` (GOROOT under `.tmp/go-toolchain`, `GOTOOLCHAIN=local`). The
 gateway needs no credential today.
+
+## Live smoke before Stage 1 (2026-10-17): applied provenance works, response bound bites
+
+Command: `.tmp/35-run-smoke.sh` → `-arms P -cells f10-s0 -hours 4 -effort max -max-output 32768 -live
+-parallel 2 -attempt-timeout 300 -call-deadline 900 -budget-min 10 -replay=false`, binary
+`.tmp/35-vs2-bin` sha256 `e5ed84025c1be43c4eacc9fc0b32b1bf7ec81c4cf53e4dd37ce0e90e30f7bf9f`.
+
+Results, verbatim from `.tmp/35-smoke-live-runs/P-f10-s0-r1/calls.jsonl`: 10 call records, 7 `ok`,
+3 `oversized`. Every record carries the applied wire settings
+(`applied_reasoning_effort: "max"`, `applied_max_output_tokens: 32768`) beside the unchanged declared
+`sampling` (`max_tokens: 128`) — the ticket-34 provenance lie is fixed and visible per call.
+
+Two harness bounds had to be re-declared for live max effort, and one is a blocker:
+
+1. **Attempt timeout (repaired, declared flags `-attempt-timeout`/`-call-deadline`).** The frozen 30 s
+   per-attempt bound (hermetic-era) cuts measured max-effort calls (mean 28 s, p90 36.6 s, max 154.6 s);
+   the first smoke attempt recorded 2 `timeout` statuses and retried. Live runs now declare 300 s per
+   attempt and a 900 s call deadline, recorded in the revision string.
+2. **Response-body bound (BLOCKER, escalated).** `MaxResponseBytes` is the spec's 64 KiB recorded-body
+   bound. A max-effort `/v1/responses` body carries ~7 `reasoning` items of ~13 KB each
+   (`encrypted_content`, unused by the world) plus the 659-byte `message` item, i.e. ~90 KB, so ~30 % of
+   max-effort calls are recorded `oversized` and their decision falls back to the frozen cascade. Probe
+   of one raw body (`35-bodysize.py`) records the shape; the world reads only `output_text`.

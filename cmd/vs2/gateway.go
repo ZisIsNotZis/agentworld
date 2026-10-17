@@ -62,6 +62,12 @@ func authorizeLive(live bool) error {
 // from the environment only. Because the application model is unpriced
 // (VS2-EC-8), the recorder takes the typed unpriced pricer, never a fabricated
 // cost.
+// httpClientTimeout bounds one HTTP response; it is the declared call deadline
+// plus headroom, so the recorder's own bounds fire first with a typed outcome.
+func httpClientTimeout() time.Duration {
+	return declaredCallDeadline + 60*time.Second
+}
+
 func newLiveConfig() (*liveConfig, error) {
 	base := os.Getenv(cognition.EnvGatewayBaseURL)
 	if base == "" {
@@ -73,7 +79,7 @@ func newLiveConfig() (*liveConfig, error) {
 		Authorized: true, WireMode: cognition.WireResponses,
 		Model: cognition.DefaultModelID, OutputMode: cognition.OutputJSON,
 		ReasoningEffort: declaredReasoningEffort, MaxOutputTokens: declaredOutputBound,
-		HTTPClient: &http.Client{Timeout: 300 * time.Second},
+		HTTPClient: &http.Client{Timeout: httpClientTimeout()},
 	})
 	if err != nil {
 		return nil, err
