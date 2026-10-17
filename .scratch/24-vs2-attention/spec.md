@@ -1,15 +1,24 @@
 # VS2 — Attention (the central claim) (design, ticket 24)
 
 Status: **implemented** across lanes L1–L4c and L2b on master `48b4882`; the hermetic matrix reports
-VS2-EC-1..9 present, with VS2-EC-3 a clean negative. The central claim is **not accepted**: the
-real-model arm is blocked on the operator spend gate (§11.3 item 1) and the value-model weights and
-feature derivations are a reversible operator-confirmable default (§11.3 item 5). This file is the
-single source of truth for VS2 and is edited in place when the design changes; it is never a running
-log. The dated implementation record, the gate table and the raw evidence live in
-`.scratch/33-vs2-l5/spec.md`.
+VS2-EC-1..9 present, with VS2-EC-3 a clean negative. The real-model arm has **run** (ticket 34,
+branch `feature/34-vs2-live`, spend authorised, model `github_copilot/gpt-6-luna`, wire `responses`):
+on the declared primary live matrix VS2-EC-1/6/7/8/9 PASS and **VS2-EC-3 FAILS — a budgeted baseline
+strictly dominates adaptive at f10-s0 and adaptive dominates no cell** — the §8.4 declared
+falsifying outcome; VS2-EC-2/4/5 live failures, their anatomy, and the incomplete §8.2
+sensitivity-seed extension are recorded in the ticket-34 evidence record. The §11.3 operator
+decisions were confirmed in ticket 34. The central claim is **not accepted**: the declared
+acceptance rule did not fire, and the live evidence falsifies the value model `vs2-value/1` as
+instantiated at equal budget. This file is the single source of truth for VS2 and is edited in place
+when the design changes; it is never a running log. The dated implementation record, the gate table
+and the raw evidence live in `.scratch/33-vs2-l5/spec.md` (hermetic) and
+`.scratch/34-vs2-live-matrix/spec.md` (live).
 
 Implementation revision binding (master `48b4882`): L1 `8ecf4d0`, L2 `53b094a`, L3 `c72ba9d`, L4a
-`57770d2` (+ nit `e6d5466`), L4b `b97ac5b`, L4c `4a0ad28`, L2b `48b4882`.
+`57770d2` (+ nit `e6d5466`), L4b `b97ac5b`, L4c `4a0ad28`, L2b `48b4882`. Live-matrix implementation
+binding (ticket 34): branch `feature/34-vs2-live`, base `00de40f` (the post-reset tree carrying the
+lanes above), authorised wire-constraint repairs `95c80b1` + `6006e98`, primary matrix run from
+`3e9a878`.
 
 Authority: the product decisions fixed by the operator in `docs/VERTICAL-SLICES.md` (VS2 section, the
 concept inventory, the cross-cutting invariants, the product decisions, and the frozen fidelity metric

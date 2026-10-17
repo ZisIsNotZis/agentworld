@@ -109,15 +109,23 @@ actor could not observe. (f) Costs reported per call, per actor-hour, and per ru
 Deepens C7/C8/C11/C13 from "present" to "tested". Adds the value-based priority layer
 (`expected civilizational value / expected cost`), escalation requests, and protected exploration.
 
-**Status (master `48b4882`).** The mechanism is delivered and verified hermetically: lanes L1–L4c and
-L2b landed the additive priority protocol surface and integer value model, the world escalation gate
-and checkpoint policy binding, the arm-local online allocation accumulator and its `allocation`
-records, the shared equal-budget runner and frozen fidelity metric, and the declared candidate-feature
-derivations and `vs2-escalation/1` predicate. The hermetic matrix (`FakeClient`, no spend) reports
-VS2-EC-1..9 present, with VS2-EC-3 a clean negative (adaptive dominates 6/12 cells, is mutually
-non-dominating in 6/12, and no baseline strictly dominates it). **Neither the central claim nor the M2
-milestone is accepted:** the real-model arm is blocked on the operator spend gate, and the value-model
-weights and feature derivations are a reversible operator-confirmable default.
+**Status (branch `feature/34-vs2-live`, ticket 34).** The mechanism is delivered and verified
+hermetically (lanes L1–L4c and L2b, master `48b4882`; hermetic matrix: VS2-EC-1..9 present, VS2-EC-3
+a clean negative). The real-model arm has now run (ticket 34, spend authorised): on the declared
+primary matrix (12 cells × arms `A0,R,P,U/A`, model `github_copilot/gpt-6-luna`, wire `responses`),
+VS2-EC-1/6/7/8/9 PASS, and **VS2-EC-3 FAILS: a budgeted baseline strictly dominates adaptive at
+f10-s0 and adaptive dominates no cell** (9/10 complete cells mutually non-dominating) — the §8.4
+declared falsifying outcome for the value model `vs2-value/1` as instantiated. VS2-EC-2 fails on one
+fail-loud ceiling halt caused by live transport retries charged per physical attempt (declared
+instrument working; anatomy in ticket 34); VS2-EC-4/5 failures and their anatomy are recorded in
+ticket 34. The §8.2 sensitivity-seed extension is incomplete (upstream gateway throttling; two
+declared attempts stopped by the no-progress rule). **Neither the central claim nor the M2 milestone
+is accepted:** the declared acceptance rule did not fire — the live evidence falsifies the value
+model as instantiated rather than supporting selective allocation. Two gateway wire constraints were
+discovered and repaired under supervisor authorisation (ticket 34): the application model rejects
+`temperature`/`top_p` on the responses wire, and its reasoning output consumed the declared 128-token
+output bound, so the responses codec omits the two parameters and applies `max_output_tokens: 512`
+while the declared `FrozenSampling()` stays unchanged and recorded.
 
 **Deliverable.** Equal-budget arms over the same world and seeds: full reference (model on every
 decision), periodic, uniform-random, and adaptive-priority.
@@ -165,7 +173,7 @@ reported rather than narrated.
 | Milestone | Slice | Status | Accepted when |
 |---|---|---|---|
 | **M1** | VS1 | **Implementation complete; hermetic evidence PASS on all eleven frozen exit criteria (EC-1..EC-11); the real-model arm blocked on spend authorisation.** | **A mind in the loop.** The project is no longer an LLM-free simulator: a real model drives part of the world's decisions *and* modifies behaviour logic during the run, its interventions are costed and replayed exactly, and the modification is recorded with lineage and applied or rolled back under audit. |
-| **M2** | VS2 | **Mechanism delivered and verified hermetically on master `48b4882` (VS2-EC-1..9 present; VS2-EC-3 a clean negative); the central claim is not accepted (real-model arm blocked on the operator spend gate; value-model weights and feature derivations await operator confirmation).** | **First evidence on the central claim.** Selective allocation beats — or decisively fails to beat — uniform and periodic spending at equal budget, across seeds, on the declared multi-indicator fidelity metric. |
+| **M2** | VS2 | **Mechanism delivered and verified hermetically on master `48b4882` (VS2-EC-1..9 present; VS2-EC-3 a clean negative). The real-model arm ran on branch `feature/34-vs2-live` (ticket 34): on the declared primary live matrix VS2-EC-3 FAILS — a budgeted baseline strictly dominates adaptive at f10-s0 and adaptive dominates no cell — so the declared acceptance rule does not fire and the value model `vs2-value/1` is falsified as instantiated; VS2-EC-2/4/5 live failures and the incomplete sensitivity extension are recorded with their anatomy in ticket 34. The central claim and the M2 milestone are not accepted.** | **First evidence on the central claim.** Selective allocation beats — or decisively fails to beat — uniform and periodic spending at equal budget, across seeds, on the declared multi-indicator fidelity metric. |
 | **M3** | VS3 | Not started | **Self-improving.** Strategies measurably improve over generations under audited mutation, with provenance and rollback for every patch. |
 | **M4** | VS4 | Not started | **Stakes and scale.** The central-claim result survives heterogeneity and scale; the marginal value of reasoning is measured, not assumed. |
 | **M5** | VS5 | Not started | **Society.** Institutions and organizations arise and persist only through inspectable incentives and enforcement. |

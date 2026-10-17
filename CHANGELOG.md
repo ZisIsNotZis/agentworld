@@ -75,6 +75,25 @@ for anything: current truth lives in the authoritative documents — the active 
 - **Ticket 28 — VS2 lane L4a: extract the shared experiment mechanics into `internal/experiment` and migrate `cmd/vs1`.** Revision `57770d2` (reviewed tip `7526205`; ticket-doc nit `e6d5466`).
 - **Ticket 29 — VS2 lane L4b: recorded-seam replay/restore selector wiring.** Revision `b97ac5b`.
 
+## 2026-10-17
+
+- **Ticket 34 — VS2 live matrix (the central claim, real-model arm).** Branch `feature/34-vs2-live`
+  (base `00de40f`, the post-reset tree). Live smoke gate PASSED (`P-f12-s0`, 256 calls, 182 model
+  actions applied, replay identical). Primary live matrix 59/60 cells (arms `A0,R,P,U,A`, model
+  `github_copilot/gpt-6-luna` via the local LiteLLM gateway, wire `responses`, ≈ 26 337 call
+  records): VS2-EC-1/6/7/8/9 PASS; **VS2-EC-3 FAIL — a budgeted baseline strictly dominates adaptive
+  at f10-s0 and adaptive dominates nowhere**, the declared §8.4 falsifying outcome for the value
+  model `vs2-value/1` as instantiated; VS2-EC-2 FAIL (one fail-loud ceiling halt, `P-f10-s1`, caused
+  by live transport retries being budget-charged per physical attempt); VS2-EC-4/5 FAIL (hour-0
+  divergence rows; replay phase lost to the declared wall bound). The central claim is **not
+  accepted**. Sensitivity extension (f=12, seeds 4–7) stopped by the declared no-progress rule after
+  two attempts (upstream gateway throttling; 7/16 and 5/16 cells ran; artifact preserved).
+  Discovered wire constraints, repaired under supervisor authorisation: the application model
+  rejects `temperature` and `top_p` on the responses wire, and its reasoning output consumed the
+  declared 128-token bound, so the responses codec omits the two parameters and applies a fixed
+  `max_output_tokens: 512` (declared `FrozenSampling()` unchanged, recorded on every call record).
+  Evidence record: `.scratch/34-vs2-live-matrix/spec.md`; branch tip `53ff3a0`.
+
 ## 2026-10-14
 
 - **Ticket 30 — VS2 lane L4c: equal-budget attention experiment runner `cmd/vs2`.** Revision `4a0ad28`.
