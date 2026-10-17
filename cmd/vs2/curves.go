@@ -795,7 +795,7 @@ func renderCurveReport(report curveReport) string {
 					fmtFloat(band.Mean[last]), fmtFloat(band.CILo[last]), fmtFloat(band.CIHi[last]),
 					fmt.Sprintf("%s..%s", fmtFloat(band.EnvLo[last]), fmtFloat(band.EnvHi[last])),
 					fmtFloat(band.MeanCV), fmtFloat(band.WorstCV))
-				if band.CVUndefined > 0 {
+				if band.CVUndefined > 0 && band.CVUndefined != band.Hours {
 					fmt.Fprintf(&b, "%-20s   (%d hours excluded from CV: mean 0)\n", "", band.CVUndefined)
 				}
 			}
