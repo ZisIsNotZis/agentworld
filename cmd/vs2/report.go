@@ -191,7 +191,26 @@ type evaluation struct {
 	ReplayMismatches []string          `json:"replay_mismatches"`
 }
 
-const evaluationLabel = "synthetic/model-conditional; hermetic FakeClient (no network, no authorised spend); cost fields are MODELLED price-table charges over the fake usage, not real spend; the run demonstrates the equal-budget ALLOCATION MECHANISM is load-bearing, never the central claim, which awaits real-model spend authorisation (spec section 1.3/9, VS2-EC-9)"
+// hermeticEvaluationLabel is the honest label of a hermetic run. A live run must
+// NOT carry it (it says "no authorised spend"), so the label is a variable set
+// from the run mode and EC-9 checks it against that mode (ticket-34 review
+// finding: the stale hermetic label made a live report lie).
+const hermeticEvaluationLabel = "synthetic/model-conditional; hermetic FakeClient (no network, no authorised spend); cost fields are MODELLED price-table charges over the fake usage, not real spend; the run demonstrates the equal-budget ALLOCATION MECHANISM is load-bearing, never the central claim, which awaits real-model spend authorisation (spec section 1.3/9, VS2-EC-9)"
+
+// liveEvaluationLabel is the honest label of a live gateway run: it names the
+// real model and endpoint, the applied wire settings, the spend authorisation and
+// the unpriced cost state, and it refuses on its face to state a verdict.
+func liveEvaluationLabel(endpoint, effort string, outputBound, responseBound int, spendNote string) string {
+	return fmt.Sprintf("live/real-model; model %s via %s, wire %s (real gateway calls, spend authorised for the run only); applied effort %q, output-bound %d, response-bound %d; cost fields are UNPRICED because the gateway exposes no price entry for this model, and per-call and per-cell token totals are recorded so spend is derivable against any price table, never fabricated; %s; this run measures the allocation mechanism and the curve noise floor under real model decisions, never the central claim on its own (VS2-EC-9)",
+		declaredModelID(), endpoint, declaredGatewayWire, effortName(effort), outputBound, responseBound, spendNote)
+}
+
+// evaluationLabel and evaluationStatus are the report's honest mode labels, set
+// once from the run mode before any cell runs.
+var (
+	evaluationLabel  = hermeticEvaluationLabel
+	evaluationStatus = "synthetic/model-conditional"
+)
 
 const honestLimit = "fidelity is measured as divergence from the high-budget R reference, a comparative proxy and never ground truth: a smaller divergence means closer to the model-conditional reference, not more faithful to reality (spec section 6)"
 

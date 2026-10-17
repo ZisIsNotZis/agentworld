@@ -115,6 +115,9 @@ func main() {
 			fail("live transport: %v", err)
 		}
 		activeLive = cfg
+		evaluationLabel = liveEvaluationLabel(cfg.endpoint, declaredReasoningEffort, declaredOutputBound, declaredResponseBound,
+			"spend was authorised in-session by the supervisor within the lane's declared hard cap")
+		evaluationStatus = "live/real-model"
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*budgetMin)*time.Minute)
@@ -216,7 +219,7 @@ func buildEvaluation(runs []*cellRun, recordedDir string, skipped, declared []st
 	identity := modelIdentityDigestBytes()
 	featureIdentity := cognition.ModelFeatureIdentityDigest(cognition.DefaultModelID, declaredGatewayWire, cognition.FrozenSampling(), protocol.FeatureSetVersion)
 	return evaluation{
-		Status:               "synthetic/model-conditional",
+		Status:               evaluationStatus,
 		Label:                evaluationLabel,
 		HonestLimit:          honestLimit,
 		ModelID:              cognition.DefaultModelID,
@@ -265,6 +268,18 @@ func revisionString() string {
 // -max-output when one was given, otherwise the wire's own default (0 means the
 // transport's declared bound). It is recorded so run identity names what the
 // wire carried.
+// declaredModelID is the application model id recorded in run identity.
+func declaredModelID() string { return cognition.DefaultModelID }
+
+// effortName renders the applied effort for the report, naming the declared
+// "not sent" state instead of an empty string.
+func effortName(effort string) string {
+	if effort == "" {
+		return "model-default (field omitted)"
+	}
+	return effort
+}
+
 func appliedOutputBound() int {
 	return declaredOutputBound
 }

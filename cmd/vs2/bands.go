@@ -430,14 +430,18 @@ func ec8(runs []*cellRun) reportBand {
 // ec9 is VS2-EC-9: honest labels, the real-model gate, and a valid negative.
 func ec9() reportBand {
 	const criterion = "VS2-EC-9 honest labels, real-model gate, negative valid: every report is synthetic/model-conditional; the real-model arm is labelled blocked on spend authorisation and no acceptance is claimed without it; a clean negative is reported verbatim and is a valid, decisive outcome."
-	labelled := contains(evaluationLabel, "synthetic/model-conditional")
+	labelled := contains(evaluationLabel, "synthetic/model-conditional") || contains(evaluationLabel, "live/real-model")
 	gate := contains(liveSpendRequirement, "spend") && contains(liveSpendRequirement, "refus")
 	status := "PASS"
 	if !labelled || !gate {
 		status = "FAIL"
 	}
+	arm := "blocked on spend; the hermetic label states no spend was authorised"
+	if activeLive != nil {
+		arm = "RAN: live gateway " + activeLive.endpoint + ", spend authorised for the run only; no acceptance is claimed here, the verdict belongs to the milestone review"
+	}
 	return band("VS2-EC-9", criterion, status, fmt.Sprintf(
-		"label=%q labelled=%t; honest limit=%q; real-model arm: blocked on spend; live gate=%q (refuses to start without the operator spend authorisation)", evaluationLabel, labelled, honestLimit, liveSpendRequirement))
+		"label=%q labelled=%t (matched to the run mode); honest limit=%q; real-model arm: %s; live gate=%q (refuses to start without the operator spend authorisation)", evaluationLabel, labelled, honestLimit, arm, liveSpendRequirement))
 }
 
 func sortedCellKeys(byCell map[string]map[string]*cellRun) []string {

@@ -19,6 +19,8 @@ func renderText(ev evaluation) string {
 	fmt.Fprintf(&b, "label: %s\n", ev.Label)
 	fmt.Fprintf(&b, "honest limit: %s\n", ev.HonestLimit)
 	fmt.Fprintf(&b, "horizon H=%d call ceiling N=%d value model=%s\n", ev.HorizonHours, ev.CallCeiling, ev.ValueModel)
+	fmt.Fprintf(&b, "applied: effort=%s output-bound=%d response-bound=%d votes=%d replicates=%d\n",
+		effortName(ev.DeclaredEffort), ev.AppliedMaxOutput, ev.AppliedResponseBound, ev.Votes, ev.Replicates)
 
 	fmt.Fprintf(&b, "\nCELL INVENTORY\n")
 	fmt.Fprintf(&b, "declared=%d ran=%d skipped=%d\n", ev.Inventory.Declared, ev.Inventory.Ran, len(ev.Inventory.Skipped))

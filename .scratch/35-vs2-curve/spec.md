@@ -308,3 +308,57 @@ one reformat commit; `git diff --check` clean; `go test -timeout 30m ./...` **al
 `internal/world` at 995.587 s and `cmd/vs2` at 57.225 s, zero FAIL lines. (A bare `go test ./...` fails
 `internal/world` on the 600 s per-package default timeout; that is the package's duration, not a
 regression — ticket 34 recorded 814.994 s.)
+
+## Stage 1 result (live, 2026-10-18 00:21 → 04:52) and the corrected design
+
+Command as declared (72 h, f10-s0 + f12-s0, 3 reps, `-effort max -max-output 32768
+-response-bound 1048576 -attempt-timeout 300 -call-deadline 900 -live -parallel 8 -budget-min 300`),
+exit 0, report emitted, **6/6 cells complete, 5106 call records, 5106 `ok`, zero non-`ok` statuses**.
+Artefacts: `.tmp/35-stage1-evaluation.json` sha256
+`c75c807f4e13c2183a856bd9eaadcc6358c6868a8b639b46eb22007f7fc0e4b2`, `.tmp/35-stage1-evaluation.txt`
+`193f388b3fe0eb8d3c7d6efb6707e78cddf3f73c8d5f068567dcdf79794d6121`, curve report
+`.tmp/35-stage1-curve.txt`, progressive ledger `.tmp/35-stage1.progress`. Calls per run 781–931
+(full-wake at 72 h), latency median 11.3 s / p90 37.9 s / mean 17.7 s / max 213.1 s, tokens 1 018 433 in
++ 5 942 598 out (f10-s0, 3 reps) and 1 172 065 in + 6 004 623 out (f12-s0, 3 reps). Model decisions
+applied 4316 of 5106 escalations; the 790 fallbacks are 731 **`inadmissible`** (the model proposed an
+action the observation forbids — a genuine model outcome, recorded `ok`) and 59 `malformed`; this is the
+decision-error rate the report shows (19.6 % at f10-s0, 12.0 % at f12-s0) and it is not a harness
+failure.
+
+**FINDING A — the aggregate noise floor at max effort is ~1 actor / ≤5 % relative.** From the stage-1
+curve report and the per-hour replicate bands: population range across the 3 replicates is at most 1
+actor (mean range 0.18 at f10-s0, 0.68 at f12-s0; worst relative SD ~3.7–4.4 %), births cumulative max
+range 1, starvation deaths max range 1, age deaths exactly 0 in every replicate, exchange volume exactly
+0 in every replicate, max capital max range 1. The model's decision-level stochasticity (measured at
+48–64 % three-sample self-consistency) therefore largely washes out of the aggregate KPI curves at this
+fixture. Recorded as the study's noise floor, not as a result about any condition.
+
+**FINDING B — 72 h is the wrong horizon, corrected by supervisor re-plan.** At 72 h the world is in its
+growth phase (population 10→11–13, births 1–2, starvation 0–1, age deaths and exchange identically
+zero), so the largest possible between-condition effect is about one actor — the size of the noise
+floor. The die-off that gives the fixture dynamic range happens between roughly h96 and h156 (ticket-34
+f10-s0: 12 at h96, 10 at h108, 5 at h120, 3 at h132, 1 at h144, 0 at h156). Stage 1 therefore stands as
+the pilot that establishes the noise floor, **not** as the reference for comparisons.
+
+### Re-plan (supervisor, supersedes the stage 2/3 paragraph above; recorded before the first new call)
+
+1. **Horizon 144 h for all remaining stages** (captures the crash through population ≈ 1).
+2. **Cell f10-s0 only** (the ticket-19 decision-sensitivity map marks f10/f11 reliable and f12 fragile),
+   **3 replicates**.
+3. **Stage 2 = effort ladder at full wake: `none`, `low`, `high`, `max`** — `medium` is dropped because
+   its decision-level agreement equals `low` at 1.4× the cost, so it adds cost without information.
+4. **Stage 3 unchanged**: arms A0/P/U/A at effort `low`, same cell and replicates.
+5. New artefact roots and report names; stage 1 is not overwritten:
+   `.tmp/35-stage2-<effort>-runs` / `.tmp/35-stage2-<effort>-evaluation.{json,txt}`,
+   `.tmp/35-stage3-runs` / `.tmp/35-stage3-evaluation.{json,txt}`.
+6. Estimated spend ≈ $10, taking the lane to ≈ $16.5 against the $25 hard cap; stop and report if
+   measured cost runs materially above it, and report if per-run calls differ materially from ~1600 at
+   144 h.
+
+**Report-labelling defect fixed before the next live report** (`cmd/vs2`): the report's status, label,
+honest-limit and EC-9 arm text are now parameterised by run mode. A live run prints
+`status: live/real-model`, a label naming the real model, endpoint, applied effort/output-bound/
+response-bound, the run-only spend authorisation and the UNPRICED cost state (never a fabricated
+spend), and an EC-9 arm line that says the real-model arm RAN and that no acceptance is claimed here.
+Hermetic reports keep their exact previous text, and EC-9 now checks the label against the run mode
+instead of the frozen hermetic constant.
