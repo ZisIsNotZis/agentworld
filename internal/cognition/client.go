@@ -39,7 +39,11 @@ const (
 	RoleActorDecision = "actor-decision"
 	RoleStrategyPatch = "strategy-patch"
 
-	// MaxResponseBytes is the spec's 64 KiB bound on a recorded response body.
+	// MaxResponseBytes is the spec's 64 KiB bound on a recorded response body. It
+	// is the hermetic default; a live run may declare a larger bound
+	// (RecorderConfig.MaxResponseBytes, GatewayConfig.MaxResponseBytes) because a
+	// long-reasoning response carries reasoning items the world never reads
+	// (ticket 35: ~90 KiB per max-effort call, ~30 % of calls lost to this bound).
 	MaxResponseBytes = 64 << 10
 
 	// DefaultMaxAttempts, DefaultAttemptTimeout, and DefaultCallDeadline are
@@ -258,6 +262,11 @@ type RecorderConfig struct {
 	CallDeadline   time.Duration
 	Now            func() time.Time
 	Sleep          func(ctx context.Context, d time.Duration) error
+	// MaxResponseBytes overrides the declared recorded-body bound. Zero keeps the
+	// spec's hermetic default (MaxResponseBytes); a live run declares the bound
+	// its wire needs and the applied bound plus each body's actual byte length are
+	// then recorded on every call record.
+	MaxResponseBytes int
 }
 
 // Recorder is the recorded-call path: it checks the budget, performs one to
@@ -269,11 +278,12 @@ type Recorder struct {
 	client         ModelClient
 	budget         *CognitiveAccount
 	price          Pricer
-	maxAttempts    int
-	attemptTimeout time.Duration
-	callDeadline   time.Duration
-	now            func() time.Time
-	sleep          func(ctx context.Context, d time.Duration) error
+	maxAttempts      int
+	attemptTimeout   time.Duration
+	callDeadline     time.Duration
+	now              func() time.Time
+	sleep            func(ctx context.Context, d time.Duration) error
+	maxResponseBytes int
 }
 
 // NewRecorder validates and builds the recorded-call path.
@@ -295,8 +305,9 @@ func NewRecorder(cfg RecorderConfig) (*Recorder, error) {
 		maxAttempts:    cfg.MaxAttempts,
 		attemptTimeout: cfg.AttemptTimeout,
 		callDeadline:   cfg.CallDeadline,
-		now:            cfg.Now,
-		sleep:          cfg.Sleep,
+		now:              cfg.Now,
+		sleep:            cfg.Sleep,
+		maxResponseBytes: cfg.MaxResponseBytes,
 	}
 	if r.maxAttempts == 0 {
 		r.maxAttempts = DefaultMaxAttempts
@@ -339,7 +350,7 @@ func (r *Recorder) Call(ctx context.Context, req CallRequest) (CallResult, error
 			Model: req.Model, Endpoint: req.Endpoint, Sampling: req.Sampling, Request: req.Request,
 		})
 		latency := r.now().Sub(started)
-		status, httpStatus := classifyCall(resp, completeErr)
+		status, httpStatus := classifyCall(resp, completeErr, r.responseByteBound())
 		digest, length := "", 0
 		body, content := resp.Body, resp.Content
 		truncatedPrefix := false
@@ -365,6 +376,10 @@ func (r *Recorder) Call(ctx context.Context, req CallRequest) (CallResult, error
 				ErrInvalidModelRequest, cost.Unpriced, priceVersion, UnpricedPriceVersion)
 		}
 		effort, outputBound := r.recordedAppliedSampling()
+		responseBound, responseBytes := 0, 0
+		if r.responseByteBound() != MaxResponseBytes {
+			responseBound, responseBytes = r.responseByteBound(), len(resp.Body)
+		}
 		rec, err := r.ledger.AppendCall(CallRecord{
 			Role:                    req.Role,
 			RequestHash:             formatHash(requestHash),
@@ -381,6 +396,8 @@ func (r *Recorder) Call(ctx context.Context, req CallRequest) (CallResult, error
 			OutputMode:              r.recordedOutputMode(),
 			AppliedReasoningEffort:  effort,
 			AppliedMaxOutputTokens:  outputBound,
+			ResponseByteBound:       responseBound,
+			ResponseBytes:           responseBytes,
 			Attempt:                 attempt,
 			Status:                  status,
 			HTTPStatus:              httpStatus,
@@ -419,6 +436,15 @@ func (r *Recorder) complete(ctx context.Context, req ModelRequest) (ModelRespons
 // a declared wire model (the real gateway) is the authority on the model
 // actually called; every hermetic transport reports none, so the request's
 // declared model is recorded unchanged.
+// responseByteBound is the recorded-body bound this recorder applies: the
+// declared override when one is set, otherwise the spec's hermetic default.
+func (r *Recorder) responseByteBound() int {
+	if r.maxResponseBytes > 0 {
+		return r.maxResponseBytes
+	}
+	return MaxResponseBytes
+}
+
 func (r *Recorder) recordedModel(declared string) string {
 	if identity, ok := r.client.(TransportIdentity); ok {
 		if model := identity.WireModel(); model != "" {
@@ -451,7 +477,10 @@ func (r *Recorder) recordedAppliedSampling() (string, int) {
 
 // classifyCall turns one transport outcome into a recorded status. An oversized
 // body is recorded by digest and length and takes the fallback (spec 6.3).
-func classifyCall(resp ModelResponse, err error) (CallStatus, int) {
+func classifyCall(resp ModelResponse, err error, maxResponseBytes int) (CallStatus, int) {
+	if maxResponseBytes <= 0 {
+		maxResponseBytes = MaxResponseBytes
+	}
 	if err != nil {
 		var hs *HTTPStatusError
 		switch {
@@ -466,7 +495,7 @@ func classifyCall(resp ModelResponse, err error) (CallStatus, int) {
 	if resp.Status == CallStatusHTTPError {
 		return CallStatusHTTPError, resp.HTTPStatus
 	}
-	if len(resp.Body) > MaxResponseBytes {
+	if len(resp.Body) > maxResponseBytes {
 		return CallStatusOversized, resp.HTTPStatus
 	}
 	if resp.Status == "" {

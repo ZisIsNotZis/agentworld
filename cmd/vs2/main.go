@@ -42,6 +42,7 @@ func main() {
 		hours        = flag.Int("hours", DeclaredHorizonHours, "declared horizon H of the run (default 168, the frozen VS2 horizon)")
 		attemptSecs  = flag.Int("attempt-timeout", 30, "per-attempt transport timeout in seconds (the frozen harness default is 30; a live max-effort run declares a longer bound)")
 		deadlineSecs = flag.Int("call-deadline", 90, "per-call deadline across attempts in seconds (the frozen harness default is 90)")
+		respBound    = flag.Int("response-bound", 0, "applied recorded-response byte bound (0: the spec's 64 KiB hermetic default); a live max-effort run declares 1 MiB because reasoning items exceed 64 KiB")
 		curveIn      = flag.String("curve-in", "", "comma-separated evaluation JSON paths: do not run cells, emit the curve report over them instead")
 		curveOut     = flag.String("curve-out", "", "curve report text output path (default: <out-txt> with a -curve suffix)")
 	)
@@ -72,6 +73,10 @@ func main() {
 	}
 	declaredAttemptTimeout = time.Duration(*attemptSecs) * time.Second
 	declaredCallDeadline = time.Duration(*deadlineSecs) * time.Second
+	if *respBound < 0 {
+		fail("response-bound must not be negative")
+	}
+	declaredResponseBound = *respBound
 	mode, err := cognition.ParseWireMode(*wire)
 	if err != nil {
 		fail("wire: %v", err)
@@ -225,6 +230,7 @@ func buildEvaluation(runs []*cellRun, recordedDir string, skipped, declared []st
 		CallCeiling:          DeclaredCallCeiling,
 		DeclaredEffort:       declaredReasoningEffort,
 		AppliedMaxOutput:     appliedOutputBound(),
+		AppliedResponseBound: appliedResponseBound(),
 		Votes:                declaredVotes,
 		Replicates:           declaredReplicates,
 		ValueModel:           declaredValueModel().Version,
@@ -249,8 +255,8 @@ func revisionString() string {
 	if effort == "" {
 		effort = "model-default"
 	}
-	return fmt.Sprintf("vs2-hermetic-fake/1; model %s wire %s; effort %s; output-bound %d; votes %d; replicates %d; attempt-timeout %s; call-deadline %s; base natural/7; mechanism v6; H=%d; N=%d; value-model %s; feature-set %s; %s",
-		cognition.DefaultModelID, declaredGatewayWire, effort, appliedOutputBound(), declaredVotes, declaredReplicates,
+	return fmt.Sprintf("vs2-hermetic-fake/1; model %s wire %s; effort %s; output-bound %d; response-bound %d; votes %d; replicates %d; attempt-timeout %s; call-deadline %s; base natural/7; mechanism v6; H=%d; N=%d; value-model %s; feature-set %s; %s",
+		cognition.DefaultModelID, declaredGatewayWire, effort, appliedOutputBound(), appliedResponseBound(), declaredVotes, declaredReplicates,
 		declaredAttemptTimeout, declaredCallDeadline,
 		declaredHorizonHours, DeclaredCallCeiling, declaredValueModel().Version, protocol.FeatureSetVersion, spend)
 }
@@ -261,6 +267,14 @@ func revisionString() string {
 // wire carried.
 func appliedOutputBound() int {
 	return declaredOutputBound
+}
+
+// appliedResponseBound is the recorded-body bound the run applies: the declared
+// -response-bound when one was given, otherwise the spec's 64 KiB default (0
+// means the transport's own default). It is run identity, and each call record
+// carries the applied bound plus the body's actual byte length.
+func appliedResponseBound() int {
+	return declaredResponseBound
 }
 
 func writeEvaluation(ev evaluation, jsonPath, textPath string) error {

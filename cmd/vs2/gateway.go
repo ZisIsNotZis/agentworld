@@ -79,7 +79,8 @@ func newLiveConfig() (*liveConfig, error) {
 		Authorized: true, WireMode: cognition.WireResponses,
 		Model: cognition.DefaultModelID, OutputMode: cognition.OutputJSON,
 		ReasoningEffort: declaredReasoningEffort, MaxOutputTokens: declaredOutputBound,
-		HTTPClient: &http.Client{Timeout: httpClientTimeout()},
+		MaxResponseBytes: declaredResponseBound,
+		HTTPClient:       &http.Client{Timeout: httpClientTimeout()},
 	})
 	if err != nil {
 		return nil, err

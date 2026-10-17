@@ -63,6 +63,13 @@ type CallRecord struct {
 	// records and wired records that apply the declared state keep their bytes.
 	AppliedReasoningEffort string `json:"applied_reasoning_effort,omitempty"`
 	AppliedMaxOutputTokens int    `json:"applied_max_output_tokens,omitempty"`
+	// ResponseByteBound is the recorded-body bound a live run applied when it is
+	// not the spec's hermetic 64 KiB default, and ResponseBytes is that body's
+	// actual buffered length, so the headroom is auditable rather than assumed.
+	// Both stay zero under the hermetic default, so hermetic record bytes are
+	// unchanged.
+	ResponseByteBound int `json:"response_byte_bound,omitempty"`
+	ResponseBytes     int `json:"response_bytes,omitempty"`
 	// ResponseTruncatedPrefix marks ResponseDigest/ResponseLength as describing
 	// only the leading prefix the transport buffered for an oversized body, not
 	// the full body, so an auditor knows the digest is recomputable from the

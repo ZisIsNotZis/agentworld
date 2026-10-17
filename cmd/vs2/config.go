@@ -192,6 +192,7 @@ const DeclaredHorizonHours = 168
 var (
 	declaredAttemptTimeout = 30 * time.Second
 	declaredCallDeadline   = 90 * time.Second
+	declaredResponseBound  = 0 // 0: the spec's 64 KiB hermetic recorded-body bound
 )
 
 // declaredHorizonHours is the horizon a run uses: the declared H by default, the

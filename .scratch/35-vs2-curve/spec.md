@@ -198,3 +198,28 @@ Two harness bounds had to be re-declared for live max effort, and one is a block
    (`encrypted_content`, unused by the world) plus the 659-byte `message` item, i.e. ~90 KB, so ~30 % of
    max-effort calls are recorded `oversized` and their decision falls back to the frozen cascade. Probe
    of one raw body (`35-bodysize.py`) records the shape; the world reads only `output_text`.
+
+**Repair (supervisor option 1, authorised before any Stage-1 cell).** The recorded-response bound is
+now a declared per-run parameter: `-response-bound` (`RecorderConfig.MaxResponseBytes` /
+`GatewayConfig.MaxResponseBytes`). The hermetic default stays the spec's 64 KiB and hermetic record
+bytes are unchanged (the applied bound and body length are only recorded when a non-default bound is
+applied). Live runs declare **1 MiB**. The applied bound is run identity, recorded in the revision
+string and on every call record beside `applied_reasoning_effort`/`applied_max_output_tokens`, and
+every call record also carries that response body's actual buffered byte length, so the headroom is
+auditable rather than assumed. Recorded bodies stay raw: `encrypted_content` is never stripped.
+
+**Defect found and fixed (stated plainly).** The 64 KiB recorded-body bound was itself a silent
+decision-loss channel at max effort: ~30 % of max-effort calls exceeded it, were recorded `oversized`
+with no extractable content, and fell back to the frozen cascade with no model action — invisible
+except as an `oversized` status in the ledger. The storage implication is why the bound is raised for
+live runs only rather than globally: a max-effort body is ~90 KB on average (~350 MB for Stage 1's 3888
+calls), which the hermetic 64 KiB bound and the default record path were never sized for.
+
+**Post-repair probe (gate for cells, verbatim).** Same smoke command plus `-response-bound 1048576`:
+10 call records, **10 `ok`, 0 `oversized`, 0 other statuses**; every record carries
+`applied_reasoning_effort: "max"`, `applied_max_output_tokens: 32768`, `response_byte_bound: 1048576`;
+recorded body lengths 15 462–120 239 bytes (three of ten over the old 64 KiB bound, confirming the loss
+channel). No new status class appeared. Artefacts: `.tmp/35-smoke-live-runs/`, `.tmp/35-smoke-live.json`,
+`.tmp/35-smoke-live.txt`, log `.tmp/35-smoke-live.log`; unit check
+`internal/cognition/client_applied_bound_test.go` (1 MiB bound accepts a 100 KiB body and records
+bound+length; the hermetic default still records `oversized`).

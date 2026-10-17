@@ -126,10 +126,11 @@ func wireStack(f *world.Natural, spec cellSpec, fp fixture, dir string, budget c
 	}
 	recorder, err := cognition.NewRecorder(cognition.RecorderConfig{
 		Ledger: ledger, Client: transport, Budget: account, Price: price,
-		Now:            time.Now,
-		AttemptTimeout: declaredAttemptTimeout,
-		CallDeadline:   declaredCallDeadline,
-		Sleep:          func(context.Context, time.Duration) error { return nil },
+		Now:              time.Now,
+		AttemptTimeout:   declaredAttemptTimeout,
+		CallDeadline:     declaredCallDeadline,
+		MaxResponseBytes: declaredResponseBound,
+		Sleep:            func(context.Context, time.Duration) error { return nil },
 	})
 	if err != nil {
 		return nil, err

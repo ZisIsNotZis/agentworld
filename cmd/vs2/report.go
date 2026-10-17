@@ -98,6 +98,7 @@ type cellReport struct {
 	Replicate       int    `json:"replicate,omitempty"`
 	Effort          string `json:"effort"`
 	MaxOutputTokens int    `json:"max_output_tokens"`
+	ResponseBound   int    `json:"response_bound"`
 
 	// The full hourly KPI series of the cell (ALIVE/BIRTHS/STARVATION/AGE
 	// deaths/capital histogram/granary histogram/wages/max capital). The bands
@@ -172,11 +173,12 @@ type evaluation struct {
 	// declared effort, applied output bound, samples per decision, and repeated
 	// runs per cell. DeclaredEffort empty means the model default was left to
 	// itself, which is a recorded state, not an inference.
-	DeclaredEffort   string `json:"declared_effort"`
-	AppliedMaxOutput int    `json:"applied_max_output_tokens"`
-	Votes            int    `json:"votes"`
-	Replicates       int    `json:"replicates"`
-	ValueModel       string `json:"value_model_version"`
+	DeclaredEffort       string `json:"declared_effort"`
+	AppliedMaxOutput     int    `json:"applied_max_output_tokens"`
+	AppliedResponseBound int    `json:"applied_response_bound"`
+	Votes                int    `json:"votes"`
+	Replicates           int    `json:"replicates"`
+	ValueModel           string `json:"value_model_version"`
 
 	Arms             []string          `json:"arms"`
 	QuotaSchedule    []int             `json:"quota_schedule"`
@@ -222,7 +224,7 @@ func cellReportOf(cr *cellRun) cellReport {
 	rep := cellReport{
 		Arm: cr.spec.Arm, F: cr.spec.F, Seed: cr.spec.Seed, Workers: cr.fp.effectiveWorkers(), Ran: true,
 		RootDigest: cr.rootDigest, BranchDigest: cr.branchDigest,
-		Replicate: cr.spec.Replicate, Effort: declaredReasoningEffort, MaxOutputTokens: appliedOutputBound(),
+		Replicate: cr.spec.Replicate, Effort: declaredReasoningEffort, MaxOutputTokens: appliedOutputBound(), ResponseBound: appliedResponseBound(),
 		Hours: cr.proj.Hours, AliveByHour: cr.proj.AliveByHour,
 		BirthsCum: cr.proj.BirthsCum, DeathsStarveCum: cr.proj.DeathsStarveCum,
 		DeathsAgeCum: cr.proj.DeathsAgeCum, CapitalHist: cr.proj.CapitalHist,

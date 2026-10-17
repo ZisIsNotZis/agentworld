@@ -415,6 +415,9 @@ type GatewayConfig struct {
 	// sends the wire's own default bound. On the responses wire the bound covers
 	// reasoning plus text together.
 	MaxOutputTokens int
+	// MaxResponseBytes is the recorded-body bound the transport buffers; zero
+	// keeps the spec's hermetic default (MaxResponseBytes).
+	MaxResponseBytes int
 	// HTTPClient is the transport. A nil client keeps the adapter a
 	// network-incapable stub (an authorized call fails with
 	// ErrGatewayUnimplemented).
@@ -436,6 +439,7 @@ type GatewayClient struct {
 	output            OutputMode
 	effort            string
 	maxOutputTokens   int
+	maxResponseBytes  int
 	baseURL           string
 	apiKey            string
 	httpClient        *http.Client
@@ -485,6 +489,7 @@ func NewGatewayClient(cfg GatewayConfig) (*GatewayClient, error) {
 		output:            output,
 		effort:            effort,
 		maxOutputTokens:   cfg.MaxOutputTokens,
+		maxResponseBytes:  cfg.MaxResponseBytes,
 		apiKey:            cfg.APIKey,
 		httpClient:        cfg.HTTPClient,
 	}
@@ -573,7 +578,11 @@ func (g *GatewayClient) Complete(ctx context.Context, req ModelRequest) (ModelRe
 		return ModelResponse{}, err
 	}
 	defer resp.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseBytes+1))
+	limit := g.maxResponseBytes
+	if limit <= 0 {
+		limit = MaxResponseBytes
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, int64(limit)+1))
 	if err != nil {
 		return ModelResponse{}, fmt.Errorf("%w: %v", ErrModelClient, err)
 	}
