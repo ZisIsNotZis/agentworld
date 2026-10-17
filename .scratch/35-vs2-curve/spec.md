@@ -251,6 +251,10 @@ projected hours remaining, status histogram):
 | 01:24 | 560 | 8.58 | all `ok` | ~6.5 h |
 | 01:34 | 638 | 8.23 | all `ok` | ~6.6 h |
 | 01:43 | 732 | 10.13 | all `ok` (732/732) | ~5.2 h |
+| 01:52 | 840 | 11.29 | all `ok` | ~4.5 h |
+| 02:02 | 948 | 11.32 | all `ok` | ~4.3 h |
+| 02:11 | 1073 | 13.17 | all `ok` | ~3.6 h |
+| 02:21 | 1228 | 16.16 | all `ok` (1228/1228) | ~2.7 h |
 
 Concurrency check (supervisor request): one throwaway probe at `-parallel 2`, cell `f10-s9` (not a
 declared cell), H=4, max effort, run while stage 1 was live → 21 calls in 307.9 s = 4.09 calls/min
@@ -290,3 +294,10 @@ Remaining work, in order:
    ticket-34 NOT-accepted status stands), and `.scratch/24-vs2-attention/spec.md` only if a status line
    must point here.
 7. **Record** every artefact's sha256 and the exact commands in this file, then commit; do not push.
+
+**Gates at code tip (before stage 1 finished), verbatim** (`sh .tmp/35-gates.sh` →
+`.tmp/35-gates.out`): `go build ./...` PASS; `go vet ./...` PASS; `gofmt -l` (tracked .go) clean after
+one reformat commit; `git diff --check` clean; `go test -timeout 30m ./...` **all packages ok**, with
+`internal/world` at 995.587 s and `cmd/vs2` at 57.225 s, zero FAIL lines. (A bare `go test ./...` fails
+`internal/world` on the 600 s per-package default timeout; that is the package's duration, not a
+regression — ticket 34 recorded 814.994 s.)
