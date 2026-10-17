@@ -521,3 +521,38 @@ recorded ticket-19 evidence at the matching horizon**, so the continuity witness
 FAIL is a horizon artefact. (The band still prints FAIL because it requires all 12 declared cells to be
 present; the honest statement is "mismatches=none at the declared cell, checked at the evidence's own
 168 h horizon".)
+
+## Admissibility quantification and the `natural-claim/v2` fix (validated by a bounded probe)
+
+**Quantification (from the stage-3 ledgers, no spend, `.tmp/35-admis.py`)**: of 917
+rejected-as-inadmissible answers across the three arms, 882 proposed `eat-stored` and were refused for
+"no granary stock, or a stored meal already taken this hour"; 32 proposed `gather` with no stocked home
+slot; 3 proposed `provision` with a non-empty bag or no granary. So the loss is one dominant,
+mechanical mistake: the model cannot see which of the legal actions the frozen gates admit this hour.
+
+**Contract fix, behind a NEW version**: `natural-claim/v2`
+(`ActorSeamSchemaVersionAdmissible = 2`, `NaturalClaimPromptTemplateAdmissible`) adds one field,
+`admissible_actions`, to the canonical request. It is computed by the same level-1 ladder the response
+check runs (`admissibleActions` → `admissibleAction`), from the request's own observation only
+(granary stock, last stored meal hour, bag units, home slots), so no privileged state and no other
+actor's data enters the request and the EC-6 observation boundary is unchanged; one ladder, one home.
+`natural-claim/v1` remains the declared default, its request bytes are byte-identical (the new field is
+`omitempty`), and a run records `claim_contract` in run identity and on every cell row. The response
+schema version follows the contract, so a schema-1 answer to a v2 request is a recorded `malformed`
+fallback (unit-tested in `internal/cognition/claim_contract_test.go`).
+
+**Bounded validation probe** (`.tmp/35-claimv2-probe.py`, results `.tmp/35-claimv2-results.json`): 30
+recorded inadmissible requests from stage 3, replayed at `effort=low` with the 32768 bound under each
+contract — 60 real calls, 33 365 input + 9 000 output tokens ≈ $0.008 of probe spend, declared here and
+nowhere else.
+
+| contract | calls | admissible | inadmissible | malformed | inadmissible rate | answers |
+|---|---|---|---|---|---|---|
+| v1 (baseline) | 30 | 3 | 26 | 0 | **86.7 %** | 26 `eat-stored`, 4 `gather` |
+| v2 (`admissible_actions` stated) | 30 | 30 | 0 | 0 | **0 %** | 29 `gather`, 1 `eat-stored` |
+
+The defect is essentially the whole of the admissibility loss, and stating the admitted set removes it
+in this sample (and costs *fewer* output tokens: 3 987 versus 5 013). Per instruction, the allocation
+fix (`vs2-value/2`: marginal/staleness term plus a per-actor coverage floor) and any re-run are NOT
+started; they await the supervisor's go-ahead. This probe is a 30-request sample at one effort level on
+one cell's requests, not a matrix result, and it does not by itself establish a between-arm effect.
