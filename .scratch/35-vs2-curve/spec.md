@@ -503,3 +503,21 @@ noise floor, so any structural difference at all reaches SNR ≥ 2 (max capital 
 from A0" is therefore weak evidence; the informative comparisons are between two stochastic arms (A vs
 U, P vs U), where the replicate band is real. Those outcomes measure how much of each arm's model answer
 survives admissibility, not which policy is better.
+
+## EC-1 at 144 h is a horizon artefact, not a regression (proved for free)
+
+The stage-3 report's EC-1 band reads, verbatim: `A0 cells checked=1 missing=0 declared=12;
+mismatches=f10-s0:alive_by_hour,f10-s0:event_body_bytes,f10-s0:events,f10-s0:history_bytes; …` →
+FAIL. The comparison target is the recorded ticket-19 evidence, produced at **168 h**, while the A0 cell
+ran at **144 h**, so the four mismatches are the expected truncation of every hourly series and event
+stream, not a substrate change.
+
+Proof, at zero spend because A0 makes no model calls: `.tmp/35-run-ec1.sh` →
+`.tmp/35-vs2-bin -arms A0 -cells f10-s0 -hours 168 -replay=false`, root `.tmp/35-ec1-runs`, report
+`.tmp/35-ec1-evaluation.json` sha256 `ed01e3229d93def1fceb34e8450c5fc4d081dabda5d52538569d152eb3234bb8`,
+text `ed761e124a65662f220291cbeec30eb23739ceba3701b1db9cc0817607e4dd6e`. Its EC-1 line, verbatim:
+`A0 cells checked=1 missing=0 declared=12; mismatches=none`. **The A0 cell is byte-identical to the
+recorded ticket-19 evidence at the matching horizon**, so the continuity witness holds and the 144 h
+FAIL is a horizon artefact. (The band still prints FAIL because it requires all 12 declared cells to be
+present; the honest statement is "mismatches=none at the declared cell, checked at the evidence's own
+168 h horizon".)
