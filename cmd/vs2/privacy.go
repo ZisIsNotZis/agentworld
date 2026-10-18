@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/parser"
 	"go/token"
@@ -40,19 +41,14 @@ var forbiddenObservationMarkers = []string{
 	"tenure", "owner", "debt", "spoil", "allocator", "regeneration", "kin", "other", "parent", "genome",
 }
 
-// declaredSeamRequestKeys is the exact allow-list top-level key set of a Role A
-// request.
-var declaredSeamRequestKeys = []string{
-	"schema_version", "role", "seam", "prompt_template", "model", "run",
-	"actor", "observation", "strategy", "actions", "sampling",
-}
-
-// declaredObservationKeys is the exact allow-list key set of the Role A
-// observation block.
-var declaredObservationKeys = []string{
-	"energy", "hunger", "bag_units", "capital", "wip", "invested_units",
-	"last_build_hour", "granary_stock", "last_stored_meal_hour", "home_patch", "home_slots", "last_denial",
-}
+// The allow-list is per contract and comes from internal/cognition, where the
+// encoders live and where TestDeclaredSeamRequestKeySetsMatchTheEncoders proves
+// each row equals what that contract writes. A single v1 list here certified the
+// wrong contract: every natural-claim/v4 request failed the v1 key check, the
+// scan returned before the privileged-marker test, and the band reported "key
+// violations=1325" beside a hard-coded claim that the observation key set was
+// exact. The boundary check was therefore silently disabled for the whole
+// ticket-36 run, which is the defect this per-contract selection repairs.
 
 // privacyScan is the accumulated adversarial-scan result.
 type privacyScan struct {
@@ -61,10 +57,27 @@ type privacyScan struct {
 	allocations   int
 	markers       []string
 	keyViolations []string
+	// byContract counts the requests that passed the key check per contract, and
+	// examined counts every request offered to the scan per contract, so the band
+	// can state what was actually certified instead of asserting it.
+	byContract map[cognition.ClaimContract]int
+	examined   map[cognition.ClaimContract]int
+	// markersScanned counts the requests whose observation block reached the
+	// privileged-marker scan. A request that fails the key check never does, so
+	// this number is the honest scope of the marker test.
+	markersScanned int
 }
 
-// scanRoleARequest checks one recorded Role A request against the declared
-// allow-list key sets and the privileged-marker list.
+func newPrivacyScan() *privacyScan {
+	return &privacyScan{
+		byContract: map[cognition.ClaimContract]int{},
+		examined:   map[cognition.ClaimContract]int{},
+	}
+}
+
+// scanRoleARequest checks one recorded Role A request against the key sets of the
+// contract the request itself declares (prompt_template), then against the
+// privileged-marker list. An undeclared contract is a violation, never a pass.
 func (s *privacyScan) scanRoleARequest(key string, body []byte) {
 	s.roleARequests++
 	var top map[string]json.RawMessage
@@ -72,8 +85,19 @@ func (s *privacyScan) scanRoleARequest(key string, body []byte) {
 		s.keyViolations = append(s.keyViolations, key+":undecodable")
 		return
 	}
-	if !sameKeySet(top, declaredSeamRequestKeys) {
-		s.keyViolations = append(s.keyViolations, key+":request-keys:"+unexpectedKeys(top, declaredSeamRequestKeys))
+	contract, err := declaredContractOf(top)
+	if err != nil {
+		s.keyViolations = append(s.keyViolations, key+":"+err.Error())
+		return
+	}
+	s.examined[contract]++
+	keys, ok := cognition.DeclaredSeamRequestKeySet(contract)
+	if !ok {
+		s.keyViolations = append(s.keyViolations, key+":undeclared-contract")
+		return
+	}
+	if !sameKeySet(top, keys.Request) {
+		s.keyViolations = append(s.keyViolations, key+":request-keys:"+unexpectedKeys(top, keys.Request))
 		return
 	}
 	obs, ok := top["observation"]
@@ -86,16 +110,51 @@ func (s *privacyScan) scanRoleARequest(key string, body []byte) {
 		s.keyViolations = append(s.keyViolations, key+":undecodable-observation")
 		return
 	}
-	if !sameKeySet(observation, declaredObservationKeys) {
-		s.keyViolations = append(s.keyViolations, key+":observation-keys:"+unexpectedKeys(observation, declaredObservationKeys))
+	if !sameKeySet(observation, keys.Observation) {
+		s.keyViolations = append(s.keyViolations, key+":observation-keys:"+unexpectedKeys(observation, keys.Observation))
 		return
 	}
+	s.byContract[contract]++
+	s.markersScanned++
 	lower := strings.ToLower(string(obs))
 	for _, marker := range forbiddenObservationMarkers {
 		if strings.Contains(lower, marker) {
 			s.markers = append(s.markers, fmt.Sprintf("%s:%s", key, marker))
 		}
 	}
+}
+
+// declaredContractOf reads the contract a request declares about itself. The
+// recorded bytes are what is being certified, so their own declaration selects
+// the allow-list; a request that declares nothing is a violation.
+func declaredContractOf(top map[string]json.RawMessage) (cognition.ClaimContract, error) {
+	raw, ok := top["prompt_template"]
+	if !ok {
+		return "", fmt.Errorf("missing-prompt-template")
+	}
+	var template string
+	if err := json.Unmarshal(raw, &template); err != nil {
+		return "", fmt.Errorf("undecodable-prompt-template")
+	}
+	contract, err := cognition.ParseClaimContract(template)
+	if err != nil || string(contract) != template {
+		return "", fmt.Errorf("undeclared-contract:%s", template)
+	}
+	return contract, nil
+}
+
+// contractCounts renders a per-contract count map in declared contract order.
+func contractCounts(counts map[cognition.ClaimContract]int) string {
+	parts := make([]string, 0, len(counts))
+	for _, row := range cognition.DeclaredSeamRequestKeySets() {
+		if n := counts[row.Contract]; n > 0 {
+			parts = append(parts, fmt.Sprintf("%s=%d", row.Contract, n))
+		}
+	}
+	if len(parts) == 0 {
+		return "none"
+	}
+	return strings.Join(parts, ",")
 }
 
 // scanAllocation checks one recorded allocation record for privileged markers.
@@ -277,12 +336,18 @@ func privacyBand(srcRoot string, runs []*cellRun) reportBand {
 	if err != nil {
 		return band("VS2-EC-6", criterion, "FAIL", fmt.Sprintf("structural import scan error: %v", err))
 	}
-	scan := &privacyScan{}
-	sentinel, err := cognition.EncodeActorSeamRequest(sentinelSeamRequest())
-	if err != nil {
-		return band("VS2-EC-6", criterion, "FAIL", fmt.Sprintf("sentinel encode error: %v", err))
+	scan := newPrivacyScan()
+	// The sentinel is encoded under EVERY declared contract, not once under the
+	// default: the point of the sentinel is to prove the encoder's output matches
+	// the declared allow-list, so a contract whose encoder has drifted must fail
+	// here rather than pass because another contract's sentinel was checked.
+	for _, row := range cognition.DeclaredSeamRequestKeySets() {
+		body, err := cognition.EncodeActorSeamRequestFor(sentinelSeamRequest(), row.Contract)
+		if err != nil {
+			return band("VS2-EC-6", criterion, "FAIL", fmt.Sprintf("sentinel encode error (%s): %v", row.Contract, err))
+		}
+		scan.scanRoleARequest("sentinel:"+string(row.Contract), body)
 	}
-	scan.scanRoleARequest("sentinel", sentinel)
 	for _, cr := range runs {
 		for _, call := range cr.calls {
 			if call.Role == cognition.RoleActorDecision {
@@ -303,11 +368,123 @@ func privacyBand(srcRoot string, runs []*cellRun) reportBand {
 	case scan.recordedRoleA == 0:
 		status = "FAIL"
 	}
+	// The evidence states what was certified, per contract, and never a claim the
+	// check did not establish: the marker scan's scope is the requests that passed
+	// the key check, which is why markersScanned is reported beside it.
 	evidence := fmt.Sprintf(
-		"import closure: request-builder=%d pkgs (no %s), protocol=%d pkgs (no net/%s), world=%d pkgs (no client); violations=%d [%s]; sentinel+recorded Role A requests scanned=%d (recorded=%d), observation key set exact, privileged markers=%d [%s]; allocation records scanned=%d, markers=%d; key violations=%d [%s]",
+		"import closure: request-builder=%d pkgs (no %s), protocol=%d pkgs (no net/%s), world=%d pkgs (no client); violations=%d [%s]; Role A requests scanned=%d (recorded=%d), declared key set matched by contract [%s] against declared contracts [%s]; privileged markers=%d over %d requests that passed the key check [%s]; allocation records scanned=%d, markers=%d; key violations=%d [%s]",
 		builder, worldPkg, protocols, worldPkg, worldClosure,
 		len(violations), joinOrNone(violations),
-		scan.roleARequests, scan.recordedRoleA, len(scan.markers), joinOrNone(scan.markers),
+		scan.roleARequests, scan.recordedRoleA,
+		contractCounts(scan.byContract), contractCounts(scan.examined),
+		len(scan.markers), scan.markersScanned, joinOrNone(scan.markers),
 		scan.allocations, len(scan.markers), len(scan.keyViolations), joinOrNone(scan.keyViolations))
 	return band("VS2-EC-6", criterion, status, evidence)
+}
+
+// recheckEC6 recomputes the VS2-EC-6 band over recorded run directories. It
+// reads each cell directory's hash-chained ledger and rebuilds the minimal cell
+// run the band consumes (its spec for key prefixes, its call records and its
+// intervention records), so the check certifies the bytes on disk - the same
+// bytes the run produced - without running a cell or spending anything. A
+// missing or undeserialisable ledger is an error, never an empty pass.
+func recheckEC6(srcRoot string, roots []string) (reportBand, error) {
+	var runs []*cellRun
+	for _, root := range roots {
+		entries, err := os.ReadDir(root)
+		if err != nil {
+			return reportBand{}, fmt.Errorf("%s: %w", root, err)
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			spec, ok := parseRecordedCellName(entry.Name())
+			if !ok {
+				continue
+			}
+			dir := filepath.Join(root, entry.Name())
+			ledger := filepath.Join(dir, "calls.jsonl")
+			if _, statErr := os.Stat(ledger); statErr != nil {
+				// The no-AI control makes no model call, so it has no ledger to
+				// certify. Every other arm must have one: a missing ledger there is
+				// an error, never an empty pass.
+				if spec.Arm == ArmA0 && errors.Is(statErr, os.ErrNotExist) {
+					continue
+				}
+				return reportBand{}, fmt.Errorf("%s: %w", dir, statErr)
+			}
+			calls, err := cognition.ReadCallRecords(ledger)
+			if err != nil {
+				return reportBand{}, fmt.Errorf("%s: %w", dir, err)
+			}
+			interventions, err := cognition.ReadInterventionRecords(ledger)
+			if err != nil {
+				return reportBand{}, fmt.Errorf("%s: %w", dir, err)
+			}
+			runs = append(runs, &cellRun{spec: spec, dir: dir, calls: calls, interventions: interventions})
+		}
+	}
+	if len(runs) == 0 {
+		return reportBand{}, fmt.Errorf("no recorded cell directories under %v", roots)
+	}
+	return privacyBand(srcRoot, runs), nil
+}
+
+// parseRecordedCellName parses a recorded cell directory name of the declared
+// shape <arm>-f<F>-s<S>[-r<N>|-w<N>] into its spec.
+func parseRecordedCellName(name string) (cellSpec, bool) {
+	parts := strings.Split(name, "-")
+	if len(parts) < 3 {
+		return cellSpec{}, false
+	}
+	spec := cellSpec{Arm: parts[0]}
+	for _, part := range parts[1:] {
+		if len(part) < 2 {
+			return cellSpec{}, false
+		}
+		value := 0
+		for _, r := range part[1:] {
+			if r < '0' || r > '9' {
+				return cellSpec{}, false
+			}
+			value = value*10 + int(r-'0')
+		}
+		switch part[0] {
+		case 'f':
+			spec.F = value
+		case 's':
+			spec.Seed = uint64(value)
+		case 'r':
+			spec.Replicate = value
+		case 'w':
+			spec.Workers = value
+		default:
+			return cellSpec{}, false
+		}
+	}
+	return spec, spec.Arm != ""
+}
+
+// recheckReport is the written form of a recomputed band: the band itself plus
+// what it was recomputed from, so a reader can bind the verdict to the bytes.
+type recheckReport struct {
+	Kind    string     `json:"kind"`
+	Roots   []string   `json:"roots"`
+	Band    reportBand `json:"band"`
+	NoSpend bool       `json:"no_spend"`
+}
+
+// writeRecheckReport writes the recomputed band as JSON and as text.
+func writeRecheckReport(jsonPath, textPath string, b reportBand) error {
+	report := recheckReport{Kind: "vs2-band-recheck/1", Roots: nil, Band: b, NoSpend: true}
+	body, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(jsonPath, append(body, '\n'), 0o600); err != nil {
+		return err
+	}
+	text := fmt.Sprintf("VS2 band recheck (no cells run, no spend)\n%s %s\n%s\n", b.ID, b.Status, b.Evidence)
+	return os.WriteFile(textPath, []byte(text), 0o600)
 }

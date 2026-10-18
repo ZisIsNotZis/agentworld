@@ -94,7 +94,9 @@ func TestPersonaCardReadsNoPrivilegedRow(t *testing.T) {
 func TestNaturalClaimSystemPromptV4Shape(t *testing.T) {
 	card := cognition.PersonaFor(5, personaPortrait(0, 6, 6, 6), 50)
 	prompt := cognition.NaturalClaimSystemPromptV4(card)
-	if tokens := len(prompt) / 4; tokens > 700 {
+	// One declared estimate for the token bound: UTF-8 bytes over four, rounded
+	// up. It is an estimate, not a measurement, and it is stated once.
+	if tokens := (len(prompt) + 3) / 4; tokens > 700 {
 		t.Fatalf("v4 system prompt estimate %d tokens exceeds the 700 bound (%d bytes)", tokens, len(prompt))
 	}
 	ordered := []string{
@@ -109,6 +111,7 @@ func TestNaturalClaimSystemPromptV4Shape(t *testing.T) {
 		"The granary is the store your capital fills",   // fact 2
 		"at most one unit from the granary in one hour", // fact 3
 		"Your bag holds one food unit",                  // fact 4
+		"up to a ceiling of twelve",                     // the meal's ceiling, so "a meal restores one" is not an overclaim
 		`"why"`,                                         // the output shape
 	}
 	at := 0

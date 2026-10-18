@@ -151,16 +151,8 @@ func NaturalClaimSystemPromptV4(card PersonaCard) string {
 		"- A slot is a strip of ground beside your home. Food appears in your slots on its own, hour after hour, whether or not you act; each slot holds one unit, and a unit waiting there is yours to pick up.\n" +
 		"- The granary is the store your capital fills, one unit an hour for each point you hold. Standing food there slowly rots, but it is the only store a child can be fed from.\n" +
 		"- You can take at most one unit from the granary in one hour, and both routes use up that hour's one draw: eating it on the spot, or putting it in your bag.\n" +
-		"- Your bag holds one food unit and no more; a meal or a piece of capital is made from exactly that unit. Energy is what keeps you alive: it drains as the hours pass, a meal restores one unit of it, and at zero you die.\n\n")
+		"- Your bag holds one food unit and no more; a meal or a piece of capital is made from exactly that unit. Energy is what keeps you alive: it drains as the hours pass, a meal restores one unit of it up to a ceiling of twelve, and at zero you die.\n\n")
 	b.WriteString("Answer with exactly one JSON object and nothing else:\n" +
 		"{\"schema_version\": 4, \"action\": \"<one action, spelled exactly as the request lists it>\", \"why\": \"<one sentence on why this action, this hour>\"}\n")
 	return b.String()
-}
-
-// personaPromptTokens is the declared token estimate of the v4 system prompt:
-// UTF-8 bytes over four, rounded up. It is an estimate, not a measurement, and
-// it exists so the "under 700 tokens" bound has a check that fails when the
-// prompt grows rather than a claim that it did not.
-func personaPromptTokens(prompt string) int {
-	return (len(prompt) + 3) / 4
 }

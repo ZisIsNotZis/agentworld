@@ -46,6 +46,7 @@ func main() {
 		curveIn       = flag.String("curve-in", "", "comma-separated evaluation JSON paths: do not run cells, emit the curve report over them instead")
 		curveOut      = flag.String("curve-out", "", "curve report text output path (default: <out-txt> with a -curve suffix)")
 		claimContract = flag.String("claim-contract", "natural-claim/v1", "declared Role A request contract: natural-claim/v1 (legal action set only), natural-claim/v2 (also states the observation's admissible action subset) or natural-claim/v4 (display vocabulary, display action labels, a real system prompt and a recorded why); recorded in run identity")
+		recheckIn     = flag.String("recheck-in", "", "comma-separated recorded run root directories: recompute the VS2-EC-6 observation-boundary band over their ledgers (no cells, no spend) and write <out> / <out-txt>; the band is recomputed, never copied")
 		relabelIn     = flag.String("relabel", "", "comma-separated evaluation JSON paths: re-emit their reports from the recorded data with the mode-corrected status/label/EC-9 text (no cells run, no spend); writes <name>-relabelled.{json,txt}")
 	)
 	flag.Parse()
@@ -94,6 +95,23 @@ func main() {
 	// status/label/EC-9 text: a report-only regeneration path that runs no cell and
 	// spends nothing, so a report produced by an older binary can be corrected
 	// without re-running the experiment or rewriting the original artefact.
+	// The recheck mode recomputes a declared band over recorded run directories.
+	// It runs no cell and spends nothing: it reads each cell directory's ledger and
+	// re-evaluates the check, so a band that was computed by an earlier (or
+	// faulty) revision can be corrected from the same data instead of being
+	// re-run at live cost.
+	if *recheckIn != "" {
+		band, err := recheckEC6(*srcRoot, splitList(*recheckIn))
+		if err != nil {
+			fail("recheck: %v", err)
+		}
+		if err := writeRecheckReport(*outJSON, *outText, band); err != nil {
+			fail("recheck report: %v", err)
+		}
+		fmt.Printf("%s %s\n%s\n", band.ID, band.Status, band.Evidence)
+		return
+	}
+
 	if *relabelIn != "" {
 		for _, path := range splitList(*relabelIn) {
 			out, changes, err := relabelEvaluationFile(path)

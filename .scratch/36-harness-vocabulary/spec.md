@@ -64,8 +64,12 @@ fingerprints are unaffected. `v1` and `v2` keep their exact previous bytes when 
 
 ### The redundancy and inert-row audit (hard rule, every row checked against the code that reads it)
 
-The rule is: no field may be derivable from another field in the same request, and no field that neither
-the model nor the world acts on belongs in the decision request. **Every observation field, every
+The rule is: **no actor-state field may be inert** (a field that neither the model nor the world acts on
+does not belong in the decision request), and **a non-state field must be declared provenance** rather than
+left as unexplained noise. The earlier form of this sentence said "no field that neither the model nor the
+world acts on belongs in the request", which the shipped request falsifies: `run.*` and `sampling` are read
+by nothing that decides and are kept deliberately, as provenance, and are declared as such in the table
+below. **Every observation field, every
 derived-name field and every non-state request block is listed below with what actually reads it**, so the
 sweep is checkable rather than asserted. "Acts on it" means a world admission gate, a frozen cascade
 decision, or the thing that happens to the unit the actor is choosing to move; a validity check that reads
@@ -121,7 +125,9 @@ Each claim action has two names, which violates one-name-one-thing. It is declar
 ## Deliverable B — the v4 system prompt
 
 `NaturalClaimSystemPromptV4(PersonaFor(actor, portrait, hour))`, `internal/cognition/prompt.go`. Under 700
-tokens by the declared estimate (bytes/4), asserted by `TestNaturalClaimSystemPromptV4Shape`. In order:
+tokens by the declared estimate (UTF-8 bytes over four, rounded up: **419** after the post-review wording
+correction, 1 673 bytes), asserted by `TestNaturalClaimSystemPromptV4Shape`, which is the single place the
+estimate is stated. In order:
 
 1. **the situation**, three sentences: one person in a small settlement, one decision per hour, the world
    does what you choose if it is possible and otherwise does what you would have done anyway;
@@ -171,12 +177,17 @@ results).
   labels that are outside the declared vocabulary (they are inadmissible, and they are counted separately
   from a wrong action).
 - **THE FALSIFIER — a separate 5-call probe.** Five further calls whose user message is the v4 prompt
-  context plus the question "what can you do this hour, and why" asked in words, no action list: the model
-  names the actions it believes are available, in its own words. The answer is compared **line by line**
-  against the code's admissibility ladder for the same five requests (a table of `action → admitted by the
-  model? / admitted by the ladder?`), and the **agreement rate** is reported with the disagreements named.
-  This separates "the model can choose correctly when asked to pick" from "the model understands the rules
-  at all".
+  context plus the question "what can you do this hour, and why" asked in words, **no action list**: the
+  model names the actions it believes are available, in its own words. The answer is compared **line by
+  line** against the code's admissibility ladder for the same five requests (a table of `action → admitted
+  by the model? / admitted by the ladder?`), and the **agreement rate** is reported with the disagreements
+  named. This separates "the model can choose correctly when asked to pick" from "the model understands the
+  rules at all".
+  *Amendment after review:* the first execution of this probe appended an instruction to answer from the
+  request's `actions` list, which is a list-filtering test, not the declared recall test. Both forms are
+  reported in the results section (form 1, labels supplied: 20/20 cells; form 2, question only, no action
+  list: behavioural agreement 5/5, declared-label recall 0/5), each labelled with the form that produced
+  it.
 - **Cost bound:** 45 calls. Stop before exceeding; the ticket budget is 1,600 calls (see below).
 
 ## Deliverable D — one full-AI run at v4
@@ -263,10 +274,16 @@ No nonsense appeared in this sample, and no `why` contradicts its action or its 
 used correctly and unprompted: the answers speak of "the granary draw", "waiting slot food", "my bag",
 "capital", i.e. the four facts the system prompt added and the renamed fields, not the old jargon.
 
-**4. THE FALSIFIER — five calls asking in words, compared line by line with the ladder.**
+**4. THE FALSIFIER — five calls asking in words, compared line by line with the ladder, in TWO forms.**
 
-Same five fresh states and the same persona prompt, but the question is "what can you do this hour, and
-why" and the answer shape is `{"schema_version":4,"can_do":[…],"why":…}`. Agreement is per action
+The first form ran with the action list and an explicit instruction to answer from it. An independent
+review found that this deviates from the pre-registration ("no action list: the model names the actions it
+believes are available"), and it is right: form 1 measures **list-filtering**, not recall. Both numbers are
+reported here, each labelled with the form that produced it, and the pre-registration paragraph at the top
+of this section is amended accordingly.
+
+**Form 1 — labels supplied (the original run; 5 calls).** The question ended with an instruction to answer
+`{"schema_version":4,"can_do":[…], …}` using the request's own `actions` list. Agreement is per action
 (4 actions × 5 requests = 20 cells) between "the model says it can" and "the ladder admits it".
 
 | request | gather | eat-stored | provision | wait | exact set |
@@ -277,12 +294,37 @@ why" and the answer shape is `{"schema_version":4,"can_do":[…],"why":…}`. Ag
 | hermetic#2026 (empty granary) | ✓ ✓ | ✓ ✓ (no) | ✓ ✓ (no) | ✓ ✓ | yes |
 | hermetic#212 (granary 7, food waiting) | ✓ ✓ | ✓ ✓ | ✓ ✓ | ✓ ✓ | yes |
 
-**Agreement 20/20 cells = 100 %, exact admissible set matched 5/5.** Its own words: "I can pick up one of
-the eight waiting slot-food units into my empty bag or wait, but there is no granary food to eat or take"; "Your bag is empty, slot food is waiting, and the granary draw is unused, so each listed action is
-available this hour". The model's model of the rules and the code's ladder are the same model on this
-sample. The falsifier therefore narrows the remaining defect: comprehension is no longer the binding
-constraint on the choice, and the near-constant `gather` answer is a property of the state and the goal,
-not of a misunderstanding.
+**Form 1 agreement: 20/20 cells = 100 %, exact admissible set 5/5 — as list-filtering.** The model was
+handed the four labels and the request's action list, so this number certifies that it can filter a menu by
+the state; it says nothing about whether it knows the vocabulary.
+
+**Form 2 — question only, no action list, free-form (the declared form; 5 calls, same five states).** The
+`actions` array was **removed** from the state shown, no answer schema was given beyond the question, and
+the wire's JSON output mode (which every live call uses) remained on. The answers, verbatim:
+
+| request (ladder-admissible set) | answer | action it names | ladder verdict |
+|---|---|---|---|
+| hermetic#852 {gather, wait} | `{"schema_version":4,"action":"pick_up_food","why":"I have food waiting in my slots and an empty bag, so I should secure one unit while I can."}` | `pick_up_food` → gather behaviour | admissible |
+| hermetic#1836 {gather, wait} | "…`"action":"pick_up_food"`, `"why":"I have no food in my bag or granary, so I should collect a waiting unit before my energy runs out."`" | `pick_up_food` → gather | admissible; its "granary is empty" clause agrees with the ladder (both granary actions inadmissible) |
+| hermetic#690 {all four} | "…`"action":"pick_up_food"`, `"why":"I can collect a waiting unit into my empty bag without drawing down the granary, preserving stored food while preparing to build capital."`" | gather | admissible (chose not to draw, correctly) |
+| hermetic#2026 {gather, wait} | "…`"action":"pick_up_food"`, `"why":"I have no food in my bag or granary, so I should collect a waiting unit before my energy runs lower."`" | gather | admissible; granary clause agrees |
+| hermetic#212 {all four} | "…`"action":"eat"`, `"why":"Eating from the granary restores energy and helps me stay alive while my capital continues producing food."`" | `eat` → eat-stored | admissible |
+
+Two numbers, and they point in opposite directions:
+
+- **Behavioural agreement with the ladder: 5/5** — every named action is one the ladder admits for that
+  state, and in the two states where the granary was drawable the model varied (gather in one, eat-stored in
+  the other). Stated cells: 10 of 20 (gather 5 positive, eat-stored 1 positive + 2 explicit "granary is
+  empty" negatives, provision 2 negatives), **10/10 agree**, 10 unstated, 0 contradictions.
+- **Vocabulary recall: 0/5.** With no list to choose from, the model invented `pick_up_food` (×4) and `eat`
+  (×1); it never produced `take_slot_food_into_bag`, `eat_granary_food`, `take_granary_food_into_bag` or
+  `wait_this_hour`. The display labels are **usable only because the request carries them**, not natural
+  names the model would produce on its own.
+
+That is the finding, not a failure of the test: the v4 contract works as designed (the labels are in the
+request, and the answer is mapped back through one table), and form 1's 20/20 is exactly the list-filtering
+it measures. A future contract that wanted recall would have to make the labels memorable (shorter, or
+buildable from the prompt), which is a vocabulary-design decision this ticket does not take.
 
 **Artefacts** (`.tmp` is git-ignored; hashes in the completion record below): `.tmp/36-comprehension-rejected.json`,
 `.tmp/36-comprehension-fresh.json`, `.tmp/36-verdicts.jsonl`, `.tmp/36-comprehension-results.json`,
@@ -329,7 +371,7 @@ Artefacts: `.tmp/36-v4-evaluation.json` (sha256 `8aa4342e…146463`), `.tmp/36-v
 | births cumulative | **2** (both by h 24; none afterwards) |
 | starvation deaths cumulative | 1 |
 | age deaths cumulative | 10 |
-| applied / rejected decisions | 1 323 / 2, both `malformed`, **0 `inadmissible`** (0.15 % decision-error rate against 40–53 % under v1 and 0.7–1.3 % under v2) |
+| applied / rejected decisions | 1 323 / 2, **0 `inadmissible`** (0.15 % decision-error rate against 40–53 % under v1 and 0.7–1.3 % under v2). The two fallback records both carry the typed reason `malformed`, and neither is a schema-invalid answer: one (seq 1560, actor 2017, h69) is a **transport error** (`status: http-error`, 0 tokens, no content), the other (seq 2124, actor 6, h95) is a **truncation at exactly 32 768 completion tokens** (`status: ok`, 106 240-byte body, JSON cut mid-object). The output-bound loss channel has therefore not gone away; it is one call in 1 325 at `low` effort with a 32 768 bound |
 | applied action mix (internal IDs) | `gather` 1 115 (84.3 %), `provision` 139 (10.5 %), `eat-stored` 62 (4.7 %), `wait` 7 (0.5 %) |
 | the frozen cascade's own mix at the same instants (recorded `frozen_action`) | `gather` 1 181, `provision` 119, `eat-stored` 25, `wait` 0 → **91 applied decisions (6.9 %) diverged from the frozen policy**, and the divergence runs in both directions |
 | calls / tokens / cost | 1 325 calls, 824 408 input + 234 007 output tokens ≈ **$0.199** at the declared gpt-6-luna prices (the report records cost as UNPRICED because the gateway exposes no price entry; the token totals are the evidence) |
@@ -353,33 +395,123 @@ closest approach to `capital >= 2 AND granary >= 3` in an escalated hour of this
 | 2017 (born h5) | 3 | 35 | h11 (2, 4, 4) | **58** |
 | 2018 (born h6) | 3 | 39 | h11 (2, 3, 4) | **101** |
 
-So the two meanings of "still no births" are separated by this run: **the gate was not merely approached, it
-was held open** — the two second-generation actors sat at or above both birth floors for 58 and 101
-escalated actor-hours each, and no third birth followed. The failure is therefore *downstream of
-capital/granary*: the birth path also needs a partner (proposal and consent are addressed and same-patch),
-a free request slot, an energy floor at the filing instant, and the granary payment at the reply. This run
-measures the claim-instant state, not the filing-instant state, and it cannot see partnership availability,
-so which of those binds is **not established here** — it is the next measurement, not a conclusion.
+So the two meanings of "still no births" are separated by this table, and stated in the only form the
+measurement supports: **the two one-actor floors (`capital >= 2` and `granary >= 3`) were held, not merely
+approached** — the two second-generation actors sat at or above them for 58 and 101 escalated actor-hours
+each, and no third birth followed. What that does **not** establish is where the birth path stops, because
+reproduction is a **two-parent conjunction**, not a threshold: a request must be filed by a proposer
+(own energy at or above the filing floor, a free and idle request row, one request per actor-hour), the
+addressee must be alive, **kin-allowed and in the same home patch**, and the reply must re-check the
+consenter's own energy/capital/granary floors before the granary payment — evaluated at the reply instant,
+not at the claim instant this run observes. This replicate carries none of the partner, request-row or
+reply-instant facts, so the correct statement is: **the claim-instant capital/granary floors were met and
+did not convert into a third birth; which of the remaining conjuncts binds is unmeasured.**
 
-**Limits of D, stated.** One cell, one replicate, one effort level, one contract; the no-AI control is the
-deterministic A0 cell at the same fixture (ticket 35 record), not a paired replicate of this run; and the
-arm is full wake (every claim-wake actor escalated), so this is not an allocation result. **No allocation
-conclusion is drawn and none may be** (the M2a/M2b/C stages above say why).
+**Limits of D, stated.**
+
+1. One cell, one replicate, one effort level, one contract; the no-AI control is the deterministic A0 cell
+   at the same fixture (ticket 35 record), not a paired replicate of this run; the arm is full wake (every
+   claim-wake actor escalated), so this is not an allocation result. **No allocation conclusion is drawn and
+   none may be** (the M2a/M2b/C stages above say why).
+2. **The band's ladder is a strict superset of the world's admission for `gather`.** The v4 ladder admits
+   `take_slot_food_into_bag` whenever some home slot is stocked; the world additionally requires a non-empty
+   bag to be *empty*, `energy > 0`, `LastGatherHour < hour`, and the food-flow allocator's own eligibility
+   for the target slot. A model answer can therefore be certified admissible and still be refused after
+   commitment, and this run cannot count those refusals: the natural journal (where attempt refusals are
+   written) is inside the run bundle and not in the ledger, so no attempt-rejection count is reported.
+   Measured lower bound on the gap in this replicate: **0 requests** admitted gather while the bag already
+   held a unit (the other two clauses are not observable from the v4 request, which no longer carries
+   `lastGatherHour`). The gap is real, unexercised on that clause here, and belongs in the next contract's
+   review.
+3. **`final_bundle_error: "invalid natural evidence journal"`** is recorded on the cell (pre-existing; the
+   ticket-35 runs carry the same message) and the cited `natural-root.bundle` /
+   `natural-branch-enabled.bundle` sha256 values are hashes of those **bundle files** (git bundles of the
+   run's genesis and births-enabled branch, 28 KB each), not hashes of the world state, the journal or the
+   ledger. The ledger hash is the separate `…/calls.jsonl` value above. The bundle error means the run's
+   journal does not re-validate through that path; it does not invalidate the recorded call ledger or the
+   projection series the table above reports, and it is **not** repaired here.
+4. The prompt sentence this run sent said "a meal restores one unit of it"; at the ceiling of 12 a meal
+   restores nothing and counts as cap-lost. The wording is corrected in the code after the run (see the
+   prompt section) and the recorded `system_prompt` of every call keeps the pre-fix text, so the run's wire
+   is unchanged by the correction.
+
+### VS2-EC-6 was silently disabled for v4 — found by review, repaired, re-run at zero spend
+
+**The defect.** `cmd/vs2/privacy.go` held one allow-list, the v1 key set, and applied it to every recorded
+request regardless of contract. Every `natural-claim/v4` request therefore failed the top-level key check,
+`scanRoleARequest` returned **before** the privileged-marker scan, and the band printed key violations beside
+a hard-coded sentence claiming the observation key set was exact. The D report recorded, verbatim:
+
+> `VS2-EC-6 FAIL | … Role A requests scanned=1326 (recorded=1325), observation key set exact, privileged
+> markers=0 [none]; … key violations=1325 [R-f10-s0-r1#0:request-keys:, …
+
+Every clause of that line was wrong in the way that matters: the marker scan had examined **nothing** for
+this contract, and the "exact" claim was an unconditional string. **Before this repair the observation-boundary
+check was silently disabled for the contract the run used**, and the ticket's own evidence was certifying a
+boundary nobody had checked.
+
+**The repair** (three parts, all in code with tests):
+
+1. the allow-list is **per contract**, declared once in `internal/cognition/seam_keys.go`
+   (`DeclaredSeamRequestKeySet`), and the scan selects it from the contract the recorded request declares
+   about itself (`prompt_template`). An undeclared contract is a violation, never a pass. The evidence line
+   now reports the counts that were certified and examined per contract, and the marker scan's scope beside
+   the marker count, instead of asserting anything.
+2. the sentinel is encoded and scanned under **every** declared contract (v1, v2, v4), so a contract whose
+   encoder drifts from its declaration fails the band rather than passing because another contract's
+   sentinel was checked.
+3. the shared declaration is guarded by `TestDeclaredSeamRequestKeySetsMatchTheEncoders` (each declared row
+   must equal exactly what that contract's encoder writes for the same request value), and
+   `TestActorSeamRequestV4UsesTheDecisionVocabulary` now consumes that declaration instead of keeping its own
+   copy. `cmd/vs2/privacy_test.go` pins the scan itself: a v4 request is certified, an extra observation key
+   or a v1 name inside a v4 request is a violation, an undeclared contract is a violation, and a privileged
+   marker inside a declared field is caught. The v4 request bytes are additionally pinned
+   (`goldenV4Request`), so the bytes this run recorded cannot drift silently.
+
+**The re-run, at zero spend.** The band is recomputed from the recorded run directories by the new
+`-recheck-in` mode (no cell runs, no model call), and the same mode is used on the ticket-35 roots as a
+cross-check that the per-contract selection is not v4-specific. Verbatim:
+
+> `VS2-EC-6 PASS`
+> `import closure: request-builder=22 pkgs (no agentworld/internal/world), protocol=13 pkgs (no net/agentworld/internal/world), world=29 pkgs (no client); violations=0 [none]; Role A requests scanned=1328 (recorded=1325), declared key set matched by contract [natural-claim/v1=1,natural-claim/v2=1,natural-claim/v4=1326] against declared contracts [natural-claim/v1=1,natural-claim/v2=1,natural-claim/v4=1326]; privileged markers=0 over 1328 requests that passed the key check [none]; allocation records scanned=0, markers=0; key violations=0 [none]`
+
+(cell `.tmp/36-v4-runs`: 1 325 recorded requests + 3 sentinels, all certified, **markers=0**, key
+violations=0). Cross-check on the older roots: `.tmp/35-v2-runs` PASS (6 580 recorded v2 requests + 3
+sentinels, markers=0, 1 359 allocation records scanned, key violations=0) and `.tmp/35-stage3-runs` PASS
+(2 265 recorded v1 requests + 3 sentinels, markers=0, 933 allocation records, key violations=0). The
+per-contract counts also show where the defect lived: **v1 and v2 were certified by the old single list; only
+v4 was not.** Reports: `.tmp/36-ec6-recheck.json` / `.txt` (D), and the same mode over the two ticket-35
+roots.
 
 ### What the vocabulary change did and did not fix
 
 **Fixed:** the model's answers are now admissible without the world telling it the answer — 0/40 in the
 comprehension probe and 0/1 325 in the full run, against 86.7 % inadmissible under v1 — and the model's own
-account of what it can do agrees with the code's ladder (20/20 cells, 5/5 exact sets). The vocabulary is
-also what makes the whys legible: 1 323 of 1 325 applied decisions carry a recorded `why`, and they speak
-the world's actual mechanics ("the granary draw", "waiting slot food", "capital") rather than the old
-jargon.
+account of what it can do agrees with the code's ladder (20/20 cells, 5/5 exact sets in the
+labels-supplied form; the no-list form is reported above). Of the 1 323 applied decisions, all carry a
+recorded `why`, **12 were read and quoted below, and at least one is degenerate**: seq 2179 (actor 2018,
+h97, 453 characters) reads "…while my energy is still enough to spare the hour.}belisoaไทยฟรี
+大发时时彩开奖} (Oops exact JSON only; malformed? final currently has extra weird token? …" — runaway
+text, consistent with the output cap being reachable at this effort. The action still applied because the
+ladder never reads `why`, which is the point of keeping comprehension evidence out of the decision path;
+the claim this record may make is therefore "12 quoted of 1 323, one degenerate", not "the whys are
+clean".
 
-**Not fixed, and not claimed:** the near-constant `gather` majority (84 % of applied decisions) — ticket 35's
-v2 sample and this run's state distribution both show the fixture's escalations mostly admit only
-gather-or-wait, so a narrow action mix is a property of the state space, not of the prompt; the birth path
-below the capital/granary gate; the fidelity anchor (Q1), which is M2b; any allocation comparison, which is
-M2c. **The central claim is not addressed by this ticket, and the M2 milestone remains not accepted.**
+**Not fixed, and not claimed:** the **`gather`-heavy action mix (84 % of applied decisions) is now measured
+against the state distribution rather than asserted.** Running the committed ladder over the 1 325 recorded
+D requests gives:
+
+| admissible set of the request | requests | model's choice |
+|---|---|---|
+| {gather, wait} | 851 (64.2 %) | gather 850, wait 1 |
+| {gather, eat-stored, provision, wait} | 328 (24.8 %) | gather 265, eat-stored 58, provision 5 |
+| {eat-stored, provision, wait} | 144 (10.9 %) | provision 134, eat-stored 4, wait 6 |
+
+so 64 % of the escalations admitted only gather-or-wait (the mix is forced by the state), and where all four
+were legal the model split 265/58/5 and where gather was impossible it took the granary routes in 138 of
+144 hours. The remaining open items are the birth path below the one-actor floors, the fidelity anchor
+(Q1), which is M2b, and any allocation comparison, which is M2c. **The central claim is not addressed by
+this ticket, and the M2 milestone remains not accepted.**
 
 
 ## Completion record

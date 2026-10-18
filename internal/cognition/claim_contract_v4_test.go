@@ -30,14 +30,24 @@ const goldenV1Request = `{"schema_version":1,"role":"actor-decision","seam":"nat
 // request, spelled once for the v2 suffix comparison.
 const goldenSampling = `{"temperature":0.7,"top_p":1,"max_tokens":128,"seed":null}`
 
-// v4ObservationKeys is the exact declared observation key set of the v4 wire:
-// every field is read by the frozen cascade, by a claim-admission gate, or by the
-// action the actor is choosing.
-var v4ObservationKeys = []string{
-	"energy", "bag_food_units", "capital", "build_point_in_progress",
-	"build_done_this_hour", "granary_food_units", "granary_draw_used_this_hour",
-	"food_units_waiting_to_pick_up", "last_refused_action",
-}
+// goldenV4Request is the exact canonical request the v4 contract produces for
+// sampleSeamRequest(). It is pinned because the ticket-36 live run's ledger holds
+// these bytes for every one of its 1 325 calls: a silent encoder change would
+// make that run's recorded requests unreproducible while every key-set and
+// ladder test still passed.
+const goldenV4Request = `{"schema_version":4,"role":"actor-decision","seam":"natural.claim","prompt_template":"natural-claim/v4","model":"github_copilot/gpt-6-luna","run":{"fixture":{"patches":2,"r":8,"founders":12,"mechanism":6,"births":true},"seed":0,"base_ref":{"id":"natural","version":7},"head_ref":{"id":"natural","version":7}},"actor":{"id":5,"hour":6},"observation":{"energy":6,"bag_food_units":0,"capital":1,"build_point_in_progress":0,"build_done_this_hour":false,"granary_food_units":3,"granary_draw_used_this_hour":false,"food_units_waiting_to_pick_up":1,"last_refused_action":"none"},"actions":["take_slot_food_into_bag","eat_granary_food","take_granary_food_into_bag","wait_this_hour"],"sampling":{"temperature":0.7,"top_p":1,"max_tokens":128,"seed":null}}`
+
+// v4Keys is the shared declaration of the v4 contract's wire key sets, the same
+// rows VS2-EC-6 checks recorded requests against. This test consumes it rather
+// than keeping a second copy, so a rename cannot leave the boundary check
+// certifying a set no request carries.
+var v4Keys = func() cognition.SeamRequestKeySet {
+	keys, ok := cognition.DeclaredSeamRequestKeySet(cognition.ClaimContractV4)
+	if !ok {
+		panic("natural-claim/v4 has no declared key set")
+	}
+	return keys
+}()
 
 // TestActorSeamRequestV4UsesTheDecisionVocabulary is the deliverable-A pin: no
 // cryptic name survives, no policy constant is sent, and every claim action is
@@ -51,8 +61,7 @@ func TestActorSeamRequestV4UsesTheDecisionVocabulary(t *testing.T) {
 	if err := json.Unmarshal(body, &top); err != nil {
 		t.Fatal(err)
 	}
-	wantTop := []string{"schema_version", "role", "seam", "prompt_template", "model", "run",
-		"actor", "observation", "actions", "sampling"}
+	wantTop := v4Keys.Request
 	got := keySet(rawKeys(t, body))
 	if len(got) != len(wantTop) {
 		t.Fatalf("top-level key set = %v, want exactly %v", got, wantTop)
@@ -66,10 +75,10 @@ func TestActorSeamRequestV4UsesTheDecisionVocabulary(t *testing.T) {
 		t.Fatal("the v4 request must not carry the strategy parameter vector: those seven values are policy constants, not state")
 	}
 	obs := keySet(rawKeys(t, top["observation"]))
-	if len(obs) != len(v4ObservationKeys) {
-		t.Fatalf("observation key set = %v, want exactly %v", obs, v4ObservationKeys)
+	if len(obs) != len(v4Keys.Observation) {
+		t.Fatalf("observation key set = %v, want exactly %v", obs, v4Keys.Observation)
 	}
-	for _, k := range v4ObservationKeys {
+	for _, k := range v4Keys.Observation {
 		if !obs[k] {
 			t.Fatalf("missing observation key %q in %v", k, obs)
 		}
@@ -104,6 +113,9 @@ func TestActorSeamRequestV4UsesTheDecisionVocabulary(t *testing.T) {
 	}
 	if wire.SchemaVersion != cognition.ActorSeamSchemaVersionVocabulary || wire.PromptTemplate != "natural-claim/v4" {
 		t.Fatalf("v4 contract identity: %+v", wire)
+	}
+	if string(body) != goldenV4Request {
+		t.Fatalf("v4 request bytes changed:\n got %s\nwant %s", body, goldenV4Request)
 	}
 	want := []string{"take_slot_food_into_bag", "eat_granary_food", "take_granary_food_into_bag", "wait_this_hour"}
 	if strings.Join(wire.Actions, ",") != strings.Join(want, ",") {
