@@ -5,8 +5,9 @@
   declared before the numbers exist; the measured results (§8) and the verdict (§9) were added after it.
 - **Verdict: `A` vs `U` separates (`A` more viable under `vrd/2`); `A` vs `P` ties.** One primary pair
   separates, one does not — not "adaptive beats periodic". One cell, one contract, one horizon, three
-  replicates, 248 decisions per budgeted arm, and `A1`'s second replicate is voided by the contract gate
-  (§8.2, §9.2). State: **complete 15-cell matrix, 0 halted, 2 948 attempts, `$0.5696`**, inside every cap.
+  replicates, at most 248 decisions per budgeted arm (`P` gate-bound at 244/244/228), and `A1`'s second
+  replicate is voided by the contract gate (§8.2, §9.2). State: **complete 15-cell matrix, 0 halted,
+  2 948 attempts, `$0.5696`**, inside every cap.
 - Base revision: `ae0396f` (master, ticket 40 merged). Branch: `feature/41-m2c-matrix-rerun`.
 - Author: worker agent (ticket 41), under the advance-phase plan.
 - Inputs, in order: the pre-registered criterion `.scratch/38-m2c-preregistration/spec.md` §7 (arms, cell,
@@ -227,6 +228,17 @@ new or as regressions, and identical in kind to ticket 39 §4's:
   `scan.recordedRoleA == 0` (`cmd/vs2/privacy.go:365-368`), so an `A0`-only anchor — which makes zero model
   calls by construction — can never satisfy it. On the full matrix the 12 model-bearing cells supply
   recorded Role A requests, and the band is read there. No violation, marker or key violation is reported.
+- **`VS2-EC-3` and `VS2-EC-4` print `[not-evaluable]`** on the shipped artefact (`m2c-evaluation.txt:71`,
+  `:74`), for the same pre-existing, structural reason and with the same consequence: neither gates this
+  run and neither is read by the verdict. Both bands are divergence vectors against the full-wake `R`
+  reference at the same cell (`cmd/vs2/report.go:404-421`), and `R` is a declared non-goal of this matrix
+  (§2), so `buildFidelity` finds no reference for any budgeted arm and records all twelve as
+  `refused (no-reference)`; the report therefore prints `complete A/P/U cells=0/12` for `VS2-EC-3` and
+  `fidelity rows=0` for `VS2-EC-4`, and the text report's divergence section reads `none (no complete A/P/U
+  vs R cell)`. Any matrix without an `R` cell reads the same way, so this is a property of the declared
+  arm set, not a defect of this run — and it is not the same statement as ticket 38 §7.7's "no override of
+  the frozen EC-3/EC-4 dominance rule" (§10): those two criteria were **not evaluated here at all**, and no
+  EC-3/EC-4 result is reported, in either direction.
 
 ## 7. Launch record
 
@@ -342,7 +354,7 @@ The four declared post-run commands of §5.9 were run in order (`m2c-contract-ga
 | `P` | persists 3/3 | 0.0210 (±0.0420) | 0.0333 (±0.0667) | 0.0000 (±0.0000) |
 | `U` | persists 3/3 | 0.1837 (±0.0321) | 0.4333 (±0.1667) | 0.0000 (±0.0000) |
 | `A` | persists 3/3 | 0.0293 (±0.0293) | 0.0667 (±0.0667) | 0.0000 (±0.0000) |
-| `A1` | persists 3/3 | 0.0028 (±0.0042) | 0.0333 (±0.0667) | 0.0000 (±0.0000) |
+| `A1` | persists 3/3 (`r2` voided, §9.2) | 0.0028 (±0.0042) | 0.0333 (±0.0667) | 0.0000 (±0.0000) |
 
 Per pair (`|mu_X − mu_Y| > max(B, ε)` separates; `ε_H = 0.01`, `ε_S = 0.1`, `ε_B = 0.5`):
 
@@ -358,8 +370,16 @@ Per pair (`|mu_X − mu_Y| > max(B, ε)` separates; `ε_H = 0.01`, `ε_S = 0.1`,
 | `A0` vs `U` | diagnostic | SEPARATES, more viable: `A0` | 0.1837 | band (0.0321), flagged one-sided noise floor |
 | `A0` vs `A1` | diagnostic | **not reportable over a voided cell** (§9.2) | 0.0028 vs band 0.0042 (3 replicates) | not recorded as a result |
 
+**The scorer's printed `secondary: 2` counts one pair this record does not report.** The last line of
+`m2c-scores.log` reads `SEPARATION (primary separating pairs: 1, secondary: 2)`; the two secondary
+separations it counts are `A1 vs U` (a pair over a voided cell, §9.2) and `P vs U`. The record's own
+reportable secondary count is therefore **1** — `P` vs `U`, `0.1627 > 0.0420` — and the transcript is kept
+verbatim, unedited, because it is the tool's output; the difference is the void, not a disagreement about the
+numbers.
+
 No tier-1 separation anywhere: **all five arms persist in all three replicates** (every replicate's terminal
-population > 0, §8.4). Tier 4 (births) ties on every pair: `d_B = 0.0000` for `A0`, `P`, `U`, `A` alike, so
+population > 0, §8.4; `A1`'s persistence is over three replicates of which `r2` is voided, and no tier-1 pair
+involves `A1`). Tier 4 (births) ties on every pair: `d_B = 0.0000` for `A0`, `P`, `U`, `A` alike, so
 the 0.5 floor is never approached. Tier 3 (starvation deaths) does separate the `U` pairs (`U` 0.4333 against
 `P` 0.0333 and `A` 0.0667: 0.4000 and 0.3667, both above `max(0.1667, 0.1)`), but the rule reads the
 **highest** separating tier and those pairs already separate at tier 2, so tier 3 decides no pair. Among the
@@ -390,7 +410,22 @@ favour of the tier order (the declared objective).
 | `A` | 1444 / 1370 / 1391 | 2 / 2 / 2 | 0 / 1 / 1 |
 | `A1` | 1443 / 1434 / 1443 | 2 / 2 / 2 | 0 / **1** / 0 |
 
-The `A1` `S = 1` replicate is `r2`, the cell carrying the inadmissible answer (§8.2).
+Each column is one replicate, keyed by the cell's own `replicate` field — **not** by its position in the
+artefact's `cells` array, which is in emission order (`U` appears there as `r3, r1, r2` and `A1` as
+`r1, r3, r2`), so a row read off that array in order comes out rotated by one replicate.
+
+The `A1` `S = 1` replicate is `r2`, the cell carrying the inadmissible answer (§8.2); its column is voided
+(§9.2) and is shown as measured data only.
+
+**One review finding is withdrawn here, and how it arose matters for the next reader.** The independent
+review of 2026-10-18 reported this row's `U` replicates as rotated — measured `r1 B4/S6, r2 B2/S3,
+r3 B2/S4` against the printed `B 2/2/4`, `S 3/4/6` — and asked for the two columns to be exchanged. That
+reading is the emission-order trap described above, and three checks settle it in favour of the row as
+printed: every cell's per-replicate prompt/completion token totals equal its same-named run directory's
+ledger totals (12 of 12), `A1-f10-s0-r2`'s ledger holds the matrix's only `inadmissible` row while the
+artefact shows `A1` `r2` with `S = 1` (so the `replicate` labels are bound to the directories), and every
+cell closes arithmetically (`alive(0) + B − S − age deaths = alive(H)`). The row stands; §9's
+"(2/4/6 …)" parenthetical, which no `U` replicate supports, is deleted.
 
 ### 8.5 The checks as declared before the run
 
@@ -403,7 +438,8 @@ fails; a voided cell is handled by §9.2 instead.
 
 **SEPARATION — `A` vs `U` separates (`A` more viable under `vrd/2`), and `A` vs `P` ties.**
 
-At 248 decisions per arm, on **one cell** (`f10-s0`), one contract (`natural-claim/v4`), one horizon
+At up to 248 decisions per arm (`P` is gate-bound below it, at 244/244/228 — §8), on **one cell**
+(`f10-s0`), one contract (`natural-claim/v4`), one horizon
 (`H = 144`), three replicates, the adaptive arm (`A`, `vs2-value/2`) separated from the **uniform-random** arm
 and **not** from the **periodic** arm. It is not "adaptive beats periodic": that pair is a tie, and periodic is
 the baseline a selective allocator most needs to beat. The pair that separated did so on tier 2 (actor-hours)
@@ -421,13 +457,35 @@ The verdict rule (§7.4) reads **SEPARATION** because at least one primary pair 
 result `P` vs `U` separates (`P` more viable, `0.1627 > 0.0420`) is reported beside it, and the A1 pairs are
 not reportable (§9.2).
 
+**Power, so the tie is not read as equivalence.** The numbers behind it are this record's own tables: the
+band that decided `A` vs `P` is `0.042013`, i.e. **60.7 actor-hours**, 4.2 % of the control's 1 444; the
+observed difference is `0.008310`, i.e. **12.0 actor-hours** (0.8 %), which is 5.1× inside that band **and
+below the declared tier-2 floor** of `0.01` = **14.4 actor-hours**, so even a noiseless 12.0-actor-hour
+effect would have been declared a tie; and because the band is the widest single-replicate excursion, the
+smallest difference separable at three replicates is **42–61 actor-hours** (`0.0293`–`0.0420`, 2.9–4.2 % of
+the control) across the pairs this record prints — against the 223 actor-hours (`0.1544`) by which `A` and
+`U` actually differ. The same-arm replicate excursions are larger than the between-arm difference — `P`'s
+actor-hour deficits are **0/0/91** and `A`'s **0/74/53** — so the band is one replicate's excursion, not a
+measure of the distance between the arms. Dropping `P-r3` alone does not separate, but it moves the pair
+**exactly onto the boundary**: `P`'s mean and band both fall to 0 while `A`'s band is its own mean
+(`0.029317`), so `|Δ| = max(band, floor)` = 42.3 actor-hours and the tie survives on the rule's strict
+inequality alone. (The independent review stated that dropping `P-r3` *would* flip the rule to a
+separation; evaluated with the scorer's own `arm_aggregate`/`pair_verdict` on this artefact it does not, and
+that claim is withdrawn here as an order-of-evaluation error.) The reading this record stands behind is
+therefore **"no detectable effect at 3 replicates"**, never "no effect": one replicate is enough to carry
+`A` vs `P` from 5.1× inside the band to exactly on it, and no effect below ≈42 actor-hours could have been
+detected here at all.
+
 What does **not** divide the arms, stated so no reader over-reads the separation:
 
 - **Tier 1, persistence:** no separation. All five arms keep a non-empty population to `H = 144` in all three
-  replicates (`H` = 1444/1444/1444 for `A0`, and the lowest replicate in the matrix is `U` r2 at 1133).
-- **Tier 4, births:** ties everywhere. `d_B = 0.0000` for every arm; `U`'s extra births (2/4/6 against the
-  control's 2) do not move the mean component at all under the declared normalisation, and the printed band
-  is the authority.
+  replicates (`H` = 1444/1444/1444 for `A0`, and the lowest replicate in the matrix is `U` r2 at 1133);
+  `A1`'s three include the voided `r2` (§9.2), and no tier-1 pair involves `A1`.
+- **Tier 4, births:** ties everywhere, and it can only ever tie or be lost. `d_B = max(0, (B_T − B_x)/B_T)` is
+  **one-sided by construction**, so an arm at or above the control's births scores 0 and no arm can win this
+  tier: `U`'s extra births (2/2/4 against the control's 2, §8.4) are clipped to 0, and the printed band is
+  the authority. "Tier 4 ties" therefore does **not** mean "the arms reproduce equally" — it means none of
+  them reproduces less.
 - **Tier 3, starvation deaths:** separates only the `U` pairs, which already separate at tier 2, so it decides
   nothing.
 - The whole separation therefore rests on **one tier, on one pair, on one cell**: `U`'s actor-hour deficit
@@ -482,7 +540,8 @@ comparison's numbers appear only as labelled sensitivity in §8.3. No A1 claim i
 
 Ticket 38 §7.7, unchanged, **plus the verdict's own scope, which must be read with the result**:
 
-- **What is established:** at 248 decisions per arm, at one cell, under one contract, at one horizon, over
+- **What is established:** at up to 248 decisions per arm (`P` gate-bound at 244/244/228), at one cell,
+  under one contract, at one horizon, over
   three replicates, the adaptive arm (`vs2-value/2`) is **more viable under `vrd/2` than uniform-random** on
   tier 2 (actor-hours), and is **not** distinguishable from periodic on any tier. It is **not** "adaptive beats
   periodic" — that pair ties — and periodic is the baseline a selective allocator has to beat.
@@ -503,6 +562,27 @@ Ticket 38 §7.7, unchanged, **plus the verdict's own scope, which must be read w
   as `0.0420` actor-hours.
 
 ## 11. Evidence paths
+
+**The evidence binding, stated rather than implied.** Four checks the independent review could not run itself,
+all at `3da26d4` (the tip the review read) and all zero spend:
+
+| # | check | command | result |
+|---|---|---|---|
+| 1 | the revision of this record | `git rev-parse HEAD` | `3da26d41c0da26c77416fccd188760da2ca5052c` |
+| 2 | the declaration precedes the launch | `git merge-base --is-ancestor 5ffab6b HEAD`; `git log -1 --format=%cI 5ffab6b` | `5ffab6b` is an ancestor of `HEAD` and was committed `2026-10-19T00:54:55+08:00` = **`16:54:55Z`**, two seconds before the §7 launch at `16:54:57Z` |
+| 3 | this branch changes no Go file | `git diff --name-only ae0396f..HEAD` | **0** `*.go` paths — `.scratch/` and `docs/VERTICAL-SLICES.md` only, so every §6 gate, the binary `.tmp/41-vs2-bin` and every artefact in this table bind to the base revision `ae0396f` |
+| 4 | the committed artefact is the one that was scored | `sha256sum .scratch/41-m2c-matrix-rerun/m2c-evaluation.json .tmp/41-m2c-evaluation.json` | both `6b3c4085e917ae56…` — one artefact, one hash, byte-identical |
+
+The independent review of 2026-10-18 is `.scratch/41-m2c-matrix-rerun/review.md`. The follow-up that lands
+its findings alters no figure already in §8–§10: it adds the power statement (§9), the tier-4 one-sidedness
+and the EC-3/EC-4 reading (§6, §9), the `replicate`-keying note and the withdrawal of the review's
+rotated-row claim (§8.4), the `≤ 248` phrasing in place of "248 decisions per arm" (§9, §10), and the
+deletion of the §9 births parenthetical that no `U` replicate supports.
+
+Re-running the scorer on the committed artefact (`vrd2.py --live .tmp/41-m2c-evaluation.json --scores
+.scratch/37-fidelity-metric/scores.json`) reproduces `m2c-scores.log` **byte for byte**
+(`sha256 1dec667b4721…`), so the transcript is the tool's own output on the artefact listed here, not a
+hand-copied summary.
 
 | artefact | home |
 |---|---|
@@ -528,5 +608,5 @@ Ticket 38 §7.7, unchanged, **plus the verdict's own scope, which must be read w
 |---|---|---|
 | a | `python3 .tmp/35-admis.py .tmp/41-m2c-runs` | exit 0; `A {applied 742, rejected 2, inadmissible 0, malformed 2}`, `P {714, 2, 0, 2}`, `U {743, 1, 0, 1}`, `A1 {740, 4, inadmissible 1, malformed 3}`; `eat_granary_food / illegal-action 1` — **gate 3 fires once, cell voided (§9.2)** |
 | b | `vrd2.py --check-inventory .tmp/41-m2c-evaluation.json` | exit 0; `PASS — 15 of 15 declared cells scored, 3 replicates per arm, 0 halted, 0 skipped` |
-| c | `vrd2.py --live … --log …/m2c-scores.log` | exit 0; bands per arm, per-pair band/floor decisions, `M2c verdict (spec section 7.4): SEPARATION (primary separating pairs: 1, secondary: 2)`; `precedence sensitivity: 0 of 36 declared-pair verdicts change`; `terminal-sample sensitivity: 0 of 6` |
+| c | `vrd2.py --live … --log …/m2c-scores.log` | exit 0; bands per arm, per-pair band/floor decisions, `M2c verdict (spec section 7.4): SEPARATION (primary separating pairs: 1, secondary: 2)` — that printed `secondary: 2` includes the `A1` vs `U` pair, so the record's reportable secondary count is 1 (§8.3); `precedence sensitivity: 0 of 36 declared-pair verdicts change`; `terminal-sample sensitivity: 0 of 6` |
 | d | `.tmp/41-vs2-bin -curve-in .tmp/41-m2c-evaluation.json -curve-out .tmp/41-m2c-curve.txt` | exit 0; 467 lines; `A@low vs U@low DISTINGUISHABLE (population)`, `A@low vs P@low NOT distinguishable` — agrees with the tier order on both primary pairs |

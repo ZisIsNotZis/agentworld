@@ -347,7 +347,10 @@ clean negative … is an equally decisive and reportable outcome"), not a failur
    drifting anchor voids the run before any score is read.
 3. **Contract gate.** Every model-bearing cell must record **0 `inadmissible`** answers. A nonzero
    count voids that cell: ticket 35 showed a matrix under a lossy contract measures admissibility luck,
-   not allocation quality.
+   not allocation quality. A voided **cell** does not void the **run**: its arm's pairs are reported as
+   *not reportable over a voided cell*, its replicate count as used-of-declared, and the run is voided —
+   `NOT RUN`, no verdict — only when the §7.4 inventory precondition or the halt rule fails. The rule, its
+   grounds and its authority are recorded in ticket 41 §9.2 (product-owner decision of 2026-10-18).
 4. **Band gate.** No difference smaller than the §7.4 band may be called a separation, in either
    direction; ties are printed as ties. A band of zero alone never establishes a practically meaningful
    separation: the tier's declared effect floor must also be cleared, so an identical-replicate pair

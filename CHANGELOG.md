@@ -254,7 +254,54 @@ for anything: current truth lives in the authoritative documents — the active 
   spend: `A0` is script-only, reproduces `H=1444 B=2 S=0` exactly, and its projections are byte-identical
   under `natural-claim/v1` and `natural-claim/v4`, so the AI arms' contract cannot move it. Ticket 39's
   run plan: ≈3 027 calls, ≈$1.28 expected (bounded $0.46–$1.28 from recorded token counts), **hard cap
-  $2.00**, 3-4 h at the measured 16-18 calls/min, `setsid nohup` with liveness from the runner pid plus
+  $2.00** (re-costed to **`$1.30`** and 7 000 cumulative attempts by ticket 40 §7, after the run it costed
+  realised `$1.989e-4` per attempt; every M2c run from ticket 41 on reads `$1.30`, so this `$2.00` is a
+  superseded pre-run figure and not a second live cap), 3-4 h at the measured 16-18 calls/min, `setsid nohup` with liveness from the runner pid plus
   ledger growth. The harness enforces calls, not dollars (`MaxCostMicros: 1<<60`, cost reported UNPRICED),
   so the dollar cap is an operator poll-and-stop rule and is recorded as such. No Go file changed; no
   full Go suite is claimed. Record: `.scratch/38-m2c-preregistration/spec.md`.
+- **Ticket 39 — M2c part 2: execute the pre-registered arm matrix (phase A pre-live gates and launch, phase B
+  poll and scoring).** Branch `feature/39-m2c-matrix` (base `279f0ba`, tip `1186e36`), **no threshold, floor,
+  arm, cell or replicate changed** — the ticket executes ticket 38 §7 and re-declares none of it. The matrix
+  ran once (arms `A0/P/U/A/A1`, cell f10-s0, `H = 144`, 3 replicates, `natural-claim/v4`, effort `low`,
+  `N = 256`) for **3 020 physical attempts and `$0.6007`**: 14 of 15 cells completed the horizon and
+  `A1-f10-s0-r1` **halted on its 257th attempt** at the declared ceiling, so the §7.4 inventory precondition
+  failed and the verdict is **`NOT RUN`** — no band, tier, pair or arm comparison was read. The halt is
+  diagnosed (§11) as a plan error rather than an infrastructure fault or an arm outcome: `q(h)` is defined so
+  that `Σ q = N`, so a *completing* cell also ends on its last permitted attempt, while the account charges
+  physical attempts — one retried 300 s timeout therefore bought no decision and truncated an otherwise
+  complete cell, and eight of the twelve model-bearing cells finished at exactly 100 % of the ceiling. The
+  zero-spend gates, the anchor reproduction (`H=1444 B=2 S=0`, 3/3 identical) and the gateway probe are
+  recorded verbatim, and the run root is preserved. Record: `.scratch/39-m2c-matrix/spec.md`.
+- **Ticket 40 — M2c part 2b: a declared transport reserve, and the re-pre-registration.** Branch
+  `feature/40-m2c-transport-reserve` (commits `f4e3924`, `dd95308`, `ae0396f`), **zero live calls, $0.00**.
+  The only change to the frozen instrument is the schedule: it selects at most `N − R_t = 248` decisions
+  inside the unchanged `DeclaredCallCeiling = 256` and leaves `R_t = 8` declared transport-reserve attempts
+  per cell for retries; `VS2-EC-2`'s criterion, its fail-loud `(N+1)`-th-attempt halt and the halt path are
+  untouched, and the reserve applies identically to every budgeted arm, so the equal-budget comparison holds.
+  Code: `internal/cognition/priority.go` (the derivation and its floor), `cmd/vs2/config.go` (the schedule
+  divides the *decision* budget, so the recorded `quota_schedule` sums to 248) and the `EscalationSelector`
+  doc sentence, with a new `internal/cognition/priority_reserve_test.go` and three joint cell tests in
+  `cmd/vs2/accounting_test.go` (a cell retrying inside the reserve still completes; `P`'s own gate, not the
+  reserve, is its binding stop), all shown to fail under a bounded mutation `R = 0`. Re-costed from the
+  realised `$1.989e-4` per attempt: **hard cap `$1.30`** and 7 000 attempts cumulative across runs (operator
+  stop `$1.04`), replacing ticket 38's pre-run `$2.00`/4 000, with the run plan's call total at 2 964
+  (≈`$1.25`). Record: `.scratch/40-m2c-transport-reserve/spec.md`.
+- **Ticket 41 — M2c part 3: the re-run under the reserve, and the verdict.** Branch
+  `feature/41-m2c-matrix-rerun` (base `ae0396f`; the declaration was committed **before the launch**, at
+  `5ffab6b`, `16:54:55Z` — two seconds before the `16:54:57Z` launch — and the verdict record is `3da26d4`;
+  the independent review's findings were landed in a follow-up on the same branch, and this branch changes no
+  Go file). The matrix completed: **15 of 15 cells, 0 halted, 2 948 attempts, 1 853 633 in / 768 547 out
+  tokens, `$0.5696`** (44 % of the `$1.30` cap), ≈17 min at `-parallel 12`, and the transport reserve went
+  entirely unspent (`attempts − decisions = 0` in every cell). The pre-registered rule returned
+  **`SEPARATION`**: at up to 248 decisions per arm (`P` gate-bound at 244/244/228), one cell, one contract,
+  one horizon and three replicates, `A` (`vs2-value/2`) is more viable under `vrd/2` than `U`
+  (`0.1544 > band 0.0321`, 4.8×), and `A` vs `P` **ties** (`0.0083 ≤ max(0.0420, 0.0100)`) — it is not
+  "adaptive beats periodic", and periodic is the baseline a selective allocator has to beat. The contract
+  gate fired once (one `inadmissible` answer in 2 948, 0.03 %), voiding `A1-f10-s0-r2` at cell level: every
+  `A1` pair is reported as not reportable and no `A1` claim is made, a rule now recorded in ticket 38 §7.6
+  and `docs/VALIDATION.md`. The tie is **not** "no effect": the band that decided it is 60.7 actor-hours
+  (4.2 % of the control's 1 444), the observed difference 12.0 actor-hours, the declared floor 14.4, and
+  same-arm replicate excursions 0/0/91 (`P`) and 0/74/53 (`A`) dwarf it, so at three replicates the minimum
+  detectable difference is ≈42–61 actor-hours — "no detectable effect at 3 replicates". Record:
+  `.scratch/41-m2c-matrix-rerun/spec.md`.
