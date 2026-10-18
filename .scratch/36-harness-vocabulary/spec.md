@@ -398,8 +398,9 @@ correction, the complete field sweep, the M2 stage declaration, the D result and
 | `.tmp/36-v4-runs/R-f10-s0-r1/calls.jsonl` (D ledger, hash-chained) | `c85746de35c7f2aeb7c7509785a8eb7788c07de7f02212b1c12589bdc839403a` |
 | `.tmp/36-v4-runs/R-f10-s0-r1/natural-root.bundle` | `cfafad62933e454a761153e51e9b6e06e6838c9753070e8f17c9786d8df6fcce` |
 | `.tmp/36-v4-runs/R-f10-s0-r1/natural-branch-enabled.bundle` | `c76013dd348b540a0abc77607cee72b512e35f27077c856af168d2a221ddb2cf` |
-| `.tmp/36-hermetic-eval.json` (fresh-request source, hermetic) | see the D table; 1 443 v4 requests, 0 live calls |
-| `.tmp/36-comprehension-results.json` (probe analysis) | produced by `.tmp/36-analyse.py` from the raw answers and `.tmp/36-verdicts.jsonl` |
+| `.tmp/36-hermetic-eval.json` (fresh-request source, hermetic) | `3d19dae82d133e02e3693954d8f0784ed26bf0c9142590df5b4df775a49459f3` (1 443 v4 requests, 0 live calls) |
+| `.tmp/36-comprehension-results.json` (probe analysis) | `48243bc88b61f7610f590e35a3a05d7da9a87ab90a9ca585476c2be6c6a44f96` |
+| `.tmp/36-verdicts.jsonl` (ladder verdicts for the 45 probe answers) | `983573731c379f325de1d4bc407f685466279c6bc23df6befa73da7c9b5592ce` |
 | `.tmp/36-vs2-bin` (binary used for both the hermetic and the live run) | `8b573f72a31938d1b5d4758aca425fa655543a1a0813f020ff36a45e4eca9598` |
 
 **Gates.** At the final tree: `go build ./...` PASS, `go vet ./...` PASS, `gofmt -l` (tracked `.go`) clean,
