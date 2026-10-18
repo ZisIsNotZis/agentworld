@@ -514,6 +514,38 @@ were legal the model split 265/58/5 and where gather was impossible it took the 
 this ticket, and the M2 milestone remains not accepted.**
 
 
+## Post-review corrections (independent review, BLOCK; no new live work except the 5-call falsifier re-run)
+
+The review returned BLOCK with three blocking items and a P2 list. What changed, and why each was real:
+
+- **EC-6 was silently disabled for v4** (section above): per-contract allow-lists, sentinel under every
+  contract, shared declaration with an encoder-equivalence test, the v4 test consuming it, a scan test, the
+  v4 byte pin, and a zero-spend `-recheck-in` re-run that now reports PASS with markers=0. The old line is
+  quoted verbatim beside the new one.
+- **The falsifier deviated from its own pre-registration.** Form 1 supplied the action list and an
+  enumeration instruction, so its 20/20 is list-filtering; the declared form (question only, no action list,
+  free-form) was run as 5 further calls: behavioural agreement **5/5** and declared-label recall **0/5** (it
+  invented `pick_up_food` and `eat`). Both numbers are recorded with the form that produced them, and the
+  pre-registration paragraph is amended rather than quietly reinterpreted.
+- **The ticket-35 suppression claim is withdrawn** in `.scratch/35-vs2-curve/spec.md`,
+  `docs/VERTICAL-SLICES.md` and `CHANGELOG.md`: under v4 a full-wake arm reproduces at the A0 rate (2 births,
+  one replicate, one cell), so "full cognition suppresses reproduction" is not established; the Q1 argument is
+  re-scoped to the R reference's own observed extinction rather than to an AI-arm suppression effect.
+- **P2s folded in:** the birth gate is restated as a two-parent conjunction and the CHANGELOG's "gate
+  demonstrably reached and held" became the one-actor-floors claim; the two fallback decisions are identified
+  as a transport error and a 32 768-token truncation, not schema errors; the cell's
+  `final_bundle_error: "invalid natural evidence journal"` is disclosed together with what the cited bundle
+  hashes are hashes of; the degenerate `why` (seq 2179) is quoted and the "whys are clean" phrasing replaced;
+  the state distribution is derived from the ladder over the 1 325 recorded requests instead of asserted; the
+  ladder's strict-superset gap for `gather` is stated in the limits with its measured lower bound; the prompt's
+  meal sentence now says "up to a ceiling of twelve"; the sweep rule is restated as "no actor-state field may
+  be inert; a non-state field must be declared provenance" (the old form was false of the shipped request,
+  which keeps `run.*` and `sampling`); the dead `personaPromptTokens` helper is removed and the token bound is
+  estimated in exactly one place; and the "different strategies produce different failure modes" claim is
+  **retired**: it appears nowhere in the tree (a grep for "failure mode(s)" finds only the generic
+  PRINCIPLES/VISION/OPEN-QUESTIONS wording about reporting failure modes), so it was never carried into a
+  document and is not carried now.
+
 ## Completion record
 
 **Commits** (branch `feature/36-harness-vocabulary`, branched from `master` `8269765`; not pushed):
