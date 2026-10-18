@@ -712,3 +712,26 @@ the original.
 
 Progressive evidence: `.tmp/35-stage1.progress` (poll log), `.tmp/35-stage23.progress`, per-cell
 hash-chained ledgers and checkpoint bundles under `.tmp/35-stage{1,2-*,3,v2}-runs/`.
+
+## Budget reallocation (supervisor, 2026-10-18 ~08:45): v1 ladder truncated, one v2 max run declared
+
+**Stage 2 `max` (v1) STOPPED** at 2246 calls (R-f10-s0-r1 749, r2 719, r3 778 — all `ok`) by its exact
+pid 1851847, on the supervisor's decision. Reason: it was completing a ladder under contract v1, where
+40-53 % of every arm's answers were inadmissible, so a v1 max-effort point could not be compared with
+anything now trusted and would have spent the lane's last margin on a superseded configuration. The
+partial artefacts stay at `.tmp/35-stage2-max-runs/` and are **not** a replicate. **The v1 effort ladder is
+therefore INCOMPLETE at its top rung** — `none`, `low` and `high` completed and are internally consistent
+with each other, and none of them is comparable to any v2 run; the ladder is truncated, not complete.
+
+**Declared before starting (one run, the pair the depth question reduces to):** full-wake `R` at
+`effort=max` under **`natural-claim/v2`**, H=144, cell f10-s0, 3 replicates — the same contract as the v2
+low reference already held, so low-vs-max at one contract is the contrast that matters.
+
+Command: `.tmp/35-run-v2max.sh` → `.tmp/35-vs2-v2bin -arms R -cells f10-s0 -reps 3 -hours 144 -effort max
+-max-output 32768 -response-bound 1048576 -attempt-timeout 300 -call-deadline 900 -claim-contract
+natural-claim/v2 -live -parallel 8 -budget-min 600 -root .tmp/35-v2max-runs`, outputs
+`.tmp/35-v2max-evaluation.{json,txt}`. Expected ≈ 3 600 calls ≈ **$5.7**, taking lane spend to ≈ $23 of the
+$25 cap. No `high` under v2 is added: it would land on the cap with no margin for a repair.
+
+**HARD STOP after this run**: no further live model calls in this lane, whatever the result. If the
+projected spend would exceed $25, the run is not started and the supervisor is told first.
