@@ -1,0 +1,9 @@
+--- FAIL: TestDeclaredScheduleLeavesTheTransportReserve (0.00s)
+    accounting_test.go:234: declared transport reserve R = 0, want the declared 8
+--- FAIL: TestCellWithoutRetriesLeavesTheReserveUnspent (0.00s)
+    accounting_test.go:310: U made 256 decisions in 256 attempts, want 248/248
+--- FAIL: TestCellRetryingWithinTheReserveStillCompletes (0.00s)
+    accounting_test.go:331: U halted inside the reserve: {Ceiling:cognitive-calls Threshold:256 Observed:257 Hour:160}
+FAIL
+FAIL	agentworld/cmd/vs2	0.005s
+FAIL

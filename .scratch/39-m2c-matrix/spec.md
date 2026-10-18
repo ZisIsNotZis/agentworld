@@ -17,7 +17,8 @@ M2c question (`docs/VERTICAL-SLICES.md`, M2c row), under the M2a-passed contract
 > Under `natural-claim/v4` at cell `f10-s0`, horizon `H = 144`, does any **budgeted allocation arm**
 > (`A` adaptive on `vs2-value/2`, `A1` adaptive on `vs2-value/1`) separate from the **periodic** (`P`)
 > and **uniform-random** (`U`) arms on the `vrd/2` order (persistence `e`, actor-hours `d_H`, starvation
-> deaths `d_S`, births `d_B`), at equal declared call ceiling `N = 256` and with the no-AI control `A0`
+> deaths `d_S`, births `d_B`), at equal declared call ceiling `N = 256` and equal declared decision budget
+> `N − R = 248` (`R = 8`, ticket 40 §3), and with the no-AI control `A0`
 > as the floor?
 
 The rule that answers it is ticket 38 §7.4–§7.6: band + per-tier effect floor `|mu_X − mu_Y| >
@@ -34,7 +35,7 @@ NOT RUN}, with the falsifier declared in §7.6 and the inventory precondition of
 | replicates | 3 per arm → 15 scored cells (3 × `A0` + 12 model-bearing) |
 | decision contract | `natural-claim/v4` |
 | applied effort | `low`; `-max-output 32768`, `-response-bound 1048576`, `-attempt-timeout 300`, `-call-deadline 900`, `-parallel 8` |
-| budget axis | declared call ceiling `N = 256` per budgeted arm-run |
+| budget axis | declared call ceiling `N = 256` physical attempts per budgeted arm-run, of which the schedule selects at most `N − R = 248` decisions (`R = 8` transport reserve, ticket 40 §3) |
 | `R` (full wake) | excluded, declared non-goal (§7.1) |
 
 Spend authority for this ticket, from ticket 38 §8.1: **hard cap $2.00 and 4 000 physical attempts**,
@@ -640,7 +641,7 @@ Per option, the sentences and conclusions that change:
 - **(v-b)** Keeps `VS2-EC-2` and `N = 256` exactly as declared and gives the *schedule* a declared reserve: `Σq(h) = N − R` for a declared `R` (e.g. 8 retried attempts; one call can spend at most 3 attempts, `DefaultMaxAttempts = 3`, `internal/cognition/client.go:52`). The ceiling still fires on the `(N+1)`-th attempt, so `VS2-EC-2` and the halt path are untouched; what changes is that the schedule stops selecting at `N − R` decisions and leaves `R` attempts unconsumed for retries. Cost: one declared constant, the quota function's numerator, one design-parameter sentence, tests, and a full re-run (`$0.63`, 3 072 attempts, over the current 4 000-attempt cap). It **changes what the arms spend** (`N − R = 248` decisions instead of 256 for `U`/`A`/`A1`), which is a change to the arms rather than to the instrument — the opposite tradeoff to (v-a).
 - **(v-c)** The only option that spends nothing: `NOT RUN` stands as M2c's answer, the `$0.6007` buys the anchor, contract, cost and ceiling-path evidence of §11.6, and the open question moves to M2d. It invalidates nothing and answers nothing.
 
-The choice between (v-a) and (v-b) turns on one question that is not mine to settle: **is `N` the arm's decision budget or the harness's attempt ceiling?** The M2c question, the quota formula and ticket 24 §5.1 say decisions; `VS2-EC-2` says attempts; the two cannot both be `256` on an arm whose schedule spends everything. No option is recommended here.
+The choice between (v-a) and (v-b) turned on one question: **is `N` the arm's decision budget or the harness's attempt ceiling?** The M2c question, the quota formula and ticket 24 §5.1 say decisions; `VS2-EC-2` says attempts; the two cannot both be `256` on an arm whose schedule spends everything. The product owner settled it in favour of **(v-b)** — `N = 256` stays the attempt ceiling, the schedule pays `N − R` decisions, `R = 8` — recorded and implemented in `.scratch/40-m2c-transport-reserve/spec.md`, with the re-run in ticket 41. The authority under which the re-run executes is raised to **7 000 cumulative physical attempts and `$1.20` per run** (ticket 40 §7): the cap clauses inside (i), (ii), (v-a) and (v-b) above were written against the first run's `4 000`/`$2.00`, and the choice between the options did not turn on them — it turned on the frozen instrument (`§7.7`). The "sentences that change" lists inside (i)–(v-c) are this section's own analysis of each option's blast radius; where they name ticket 38 §7.1, §7.3 or §8.1, ticket 40 §6 is the record of what actually changed.
 
 ### 11.6 Q6 — what the current artefacts still support without scoring
 
@@ -664,4 +665,4 @@ Not supported — and not to be inferred from any of the above:
 
 ### 11.7 What this section did not do
 
-No live call, no re-run, no scorer or ledger edit, no change to ticket 38 §7, and no push. The declared verdict remains `NOT RUN`; the options of §11.5 are proposals for the product owner, not applied.
+No live call, no re-run, no scorer or ledger edit, no change to ticket 38 §7 (the reserve's re-declaration is ticket 40's), and no push. The declared verdict remains `NOT RUN`. The options of §11.5 were proposals for the product owner; ticket 40 records the decision (option v-b) and implements it, and ticket 41 owns the re-run.

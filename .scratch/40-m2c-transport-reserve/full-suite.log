@@ -1,0 +1,18 @@
+ok  	agentworld/cmd/capacity	17.295s
+ok  	agentworld/cmd/foodflow	17.008s
+ok  	agentworld/cmd/natural	51.897s
+ok  	agentworld/cmd/reproduction	23.542s
+ok  	agentworld/cmd/socialfood	24.983s
+?   	agentworld/cmd/survival	[no test files]
+ok  	agentworld/cmd/vs1	121.190s
+ok  	agentworld/cmd/vs2	38.203s
+ok  	agentworld/internal/checkpoint	0.006s
+ok  	agentworld/internal/cognition	0.550s
+ok  	agentworld/internal/cognition/protocol	0.008s
+ok  	agentworld/internal/component	2.905s
+ok  	agentworld/internal/experiment	0.004s
+ok  	agentworld/internal/kernel	0.091s
+ok  	agentworld/internal/scheduler	0.171s
+ok  	agentworld/internal/sim	0.016s
+ok  	agentworld/internal/strategy	2.192s
+ok  	agentworld/internal/world	560.064s

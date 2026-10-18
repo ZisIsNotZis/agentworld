@@ -218,7 +218,11 @@ not an arm comparison.
 
 ## 7. The pre-declared M2c criterion (M2c-AC)
 
-Fixed here, before any live call of the M2c matrix.
+Fixed here, before any live call of the M2c matrix. The budget axis of §7.1 is the one item re-declared
+after the first matrix run produced no verdict (`NOT RUN`, ticket 39 §10.5): the schedule now selects at
+most `N − R` decisions and leaves the declared reserve `R = 8` attempts to retries, declared and
+implemented in ticket 40 §3. §7.4–§7.7 (band, effect floors, unanimity, verdict, falsifier, inventory
+precondition, exclusions) are unchanged in text and in value.
 
 ### 7.1 Arms, cells, horizon, replicates
 
@@ -230,7 +234,7 @@ Fixed here, before any live call of the M2c matrix.
 | replicates | 3 per arm |
 | decision contract | `natural-claim/v4` (the M2a-passed contract) |
 | applied effort | `low`; output bound 32 768; response bound 1 048 576; attempt timeout 300 s; call deadline 900 s; `-parallel 8` |
-| budget axis | the declared call ceiling `N = 256` per budgeted arm-run (unchanged) |
+| budget axis | the declared call ceiling `N = 256` physical attempts per budgeted arm-run (unchanged), of which the schedule selects at most `N − R = 248` decisions; `R = 8` is the declared transport reserve (declared and implemented in ticket 40 §3) |
 | `R` | **excluded** (declared non-goal, below) |
 
 Single cell is declared deliberately: ticket 35's re-plan runs one cell, and the frozen rule's "in both
@@ -250,9 +254,10 @@ one `natural-claim/v4` `R` replicate at this cell and horizon.
 
 ### 7.3 Cost of the matrix
 
-12 model-bearing runs at `N = 256` calls (`A0` runs 3 times at 0 calls). Ceiling 3 072 physical
-attempts, because `AllowCall` is charged per attempt (`internal/cognition/client.go:353`). Expected
-spend and the hard cap are declared in §8.
+12 model-bearing runs at `N − R = 248` decisions each (`A0` runs 3 times at 0 calls), inside a ceiling of
+`N = 256` physical attempts, because `AllowCall` is charged per attempt (`internal/cognition/client.go:353`):
+12 × 248 = **2 976 decisions**, 12 × 256 = **3 072 attempts**, with the declared reserve `R = 8` per cell
+left unconsumed for retries. Expected spend and the hard cap are declared in §8.
 
 ### 7.4 The noise band and the decision rule
 
@@ -364,7 +369,7 @@ clean negative … is an equally decisive and reportable outcome"), not a failur
 - **No "better" language beyond the declared objective**: the report says "more viable under `vrd/2`",
   never "the better policy".
 
-## 8. The run plan ticket 39 executes (costed)
+## 8. The M2c run plan (costed)
 
 ### 8.1 Counts, tokens, dollars
 
@@ -380,35 +385,43 @@ Recorded basis, from the ledgers and reports of the runs this matrix re-uses:
 
 Two bounds, both derived from recorded data rather than assumed:
 
-- **Lower bound — scale the v4 full-wake measurement by call count.** `$0.199 × 3 072 / 1 325 = $0.46`.
+- **Lower bound — scale the v4 full-wake measurement by call count.** `$0.199 × 2 976 / 1 325 = $0.45`
+  at the expected 2 976 attempts, `$0.46` at the 3 072-attempt ceiling.
   This assumes budgeted arms' calls are as cheap as `R`'s (`622` in / `177` out per call).
 - **Upper bound — use the recorded per-arm token profiles.** Budgeted arms' recorded calls carried
   ~1 332 input and ~440 output tokens each; scaling the input side by the v4/v2 input ratio measured on
   `R` (`622/443 = 1.40`) gives ≈`1 870` in / ≈`460` out per call, i.e. ≈`$4.2e-4` per call. Then
-  `244·3 + 256·3 + 256·3 + 253·3 = 3 027` calls → **≈ $1.28**.
+  `244·3 + 248·3 + 248·3 + 248·3 = 2 964` calls → **≈ $1.25** (`P`'s 244 is its own recorded gate-bound
+  rate and the reserve does not bind it; the three quota-bound arms are 248 by schedule).
 
-**Hard cap for ticket 39: $2.00, and 4 000 physical attempts.** Justification: `$1.28` is the
-pessimistic recorded-token estimate and `$2.00` is 1.56× it, so the cap absorbs a retry storm (ticket
-34's EC-2 halt was caused by retries charged per attempt) without reaching the user's money in any
-plausible outcome; the attempt cap of `3 072` (12 × 256) is enforced by the harness itself, and the
-declared operator cap of 4 000 leaves headroom for a re-run of one cell if a transport failure voids it. The project has ≈$30 of headroom under
-the user's $50 cap and the user said lesser is better, so the cap is stated as a ceiling on one ticket,
-not a budget to spend. **The harness enforces calls, not dollars** (`budgetFor` sets
+**Hard cap for one M2c matrix run: $1.20, and 7 000 physical attempts cumulative across runs.**
+Justification: `$1.25` is the pessimistic recorded-token estimate, but the cap is sized from the price
+this matrix actually pays — ticket 39 realised `$0.6007` for 3 020 attempts, i.e. `$1.989e-4` per attempt,
+so a full re-run at the 3 072-attempt ceiling costs ≈`$0.61` and `$1.20` is ≈2× that (the pre-run
+projection's upper bound was 2.1× the realised price). The cap still absorbs a retry storm (ticket 34's
+EC-2 halt was caused by retries charged per attempt) without approaching the user's money. The attempt
+ceiling of `3 072` (12 × 256) is enforced by the harness itself; the operator cap of 7 000 is cumulative
+because the first run already spent 3 020 attempts, leaving 908 attempts for a single-cell re-run, and it
+replaces the earlier 4 000-attempt cap, which was sized for one run of the matrix. Ticket 39 spent
+`$0.6007` and this run is capped at `$1.20`, so the project remains far inside the user's $50 cap, and the
+user said lesser is better: the cap is a ceiling on one run, not a budget to spend. **The harness enforces calls, not dollars** (`budgetFor` sets
 `MaxCostMicros: 1<<60` and the report records cost as UNPRICED because the gateway exposes no price
 entry): the dollar cap is therefore enforced by the operator's poll rule below, and that limit is
 stated rather than implied.
 
 **Stop rule (operator, during the run):** every 15 minutes, compute spend from the recorded `usage`
-rows of every `calls.jsonl` at the declared prices. If realised spend exceeds **$1.60**, or the
-realised rate projects a total above **$2.00**, stop the runner and report — the run then stands as a
+rows of every `calls.jsonl` at the declared prices. If realised spend exceeds **$0.96**, or the
+realised rate projects a total above **$1.20**, stop the runner and report — the run then stands as a
 partial matrix and is reported as incomplete, never scored as a smaller result.
 
 ### 8.2 Wall clock
 
-Measured `R`@v4 lane rate: 15.8–18.2 calls/min at `-parallel 8` (1 325 calls in 84 min). 3 072 attempts
-→ **169–194 min**. Declared: **3–4 h expected, deadline 6 h**; `-budget-min 720` so the harness's own
-wall-clock budget never truncates the matrix before the operator's deadline. ETA is model-latency
-bound, not CPU bound; the machine is not the constraint.
+Measured `R`@v4 lane rate: 15.8–18.2 calls/min at `-parallel 8` (1 325 calls in 84 min). 2 976 expected
+attempts (3 072 at the ceiling) → **163–194 min** projected. Declared: **3–4 h expected, deadline 6 h**;
+`-budget-min 720` so the harness's own wall-clock budget never truncates the matrix before the operator's
+deadline. ETA is model-latency bound, not CPU bound; the machine is not the constraint. Realised for a
+full matrix at `-parallel 8` on this machine: **44 min** (ticket 39 §11.5), so the projection is the
+conservative end.
 
 ### 8.3 Detachment and liveness
 

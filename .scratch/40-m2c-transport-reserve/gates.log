@@ -1,0 +1,12 @@
+=== go version ===
+go version go1.24.13 linux/amd64
+=== go build ./... ===
+BUILD-OK exit=0
+=== go vet ./... ===
+VET-OK exit=0
+=== gofmt -l tracked .go ===
+GOFMT-DONE (empty above = no files)
+=== git diff --check 279f0ba ===
+DIFFCHK-OK exit=0
+=== gofmt -l on the new untracked test file ===
+NEW-FILE-GOFMT-DONE (empty above = clean)
