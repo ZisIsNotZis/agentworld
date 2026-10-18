@@ -820,8 +820,11 @@ calls ≈ $0.22). **Lane spend ≈ $13.4 of the $25 hard cap** at the v2-max lau
 projected at ≈ $3.6 (full-wake at 144 h, 3 replicates), taking the lane to ≈ **$17**, i.e. below the
 supervisor's $23 estimate and inside the cap with margin.
 
-v2-max progress at 09:01: 89 calls, all `ok`, max-effort latencies 13-46 s, throughput ≈ 8.9 calls/min
-(≈ 6.8 h to the ≈ 3 600-call target). **Hard stop after this run: no further live model calls in this
+v2-max progress: 89 calls at 09:01, 126 at 09:11, 164 at 09:20 (all `ok`); mean max-effort latency
+30.9 s (median 26.9 s) with 3 concurrent cells, i.e. **≈ 3.5-4 calls/min, so the ≈ 3 600-call target
+needs ≈ 15-17 h wall**, not the ≈ 4 h the earlier per-call latency suggested. The rate is reported, not
+worked around: no throughput lever is left inside the declared design (one cell × 3 replicates caps
+concurrency at 3, and the latency is provider-side at max effort). **Hard stop after this run: no further live model calls in this
 lane, whatever the result.** When it lands: `-relabel` it, hash it, re-run the curve report
 (`-curve-in` the v2 and v2max relabelled evaluations) for the low-vs-max contrast at one contract, and
 append the result here.
