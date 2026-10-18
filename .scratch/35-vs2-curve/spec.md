@@ -994,8 +994,9 @@ spend accounting, max→high substitution.
 | `.tmp/35-curve-report.txt` (stages 1-3, post-`n/a`-repair) | `14665daaec7b0b06dd3a3e2fde38088a5a76928c631dc9be22c12af31ae846cf` |
 | `.tmp/35-ec1-evaluation.json` (A0@168 h continuity) | `ed01e3229d93def1fceb34e8450c5fc4d081dabda5d52538569d152eb3234bb8` |
 | `.tmp/35-claimv2-results.json` (v1 vs v2 probe) | `059a256143813cab38d4defc254366a7edb9b3fc9dfea447ebdf23375cc60411` |
-| `cmd/vs2/curves.go` | `0404f81534daf569b0483e0e2085cbc9c91d595673ececd6a4c062ed01d5d8d1` |
-| `cmd/vs2/curves_test.go` | `529c568ebba13e1ec0f09f47171cebb2afa92c57ae2d6ba24cb65742e5f83b11` |
+| `cmd/vs2/curves.go` (post-review: `n/a (both deterministic)` + column labels) | `639f268c98feb43021768d733ddf662151e765bf2fe53514efe30815a86e6f8c` |
+| `cmd/vs2/curves_test.go` (post-review) | `ce22b89623231ecf15bcb6b00ea8dfc2c9bb0188dfb7d5c2aba8c3f83f99e596` |
+| `cmd/vs2/curves.go` and `curves_test.go` at the pre-review tip (superseded) | `0404f815…d5d8d1` / `529c568e…3b11` (full values in git history at `5c37a87`) |
 | `.tmp/35-v2high-evaluation.json` (depth run, `high`@v2) | `fa28644877bec6a40045d64006fa3d4a606776e3d7d36e858e4273569eddaae6` |
 | `.tmp/35-v2high-evaluation-relabelled.json` | `8278d3f818919c83d438b41734915524b39ed466a5ea5dbb484b15f4b34601b6` |
 | `.tmp/35-depth-curve.txt` (low vs high and the v2 arms, post-`n/a`-repair) | `f5bdcbe6a799e5ca8306ac9fe9098f3ca4211f97d16e8753c6da6bcc2813a0fd` |
