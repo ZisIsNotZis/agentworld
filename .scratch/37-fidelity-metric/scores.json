@@ -1,0 +1,454 @@
+{
+  "discrimination": [
+    {
+      "min_margin": 0.8678670360110804,
+      "ok": true,
+      "pair": "A1_vs_A"
+    },
+    {
+      "min_margin": 0.5962603878116344,
+      "ok": true,
+      "pair": "R_vs_A0"
+    },
+    {
+      "min_margin": 0.5962603878116344,
+      "ok": true,
+      "pair": "R_vs_P"
+    }
+  ],
+  "results": [
+    {
+      "anchor": {
+        "B": 2.0,
+        "H": 1444.0,
+        "N0": 10.0,
+        "S": 0.0
+      },
+      "anchor_error": null,
+      "arms": [
+        "A",
+        "A0",
+        "A1",
+        "P",
+        "R",
+        "U"
+      ],
+      "contract": "natural-claim/v2",
+      "horizon": 144,
+      "label": "primary",
+      "path": "/home/z/vibe/agentworld/.tmp/35-v2-evaluation.json",
+      "reference_matches": {
+        "A/r1": "R3(row 1)",
+        "A/r2": "R3(row 2)",
+        "A/r3": "R3(row 0)",
+        "A1/r1": "R3(row 0)",
+        "A1/r2": "R3(row 2)",
+        "A1/r3": "R3(row 1)",
+        "P/r1": "R3(row 2)",
+        "P/r2": "R3(row 1)",
+        "P/r3": "R3(row 0)",
+        "U/r1": "R3(row 0)",
+        "U/r2": "R3(row 2)",
+        "U/r3": "R3(row 1)"
+      },
+      "table": [
+        {
+          "actor_hours": 1444,
+          "alive_143": 2,
+          "alive_end": 1,
+          "arm": "A0",
+          "births": 2,
+          "calls": 0,
+          "fid_mean8": null,
+          "replicate": 1,
+          "starvation": 0,
+          "vrd": 0.0
+        },
+        {
+          "actor_hours": 1444,
+          "alive_143": 2,
+          "alive_end": 1,
+          "arm": "A0",
+          "births": 2,
+          "calls": 0,
+          "fid_mean8": null,
+          "replicate": 2,
+          "starvation": 0,
+          "vrd": 0.0
+        },
+        {
+          "actor_hours": 1444,
+          "alive_143": 2,
+          "alive_end": 1,
+          "arm": "A0",
+          "births": 2,
+          "calls": 0,
+          "fid_mean8": null,
+          "replicate": 3,
+          "starvation": 0,
+          "vrd": 0.0
+        },
+        {
+          "actor_hours": 1082,
+          "alive_143": 0,
+          "alive_end": 0,
+          "arm": "R",
+          "births": 0,
+          "calls": 1082,
+          "fid_mean8": null,
+          "replicate": 1,
+          "starvation": 1,
+          "vrd": 1.3506925207756233
+        },
+        {
+          "actor_hours": 1166,
+          "alive_143": 0,
+          "alive_end": 0,
+          "arm": "R",
+          "births": 0,
+          "calls": 1166,
+          "fid_mean8": null,
+          "replicate": 2,
+          "starvation": 0,
+          "vrd": 1.1925207756232687
+        },
+        {
+          "actor_hours": 1305,
+          "alive_143": 1,
+          "alive_end": 0,
+          "arm": "R",
+          "births": 1,
+          "calls": 1305,
+          "fid_mean8": null,
+          "replicate": 3,
+          "starvation": 0,
+          "vrd": 0.5962603878116344
+        },
+        {
+          "actor_hours": 1444,
+          "alive_143": 2,
+          "alive_end": 1,
+          "arm": "P",
+          "births": 2,
+          "calls": 244,
+          "fid_mean8": 0.17561919688006983,
+          "replicate": 1,
+          "starvation": 0,
+          "vrd": 0.0
+        },
+        {
+          "actor_hours": 1444,
+          "alive_143": 2,
+          "alive_end": 1,
+          "arm": "P",
+          "births": 2,
+          "calls": 244,
+          "fid_mean8": 0.17609653393404762,
+          "replicate": 2,
+          "starvation": 0,
+          "vrd": 0.0
+        },
+        {
+          "actor_hours": 1444,
+          "alive_143": 2,
+          "alive_end": 1,
+          "arm": "P",
+          "births": 2,
+          "calls": 244,
+          "fid_mean8": 0.17551186449602932,
+          "replicate": 3,
+          "starvation": 0,
+          "vrd": 0.0
+        },
+        {
+          "actor_hours": 1114,
+          "alive_143": 3,
+          "alive_end": 3,
+          "arm": "U",
+          "births": 3,
+          "calls": 256,
+          "fid_mean8": 0.893114133532314,
+          "replicate": 1,
+          "starvation": 5,
+          "vrd": 0.7285318559556787
+        },
+        {
+          "actor_hours": 1199,
+          "alive_143": 2,
+          "alive_end": 2,
+          "arm": "U",
+          "births": 3,
+          "calls": 256,
+          "fid_mean8": 0.8459395881508263,
+          "replicate": 2,
+          "starvation": 4,
+          "vrd": 0.5696675900277008
+        },
+        {
+          "actor_hours": 1034,
+          "alive_143": 2,
+          "alive_end": 1,
+          "arm": "U",
+          "births": 2,
+          "calls": 256,
+          "fid_mean8": 0.9299350977656747,
+          "replicate": 3,
+          "starvation": 6,
+          "vrd": 0.8839335180055401
+        },
+        {
+          "actor_hours": 1443,
+          "alive_143": 2,
+          "alive_end": 2,
+          "arm": "A",
+          "births": 2,
+          "calls": 256,
+          "fid_mean8": 0.20549533879203105,
+          "replicate": 1,
+          "starvation": 0,
+          "vrd": 0.0006925207756232687
+        },
+        {
+          "actor_hours": 1444,
+          "alive_143": 2,
+          "alive_end": 1,
+          "arm": "A",
+          "births": 2,
+          "calls": 256,
+          "fid_mean8": 0.2033695117637268,
+          "replicate": 2,
+          "starvation": 0,
+          "vrd": 0.0
+        },
+        {
+          "actor_hours": 1264,
+          "alive_143": 2,
+          "alive_end": 2,
+          "arm": "A",
+          "births": 2,
+          "calls": 256,
+          "fid_mean8": 0.41704419022458256,
+          "replicate": 3,
+          "starvation": 2,
+          "vrd": 0.32465373961218835
+        },
+        {
+          "actor_hours": 1166,
+          "alive_143": 0,
+          "alive_end": 0,
+          "arm": "A1",
+          "births": 0,
+          "calls": 253,
+          "fid_mean8": 0.15187908653792473,
+          "replicate": 1,
+          "starvation": 0,
+          "vrd": 1.1925207756232687
+        },
+        {
+          "actor_hours": 1166,
+          "alive_143": 0,
+          "alive_end": 0,
+          "arm": "A1",
+          "births": 0,
+          "calls": 253,
+          "fid_mean8": 0.15242921378522056,
+          "replicate": 2,
+          "starvation": 0,
+          "vrd": 1.1925207756232687
+        },
+        {
+          "actor_hours": 1166,
+          "alive_143": 0,
+          "alive_end": 0,
+          "arm": "A1",
+          "births": 0,
+          "calls": 253,
+          "fid_mean8": 0.15184061715727748,
+          "replicate": 3,
+          "starvation": 0,
+          "vrd": 1.1925207756232687
+        }
+      ]
+    },
+    {
+      "anchor": {
+        "B": 2.0,
+        "H": 1444.0,
+        "N0": 10.0,
+        "S": 0.0
+      },
+      "anchor_error": null,
+      "arms": [
+        "A",
+        "A0",
+        "P",
+        "U"
+      ],
+      "contract": "?",
+      "horizon": 144,
+      "label": "secondary",
+      "path": "/home/z/vibe/agentworld/.tmp/35-stage3-evaluation.json",
+      "reference_matches": {},
+      "table": [
+        {
+          "actor_hours": 1444,
+          "alive_143": 2,
+          "alive_end": 1,
+          "arm": "A0",
+          "births": 2,
+          "calls": 0,
+          "fid_mean8": null,
+          "replicate": 1,
+          "starvation": 0,
+          "vrd": 0.0
+        },
+        {
+          "actor_hours": 1444,
+          "alive_143": 2,
+          "alive_end": 1,
+          "arm": "A0",
+          "births": 2,
+          "calls": 0,
+          "fid_mean8": null,
+          "replicate": 2,
+          "starvation": 0,
+          "vrd": 0.0
+        },
+        {
+          "actor_hours": 1444,
+          "alive_143": 2,
+          "alive_end": 1,
+          "arm": "A0",
+          "births": 2,
+          "calls": 0,
+          "fid_mean8": null,
+          "replicate": 3,
+          "starvation": 0,
+          "vrd": 0.0
+        },
+        {
+          "actor_hours": 1444,
+          "alive_143": 2,
+          "alive_end": 1,
+          "arm": "P",
+          "births": 2,
+          "calls": 244,
+          "fid_mean8": null,
+          "replicate": 1,
+          "starvation": 0,
+          "vrd": 0.0
+        },
+        {
+          "actor_hours": 1444,
+          "alive_143": 2,
+          "alive_end": 1,
+          "arm": "P",
+          "births": 2,
+          "calls": 244,
+          "fid_mean8": null,
+          "replicate": 2,
+          "starvation": 0,
+          "vrd": 0.0
+        },
+        {
+          "actor_hours": 1444,
+          "alive_143": 2,
+          "alive_end": 1,
+          "arm": "P",
+          "births": 2,
+          "calls": 244,
+          "fid_mean8": null,
+          "replicate": 3,
+          "starvation": 0,
+          "vrd": 0.0
+        },
+        {
+          "actor_hours": 1238,
+          "alive_143": 3,
+          "alive_end": 3,
+          "arm": "U",
+          "births": 3,
+          "calls": 256,
+          "fid_mean8": null,
+          "replicate": 1,
+          "starvation": 4,
+          "vrd": 0.5426592797783933
+        },
+        {
+          "actor_hours": 1214,
+          "alive_143": 1,
+          "alive_end": 1,
+          "arm": "U",
+          "births": 1,
+          "calls": 256,
+          "fid_mean8": null,
+          "replicate": 2,
+          "starvation": 1,
+          "vrd": 0.7592797783933518
+        },
+        {
+          "actor_hours": 1109,
+          "alive_143": 2,
+          "alive_end": 1,
+          "arm": "U",
+          "births": 3,
+          "calls": 256,
+          "fid_mean8": null,
+          "replicate": 3,
+          "starvation": 6,
+          "vrd": 0.8319944598337949
+        },
+        {
+          "actor_hours": 1440,
+          "alive_143": 2,
+          "alive_end": 1,
+          "arm": "A",
+          "births": 2,
+          "calls": 256,
+          "fid_mean8": null,
+          "replicate": 1,
+          "starvation": 0,
+          "vrd": 0.002770083102493075
+        },
+        {
+          "actor_hours": 1427,
+          "alive_143": 2,
+          "alive_end": 2,
+          "arm": "A",
+          "births": 2,
+          "calls": 256,
+          "fid_mean8": null,
+          "replicate": 2,
+          "starvation": 0,
+          "vrd": 0.011772853185595568
+        },
+        {
+          "actor_hours": 1166,
+          "alive_143": 0,
+          "alive_end": 0,
+          "arm": "A",
+          "births": 0,
+          "calls": 253,
+          "fid_mean8": null,
+          "replicate": 3,
+          "starvation": 0,
+          "vrd": 1.1925207756232687
+        }
+      ]
+    }
+  ],
+  "sensitivity": [
+    {
+      "ok": true,
+      "variant": "Hx2"
+    },
+    {
+      "ok": true,
+      "variant": "Bx2"
+    },
+    {
+      "ok": true,
+      "variant": "Sx2"
+    }
+  ]
+}
