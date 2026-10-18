@@ -640,7 +640,7 @@ Nothing in ticket 37's *verdict* is overturned, and this ticket re-opens none of
 | 6 | recorded verification | `… --scores .scratch/37-fidelity-metric/scores.json --log …/recorded.log` | exit 0, loader identity `0.000e+00` |
 | 7 | negative control | `… --expect-fail --scores …` | exit 0, `NEGATIVE CONTROL PASS` |
 | 8 | `--live` CLI smoke | `… --live /tmp/38-live-smoke.json --scores …` | exit 0 |
-| 9 | anchor reproduction, 0 spend | two `cmd/vs2 -arms A0` runs under `natural-claim/v1` and `natural-claim/v4` | exit 0 both; vectors identical and equal to the committed anchor (`anchor-check.json`) |
+| 9 | anchor reproduction, 0 spend | three `cmd/vs2 -arms A0` runs: `natural-claim/v1`, `natural-claim/v4`, and the ticket-39 gate command (`-reps 3`, v4) | exit 0 each; vectors identical and equal to the committed anchor (`anchor-check.json`) |
 | 10 | full Go suite | `go test -timeout 30m ./...` | **not run — no Go file changed on this branch**; recorded rather than claimed |
 | 11 | `make race` | — | **not run** — not in this ticket's gate list |
 
