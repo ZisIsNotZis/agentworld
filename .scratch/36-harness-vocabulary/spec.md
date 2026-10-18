@@ -65,35 +65,38 @@ fingerprints are unaffected. `v1` and `v2` keep their exact previous bytes when 
 ### The redundancy and inert-row audit (hard rule, every row checked against the code that reads it)
 
 The rule is: no field may be derivable from another field in the same request, and no field that neither
-the model nor the world acts on belongs in the decision request. What was dropped and why:
+the model nor the world acts on belongs in the decision request. **Every observation field, every
+derived-name field and every non-state request block is listed below with what actually reads it**, so the
+sweep is checkable rather than asserted. "Acts on it" means a world admission gate, a frozen cascade
+decision, or the thing that happens to the unit the actor is choosing to move; a validity check that reads
+a value and discards it is not acting on it.
 
-1. **`hunger` — dropped as inert.** `NaturalBasalFor` decides death from energy alone; the frozen cascade
-   validates hunger and then discards the value (`_, hungerOK := capacityInteger(obs.Hunger, …)` in
-   `natural6.go`/`natural9.go`), no claim-admission gate reads it, and no action's effect depends on it. It
-   remains a world row, a checkpoint field and an allocator feature row (`ObservationFeatures`), where it
-   does drive *who* is escalated; it does not drive *what the actor does*. Under the supervisor's rule it
-   therefore leaves the model-visible request and stays the ledger fact it is.
-2. **`invested_units` — dropped as inert.** Read only by the frozen cascade's validity check (`_,
-   investedOK := …`); it is a conservation ledger row (`invested = 2·created + wip`), not a decision fact.
-3. **`home_patch` — dropped.** An actor has exactly one home patch and no claim action can address another,
-   so the id decides nothing. It stays in `strategy.NaturalObservation` for the frozen cascade's own
-   validity check.
-4. **`identity_digest` — dropped as derived.** `RunIdentityDigest` is a hash of `fixture`, `seed`,
-   `base_ref`, `head_ref`, all of which the request keeps; two homes for one fact, so the derived one goes.
-   Provenance holds: the digest is recomputable by the recorded `RunIdentityDigest` from the request alone.
-5. **per-slot rows and slot ids — collapsed to one count.** Eight rows of `{slot, stock}` state one fact
-   (how much food is waiting) plus an id the action cannot address.
-6. **`strategy.parameters` — dropped.** Seven policy constants; measured as 40 % of the v1 request's
-   characters and read by no decision.
-7. **`last_build_hour` and `last_stored_meal_hour` — replaced by the gated booleans**, not added to them:
-   the timestamp and its gate outcome are the same fact, so only the outcome survives.
+| field (v1 wire) | who reads it | verdict |
+|---|---|---|
+| `energy` | the death channel (`NaturalBasalFor`: `starved := Energy == 0`), `CapacityConsume`/`NaturalConsume` (`energy > 0`), the build floors, the cascade's claim floors, the report | **kept** (`energy`) |
+| `hunger` | **validated and discarded** by the cascade (`_, hungerOK := capacityInteger(obs.Hunger, …)`); an allocator feature row (`urgency`, `decision_sensitivity`) and so part of *who is escalated*; nothing in any action, gate or mechanic | **dropped from the request**, kept as the world row, checkpoint field and allocator feature it is — the ledger fact. It has no decision consequence, and naming it (as the dispatch asked) as a "starvation clock" would have taught the model a false rule: see the verified semantics above |
+| `bag_units` | `CapacityGather`/`NaturalGatherFor` (empty), `provision` (empty), build/consume (one) | **kept** (`bag_food_units`) |
+| `capital` | the birth gate (`Capital >= 2`), the build cap (`k + wip < 8`), the cascade's bag decision, one allocator feature | **kept** (`capital`) |
+| `wip` | the cascade's bag decision (`capital + wip < CapacityKMax`), i.e. whether the next bag unit completes a capital point | **kept** (`build_point_in_progress`) |
+| `invested_units` | **validated and discarded** (`_, investedOK := …`); no feature, no gate, no report | **dropped from the request**, kept as the conservation ledger row it is |
+| `last_build_hour` | `CapacityBuild` (`LastBuildHour >= hour` refuses a second build); the cascade only range-checks it | **replaced** by `build_done_this_hour`: the gate's outcome is what decides whether a gathered unit can become capital this hour, and the timestamp itself is history |
+| `granary_stock` | `eat-stored` and `provision` admission, the birth gate (`granary >= 3`), the capital yield, one allocator feature | **kept** (`granary_food_units`) |
+| `last_stored_meal_hour` | the shared one-draw guard of rule 509 (v6/v7) and rule 515 | **replaced** by `granary_draw_used_this_hour`: the affordance, not the timestamp |
+| `home_patch` | the frozen cascade's home-patch validity check and the bag's source provenance; **no action can address a patch other than the actor's own** | **dropped from the request**, kept in the observation: the id decides nothing the actor chooses |
+| `home_slots[].slot` | never used for a choice: `gather` always takes the lowest-numbered stocked slot (`naturalLowestStockedSlot`), and a model cannot name one | **dropped** |
+| `home_slots[].stock` | `gather` admission (`stock == 1` in some slot), the cascade's candidate list | **collapsed** to `food_units_waiting_to_pick_up`: the array's sum is that count, and the ids above are unusable |
+| `last_denial` | the frozen cascade's refusal fallbacks (`gather-denied` → eat-stored or rest; `build-denied` → eat), which is what is applied when a model answer is rejected, and one allocator feature | **kept and renamed** (`last_refused_action`), with its values respelled as display labels so no internal ID reaches the request |
+| `strategy.parameters` (7 values) | **the frozen cascade's thresholds** (claim floors, bag build floors, birth filing floor): not inert, but *configuration, not state* — identical for every actor of a generation and identified by the recorded head ref (`natural/7` plus the generation's deltas) | **dropped**; 40 % of the v1 request's characters, and the prompt says in words what they decide (a bag unit can become capital or a meal) |
+| `run.fixture`, `run.seed`, `run.base_ref`, `run.head_ref` | nothing in the decision reads them; they are the per-call run identity that binds a recorded call to its run | **kept** as provenance, not as state |
+| `run.identity_digest` | nothing; it is `RunIdentityDigest` over the four `run` fields above | **dropped as derived** (two homes for one fact); it is recomputable from the request |
+| `sampling` | nothing in the decision; the call record holds the same sampling instance as its own field | **kept, and named here rather than removed silently**: it is the frozen spec's (§6.2) declared wire sampling instance of the canonical request, it states no actor fact, and the D run executes under exactly these bytes. It is a declared non-state field of the call, not a fact the actor reasons about — and it is the one field in the request that is duplicated on the call record |
 
-The other fields are kept because something acts on them: `energy` (death, meal, build floors), `capital`
-(birth gate and build cap), `bag_food_units` (gather/provision/build admission), `granary_food_units`
-(eat-stored/provision admission, birth gate, capital yield), `granary_draw_used_this_hour` (the shared
-one-draw guard), `food_units_waiting_to_pick_up` (gather admission), `build_point_in_progress` and
-`build_done_this_hour` (what happens to a gathered unit at the frozen bag decision), `last_refused_action`
-(the refused-action record the actor may reason about, renamed so its value is not an internal ID).
+What this sweep found, stated plainly: **three fields were present, named and read by nothing that decides
+anything** — `hunger` (the worst of them, because its name advertises a stake it does not have),
+`invested_units`, and `home_patch` — and a fourth, `run.identity_digest`, was a determined function of the
+field block beside it. Two of those (`hunger`, `invested_units`) are the actor's own state, so they stay in
+the world, the checkpoint and the request-independent feature rows where they do work; one (`home_patch`)
+is identity, and one (`identity_digest`) is derived. All four left the model-visible request.
 
 ### The single-name exception (declared, not glossed over)
 
