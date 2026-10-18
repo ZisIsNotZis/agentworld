@@ -30,3 +30,4 @@ per-attempt price · note.
 
 | # | UTC | pid alive | ledgers | attempts (Δ) | in/out tok | spend (Δ) | $/attempt | note |
 |---|---|---|---|---|---|---|---|---|
+| 7 | 2026-10-18T18:00:55Z (t+4:25) | yes, `Ssl` 04:24, pid 2779824 | 12 of 12 | 869 (first) | 546 464 / 179 060 | $0.1442 (first) | $1.659e-4 | all 12 model-bearing cells live and growing in one wave (49-78 calls each), aggregate ≈ **197/min**, tracking cell 1's 214/min at the same age; one content-policy 400 (`P-f10-s1-r3:115`), the same class as cell 1's three. Ticket-to-date spend $0.5111 + $0.1442 = **$0.6553**, at 2 969 + 869 = 3 838 attempts. **Rate projection**: 5 952 attempts × $1.659e-4 = **≈ $0.99**, inside the $1.30 stop; cumulative ticket total at this rate ≈ $1.00 |
