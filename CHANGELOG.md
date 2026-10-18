@@ -228,9 +228,16 @@ for anything: current truth lives in the authoritative documents — the active 
   survivor needs `w_H/w_B > 1/d_H(extinction)` (10.39 at the recorded `R` r3, unbounded as extinction
   moves later). Three candidates were scored on four declared worlds — the two ticket 37 tabulated, the
   recorded `A0` floor, and a survivor with one starvation death: `vrd/2` orders them exactly as the
-  priority sentence does (`W0 ≺ W1 ≺ W3 ≺ W2`, six declared tests PASS), while a floored-fertility
+  priority sentence does (`W0 ≺ W1 ≺ W3 ≺ W2`, six of the seven declared tests PASS), while a floored-fertility
   additive variant at 10:1 weights still ranks the extinct world above the sterile survivor and a
-  births-dropped distance still ranks it above a surviving world. On ticket 37's committed recorded
+  births-dropped distance still ranks it above a surviving world. An independent review of the branch
+  verdicted BLOCK on two defects in the pre-declaration, both fixed **before any live call** and both
+  tightenings (section R7 of the record): each tier now declares an **effect floor**
+  (`ε_H = 0.01`, `ε_S = 0.1`, `ε_B = 0.5`), so a difference must clear `max(replicate band, floor)` and
+  a zero band alone never separates; and the verdict is refused as `NOT RUN` unless the declared
+  15-cell inventory is complete (3 × `A0` + 12 model-bearing, 3 replicates per arm, no halted run). The
+  declared witness set gained the tier-2-over-tier-3 pair `W4`/`W5` (T7; seven declared tests PASS), and
+  §8.4 gained the ticket-35 curve corroboration step. On ticket 37's committed recorded
   vectors the repair changes **0 of 15 arm-pair orders** (`A0 < P < A < U < R < A1`, loader identity
   exact to 0.000e+00), so ticket 37's anchor verdict and all three pre-registered discrimination pairs
   survive — the pairs now decided categorically at tier 1 in 9/9 replicate pairings — while its recorded
@@ -238,7 +245,8 @@ for anything: current truth lives in the authoritative documents — the active 
   six tier permutations, under which no surviving arm moves). The M2c criterion is **pre-declared before
   any live call** (`.scratch/38-m2c-preregistration/spec.md` §7): arms `A0/P/U/A/A1`, cell f10-s0, H=144,
   3 replicates, contract `natural-claim/v4`, effort `low`; tier separation requires the difference to
-  clear the wider single-condition replicate envelope and tier 1 requires unanimity; verdict
+  clear the wider single-condition replicate envelope and the tier's declared effect floor (a zero band
+  alone never separates), and tier 1 requires unanimity; verdict
   SEPARATION / SECONDARY-ONLY / NO SEPARATION, with `A` vs `P` and `A` vs `U` as the primary pairs; the
   falsifier and four pre-run gates (evaluator reproduction, anchor reproduction, zero-inadmissible
   contract gate, band gate) are declared, and the ticket states what M2c may **not** conclude (not the

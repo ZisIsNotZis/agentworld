@@ -1,2 +1,5 @@
 .pi/
 .tmp/
+# Python byte-code caches: a tool by-product regenerated from the tracked source, never evidence.
+__pycache__/
+*.pyc

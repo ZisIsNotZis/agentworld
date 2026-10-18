@@ -16,13 +16,17 @@ Zero live calls. This script is the evaluator the M2c criterion is declared agai
 
 Modes:
   --scores PATH   ticket 37's committed per-cell vectors (the recorded matrix);
-  --live PATH     an evaluation JSON from a live run; applies the pre-declared
-                  band rule and prints a verdict per declared pair;
-  --self-test     the declared ordering tests T1-T6 on worlds W0-W3, the band-rule
-                  fixtures, and the loader identity check. Must pass before any score
-                  is read (spec section 7.6, gate 1);
+  --live PATH     an evaluation JSON from a live run; asserts the declared cell
+                  inventory, then applies the pre-declared band rule and prints a
+                  verdict per declared pair, or NOT RUN if the inventory is not met;
+  --check-inventory PATH  the same inventory assertion alone (spec section 8.4);
+  --self-test     the declared ordering tests T1-T7 on worlds W0-W5, the band-rule and
+                  inventory fixtures, and the loader identity check. Must pass before any
+                  score is read (spec section 7.6, gate 1);
   --expect-fail   the negative control: every declared comparison is inverted and must
-                  be detected as a FAIL.
+                  be detected as a FAIL;
+  --write-smoke PATH  write the declared synthetic 15-cell artefact the --live CLI smoke
+                  scores (shape and plumbing only, never a result about any arm).
 
 Absence stays absent: a missing required field is a hard failure, never a zero.
 """
@@ -39,13 +43,21 @@ WORLDS = {
     "W1": {"label": "sterile but fully surviving (synthetic)", "H": 1450.0, "B": 0.0, "S": 0.0, "alive_end": 10},
     "W2": {"label": "recorded R replicate 3: extinct at H, one birth", "H": 1305.0, "B": 1.0, "S": 0.0, "alive_end": 0},
     "W3": {"label": "survives, one birth short, one starvation death (synthetic)", "H": 1444.0, "B": 1.0, "S": 1.0, "alive_end": 1},
+    # W4/W5 are the declared tier-2-over-tier-3 witness pair (spec section 6, T7): W4 is
+    # one actor-hour better and three starvation deaths worse than W5, and tier 2 decides it.
+    "W4": {"label": "survives at the control's hours and births, three starvation deaths (synthetic)",
+           "H": 1444.0, "B": 2.0, "S": 3.0, "alive_end": 1},
+    "W5": {"label": "one actor-hour short of the control, no starvation deaths (W4's comparator)",
+           "H": 1443.0, "B": 2.0, "S": 0.0, "alive_end": 1},
 }
 
 # The anchor as recorded (ticket 37 scores.json A0 rows are identical across replicates).
 ANCHOR = {"H": 1444.0, "B": 2.0, "S": 0.0, "N0": 10.0}
 
-# Declared priority test: the four worlds must come out in this order.
+# T4's declared order over the four originals, and T7's over the widened witness set.
+CORE_WORLDS = ["W0", "W1", "W2", "W3"]
 DECLARED_WORLD_ORDER = ["W0", "W1", "W3", "W2"]
+DECLARED_WITNESS_ORDER = ["W0", "W1", "W3", "W4", "W5", "W2"]
 
 # P2's declared precedence weights (spec section 4).
 P2_WEIGHTS = {"H": 10.0, "S": 1.0, "B": 1.0}
@@ -112,11 +124,11 @@ def order_by(score, worlds, t):
 
 
 # ---------------------------------------------------------------------------
-# Declared ordering tests T1-T6 (spec section 6).
+# Declared ordering tests T1-T7 (spec section 6).
 # ---------------------------------------------------------------------------
 
 def declared_world_tests(t):
-    """Return (passed, lines). T1-T6 are the acceptance of the metric choice."""
+    """Return (passed, lines). T1-T7 are the acceptance of the metric choice."""
     ws = WORLDS
     lines = []
     ok = True
@@ -138,7 +150,7 @@ def declared_world_tests(t):
     lines.append("T3 %s: W3 (survivor, one starvation death) outranks W2" % ("PASS" if t3 else "FAIL"))
     ok = ok and t3
 
-    got = sorted(ws, key=lambda n: keys[n])
+    got = sorted(CORE_WORLDS, key=lambda n: keys[n])
     t4 = got == DECLARED_WORLD_ORDER
     lines.append("T4 %s: the full order is %s (declared %s)"
                  % ("PASS" if t4 else "FAIL", " < ".join(got), " < ".join(DECLARED_WORLD_ORDER)))
@@ -155,19 +167,33 @@ def declared_world_tests(t):
 
     lines.append("")
     lines.append("rejected alternatives on the same four worlds (spec section 4):")
-    lines.append("   P2 vrd/2f: " + " < ".join(order_by(vrd2f, ws, t)))
-    lines.append("   order P2: " + "  ".join("%s=%.4f" % (n, vrd2f(ws[n], t)) for n in ("W0", "W1", "W2", "W3")))
+    core = {n: ws[n] for n in CORE_WORLDS}
+    lines.append("   P2 vrd/2f: " + " < ".join(order_by(vrd2f, core, t)))
+    lines.append("   order P2: " + "  ".join("%s=%.4f" % (n, vrd2f(ws[n], t)) for n in CORE_WORLDS))
     p2_ok = vrd2f(ws["W1"], t) < vrd2f(ws["W2"], t)
     lines.append("   P2 T2 %s (W1 %.4f vs W2 %.4f); required weight ratio w_H/w_B > 1/%.5f = %.2f"
                  % ("PASS" if p2_ok else "FAIL", vrd2f(ws["W1"], t), vrd2f(ws["W2"], t),
                     components(ws["W2"], t)["H"], 1.0 / components(ws["W2"], t)["H"]))
-    lines.append("   P3 vrd/2s: " + " < ".join(order_by(vrd2s, ws, t)))
-    lines.append("   order P3: " + "  ".join("%s=%.4f" % (n, vrd2s(ws[n], t)) for n in ("W0", "W1", "W2", "W3")))
+    lines.append("   P3 vrd/2s: " + " < ".join(order_by(vrd2s, core, t)))
+    lines.append("   order P3: " + "  ".join("%s=%.4f" % (n, vrd2s(ws[n], t)) for n in CORE_WORLDS))
     p3_t2 = vrd2s(ws["W1"], t) < vrd2s(ws["W2"], t)
     p3_t3 = vrd2s(ws["W3"], t) < vrd2s(ws["W2"], t)
     lines.append("   P3 T2 %s (W1 %.4f vs W2 %.4f); P3 T3 %s (W3 %.4f vs W2 %.4f)"
                  % ("PASS" if p3_t2 else "FAIL", vrd2s(ws["W1"], t), vrd2s(ws["W2"], t),
                     "PASS" if p3_t3 else "FAIL", vrd2s(ws["W3"], t), vrd2s(ws["W2"], t)))
+
+    # T7 is printed after the rejected alternatives so the committed section-R2 transcript's
+    # first block stays verbatim; it is a declared ordering test like T2-T6.
+    lines.append("")
+    lines.append("T7 the tier-2-over-tier-3 witness pair W4/W5 (spec section 6):")
+    for n in ("W4", "W5"):
+        lines.append("   vrd/2 key %s = %s" % (n, fmt_key(keys[n])))
+    got6 = sorted(ws, key=lambda n: keys[n])
+    t7 = got6 == DECLARED_WITNESS_ORDER and keys["W4"] < keys["W5"]
+    lines.append("T7 %s: the order is %s (declared %s); W4 survives one actor-hour better than W5 and "
+                 "three starvation deaths worse, and tier 2 decides it"
+                 % ("PASS" if t7 else "FAIL", " < ".join(got6), " < ".join(DECLARED_WITNESS_ORDER)))
+    ok = ok and t7
     return ok, lines
 
 
@@ -368,22 +394,88 @@ def recorded_report(cells, anchor, primary):
 
 def live_cells(path):
     doc = load_json(path)
+    cells, halted = cells_of(doc)
+    return cells, halted, doc
+
+
+LIVE_ROW_KEYS = ("arm", "replicate", "ran", "halted", "alive_by_hour", "births_cum",
+                 "deaths_starve_cum", "realized_calls")
+
+
+def cells_of(doc):
+    """The state vector of every scored cell row, plus the rows that are not complete runs."""
     cells = {}
+    halted = set()
     for row in doc.get("cells") or []:
-        alive = row.get("alive_by_hour")
-        if not alive:
-            fail("live cell %s/r%s lacks alive_by_hour (absence is not zero)" % (row.get("arm"), row.get("replicate")))
+        label = "%s/r%s" % (row.get("arm"), row.get("replicate"))
+        for k in LIVE_ROW_KEYS:
+            if k not in row:
+                fail("live cell %s lacks %s (absence is not zero)" % (label, k))
+        if not row["alive_by_hour"]:
+            fail("live cell %s has an empty alive_by_hour (absence is not zero)" % label)
+        if row["halted"] or not row["ran"]:
+            halted.add(label)
         cells[(row["arm"], row["replicate"])] = {
-            "H": float(sum(alive)), "B": float(row["births_cum"][-1]),
-            "S": float(row["deaths_starve_cum"][-1]), "alive_end": int(alive[-1]),
-            "alive_143": int(alive[-2]) if len(alive) > 1 else int(alive[-1]),
-            "calls": int(row.get("realized_calls", 0)),
+            "H": float(sum(row["alive_by_hour"])), "B": float(row["births_cum"][-1]),
+            "S": float(row["deaths_starve_cum"][-1]), "alive_end": int(row["alive_by_hour"][-1]),
+            "alive_143": int(row["alive_by_hour"][-2]) if len(row["alive_by_hour"]) > 1
+            else int(row["alive_by_hour"][-1]),
+            "calls": int(row["realized_calls"]),
         }
-    return cells, doc
+    return cells, halted
+
+
+# The declared M2c inventory (spec section 7.1): 5 arms x 3 replicates = 15 scored
+# cells, of which A0's 3 are script-only (0 calls) and 12 are model-bearing. A cell
+# that errored is omitted from the artefact's cells array and counted in
+# inventory.skipped, so a partial matrix must be refused by the scorer rather than
+# scored as a smaller experiment: with fewer than 3 replicates the band shrinks
+# towards zero and any difference becomes a "separation".
+DECLARED_LIVE_ARMS = ("A0", "P", "U", "A", "A1")
+DECLARED_REPLICATES = 3
+DECLARED_LIVE_CELLS = len(DECLARED_LIVE_ARMS) * DECLARED_REPLICATES
+DECLARED_HOURS = 144
+
+
+def inventory_problems(doc, cells, halted):
+    """The declared cell-inventory assertion of spec section 8.4 (step 5b)."""
+    problems = []
+    inv = doc.get("inventory")
+    if not isinstance(inv, dict):
+        problems.append("the artefact carries no inventory block")
+        inv = {}
+    if inv.get("ran") != DECLARED_LIVE_CELLS:
+        problems.append("inventory.ran = %s, declared %d (3 x A0 + 12 model-bearing)"
+                        % (inv.get("ran"), DECLARED_LIVE_CELLS))
+    if inv.get("declared") != DECLARED_LIVE_CELLS:
+        problems.append("inventory.declared = %s, declared %d" % (inv.get("declared"), DECLARED_LIVE_CELLS))
+    if inv.get("skipped"):
+        problems.append("inventory.skipped = %d cell(s): %s"
+                        % (len(inv["skipped"]), ", ".join(str(s) for s in inv["skipped"])))
+    if len(cells) != DECLARED_LIVE_CELLS:
+        problems.append("%d scored cell(s) present, declared %d" % (len(cells), DECLARED_LIVE_CELLS))
+    for arm in DECLARED_LIVE_ARMS:
+        n = sum(1 for (a, _) in cells if a == arm)
+        if n != DECLARED_REPLICATES:
+            problems.append("%s carries %d replicate(s), declared %d" % (arm, n, DECLARED_REPLICATES))
+    if halted:
+        problems.append("%d cell(s) did not complete (halted at the call ceiling or not run): %s"
+                        % (len(halted), ", ".join(sorted(halted))))
+    return problems
 
 
 TIER_LABEL = {"H": "actor-hours", "S": "starvation deaths", "B": "births"}
 TIER_LOWER_BETTER = {"H": True, "S": True, "B": False}
+
+# Declared per-tier effect floors (spec section 7.4): a tier separates only when the
+# replicate-mean difference clears the replicate band AND this floor, so a zero band
+# cannot promote a practically nil difference to the headline.
+EFFECT_FLOOR = {"H": 0.01, "S": 0.1, "B": 0.5}
+
+# A replicate mean of three equal quanta can sit ~1e-17 above the quantum, so the
+# comparison ignores representation error below 1e-12 — four orders of magnitude below
+# the smallest difference any tier can carry (one actor-hour is 6.9e-4).
+FLOAT_TOLERANCE = 1e-12
 
 
 def pair_verdict(aggs, x, y, tiers=("H", "S", "B"), extinct="extinct_all", persist="persist_all"):
@@ -393,20 +485,21 @@ def pair_verdict(aggs, x, y, tiers=("H", "S", "B"), extinct="extinct_all", persi
         return (y, "tier 1: %s extinct in all replicates, %s persists in all" % (x, y), 1)
     if gy[extinct] and gx[persist]:
         return (x, "tier 1: %s extinct in all replicates, %s persists in all" % (y, x), 1)
+    inside = []
     for name in tiers:
         d = gx[name] - gy[name]
         b = max(gx["band_" + name], gy["band_" + name])
-        if abs(d) > b:
+        floor = EFFECT_FLOOR[name]
+        if abs(d) > max(b, floor) + FLOAT_TOLERANCE:
             winner = x if (d < 0) == TIER_LOWER_BETTER[name] else y
-            if b == 0:
-                note = " (both deterministic: no replicate noise, a structural difference)"
-            elif min(gx["band_" + name], gy["band_" + name]) == 0:
-                note = " (one-sided noise floor)"
-            else:
-                note = ""
-            return (winner, "tier %s: |%.4f - %.4f| = %.4f > band %.4f%s"
-                    % (TIER_LABEL[name], gx[name], gy[name], abs(d), b, note), 1)
-    return (None, "tie: no tier separates", 0)
+            note = " ; the replicate band is zero, so the effect floor is what makes it meaningful" if b == 0 else \
+                   (" ; one-sided noise floor" if min(gx["band_" + name], gy["band_" + name]) == 0 else "")
+            return (winner, "tier %s: |%.4f - %.4f| = %.4f > max(band %.4f, floor %.4f), decided by the %s%s"
+                    % (TIER_LABEL[name], gx[name], gy[name], abs(d), b, floor,
+                       "band" if b >= floor else "effect floor", note), 1)
+        inside.append((TIER_LABEL[name], abs(d), b, floor))
+    return (None, "tie: no tier separates — " + "; ".join(
+        "%s |%.4f| <= max(band %.4f, floor %.4f)" % t for t in inside), 0)
 
 
 def verdict(cells, anchor):
@@ -416,7 +509,17 @@ def verdict(cells, anchor):
         if any(a == arm for (a, _) in cells):
             arms.append(arm)
     aggs = {a: arm_aggregate(cells, a, anchor) for a in arms}
-    lines = ["per-arm bands:"]
+    short = [a for a in arms if len(aggs[a]["reps"]) != DECLARED_REPLICATES]
+    if short:
+        return ("NOT RUN", ["declared pairs: NOT RUN — %s carries %s replicate(s), declared %d; a truncated "
+                             "arm has a narrower band and would separate on noise"
+                             % (", ".join(short), "/".join(str(len(aggs[a]["reps"])) for a in short),
+                                DECLARED_REPLICATES)])
+    lines = ["declared effect floors (spec section 7.4): actor-hours %.2f (%.1f actor-hours at H_T = %.0f), "
+             "starvation deaths %.2f, births %.2f; a tier separates only above max(band, floor)"
+             % (EFFECT_FLOOR["H"], EFFECT_FLOOR["H"] * anchor["H"], anchor["H"],
+                EFFECT_FLOOR["S"], EFFECT_FLOOR["B"]),
+             "per-arm bands:"]
     for a in arms:
         g = aggs[a]
         lines.append("   %-3s persisted=%s extinct=%s dH=%.4f(+/-%.4f) dS=%.4f(+/-%.4f) dB=%.4f(+/-%.4f)"
@@ -532,7 +635,135 @@ def band_fixtures():
                  "sensitivity fires on %d verdict(s)" % (v, fired))
     ok = ok and fired > 0
 
+    # (f) zero band, practically nil difference (one actor-hour of 1 444): the effect floor
+    # must refuse it, which the band alone cannot do.
+    c = cells({"P": [(1444, 2, 0, 1)] * 3, "A": [(1443, 2, 0, 1)] * 3})
+    v, _ = verdict(c, anchor)
+    lines.append("fixture f (1 actor-hour of a 1 444-actor-hour control, band 0): %s" % v)
+    ok = ok and v == "NO SEPARATION"
+
+    # (g) the same rule at the starvation tier: exactly one death is inside the floor, three
+    # deaths clear it.
+    c = cells({"P": [(1444, 2, 0, 1)] * 3, "A": [(1444, 2, 1, 1)] * 3})
+    v, _ = verdict(c, anchor)
+    lines.append("fixture g1 (exactly one starvation death, band 0): %s" % v)
+    ok = ok and v == "NO SEPARATION"
+    c = cells({"P": [(1444, 2, 0, 1)] * 3, "A": [(1444, 2, 3, 1)] * 3})
+    v, _ = verdict(c, anchor)
+    lines.append("fixture g2 (three starvation deaths, band 0): %s" % v)
+    ok = ok and v == "SEPARATION"
+
+    # (h) a real difference on a zero band must still separate: the floor is a threshold,
+    # not a blanket refusal.
+    c = cells({"P": [(1444, 2, 0, 1)] * 3, "A": [(1420, 2, 0, 1)] * 3})
+    v, vlines = verdict(c, anchor)
+    lines.append("fixture h (24 actor-hours of the control, band 0): %s" % v)
+    ok = ok and v == "SEPARATION" and any("decided by the effect floor" in line for line in vlines)
+
     lines.append("band rule fixtures: %s" % ("PASS" if ok else "FAIL"))
+    return ok, lines
+
+
+def smoke_artefact():
+    """A synthetic artefact in the live evaluation shape: the declared 15-cell inventory
+    (5 arms x 3 replicates, 145 hourly samples). Shape and plumbing only — never a result
+    about any arm. Its replicates are deterministic except A's, so it exercises both the
+    band path and the zero-band effect-floor path."""
+    hours = list(range(DECLARED_HOURS + 1))
+
+    def row(arm, replicate, alive_flat, alive_end, births, starve, calls):
+        return {"arm": arm, "replicate": replicate, "hours": hours,
+                "alive_by_hour": [alive_flat] * DECLARED_HOURS + [alive_end],
+                "births_cum": [0 if h < 100 else births for h in hours],
+                "deaths_starve_cum": [0 if h < 50 else starve for h in hours],
+                "deaths_age_cum": [0] * len(hours),
+                "wages_cum": [2 * h for h in hours],
+                "max_capital": [12 + h // 24 for h in hours],
+                "capital_hist": [[max(0, 5 - h // 48)] for h in hours],
+                "granary_hist": [[3] for h in hours],
+                "realized_calls": calls, "ran": True, "halted": False}
+
+    cells = []
+    for rep in (1, 2, 3):
+        cells.append(row("A0", rep, 10, 4, 2, 0, 0))
+        cells.append(row("P", rep, 10, 4, 2, 0, 244))
+        cells.append(row("U", rep, 8, 1, 2, 5, 256))
+        cells.append(row("A1", rep, 9, 0, 1, 0, 253))
+    for rep, (flat, end, starve) in enumerate(((9, 2, 2), (9, 4, 2), (8, 10, 3)), start=1):
+        cells.append(row("A", rep, flat, end, 2, starve, 256))
+    return {"status": "smoke-fixture (shape and plumbing only; not a result about any arm)",
+            "claim_contract": "natural-claim/v4", "horizon_hours": DECLARED_HOURS,
+            "inventory": {"declared": DECLARED_LIVE_CELLS, "ran": DECLARED_LIVE_CELLS, "skipped": []},
+            "cells": cells}
+
+
+def inventory_fixtures():
+    """The declared inventory assertion: a complete artefact scores, a truncated or halted
+    one is refused as NOT RUN rather than scored as a smaller experiment."""
+    ok = True
+    lines = []
+
+    def variant(mutate):
+        doc = json.loads(json.dumps(smoke_artefact()))
+        mutate(doc)
+        return doc
+
+    def drop_arm(doc):
+        doc["cells"] = [c for c in doc["cells"] if c["arm"] != "A1"]
+        doc["inventory"]["ran"] = 12
+        doc["inventory"]["skipped"] = ["A1-f10-s0-r1:model-unavailable"]
+
+    def drop_replicate(doc):
+        doc["cells"] = [c for c in doc["cells"] if not (c["arm"] == "A" and c["replicate"] == 3)]
+        doc["inventory"]["ran"] = 14
+
+    def halt_cell(doc):
+        for c in doc["cells"]:
+            if c["arm"] == "U" and c["replicate"] == 2:
+                c["halted"] = True
+
+    def understate_ran(doc):
+        doc["inventory"]["ran"] = 14
+
+    cases = [
+        ("the declared 15-cell artefact", variant(lambda d: None), False),
+        ("one declared arm absent (A1 dropped, ran 12)", variant(drop_arm), True),
+        ("one declared arm with two replicates (A/r3 dropped, ran 14)", variant(drop_replicate), True),
+        ("one cell halted at its call ceiling", variant(halt_cell), True),
+        ("inventory.ran short of the artefact's cells", variant(understate_ran), True),
+    ]
+    for label, doc, expect_refused in cases:
+        cells, halted = cells_of(doc)
+        problems = inventory_problems(doc, cells, halted)
+        refused = bool(problems)
+        lines.append("inventory fixture (%s): %s%s"
+                     % (label, "NOT RUN" if refused else "scored",
+                        " — " + problems[0] if problems else ""))
+        ok = ok and refused == expect_refused
+
+    shortened = variant(drop_replicate)
+    cells, _ = cells_of(shortened)
+    v, _ = verdict(cells, dict(ANCHOR))
+    lines.append("verdict over the two-replicate arm: %s (must be NOT RUN)" % v)
+    ok = ok and v == "NOT RUN"
+
+    lines.append("inventory fixtures: %s" % ("PASS" if ok else "FAIL"))
+    return ok, lines
+
+
+def reachability_check(cells, anchor):
+    """The effect floor must not make the criterion confirmatory by construction: on the recorded v2
+    shape it still yields one tie and one separation. A reachability check on ticket-35 v2 aggregates,
+    NOT an M2c result (v2 is the wrong contract to answer M2c)."""
+    aggs = {a: arm_aggregate(cells, a, anchor) for a in ("P", "U", "A")}
+    ap = pair_verdict(aggs, "A", "P")
+    au = pair_verdict(aggs, "A", "U")
+    ok = ap[2] == 0 and au[2] == 1
+    lines = ["reachability on the recorded v2 shape (ticket-35 aggregates; not an M2c result):",
+             "   A vs P: %s — %s" % ("SEPARATES" if ap[2] else "TIE", ap[1]),
+             "   A vs U: %s — %s" % ("SEPARATES" if au[2] else "TIE", au[1]),
+             "   %s: with the effect floors in force the rule still yields both a tie and a separation"
+             % ("PASS" if ok else "FAIL")]
     return ok, lines
 
 
@@ -543,7 +774,10 @@ def self_test(cells_path):
     ok_bands, band_lines = band_fixtures()
     lines.append("")
     lines += band_lines
-    ok = ok_worlds and ok_bands
+    ok_inventory, inventory_lines = inventory_fixtures()
+    lines.append("")
+    lines += inventory_lines
+    ok = ok_worlds and ok_bands and ok_inventory
     if cells_path:
         cells, anchor, primary = recorded_cells(cells_path)
         lines.append("")
@@ -560,6 +794,10 @@ def self_test(cells_path):
         t5 = all(key(w, anchor) == (0.0, 0.0, 0.0, 0.0) for w in a0)
         lines.append("T5 on every recorded A0 replicate: %s" % ("PASS" if t5 else "FAIL"))
         ok = ok and t5
+        ok_reach, reach_lines = reachability_check(cells, anchor)
+        lines.append("")
+        lines += reach_lines
+        ok = ok and ok_reach
     lines.append("")
     lines.append("SELF-TEST: %s" % ("PASS" if ok else "FAIL"))
     return ok, lines
@@ -597,6 +835,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--scores", help="ticket 37's committed scores.json (recorded vectors)")
     ap.add_argument("--live", help="an evaluation JSON from a live run")
+    ap.add_argument("--check-inventory", metavar="PATH",
+                    help="assert the declared M2c cell inventory of a live evaluation JSON")
+    ap.add_argument("--write-smoke", metavar="PATH",
+                    help="write the declared synthetic 15-cell artefact the --live smoke scores")
     ap.add_argument("--log", help="write the transcript here as well as stdout")
     ap.add_argument("--self-test", action="store_true")
     ap.add_argument("--expect-fail", action="store_true")
@@ -612,22 +854,47 @@ def main():
         ok, lines = self_test(args.scores)
         if not ok:
             rc = 2
-    elif args.live:
-        cells, doc = live_cells(args.live)
-        anchor_doc = {}
-        if args.scores:
-            _, anchor_doc, _ = recorded_cells(args.scores)
-        anchor = anchor_doc or dict(ANCHOR)
+    elif args.write_smoke:
+        doc = smoke_artefact()
+        directory = os.path.dirname(args.write_smoke)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        with open(args.write_smoke, "w", encoding="utf-8") as fh:
+            json.dump(doc, fh, indent=1)
+        lines.append("wrote the declared %d-cell smoke artefact to %s (shape only: not a result about "
+                     "any arm)" % (DECLARED_LIVE_CELLS, args.write_smoke))
+    elif args.check_inventory or args.live:
+        path = args.check_inventory or args.live
+        cells, halted, doc = live_cells(path)
+        problems = inventory_problems(doc, cells, halted)
         lines.append("live artefact: contract=%s horizon=%s status=%s"
                      % (doc.get("claim_contract"), doc.get("horizon_hours"), doc.get("status")))
-        v, vlines = verdict(cells, anchor)
-        lines += vlines
+        lines.append("cell inventory (spec section 8.4): %s"
+                     % ("PASS — %d of %d declared cells scored, %d replicates per arm, 0 halted, 0 skipped"
+                        % (len(cells), DECLARED_LIVE_CELLS, DECLARED_REPLICATES) if not problems else "FAIL"))
+        for problem in problems:
+            lines.append("   " + problem)
+        if problems:
+            lines.append("M2c verdict (spec section 7.4): NOT RUN — the declared inventory is not met; the "
+                         "matrix is reported as incomplete and never scored as a smaller experiment")
+            rc = 3
+        elif args.check_inventory:
+            pass
+        else:
+            anchor_doc = {}
+            if args.scores:
+                _, anchor_doc, _ = recorded_cells(args.scores)
+            anchor = anchor_doc or dict(ANCHOR)
+            v, vlines = verdict(cells, anchor)
+            lines += vlines
+            if v == "NOT RUN":
+                rc = 3
     else:
         if args.scores:
             cells, anchor, primary = recorded_cells(args.scores)
             lines += recorded_report(cells, anchor, primary)
         else:
-            fail("nothing to do: pass --scores, --live, --self-test or --expect-fail")
+            fail("nothing to do: pass --scores, --live, --self-test, --check-inventory or --expect-fail")
 
     text = "\n".join(lines) + "\n"
     sys.stdout.write(text)

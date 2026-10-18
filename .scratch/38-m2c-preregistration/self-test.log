@@ -19,12 +19,29 @@ rejected alternatives on the same four worlds (spec section 4):
    order P3: W0=0.0000  W1=0.0000  W2=0.0963  W3=0.1000
    P3 T2 PASS (W1 0.0000 vs W2 0.0963); P3 T3 FAIL (W3 0.1000 vs W2 0.0963)
 
+T7 the tier-2-over-tier-3 witness pair W4/W5 (spec section 6):
+   vrd/2 key W4 = (e=0, dH=0.0000, dS=0.3000, dB=0.0000)
+   vrd/2 key W5 = (e=0, dH=0.0007, dS=0.0000, dB=0.0000)
+T7 PASS: the order is W0 < W1 < W3 < W4 < W5 < W2 (declared W0 < W1 < W3 < W4 < W5 < W2); W4 survives one actor-hour better than W5 and three starvation deaths worse, and tier 2 decides it
+
 fixture a (A's replicate spread covers a 1 actor-hour mean difference): NO SEPARATION
 fixture b (extinct vs persisting, unanimous): SEPARATION
 fixture c (four starvation deaths beyond the survival band): SEPARATION
 fixture d (identical arms): NO SEPARATION
 fixture e (survival-first says A, deaths-first says P): verdict SEPARATION, precedence sensitivity fires on 3 verdict(s)
+fixture f (1 actor-hour of a 1 444-actor-hour control, band 0): NO SEPARATION
+fixture g1 (exactly one starvation death, band 0): NO SEPARATION
+fixture g2 (three starvation deaths, band 0): SEPARATION
+fixture h (24 actor-hours of the control, band 0): SEPARATION
 band rule fixtures: PASS
+
+inventory fixture (the declared 15-cell artefact): scored
+inventory fixture (one declared arm absent (A1 dropped, ran 12)): NOT RUN — inventory.ran = 12, declared 15 (3 x A0 + 12 model-bearing)
+inventory fixture (one declared arm with two replicates (A/r3 dropped, ran 14)): NOT RUN — inventory.ran = 14, declared 15 (3 x A0 + 12 model-bearing)
+inventory fixture (one cell halted at its call ceiling): NOT RUN — 1 cell(s) did not complete (halted at the call ceiling or not run): U/r2
+inventory fixture (inventory.ran short of the artefact's cells): NOT RUN — inventory.ran = 14, declared 15 (3 x A0 + 12 model-bearing)
+verdict over the two-replicate arm: NOT RUN (must be NOT RUN)
+inventory fixtures: PASS
 
 recorded matrix: contract=natural-claim/v2 horizon=144 cells=18 arms=A,A0,A1,P,R,U
 anchor: H_T=1444.0 B_T=2.0 S_T=0.0 N0=10.0
@@ -111,5 +128,10 @@ terminal-sample sensitivity (tier 1 read at h=H-1 instead of h=H):
 
 recorded loader identity: max |vrd/1 recomputed - recorded| = 0.000e+00 — PASS
 T5 on every recorded A0 replicate: PASS
+
+reachability on the recorded v2 shape (ticket-35 aggregates; not an M2c result):
+   A vs P: TIE — tie: no tier separates — actor-hours |0.0418| <= max(band 0.0829, floor 0.0100); starvation deaths |0.0667| <= max(band 0.1333, floor 0.1000); births |0.0000| <= max(band 0.0000, floor 0.5000)
+   A vs U: SEPARATES — tier actor-hours: |0.0418 - 0.2274| = 0.1856 > max(band 0.0829, floor 0.0100), decided by the band
+   PASS: with the effect floors in force the rule still yields both a tie and a separation
 
 SELF-TEST: PASS

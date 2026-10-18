@@ -188,6 +188,8 @@ are declared here so that the test does not depend on any arm.
 | `W1` | 1450 | 0 | 0 | 10 | sterile but fully surviving (ticket 37's pinned pathology world) |
 | `W2` | 1305 | 1 | 0 | 0 | recorded `R` replicate 3: extinct at `H`, one birth |
 | `W3` | 1444 | 1 | 1 | 1 | survives the horizon, one birth short of the control, one actor lost to starvation |
+| `W4` | 1444 | 2 | 3 | 1 | survives at the control's actor-hours and births with three starvation deaths (synthetic) — the tier-2-over-tier-3 witness |
+| `W5` | 1443 | 2 | 0 | 1 | one actor-hour short of the control with no starvation deaths (synthetic) — `W4`'s declared comparator |
 
 Declared tests, fixed now:
 
@@ -200,8 +202,18 @@ Declared tests, fixed now:
   `W0 ≺ W1 ≺ W3 ≺ W2` — survived, then deaths avoided, then reproduction, exactly the sentence.
 - **T5 (the floor is exact).** All three recorded `A0` replicates must have key `(0,0,0,0)`.
 - **T6 (control identity).** A synthetic copy of `A0` must tie the recorded `A0` exactly.
+- **T7 (the priority's extreme is declared, not accidental; added before the first live call).**
+  `W0`–`W3` exercise tier 3 against tier 4 (`W3` outranks `W1`) but never tier 2 against tier 3, so the
+  order's most contestable behaviour — a survival difference of any size outranking any number of
+  starvation deaths, which is the sharper claim because "deaths avoided" is the second declared
+  priority — had no declared witness. `W4` must outrank `W5`: `W4` is one actor-hour better (`d_H` 0
+  against `1/1444 = 0.0007`) and three starvation deaths worse (`d_S` 0.3 against 0), tier 2 decides it
+  before tier 3 is read, and the declared order over the widened set is `W0 ≺ W1 ≺ W3 ≺ W4 ≺ W5 ≺ W2`.
+  The tradeoff is thus chosen explicitly. The §7.4 effect floor raises the **live** entrance threshold to
+  a tier-2 difference above 14.4 actor-hours, which bounds how cheaply the extreme can be reached but
+  does not reverse it.
 
-These six are the *acceptance* of this ticket's deliverable 1. They are arithmetic on declared worlds,
+These seven are the *acceptance* of this ticket's deliverable 1. They are arithmetic on declared worlds,
 not an arm comparison.
 
 ## 7. The pre-declared M2c criterion (M2c-AC)
@@ -257,6 +269,36 @@ single-condition envelope half-width `max(envHi−mu, mu−envLo)`. For a pair `
 An arm `X` **outranks** `Y` iff the highest tier on which they separate is a tier on which `X` is
 better. If no tier separates, the pair is a **tie** and is reported as a tie.
 
+**Per-tier effect floors (added before the first live call; tightening only, no threshold loosened).**
+`B` alone lets a practically nil difference become the headline whenever the band collapses to zero,
+which happens by construction for a deterministic pair and for any two arms whose three replicates agree
+(the recorded `P` was `1444/2/0` and `A1` was `1166/0/0` in all three replicates). So each tier also
+declares an effect floor `ε`, and a tier separates iff **`|mu_X − mu_Y| > max(B, ε_tier)`**:
+
+| tier | `ε` | why this value |
+|---|---|---|
+| 2 `d_H` | `0.01` | 14.4 actor-hours of the control's 1 444 (1.0 % of its population-time), an order of magnitude below every recorded stochastic arm's replicate spread (`A`'s half-width is 0.0829), so it binds only where the band collapses |
+| 3 `d_S` | `0.1` | `1/N0` at `N0 = 10`: one starvation death per replicate on average, the smallest non-zero difference the component can carry |
+| 4 `d_B` | `0.5` | `1/B_T` at `B_T = 2`: one birth on the control's, the smallest non-zero difference the component can carry |
+
+Tier 1 needs no floor: its rule is unanimity across replicates, not a magnitude. Three consequences are
+declared rather than discovered. (a) The comparison is strict, so a difference equal to exactly one
+quantum — one starvation death, one birth on this control — ties at that tier and the comparison
+descends; the tier-4 floor therefore needs a two-birth gap, the whole fertility axis, which is one reason
+§7.7 forbids reading a tier-4-only difference as a general separation. (b) On this matrix the floors at
+tiers 2–3 are no wider than the recorded bands of the stochastic arms (`A` 0.0829 actor-hours and 0.1333
+starvation deaths, `U` 0.0577 and 0.1), so there the band still governs and the floor decides only the
+collapsed-band case it was declared for; at tier 4 the floor (`0.5`) is wider than every recorded band
+(the largest is `R`'s `0.3333`), so tier 4 needs a two-birth gap. (c) Replicate means carry representation
+error, so a difference below `1e-12` is ignored (`vrd2.py`'s `FLOAT_TOLERANCE`), four orders of magnitude
+below the smallest quantum any tier can carry.
+
+**Inventory precondition.** A verdict is computed only over an artefact carrying the declared inventory
+of §7.1: 15 scored cells (3 × `A0` + 12 model-bearing), exactly 3 replicates per declared arm, no skipped
+cell, and no cell whose run halted at its call ceiling — a halted cell's remaining hours run on fallback
+decisions, so it is not a complete run of the arm's allocation. Anything else prints `NOT RUN` and no
+verdict (§8.4 step 5b), because a truncated arm halves its own band and would separate on any difference.
+
 **Verdict rule.**
 
 - **SEPARATION** iff at least one **primary** pair separates: `A` vs `P`, or `A` vs `U`.
@@ -269,7 +311,8 @@ better. If no tier separates, the pair is a **tie** and is reported as a tie.
 ### 7.5 Corroboration and sensitivity (declared, not decisive)
 
 - **Curve corroboration:** ticket 35's criterion is computed on the demographic KPI curves
-  (`SNR = RMSE_h(d)/RMSE_h(sigma) ≥ 2` with a ≥ 24-hour consecutive separation), and its verdict is
+  (`SNR = RMSE_h(d)/RMSE_h(sigma) ≥ 2` with a ≥ 24-hour consecutive separation) — step 7 of §8.4,
+  `cmd/vs2 -curve-in/-curve-out` over the same evaluation JSON, zero spend — and its verdict is
   reported beside the tier order. If the two disagree, **both** are reported and the tier order stands,
   because it is the declared objective; a disagreement is itself a recorded finding about the
   instrument.
@@ -290,7 +333,7 @@ clean negative … is an equally decisive and reportable outcome"), not a failur
 **Safe way to see the failure that matters** — the ways this could report a false separation:
 
 1. **Evaluator gate (before any live call is read).** The scorer must reproduce every `vrd/1` and
-   `vrd/2` value committed in this ticket from the committed recorded vectors, pass T1–T6, tie a
+   `vrd/2` value committed in this ticket from the committed recorded vectors, pass T1–T7, tie a
    synthetic copy of `A0` exactly, and — in `--expect-fail` mode — detect the inverted comparison
    (`W2` outranking `W1`) as a FAIL. A scorer that cannot fail is not evidence.
 2. **Anchor gate (zero spend, before the live matrix).** The `A0` zero-spend re-run at the landing
@@ -300,7 +343,9 @@ clean negative … is an equally decisive and reportable outcome"), not a failur
    count voids that cell: ticket 35 showed a matrix under a lossy contract measures admissibility luck,
    not allocation quality.
 4. **Band gate.** No difference smaller than the §7.4 band may be called a separation, in either
-   direction; ties are printed as ties.
+   direction; ties are printed as ties. A band of zero alone never establishes a practically meaningful
+   separation: the tier's declared effect floor must also be cleared, so an identical-replicate pair
+   differing by one actor-hour or by one starvation death ties and is printed as a tie.
 
 ### 7.7 What M2c may NOT conclude
 
@@ -412,11 +457,24 @@ echo "runner pid $!"
 # --- 5. liveness (every poll; pid + ledger growth, never a pid file, never log content) ---
 ps -p <runner pid> >/dev/null && wc -l .tmp/39-m2c-runs/*/calls.jsonl | tail -1
 
+# --- 5b. inventory assertion before any score is read (spec sections 7.1 and 7.4) ---
+python3 .scratch/38-m2c-preregistration/vrd2.py --check-inventory .tmp/39-m2c-evaluation.json
+# expect exit 0 and: cell inventory (spec section 8.4): PASS — 15 of 15 declared cells scored,
+#   3 replicates per arm, 0 halted, 0 skipped. A nonzero exit (3) means the artefact is a partial
+#   matrix: it is reported as incomplete and never scored as a smaller result (§8.1 stop rule).
+
 # --- 6. scoring (after exit 0; the same scorer, over the live evaluation JSON) ---
 python3 .scratch/38-m2c-preregistration/vrd2.py \
   --live .tmp/39-m2c-evaluation.json \
   --scores .scratch/37-fidelity-metric/scores.json \
   --log .scratch/38-m2c-preregistration/m2c-scores.log
+# the scorer asserts the same inventory again and prints `M2c verdict ...: NOT RUN` with exit 3, and no
+# verdict, if any declared cell is missing, short of 3 replicates, or halted.
+
+# --- 7. curve corroboration (§7.5; zero spend, reads the same artefact) ---
+.tmp/39-vs2-bin -curve-in .tmp/39-m2c-evaluation.json -curve-out .tmp/39-m2c-curve.txt
+# ticket 35's SNR / 24-hour criterion per declared pair, reported beside the tier order and decisive
+# for nothing; ticket 39 commits the curve report with the run.
 ```
 
 The gate order is not cosmetic: **step 2 before step 4** is the M2c row's requirement ("M2c owns the
@@ -518,6 +576,16 @@ The two rejected candidates, on the same four worlds (same transcript):
 **`vrd/2` is therefore the only candidate of the three whose ordering agrees with the declared
 priority on all four worlds, which is what T2–T4 require.**
 
+The same transcript then prints the widest declared witness set (§6 T7, added by R7 before any live
+call), verbatim:
+
+```
+T7 the tier-2-over-tier-3 witness pair W4/W5 (spec section 6):
+   vrd/2 key W4 = (e=0, dH=0.0000, dS=0.3000, dB=0.0000)
+   vrd/2 key W5 = (e=0, dH=0.0007, dS=0.0000, dB=0.0000)
+T7 PASS: the order is W0 < W1 < W3 < W4 < W5 < W2 (declared W0 < W1 < W3 < W4 < W5 < W2); W4 survives one actor-hour better than W5 and three starvation deaths worse, and tier 2 decides it
+```
+
 ## R3 — The recorded matrix: the repair changes what the metric means, and no recorded arm ordering
 
 `python3 .scratch/38-m2c-preregistration/vrd2.py --scores .scratch/37-fidelity-metric/scores.json` —
@@ -575,25 +643,41 @@ exit 0, transcript `recorded.log`. This is **verification, not the M2c compariso
 
 ## R4 — The criterion's machinery can fail, and one `--live` CLI path works
 
-- **Band-rule fixtures** (`self-test.log`), exercising §7.4 in both directions:
+- **Band-rule fixtures** (`self-test.log`), exercising §7.4 in both directions and both bounds:
   `fixture a` (an arm whose replicate spread covers the mean difference) → **NO SEPARATION**;
   `fixture b` (extinct vs persisting, unanimous) → **SEPARATION** at tier 1;
   `fixture c` (four starvation deaths beyond the survival band) → **SEPARATION**;
   `fixture d` (identical arms) → **NO SEPARATION**; `fixture e` (an arm with more actor-hours and more
   starvation deaths than the other) → **SEPARATION**, with the declared precedence sensitivity **firing
-  on 3 verdicts**, i.e. the sensitivity machinery detects a case where tier order decides the answer. A
-  rule that always separates fails `a`/`d`; a rule that never separates fails `b`/`c`; a sensitivity
-  machine that can only print zero fails `e`.
+  on 3 verdicts**, i.e. the sensitivity machinery detects a case where tier order decides the answer;
+  `fixture f` (1 actor-hour of a 1 444-actor-hour control, band 0) → **NO SEPARATION**, which the band
+  alone could not do; `fixture g1` (exactly one starvation death, band 0) → **NO SEPARATION** and
+  `fixture g2` (three starvation deaths, band 0) → **SEPARATION**, pinning the strict quantum boundary;
+  `fixture h` (24 actor-hours of the control, band 0) → **SEPARATION** decided by the effect floor, so the
+  floor is a threshold and not a blanket refusal. A rule that always separates fails `a`/`d`/`f`/`g1`; a
+  rule that never separates fails `b`/`c`/`e`/`g2`/`h`; a sensitivity machine that can only print zero
+  fails `e`.
+- **Inventory fixtures** (`self-test.log`): the declared 15-cell artefact is **scored**; one declared arm
+  absent (`inventory.ran` 12), one arm with two replicates, one cell `halted` at its call ceiling, and an
+  `inventory.ran` that disagrees with the artefact are each **NOT RUN** with the reason printed, and the
+  verdict machinery over the two-replicate arm returns `NOT RUN` rather than a verdict.
+- **Reachability with the effect floors in force** (`self-test.log`): the tightened rule is not
+  confirmatory by construction — on the recorded v2 aggregates (ticket-35 data, not an M2c result) `A`
+  vs `P` **ties** (actor-hours `|0.0418| <= band 0.0829`, deaths `0.0667 <= max(band 0.1333, floor
+  0.1)`) while `A` vs `U` **separates** (`0.1856 > band 0.0829`), so both outcomes remain reachable.
 - **Negative control** (`python3 … --expect-fail --scores …`, exit 0, transcript
   `negative-control.log`): the inverted claims `W2 < W1`, `W2 < W3`, `W2 < W0` and `A1 < A` are each
   required to **hold = False**, and the run prints `NEGATIVE CONTROL PASS` only if all four do.
-- **`--live` CLI smoke** (`live-smoke.log`) against a three-arm synthetic artefact at
-  `/tmp/38-live-smoke.json` (shape and plumbing only, **not** a result about any arm): the band rule
-  reports a deterministic-vs-deterministic difference as a structural separation, a
-  deterministic-identical pair as a tie, an absent arm as `NOT RUN — an arm is absent from the
-  artefact` rather than a pass, and the two declared sensitivity blocks (six tier orders, `h=H−1`
-  persistence) are emitted for every declared pair. Ticket 39's scoring command is therefore a command
-  that runs and produces every quantity §7.5 promises, not only the verdict.
+- **`--live` CLI smoke** (`live-smoke.log`) against the declared synthetic artefact written by
+  `--write-smoke .tmp/38-live-smoke.json` — 5 arms × 3 replicates = the declared 15 cells, 145 hourly
+  samples, shape and plumbing only, **not** a result about any arm. It passes the inventory assertion
+  (`15 of 15, 3 replicates per arm, 0 halted, 0 skipped`), prints the declared effect floors, decides two
+  declared pairs on the band and two on the effect floor, ties a deterministic-identical pair (with the
+  per-tier `|Δ| <= max(band, floor)` trace), and emits both declared sensitivity blocks (six tier orders,
+  `h=H−1` persistence) for every declared pair. `--check-inventory` on the same artefact with `A/r3`
+  dropped exits 3 with `M2c verdict …: NOT RUN`, so the refusal is a CLI-observable path and not only a
+  library branch. Ticket 39's scoring command is therefore a command that runs and produces every
+  quantity §7.5 promises, not only the verdict.
 
 ## R5 — Which of ticket 37's recorded conclusions survive
 
@@ -619,14 +703,61 @@ Nothing in ticket 37's *verdict* is overturned, and this ticket re-opens none of
   `gofmt -l` over tracked `.go` files, and `git diff --check 8ea4a79` — see the gate table below.
 - **Live model calls: 0. Spend: $0.00.**
 - **Limits of the repair.** `vrd/2` cannot express a tradeoff between tiers: a survival difference of
-  one actor-hour outranks any reproduction difference, by construction. Its "stability" tier is a
-  reproduction proxy, not a variance/churn measure, and it inherits every information loss ticket 37
-  declared for `vrd/1` (identity, kin and diversity of survivors, age-death timing, wealth and granary
-  distributions, exchange, action mix, decision-error rate). Its persistence predicate is read at the
-  terminal sample, and R3 records the boundary case that convention creates.
+  one actor-hour outranks any difference on a lower tier, by construction — any reproduction difference
+  and also any number of starvation deaths, so "deaths avoided" can never compensate a survival deficit
+  (§6 T7 declares that tradeoff as a witness rather than leaving it as an accident, and §7.4's effect
+  floor raises the live entrance threshold to 14.4 actor-hours without reversing it). Its "stability"
+  tier is a reproduction proxy, not a variance/churn measure, and it inherits every information loss
+  ticket 37 declared for `vrd/1` (identity, kin and diversity of survivors, age-death timing, wealth and
+  granary distributions, exchange, action mix, decision-error rate). Its persistence predicate is read at
+  the terminal sample, and R3 records the boundary case that convention creates.
 - **Not done, deliberately.** No live call; no arm comparison under `vrd/2` beyond the recorded v1/v2
   matrix; no Go evaluator change; no claim about any policy; no re-opening of tickets 34/35/36/37; no
   push.
+
+## R7 — The independent review's two blocking findings, fixed before any live call
+
+An independent review of tip `c7cc624` verdicted **BLOCK** on two defects in the pre-declaration. Both
+are in §7, both were fixed here **before the first live call of the M2c matrix**, and both are tightenings:
+no threshold was loosened, no arm, cell, horizon, contract, replicate count or pair set changed, and no
+verdict-producing rule was reworded to fit data — there is no M2c data yet to fit.
+
+- **P1-1 (no per-tier effect floor).** The band rule alone let a practically nil difference become the
+  headline once the replicate band collapsed to zero (automatic for a deterministic pair), e.g. `A0` vs
+  `P` at one actor-hour of 1 444 would have printed SEPARATION with a reassuring "both deterministic"
+  note. §7.4 now declares `ε_H = 0.01`, `ε_S = 0.1`, `ε_B = 0.5` and requires
+  `|mu_X − mu_Y| > max(B, ε_tier)`; §7.6 gate 4 states that a zero band alone never establishes a
+  separation. `vrd2.py`'s `pair_verdict` implements it and prints a per-tier `|Δ| <= max(band, floor)`
+  trace for every tie, fixtures `f`, `g1`, `g2`, `h` pin both sides of the boundary, and the review's own
+  trap (`A0` vs `P`, one actor-hour) is now fixture `f`, and a reachability check keeps the tightened
+  rule falsifiable: on the recorded v2 aggregates `A` vs `P` still ties and `A` vs `U` still separates.
+- **P1-2 (a truncated experiment scored as if complete).** One surviving replicate gave a zero band and a
+  false separation, and two halved the intended envelope. §7.4's inventory precondition and §8.4 step 5b
+  now assert the declared 15 scored cells (3 × `A0` + 12 model-bearing), exactly 3 replicates per declared
+  arm, no skipped cell and no `halted` cell (a halted run's remaining hours decide on fallback policy, so
+  it is not a complete run); `vrd2.py --check-inventory` and `--live` both refuse with `M2c verdict …:
+  NOT RUN` and exit 3, and `verdict()` refuses an arm with fewer than 3 replicates. Inventory fixtures and
+  one CLI refusal (gate 8b) exercise it.
+- **Riding along (§7.5 curve corroboration).** It was declared but no step produced it; §8.4 step 7 now
+  runs `cmd/vs2 -curve-in/-curve-out` over the same evaluation JSON at zero spend, and gate 8c shows the
+  command running on the smoke artefact.
+- **Riding along (the module's own absence rule).** `live_cells` defaulted a missing `realized_calls` to
+  zero, against the module's declared "a missing required field is a hard failure"; every live row key is
+  now required.
+- **Riding along (the lexicographic extreme).** The order's sharpest property — any difference on a lower
+  tier is unreachable, including any number of starvation deaths — was disclosed only in terms of
+  reproduction. `docs/VALIDATION.md` and `docs/OPEN-QUESTIONS.md` Q1 now say it outranks deaths as well,
+  and §6 declares the witness pair `W4`/`W5` (T7) so the tradeoff is chosen rather than accidental: the
+  existing worlds exercised tier 3 against tier 4 but never tier 2 against tier 3.
+- **Tool by-product untracked.** The committed `.scratch/38-m2c-preregistration/__pycache__/` byte-code is
+  removed from the index and the tree, and `__pycache__/` / `*.pyc` are ignored, because a byte-code cache
+  is regenerated from the tracked source and belongs in `.gitignore` rather than in the ticket's evidence.
+
+Not fixed here, recorded instead (non-blocking in the review): the §8.1 dollar bound mis-multiplies the
+per-replicate token columns by three (the corrected per-call profile makes the expected spend ≈$0.41–$0.50,
+so the $2.00 cap only gets safer); `--expect-fail` re-tests T2–T4 rather than mutating the comparison; the
+anchor's `alive_T(H) > 0` precondition is unrepresentable in `ANCHOR`; and the §7.6 contract gate still has
+no executing step.
 
 ## Gate table
 
@@ -639,7 +770,9 @@ Nothing in ticket 37's *verdict* is overturned, and this ticket re-opens none of
 | 5 | scorer self-test + declared tests | `python3 .scratch/38-m2c-preregistration/vrd2.py --self-test --scores .scratch/37-fidelity-metric/scores.json --log …/self-test.log` | exit 0, `SELF-TEST: PASS` |
 | 6 | recorded verification | `… --scores .scratch/37-fidelity-metric/scores.json --log …/recorded.log` | exit 0, loader identity `0.000e+00` |
 | 7 | negative control | `… --expect-fail --scores …` | exit 0, `NEGATIVE CONTROL PASS` |
-| 8 | `--live` CLI smoke | `… --live /tmp/38-live-smoke.json --scores …` | exit 0 |
+| 8 | `--live` CLI smoke | `… --write-smoke .tmp/38-live-smoke.json` then `… --live .tmp/38-live-smoke.json --scores … --log …/live-smoke.log` | exit 0, inventory `PASS — 15 of 15` |
+| 8b | inventory assertion refuses a truncated matrix | `… --check-inventory .tmp/38-live-smoke-truncated.json` (the smoke artefact with `A/r3` dropped) | exit 3, `M2c verdict …: NOT RUN` |
+| 8c | curve corroboration step | `.tmp/38-vs2-bin -curve-in .tmp/38-live-smoke.json -curve-out .tmp/38-curve-smoke.txt` | exit 0, report written — the §8.4 step-7 command runs at zero spend |
 | 9 | anchor reproduction, 0 spend | three `cmd/vs2 -arms A0` runs: `natural-claim/v1`, `natural-claim/v4`, and the ticket-39 gate command (`-reps 3`, v4) | exit 0 each; vectors identical and equal to the committed anchor (`anchor-check.json`) |
 | 10 | full Go suite | `go test -timeout 30m ./...` | **not run — no Go file changed on this branch**; recorded rather than claimed |
 | 11 | `make race` | — | **not run** — not in this ticket's gate list |
@@ -659,7 +792,9 @@ python3 .scratch/38-m2c-preregistration/vrd2.py \
 python3 .scratch/38-m2c-preregistration/vrd2.py --expect-fail \
   --scores .scratch/37-fidelity-metric/scores.json \
   --log .scratch/38-m2c-preregistration/negative-control.log
-python3 .scratch/38-m2c-preregistration/vrd2.py --live /tmp/38-live-smoke.json \
+python3 .scratch/38-m2c-preregistration/vrd2.py --write-smoke .tmp/38-live-smoke.json
+python3 .scratch/38-m2c-preregistration/vrd2.py --live .tmp/38-live-smoke.json \
   --scores .scratch/37-fidelity-metric/scores.json \
   --log .scratch/38-m2c-preregistration/live-smoke.log
+python3 .scratch/38-m2c-preregistration/vrd2.py --check-inventory .tmp/38-live-smoke-truncated.json  # exit 3, NOT RUN
 ```
