@@ -310,3 +310,5 @@ file and never log content (the report is written only at exit).
 |---|---|---|---|
 | 12:39 | 271 | 17.2 | all `ok` |
 | 12:57 | 603 | 17.9 | all `ok` |
+| 13:07 | 780 | 18.1 | all `ok` |
+| 13:12 | 875 | 18.1 | 874 `ok`, 1 `http-error` (transport retry; the attempt was retried and the call completed) |
