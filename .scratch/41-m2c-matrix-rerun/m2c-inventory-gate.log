@@ -1,0 +1,4 @@
+=== inventory gate (ticket 38 §7.4, §8.4 step 5b); 2026-10-18T17:13:10Z
+live artefact: contract=natural-claim/v4 horizon=144 status=live/real-model
+cell inventory (spec section 8.4): PASS — 15 of 15 declared cells scored, 3 replicates per arm, 0 halted, 0 skipped
+exit=0

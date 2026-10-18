@@ -1,0 +1,11 @@
+=== ticket 41 post-run contract gate (ticket 38 §7.6 gate 3) on THIS run's ledgers; 2026-10-18T17:12:47Z
+tally per arm (role-a records):
+  A {'applied': 742, 'rejected': 2, 'inadmissible': 0, 'malformed': 2, 'other': 0}
+  A1 {'applied': 740, 'rejected': 4, 'inadmissible': 1, 'malformed': 3, 'other': 0}
+  P {'applied': 714, 'rejected': 2, 'inadmissible': 0, 'malformed': 2, 'other': 0}
+  U {'applied': 743, 'rejected': 1, 'inadmissible': 0, 'malformed': 1, 'other': 0}
+proposed action counts: {'eat_granary_food': 1}
+refusing gate counts: {'illegal-action': 1}
+proposed x gate:
+  eat_granary_food illegal-action                           1
+exit=0

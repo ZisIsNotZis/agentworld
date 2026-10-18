@@ -241,19 +241,137 @@ Launched. The pid cannot be recorded before it exists; nothing else was deferred
 
 The polling record is `.scratch/41-m2c-matrix-rerun/poll-log.md`, committed as it is written.
 
-## 8. Results — declared empty before the run
+## 8. Results — filled from the artefact, 2026-10-18T17:13Z
 
-Per-cell rows are `kind == "call"` ledger rows (charged attempts), never decisions; `halted` and
-`realized_calls` are read from the evaluation JSON, not from the log. Empty by declaration, not by omission.
+Per-cell rows are `kind == "call"` ledger rows (charged attempts), never decisions; `halted`,
+`realized_calls`, `under_budget` and `budget_shortfall` are read from the evaluation JSON
+(`.tmp/41-m2c-evaluation.json`, 775 911 B), not from the log. `attempts − decisions` is the `call` row count
+minus the `role-a` row count in the same ledger.
 
 | arm | cell | reps | charged calls (r1/r2/r3) | `realized_calls` (r1/r2/r3) | attempts − decisions | `halted` | `inadmissible` |
 |---|---|---|---|---|---|---|---|
-| A0 | f10-s0 | — | — | — | — | — | — |
-| P | f10-s0 | — | — | — | — | — | — |
-| U | f10-s0 | — | — | — | — | — | — |
-| A | f10-s0 | — | — | — | — | — | — |
-| A1 | f10-s0 | — | — | — | — | — | — |
-| **total** | | | — | | | | |
+| A0 | f10-s0 | 3/3 | 0 (0/0/0) | 0 (0/0/0) | 0 | none | — (0 calls) |
+| P | f10-s0 | 3/3 | 716 (244/244/228) — gate-bound, below the 248 decision budget | 244/244/228 | 0/0/0 | none | 0 |
+| U | f10-s0 | 3/3 | 744 (248/248/248) | 248/248/248 | 0/0/0 | none | 0 |
+| A | f10-s0 | 3/3 | 744 (248/248/248) | 248/248/248 | 0/0/0 | none | 0 |
+| A1 | f10-s0 | 3/3 | 744 (248/248/248) | 248/248/248 | 0/0/0 | none | **1** (`r2`) |
+| **total** | | 15/15 | **2 948 calls, $0.5696** | | **0** | **0** | **1** |
+
+Tokens: 1 853 633 in / 768 547 out = `1 853 633 × $0.10/M + 768 547 × $0.50/M` = **$0.5696** (the report's own
+cost field is `UNPRICED`; the gateway exposes no price). Attempts: **2 948** of the 3 980 remaining on the
+7 000 cumulative operator cap; spend **$0.5696** against the `$1.04` operator stop and the `$1.30` hard cap
+(44 % of the cap, and 4 % below the §4 expected `≈ $0.59`). Wall clock: launch `16:54:57Z` → exit between
+`17:11:37Z` and `17:12:24Z` = **≈ 17 min** at `-parallel 12`, against ticket 39's 44 min at `-parallel 8`
+and the declared 3–4 h projection.
+
+### 8.1 The declared post-run checks, one by one
+
+| # | check (§8.1) | measured | verdict |
+|---|---|---|---|
+| 1 | `attempts − decisions ≤ 8` per model-bearing cell | **0** in all 12 cells: 2 948 call rows and 2 948 `role-a` rows, so not one attempt was spent on a retry and the whole `R_t = 8` reserve went unspent in every cell | **PASS** |
+| 2 | `realized_calls = 248` per quota-bound cell, `under_budget`, `budget_shortfall 8` | `U`, `A`, `A1`: 248/248/248 each, `under_budget = true`, `budget_shortfall = 8`; `P` gate-bound at 244/244/228 with shortfall 12/12/28 | **PASS** |
+| 3 | 0 halted cells | `halted = false` in all 15 cell rows | **PASS** |
+| 4 | inventory `ran == 15` | `cell inventory (spec section 8.4): PASS — 15 of 15 declared cells scored, 3 replicates per arm, 0 halted, 0 skipped` (exit 0) | **PASS** |
+| 5 | 0 `inadmissible` per model-bearing arm (§7.6 gate 3) | `A {applied 742, rejected 2, inadmissible 0, malformed 2}`, `P {714, 2, 0, 2}`, `U {743, 1, 0, 1}`, **`A1 {740, 4, inadmissible 1, malformed 3}`** | **FAIL** — see §8.2 |
+| 6 | spend and attempts against §4's caps | 2 948 attempts of 3 980 available; `$0.5696` of `$1.30`, never near the `$1.04` stop | **PASS** |
+
+### 8.2 The one gate that fires: `A1-f10-s0-r2` records 1 `inadmissible` answer
+
+Ticket 38 §7.6 gate 3, in the text that was fixed before any live call: *"Every model-bearing cell must
+record **0 `inadmissible`** answers. A nonzero count voids that cell."*
+
+The single event, from `A1-f10-s0-r2`'s ledger:
+
+| field | value |
+|---|---|
+| ledger row | `seq 627`, `kind: "role-a"`, `cause: {actor: 8, hour: 139, wake_policy: vs2-A1, seam: natural.claim}` |
+| the answer | decoded to `action: "eat_granary_food"` — an action name outside the `natural-claim/v4` vocabulary |
+| the contract's response | `source: "fallback"`, `reason: "inadmissible"`, `fallback_reason: "inadmissible"`, `frozen_action: "gather"` — **rejected, not applied**; the decision ran on the frozen action |
+| what it cost | the same 1 attempt as any other decision (that cell's `attempts − decisions = 0`), and 1 of its 248 decisions |
+| `35-admis.py`'s classification | `proposed x gate: eat_granary_food illegal-action 1` — the same row: the legacy world gate would also have refused that action |
+| the only other non-`ok` event in the matrix | 1 `http-error 400` (content policy) at `A-f10-s0-r2:243`, single attempt, no retry burst, no reserve consumed |
+
+**This is a decision for the product owner, not a judgement this record may make**, because it decides
+whether the pre-registered artefact may be scored at all. The measured facts it turns on:
+
+- Run 1 (ticket 39) recorded **0** `inadmissible` on this same contract, with 8 `malformed` answers; this run
+  records **1** `inadmissible` in 2 948 answers (0.034 %), against 8 `malformed`.
+- The contract **rejected** the answer; it was not applied under a lossy contract, which is the pathology
+  §7.6 gate 3 exists to catch ("measures admissibility luck, not allocation quality").
+- §7.4's inventory precondition (the list of things that print `NOT RUN`) names a **skipped** cell and a
+  **halted** cell, not a voided one; §7.6 gate 3 says "voids **that cell**" and does not say what a voided
+  cell does to the verdict.
+- The verdict is robust to the handling: `A1-f10-s0-r2` is the mild outlier of its arm
+  (`H = 1434` against its siblings' 1443/1443), and dropping it changes **no** pair's verdict — `A vs A1`
+  stays a TIE (`|0.0293 − 0.0007| = 0.0286 ≤ band 0.0293`), `A1 vs U` still separates, `A1 vs P` stays a TIE.
+  **Neither primary pair (`A` vs `P`, `A` vs `U`) involves `A1` at all.**
+- The three readings and what each records: **(A) strict** — the cell is void, so the declared inventory of
+  15 scored cells at 3 replicates per arm is not met, the artefact is `NOT RUN`, and a fifth live run of the
+  matrix (≈ $0.57) is the only way to a verdict; **(B) cell-level void** — `A1`-involving pairs are reported
+  as not computable over a voided cell, the primary pairs are scored from complete cells, and the verdict
+  below stands; **(C) recorded, not voiding** — the event is recorded as a contract rejection at 0.03 %, the
+  full 15 cells are scored, and the verdict below stands.
+
+`A vs P` and `A vs U` are unaffected by the choice; only the A1 pairs' *reportability* and whether a re-run
+is owed differ. Until the reading is recorded in §9, **the recorded verdict is not yet fixed**.
+
+### 8.3 What the scorer returns on this artefact (computed, §9 records the verdict)
+
+The four declared post-run commands of §5.9 were run in order (`m2c-contract-gate.log`,
+`m2c-inventory-gate.log`, `m2c-scores.log`, `m2c-curve.txt`). Per-arm bands, `vrd/2`:
+
+| arm | tier 1 persistence | `d_H` (± half-width) | `d_S` (±) | `d_B` (±) |
+|---|---|---|---|---|
+| `A0` | persists 3/3 | 0.0000 (±0.0000) | 0.0000 (±0.0000) | 0.0000 (±0.0000) |
+| `P` | persists 3/3 | 0.0210 (±0.0420) | 0.0333 (±0.0667) | 0.0000 (±0.0000) |
+| `U` | persists 3/3 | 0.1837 (±0.0321) | 0.4333 (±0.1667) | 0.0000 (±0.0000) |
+| `A` | persists 3/3 | 0.0293 (±0.0293) | 0.0667 (±0.0667) | 0.0000 (±0.0000) |
+| `A1` | persists 3/3 | 0.0028 (±0.0042) | 0.0333 (±0.0667) | 0.0000 (±0.0000) |
+
+Per pair (`|mu_X − mu_Y| > max(B, ε)` separates; `ε_H = 0.01`, `ε_S = 0.1`, `ε_B = 0.5`):
+
+| pair | class | result | by how much | what decided it |
+|---|---|---|---|---|
+| `A` vs `P` | primary | **TIE** | actor-hours 0.0083, starvation deaths 0.0333, births 0.0000 | **band** (0.0420 and 0.0667) — both differences are far inside it |
+| `A` vs `U` | primary | **SEPARATES**, more viable: `A` | actor-hours 0.1544 | **band** (0.0321) — 4.8× the band, and 15× the tier-2 floor |
+| `A1` vs `P` | secondary | TIE | 0.0182 / 0.0000 / 0.0000 | band (0.0420 / 0.0667) |
+| `A1` vs `U` | secondary | SEPARATES, more viable: `A1` | 0.1810 | band (0.0321) |
+| `A` vs `A1` | secondary | TIE | 0.0265 / 0.0333 / 0.0000 | band (0.0293) |
+| `P` vs `U` | secondary | SEPARATES, more viable: `P` | 0.1627 | band (0.0420) |
+| `A0` vs each | diagnostic | `A0` vs `P`, `A0` vs `A`, `A0` vs `A1` TIE; `A0` vs `U` SEPARATES (`A0` better) | 0.1837 vs `U` | band (0.0321), flagged one-sided noise floor |
+
+No tier-1 separation anywhere: **all five arms persist in all three replicates** (every `H` and every
+replicate's terminal population > 0, §8.4). Tier 4 (births) ties on every pair: `d_B = 0.0000` for `A0`, `P`,
+`U`, `A`, `A1` alike, so the 0.5 floor is never approached. Tier 3 (starvation deaths) does separate the three
+`U` pairs (`U` 0.4333 against `P`/`A1` 0.0333 and `A` 0.0667: 0.4000 and 0.3667, both above
+`max(0.1667, 0.1)`), but the rule reads the **highest** separating tier, and those pairs already separate at
+tier 2, so tier 3 decides no pair. Within `{P, U, A, A1}` the pairs that do not separate anywhere are
+`A` vs `P`, `A1` vs `P` and `A` vs `A1`.
+
+Sensitivity, reported and not decisive (§7.5): the **six tier permutations change 0 of 36 declared-pair
+verdicts**, and the **`h = H−1` terminal-sample variant changes 0 of 6**. No weight search, no re-tuning.
+
+**Curve corroboration (§7.5, decisive for nothing): agrees with the tier order on both primary pairs** —
+`A@low vs U@low` `DISTINGUISHABLE (population, SNR ≥ 2 with a ≥ 24-hour separation)` and
+`A@low vs P@low` `NOT distinguishable at this noise floor`. It additionally calls `A1 vs P`, `A1 vs A`
+(`granary_hist[0]`), `P vs U` and `A0` vs each distinguishable; the two instruments therefore agree on the
+primary question and disagree on some secondary ones, which §7.5 already declares can happen and resolves in
+favour of the tier order (the declared objective).
+
+### 8.4 The per-replicate vectors behind the means
+
+`H` = Σ population over samples 0..144, `B` = cumulative births at `H`, `S` = cumulative starvation deaths at
+`H`; the `A0` control is `H = 1444, B = 2, S = 0` in all three replicates (§6 gate 7).
+
+| arm | `H` (r1/r2/r3) | `B` | `S` |
+|---|---|---|---|
+| `A0` | 1444 / 1444 / 1444 | 2 / 2 / 2 | 0 / 0 / 0 |
+| `P` | 1444 / 1444 / 1353 | 2 / 2 / 2 | 0 / 0 / 1 |
+| `U` | 1178 / 1133 / 1225 | 2 / 2 / 4 | 3 / 4 / 6 |
+| `A` | 1444 / 1370 / 1391 | 2 / 2 / 2 | 0 / 1 / 1 |
+| `A1` | 1443 / 1434 / 1443 | 2 / 2 / 2 | 0 / **1** / 0 |
+
+The `A1` `S = 1` replicate is `r2`, the cell carrying the inadmissible answer (§8.2).
 
 ### 8.1 The post-run checks this table is judged by (declared before the run)
 
