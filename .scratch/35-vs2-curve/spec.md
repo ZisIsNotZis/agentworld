@@ -1086,3 +1086,38 @@ checked by the supervisor and are recorded here with the commands:
 3. **The `P vs A0` wealth divergence is real**: recomputing from `.tmp/35-v2-evaluation.json`,
    `max_capital` differs from A0 in **76/70/74 hours** across the three P replicates, first divergence at
    h19/h13/h13, with `capital_hist[2]` and `[3]` following it; every demographic series is identical.
+
+## Correction carried in by ticket 36 (2026-10-18): the v2 "29/30 gather" was the fixture's action space
+
+A claim this file makes implicitly is withdrawn here, with its reason, rather than left standing. The v2
+validation probe above reports `v2`: **29 of 30 answers `gather`, 1 `eat-stored`**, and the ticket-36
+dispatch read that as a collapse — "the v2 shortcut removes inadmissibility but collapses the action
+distribution". Recomputed under ticket 36, that reading is **wrong**:
+
+- The 30 requests the v2 probe used are 30 draws (its own `random.seed(350)`) from the **917 stage-3
+  requests that had been rejected as inadmissible**. Re-rendering that exact sample through the committed
+  `natural-claim/v4` encoder and running the committed admissibility ladder over every action of every
+  request gives the sample's **admissible action sets**:
+
+  | admissible set of the request | requests in the v2 probe's 30 | v2 probe answers |
+  |---|---|---|
+  | {`gather`, `wait`} | **29** | 29 `gather` |
+  | {`eat-stored`, `provision`, `wait`} | **1** | 1 `eat-stored` |
+
+  In 29 of the 30 requests `gather` was the **only legal action other than `wait`**, and `wait` produces
+  nothing. The probe's answer distribution is therefore what the state supported, one for one; there was
+  no collapse to explain.
+- The same computation over the whole 917-request pool the sample came from: **885 (96.5 %) admit only
+  {`gather`, `wait`}**, 27 (2.9 %) admit {`eat-stored`, `provision`, `wait`}, 5 (0.5 %) admit only
+  {`wait`}. The rejected-request pool is, by construction, the set of hours in which the model proposed a
+  granary action that the hour forbade — hours in which gathering slot food was the only productive option.
+- Ticket 36's own 40-request probe finds the same structure independently (35 of 40 requests admit only
+  {`gather`, `wait`}; in the 5 that also admitted a granary draw the model chose 3 `gather`, 1
+  `eat-stored`, 1 `provision`).
+
+**The corrected statement.** `natural-claim/v2` did what it claimed (0/30 inadmissible), and the
+near-constant `gather` answer was a property of the sampled states, **not** model degeneration and **not**
+an effect of being told the admissible set. What remains true from this file is that the v2 probe was a
+30-request sample at one effort level on one cell's requests; what changes is the interpretation of its
+action column. Nothing else in this record depends on that reading: the v2 run result, the curve
+verdicts, the coverage finding and the R-anchor problem are untouched.
