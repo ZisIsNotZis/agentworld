@@ -498,15 +498,19 @@ distinguish allocation policies is not demonstrated by this data.
 Corresponding curve comparison (`-curve-in .tmp/35-stage3-evaluation.json`, `.tmp/35-stage3-curve.txt`),
 verbatim per pair and with the numbers that matter:
 
-- **A0 vs P: every population/birth/starvation/age-death curve is identical** (RMSE 0.0000, "both
-  deterministic (identical curves)"); the only KPI that separates is `granary_hist[0]`. P's world *is*
-  the no-model world on the primary KPIs.
-- **A0 vs A: population SNR 0.918, births 0.920, age deaths 1.633 — none separates**; the pair is
-  distinguishable only through `max_capital` (SNR 8.522, first separation h17, 109 consecutive hours
+- **A0 vs P: NOT distinguishable.** Every population/birth/starvation/age-death/churn curve is identical
+  (RMSE 0.0000, `n/a (both deterministic)`), and the two KPI families that do differ cannot carry the rule
+  here: the granary histogram differs at every hour but both conditions are **deterministic** on it, so the
+  frozen criterion reports `n/a (both deterministic)` rather than a ratio, and `max_capital`'s real ratio
+  (SNR 3.404) sustains only a **3-hour** separating run. P's world *is* the no-model world on the primary
+  KPIs.
+- **A0 vs A: population SNR 0.918, births 0.920, starvation 0.817, age deaths 1.633 — none separates**; the
+  pair is distinguishable through `max_capital` (SNR 8.522, first separation h17, 109 consecutive hours
   from h35), i.e. a structural capital difference, not a demographic one.
 - **P vs U: population SNR 3.430 (first separation h6, 95-hour run from h20)** and starvation deaths
   SNR 2.122 (120-hour run from h25) — U is separated from both P and A0.
-- **A vs U** separates through starvation deaths; **A vs P** only through `max_capital`.
+- **A vs U** separates through starvation deaths (SNR 2.122); **A vs P** only through `max_capital`
+  (SNR 5.567, 110 hours from h34) — again a capital difference, not a demographic one.
 
 Methodological caveat this exposes: against the deterministic A0 control the denominator is a one-sided
 noise floor, so a structural difference reaches SNR ≥ 2 easily (max capital 0 vs 2). "Distinguishable
