@@ -228,17 +228,18 @@ new or as regressions, and identical in kind to ticket 39 §4's:
 
 ## 7. Launch record
 
-Filled in the commit that follows this one, immediately after the `setsid` launch: the **UTC launch second**,
-the **runner pid**, the run root, the log path, and the first ledger observation. The pid cannot be recorded
-before it exists; nothing else is deferred.
+Launched. The pid cannot be recorded before it exists; nothing else was deferred.
 
 | item | value |
 |---|---|
-| UTC launch time | *recorded at launch, §7.1* |
-| runner pid | *recorded at launch, §7.1* |
+| UTC launch time | **`2026-10-18T16:54:57Z`** (process `lstart` `Mon Oct 19 00:54:57 2026` at `+0800`; the host's UTC offset was read in the same minute, `date -u` `2026-10-18T16:55:06Z` vs `date` `2026-10-19T00:55:06+0800`) |
+| runner pid | **`2759873`** — the `cmd/vs2` process itself, `sid = pgid = pid = 2759873` (`Ssl`, so it leads its new session and does not die with the launching shell), argv[0] `.tmp/41-vs2-bin`. Its parent `2759870` is the `/bin/bash -c` wrapper `setsid nohup` was invoked through, and it is not the runner: stopping this run means killing **2759873** and only that pid. |
 | run root | `.tmp/41-m2c-runs` (fresh; one directory per arm-replicate) |
 | log | `.tmp/41-m2c-run.log` (the report is written only at exit, so an empty log proves nothing) |
 | evaluation artefact | `.tmp/41-m2c-evaluation.json`, `.tmp/41-m2c-evaluation.txt` |
+| first observation, t+9 s | 12 cell directories, **11** with a `calls.jsonl`, 28 charged attempts, 17 634 in / 3 351 out tokens, $0.0034 — running, not queued-dead: `A-f10-s0-r1` is the twelfth and had not yet charged a call |
+
+The polling record is `.scratch/41-m2c-matrix-rerun/poll-log.md`, committed as it is written.
 
 ## 8. Results — declared empty before the run
 
