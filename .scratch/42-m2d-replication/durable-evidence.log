@@ -1,0 +1,51 @@
+# Ticket 42 follow-up — durable-evidence checks
+
+Zero spend, zero live calls: every command below runs the unmodified scorer
+`.scratch/38-m2c-preregistration/vrd2.py` (its last commit is `279f0ba`, ticket 38, and `git diff --stat d38a86b -- .scratch/38-m2c-preregistration/vrd2.py` is empty, so it is the scorer ticket 38 gate 7 exercised) on committed or local files. Recorded at revision 6abd169 on `feature/42-m2d-replication`.
+
+## 1. The reduced extracts are exact subsets of the run artefacts
+
+```
+$ python3 .scratch/42-m2d-replication/extract-live-rows.py .tmp/42-f12-s0-evaluation.json .scratch/42-m2d-replication/f12-s0-live-extract.json
+wrote .scratch/42-m2d-replication/f12-s0-live-extract.json: 15 cells, 50623 bytes
+$ python3 .scratch/42-m2d-replication/extract-live-rows.py .tmp/42-f10-s1-evaluation.json .scratch/42-m2d-replication/f10-s1-live-extract.json
+wrote .scratch/42-m2d-replication/f10-s1-live-extract.json: 15 cells, 50558 bytes
+```
+
+## 2. `vrd2.py --live` on each extract reproduces the committed scoring transcript byte for byte
+
+```
+$ python3 .scratch/38-m2c-preregistration/vrd2.py --live .scratch/42-m2d-replication/f12-s0-live-extract.json --scores .scratch/37-fidelity-metric/scores.json > /tmp/repro-f12-s0.txt; echo "exit $?"
+exit 0
+$ diff -u .scratch/42-m2d-replication/f12-s0-scores.log /tmp/repro-f12-s0.txt && echo IDENTICAL
+IDENTICAL — 23 lines, 3015 bytes
+$ python3 .scratch/38-m2c-preregistration/vrd2.py --live .scratch/42-m2d-replication/f10-s1-live-extract.json --scores .scratch/37-fidelity-metric/scores.json > /tmp/repro-f10-s1.txt; echo "exit $?"
+exit 0
+$ diff -u .scratch/42-m2d-replication/f10-s1-scores.log /tmp/repro-f10-s1.txt && echo IDENTICAL
+IDENTICAL — 23 lines, 3416 bytes
+```
+
+## 3. The inventory assertion passes on each extract
+
+```
+$ python3 .scratch/38-m2c-preregistration/vrd2.py --check-inventory .scratch/42-m2d-replication/f12-s0-live-extract.json
+live artefact: contract=natural-claim/v4 horizon=144 status=live/real-model
+cell inventory (spec section 8.4): PASS — 15 of 15 declared cells scored, 3 replicates per arm, 0 halted, 0 skipped
+exit 0
+$ python3 .scratch/38-m2c-preregistration/vrd2.py --check-inventory .scratch/42-m2d-replication/f10-s1-live-extract.json
+live artefact: contract=natural-claim/v4 horizon=144 status=live/real-model
+cell inventory (spec section 8.4): PASS — 15 of 15 declared cells scored, 3 replicates per arm, 0 halted, 0 skipped
+exit 0
+```
+
+## 4. Negative control: the inverted comparison is detected as a failure (§4 falsifier 1, `--expect-fail`)
+
+```
+$ python3 .scratch/38-m2c-preregistration/vrd2.py --expect-fail --scores .scratch/37-fidelity-metric/scores.json
+NEGATIVE-CONTROL T2: declared order holds=True ; inverted claim also holds=False (must be False)
+NEGATIVE-CONTROL T3: declared order holds=True ; inverted claim also holds=False (must be False)
+NEGATIVE-CONTROL T4: declared order holds=True ; inverted claim also holds=False (must be False)
+NEGATIVE-CONTROL recorded A1<A (the extinct arm declared more viable): inverted claim holds=False (must be False)
+NEGATIVE CONTROL PASS: every inverted comparison was detected as a failure
+exit 0
+```

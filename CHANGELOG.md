@@ -305,3 +305,33 @@ for anything: current truth lives in the authoritative documents — the active 
   same-arm replicate excursions 0/0/91 (`P`) and 0/74/53 (`A`) dwarf it, so at three replicates the minimum
   detectable difference is ≈42–61 actor-hours — "no detectable effect at 3 replicates". Record:
   `.scratch/41-m2c-matrix-rerun/spec.md`.
+- **Ticket 42 — M2d: replicate the M2c result at a second cell and a second seed.** Branch
+  `feature/42-m2d-replication` (base `d38a86b`; the three-label replication rule, its falsifier and four
+  pre-run gates committed **before the first live call**, at `5f3d0a3`, `17:28:25Z`, 90 s ahead of the
+  `17:29:55Z` cell-1 launch; verdict record `6abd169`; **no Go file changed**). Two new cells — the declared
+  second cell `f12-s0` and the second-seed cell `f10-s1` — arms `A0/P/U/A/A1`, 3 replicates, contract
+  `natural-claim/v4`, `H = 144`, effort `low`, at most 248 decisions per arm under the unchanged
+  `N = 256` ceiling with the `R_t = 8` reserve: **2 969 + 2 976 = 5 945 attempts and `$1.0666`**, 0 halted,
+  0 `inadmissible`, both artefacts at the full 15-cell inventory (3 × `A0` + 12 model-bearing). The
+  pre-declared table returns **`FAILED TO REPLICATE`** — neither cell reproduces both halves of the M2c
+  pattern — and the label is kept unrelabelled, because a pre-declared vocabulary may not be revised after
+  seeing data. Per cell: at `f12-s0` the `A`-vs-`U` separation reproduced and grew (`0.4333` against a `0.1`
+  threshold at tier 3) while the `A`-vs-`P` null **broke in `A`'s favour** (`0.1667` against `0.1`,
+  band-decided: 1.67 starvation deaths against a 1-death band) — reported as a failure of the null at that
+  cell, never as support; at `f10-s1` neither primary pair separated (`A` vs `U` `0.0893 ≤ band 0.1053`,
+  `A` vs `P` `0.0000` against the `0.0144` floor) and every arm tied with the no-AI control, so that cell
+  could not discriminate anything. **The honest summary: the M2c pattern is cell-dependent in both
+  halves** — one cell strengthened the claim, one could not see it, and the pre-declared vocabulary has no
+  word for either, so the next pre-registration must add "no resolution at this cell". The decisive new
+  fact is negative: `A` vs `A0` ties at all three cells (at `f10-s0` exactly on its own band), `P`'s
+  `f10-s1` replicates are numerically identical to the control's, and `P`/`U` are *worse* than the control
+  at `f12-s0` — no AI arm has beaten doing nothing in any cell, so the two `f12-s0` separations are damage
+  avoidance relative to arms that harm the control's outcome, and 13 of that cell's 16 deaths are age
+  deaths. Recorded rather than repaired: the cumulative attempt cap was breached by 2 413 attempts
+  (11 913 against the supervisor's amended 9 500, a number the declared matrix had already made
+  unreachable before the launch), with the forward rule for the next ticket — derive the stop rule at run
+  time ("stop when remaining attempts < required attempts") so an inconsistent pair of numbers cannot both
+  stand. The primary evidence is now durable on the branch: a reduced per-cell extract of exactly
+  `vrd2.py`'s `LIVE_ROW_KEYS` reproduces both scoring transcripts byte for byte, and the `--expect-fail`
+  half of the evaluator falsifier, declared in §4.1 and not run before the launch, was run. Record:
+  `.scratch/42-m2d-replication/spec.md`.
