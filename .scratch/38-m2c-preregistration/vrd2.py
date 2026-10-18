@@ -298,6 +298,20 @@ def recorded_report(cells, anchor, primary):
     for x, y, mx, my in flips:
         lines.append("   %s vs %s  (vrd/1 %s %.4f vs %.4f)" % (x, y, "<" if mx < my else ">", mx, my))
 
+    ks = sorted(cells)
+    rep_flips = []
+    for i, x in enumerate(ks):
+        for y in ks[i + 1:]:
+            before = vrd1(cells[x], anchor) < vrd1(cells[y], anchor)
+            after = key(cells[x], anchor) < key(cells[y], anchor)
+            if before != after:
+                rep_flips.append((x, y, vrd1(cells[x], anchor), vrd1(cells[y], anchor)))
+    lines.append("replicate-level comparisons the repair corrects: %d of %d cell pairs"
+                 % (len(rep_flips), len(ks) * (len(ks) - 1) // 2))
+    for x, y, dx, dy in rep_flips:
+        lines.append("   %s/r%d vs %s/r%d: vrd/1 %.4f vs %.4f (extinct-at-H ranked better) -> vrd/2 ranks the "
+                     "persisting cell better" % (x[0], x[1], y[0], y[1], dx, dy))
+
     lines.append("")
     lines.append("ticket 37's declared pairs re-checked under vrd/2, every 3x3 replicate pairing:")
     pairs = [("D1", "A1", "A"), ("D2", "R", "A0"), ("D3", "R", "P")]

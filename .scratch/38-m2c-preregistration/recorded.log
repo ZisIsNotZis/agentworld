@@ -36,6 +36,9 @@ P2 vrd/2f order: A0(0.0000) < P(0.0000) < A(0.4845) < R(2.4982) < U(2.7738) < A1
 P3 vrd/2s order: A0(0.0000) < P(0.0000) < A(0.1084) < A1(0.1925) < R(0.2132) < U(0.7274)
    pairs whose relative order differs from vrd/2: R/U, R/A1, U/A1
 pairs whose relative order changed between vrd/1 and vrd/2: 0
+replicate-level comparisons the repair corrects: 2 of 153 cell pairs
+   R/r3 vs U/r1: vrd/1 0.5963 vs 0.7285 (extinct-at-H ranked better) -> vrd/2 ranks the persisting cell better
+   R/r3 vs U/r3: vrd/1 0.5963 vs 0.8839 (extinct-at-H ranked better) -> vrd/2 ranks the persisting cell better
 
 ticket 37's declared pairs re-checked under vrd/2, every 3x3 replicate pairing:
    D1 worse=A1 better=A: PASS over 9 pairings (9 decided at tier 1)

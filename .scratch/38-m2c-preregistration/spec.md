@@ -539,9 +539,16 @@ exit 0, transcript `recorded.log`. This is **verification, not the M2c compariso
 | P2 `vrd/2f` (rejected) | A0(0.0000) < P(0.0000) < A(0.4845) < **R(2.4982) < U(2.7738)** < A1(2.9252) |
 | P3 `vrd/2s` (rejected) | A0(0.0000) < P(0.0000) < A(0.1084) < **A1(0.1925) < R(0.2132) < U(0.7274)** |
 
-- **`vrd/1` → `vrd/2`: 0 of 15 arm pairs change relative order.** The repair changes what the numbers
-  *mean* (a lexicographic key instead of an additive total, and extinction is now categorical) without
-  moving any recorded arm. The two rejected candidates do move arms, which is what makes them
+- **`vrd/1` → `vrd/2`: 0 of 15 arm pairs change relative order** (arm means). At replicate level the
+  scorer recomputes every cell pair and reports `replicate-level comparisons the repair corrects: 2 of
+  153 cell pairs`, verbatim in `recorded.log`: `R`/r3 (extinct at the terminal sample after 1 305
+  actor-hours, one birth) against `U`/r1 (`0.7285`) and `U`/r3 (`0.8839`) — both persisting cells with 5
+  and 6 starvation deaths. `vrd/1` ranked the extinct replicate better in both; `vrd/2` ranks the
+  persisting cell better, because tier 1 now decides before actor-hours. That is the priority sentence
+  applied to recorded data and the one place the repair is not order-preserving — deliberately. The
+  repair changes what the numbers *mean* (a lexicographic key instead of an additive total, extinction
+  categorical) without moving any recorded **arm**; the two corrected comparisons are exactly the class
+  of inversion §3 item 2 describes. The two rejected candidates do move arms, which is what makes them
   materially different rather than cosmetic: P2 inverts `R`/`U`; P3 moves `A1` from last to third,
   inverting `R`/`A1`, `U`/`A1` and `R`/`U`.
 - **Ticket 37's declared pairs, re-checked under `vrd/2` over every 3×3 replicate pairing:** D1
@@ -588,7 +595,7 @@ exit 0, transcript `recorded.log`. This is **verification, not the M2c compariso
 | AC-37(c) discrimination: D1/D2/D3 pass in every replicate pairing | **survives, strengthened** | 9/9 each, all decided at tier 1; the margins are categorical instead of numeric |
 | AC-37(d) robustness under three one-at-a-time weight doublings | **void, replaced** | there are no weights; the declared replacement is the six tier permutations (R3), under which no surviving arm's order moves |
 | AC-37(e): the arm the old instrument called closest to R (`A1`) is the least viable | **survives** | `A1` is extinct in 3/3 with 0 births; it ranks last under `vrd/2` |
-| recorded `vrd/1` magnitudes (0.5963, 0.7274, 1.0465, 1.1925, …) | **invalidated as comparable numbers** | they are `vrd/1` values; the `vrd/2` key is not a scalar and no `vrd/1` number may be compared with it. The recorded *order* is invariant (R3) |
+| recorded `vrd/1` magnitudes (0.5963, 0.7274, 1.0465, 1.1925, …) | **invalidated as comparable numbers** | they are `vrd/1` values; the `vrd/2` key is not a scalar and no `vrd/1` number may be compared with it. The recorded **arm** order is invariant, and 2 of 153 replicate comparisons are corrected as §3 item 2 requires (R3) |
 | the pathology itself | **withdrawn as current fact, kept with its reason** | `docs/VALIDATION.md` records `vrd/1` as withdrawn and why; the reason (an additive form cannot express a priority order) is what stops the same defect returning |
 | ties at `D = 0` are reported as ties | **survives, restated** | ties are now identical keys; `A0` and all three `P` replicates share `(0,0,0,0)` and are reported tied |
 
