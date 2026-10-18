@@ -828,3 +828,40 @@ concurrency at 3, and the latency is provider-side at max effort). **Hard stop a
 lane, whatever the result.** When it lands: `-relabel` it, hash it, re-run the curve report
 (`-curve-in` the v2 and v2max relabelled evaluations) for the low-vs-max contrast at one contract, and
 append the result here.
+
+## Depth rung substitution: max@v2 STOPPED, high@v2 declared (supervisor decision, 2026-10-18 09:2x)
+
+**`max` at contract v2 is STOPPED** by its exact runner pid 2105928 after 165 calls (all `ok`), preserved
+at `.tmp/35-v2max-partial-runs/` and **not** a replicate. **`max`@v2 is therefore deliberately unrun.**
+
+Supervisor reasoning, recorded verbatim:
+
+> - The max point at v2 costs 15-17 h of wall time for one data point, at 3 concurrent cells capped by
+>   provider-side latency.
+> - We already have a v1 depth signal that suggests the interesting transition is above `none`, not above
+>   `low`: under v1, `none` reproduced A0's 2 births while `low` full-wake fell to 0-1 births. Under v2 the
+>   same structure appears.
+> - Decision-level agreement with max is 83 % at `high` versus 72 % at `low`, at ~1/4 the latency and ~1/4
+>   the cost per call.
+> - Therefore `high` is the right third rung: if `high` does not separate from `low` on the demographic
+>   curves, then the limiting factor is the fixture's resolution (population capped at 12, extinction by
+>   h156, zero births under full cognition), not the depth of thinking, and `max` would be an expensive way
+>   to learn the same thing. If `high` DOES separate, that is a real depth effect and it earns a later,
+>   properly budgeted max run.
+
+**Liveness rule for this lane (supersedes pid files):** liveness is decided by the *runner* pid plus ledger
+growth and never by a pid file alone. Twice the pid file named a wrapper `bash -c`, which read as "dead"
+while the runner was alive (and once the diagnosis caused a healthy run to be killed); an empty log proves
+nothing either way, because the report is written only at exit.
+
+**Declared before launching:** full-wake `R` at `effort=high` under `natural-claim/v2`, H=144, cell
+f10-s0, 3 replicates, same bounds/timeouts (`-max-output 32768 -response-bound 1048576
+-attempt-timeout 300 -call-deadline 900`), `-parallel 8`, detached. Command `.tmp/35-run-v2high.sh` →
+`.tmp/35-vs2-v2bin -arms R -cells f10-s0 -reps 3 -hours 144 -effort high … -root .tmp/35-v2high-runs`,
+outputs `.tmp/35-v2high-evaluation.{json,txt}`. Expected ≈ 3 600 calls ≈ **$1.8** and ≈ 3 h wall. **Hard stop
+after it: no further live model calls in this lane.**
+
+**Acceptance framing (already pre-declared):** compare low vs high curves against the replicate band,
+report SNR per KPI, call no arm better, and state the fixture's dynamic range alongside. If `high` separates
+from `low` on births/population, say so; if it does not, state that the fixture cannot resolve depth at this
+budget.
