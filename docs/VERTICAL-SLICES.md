@@ -218,6 +218,27 @@ reported rather than narrated.
 | **M5** | VS5 | Not started | **Society.** Institutions and organizations arise and persist only through inspectable incentives and enforcement. |
 | **M6** | VS6 | Not started | **History.** Model-conditional calibration, conditional branches, sensitivity rather than one timeline. |
 
+
+### M2 stages (declared order; a later stage may not start before its predecessor passes)
+
+M2 is one milestone whose acceptance is still open. Its work is now staged, because ticket 35 showed the
+instrument and the metric were being asked to answer a question neither could carry: a policy comparison
+was run on a decision contract that cost 40-53 % of its answers to inadmissibility, and judged against a
+reference anchor that rewards extinction. Each stage's acceptance criterion is fixed by its own ticket
+**before** it runs; this table declares only the order and the rule that a stage may not begin before its
+predecessor has passed.
+
+| Stage | Question it settles | Status |
+|---|---|---|
+| **M2a — decision-contract calibration** | Does the model-facing request state the decision the actor actually faces, and do the actor's answers fall inside what the world admits? | **PASSED 2026-10-18, ticket 36**, against the criterion pre-declared in `.scratch/36-harness-vocabulary/spec.md` before the first probe call: **0/40 inadmissible** answers under `natural-claim/v4` (v1 baseline 86.7 %, v2 shortcut 0 %), and the model's own account of what it can do agrees with the code's admissibility ladder on **20/20 cells and 5/5 exact sets** (the falsifier). The criterion contained no action-variety threshold, so this stage claims none. |
+| **M2b — fidelity metric and reference anchor** | Is "designed to approach the R reference" a valid objective at all? Ticket 35 showed full cognition suppresses reproduction and dies out, so fidelity-to-R currently rewards extinction. This is Q1 in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md): a civilization-level distance measure with a defended anchor. | Not started. M2a passed; acceptance to be pre-declared by its own ticket. |
+| **M2c — allocation policy on the calibrated instrument** | Under the M2a contract and the M2b metric, does any budgeted allocation arm separate from the periodic and uniform arms on demographic KPIs? (Ticket 35's arm comparisons are v1/v2-contract results and do not answer this.) | Not started. Requires M2a (passed) and M2b. |
+| **M2d — replication across cells and seeds** | Does any M2c separation reproduce at f12-s0 and other seeds? Every verdict after ticket 35's single-cell re-plan is single-cell, and the frozen rule's "in both cells" condition has been met only vacuously. | Not started. Requires M2c. |
+
+No stage of M2 changes the M2 milestone's own status: **the central claim and the M2 milestone remain not
+accepted**, and M2a is instrument calibration, not evidence for the claim.
+
+
 ## Cross-cutting invariants (apply from VS1 onward)
 
 1. **Determinism with a nondeterministic component.** Model calls are recorded events; replay reads
