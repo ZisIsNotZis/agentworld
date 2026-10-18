@@ -865,3 +865,46 @@ after it: no further live model calls in this lane.**
 report SNR per KPI, call no arm better, and state the fixture's dynamic range alongside. If `high` separates
 from `low` on births/population, say so; if it does not, state that the fixture cannot resolve depth at this
 budget.
+
+## Completion record (2026-10-18, branch `feature/35-vs2-curve`)
+
+**Commits** (in order): `2c7fbcc` pre-registered criterion · `99e3a6c` 72 h + `-parallel 8` declaration ·
+`fa79953` applied effort/bound provenance + `-votes` · `6c08536` flags, KPI export, replicate dirs, curve
+statistics + tests · `8562195` smoke + live attempt/call timeouts · `fb27465` live-only 1 MiB response
+bound + per-call applied bound/body length · `df54d93` stage-1 result + re-plan + mode-corrected labels +
+`-relabel` · later commits: stage-2/3 results, EC-1 continuity, admissibility quantification and
+`natural-claim/v2`, `vs2-value/2` + coverage reporting + regression test, v2 result, re-grading, docs,
+spend accounting, max→high substitution.
+
+**Artefact hashes (sha256)**
+
+| artefact | sha256 |
+|---|---|
+| `.scratch/35-vs2-curve/spec.md` (this record) | `03e90758109f146eddaef00ded8088693c59bd08281feb89de6a83f512f2074d` |
+| `.tmp/35-stage1-evaluation.json` | `c75c807f4e13c2183a856bd9eaadcc6358c6868a8b639b46eb22007f7fc0e4b2` |
+| `.tmp/35-stage2-none-evaluation.json` | `6fb3c2ecc161a6c99ac7b9a579f8d017bf507203339ddf792b92ab6f16f2f14b` |
+| `.tmp/35-stage2-low-evaluation.json` | `d579aa77b3246ea4ff9240d6161c8f15457e11997429d7943a1006406f5ae8e3` |
+| `.tmp/35-stage2-high-evaluation.json` | `c39d4a61ee1099ca38fed5025a92294d2ac63a1e974b2b240eeb5e91dcc08c37` |
+| `.tmp/35-stage3-evaluation.json` | `808de6230b0a7491171eaa037444e4e34229a83ecdec4368dafdc1a22076b8ed` |
+| `.tmp/35-v2-evaluation.json` | `8efd819533d56b419d74639f6e6ba559fb678f013df7120bf6b8c3102d4bae3d` |
+| `.tmp/35-v2-evaluation.txt` | `857318f46f5c20516daa9b3a89099ba81a48f7ebedc743c950105f8de6563a3d` |
+| `.tmp/35-v2-curve.txt` | `62d9e989e451f6be2bb21970a66e6502e5294f33aa32dae4d618fe9283b32feb` |
+| `.tmp/35-curve-report.txt` (stages 1-3) | `2f1642d66c7350202d501e01e7a724256616fe345d840a0d50ba53b7059bbafa` |
+| `.tmp/35-ec1-evaluation.json` (A0@168 h continuity) | `ed01e3229d93def1fceb34e8450c5fc4d081dabda5d52538569d152eb3234bb8` |
+| `.tmp/35-claimv2-results.json` (v1 vs v2 probe) | `059a256143813cab38d4defc254366a7edb9b3fc9dfea447ebdf23375cc60411` |
+| `cmd/vs2/curves.go` | `0404f81534daf569b0483e0e2085cbc9c91d595673ececd6a4c062ed01d5d8d1` |
+| `cmd/vs2/curves_test.go` | `529c568ebba13e1ec0f09f47171cebb2afa92c57ae2d6ba24cb65742e5f83b11` |
+
+**Final statement of what this lane establishes and what it does not.**
+Establishes: the harness now records what it applies (effort, output bound, response bound, body length)
+per call; the ticket-34 harness bounds (30 s attempt, 64 KiB body) were silent live decision-loss
+channels and are fixed for live runs; the dominant loss in the v1 matrix was **admissibility** (40-53 %)
+and a versioned contract change removes it (`natural-claim/v2`: 0 inadmissible in 6 580 calls); the
+coverage collapse was the value model and `vs2-value/2` fixes it (Gini 0.14-0.23 vs 0.49-0.59 in the same
+run); and the aggregate noise floor at this fixture is ~1 actor / ≤5 % relative. Does not establish: that
+any allocation policy is better. Periodic sampling reproduces the no-AI world exactly at 144 h; no
+demographic indicator separates A from P or from A0; and the candidate metric families rank the arms in
+**opposite orders**, because **the R anchor is unvalidated** (full cognition suppresses reproduction and
+dies out, so fidelity-to-R rewards extinction). **Open question Q1 (a civilization-level distance measure)
+is not resolved here and is the blocking question for any further VS2 claim.** The ticket-34 verdict
+(central claim NOT accepted under EC-3 as written) stands unchanged, and the M2 milestone is not accepted.
