@@ -142,11 +142,16 @@ fixture** (244 applied model decisions leave population, births, starvation deat
 exchange identical to the no-AI world at every hour and in every replicate, while wealth and granary state
 still differ), and **the v1 value model, whose concentrated coverage was called a defect, is the arm
 closest to the R reference while the "fixed" model is indistinguishable from A0 *on the demographic
-KPIs*** (the frozen instrument still separates them on capital and granary histograms) — because R
-produces 0-1 births and dies out, so fidelity-to-R currently rewards suppressing reproduction. **The R anchor is an unvalidated objective**
-(open question Q1: a civilization-level distance measure), so no arm is called better, the ticket-34
-verdict stands unchanged, and **the central claim and the M2 milestone remain not accepted**. Record:
-`.scratch/35-vs2-curve/spec.md`.
+KPIs*** (the frozen instrument still separates them on capital and granary histograms). R produces 0-1
+births and dies out in those runs, so **fidelity-to-R rewards a trajectory that loses population — the R
+anchor is an unvalidated objective** (open question Q1: a civilization-level distance measure). The earlier
+reading that *cognition suppresses reproduction* is **withdrawn** (ticket 36): under `natural-claim/v4`, a
+contract that loses no answer to inadmissibility, one full-wake replicate at the same cell, horizon, effort
+and bounds produced 2 births — the same as the deterministic no-AI control — so the v1/v2 birth deficits are
+not separable from instrument loss, and Q1 rests on the reference's own extinction, not on an AI-arm effect.
+No arm is called better, the ticket-34 verdict stands unchanged, and **the central claim and the M2
+milestone remain not accepted**. Record: `.scratch/35-vs2-curve/spec.md`,
+`.scratch/36-harness-vocabulary/spec.md`.
 
 **Status (branch `feature/34-vs2-live`, ticket 34).** The mechanism is delivered and verified
 hermetically (lanes L1–L4c and L2b, master `48b4882`; hermetic matrix: VS2-EC-1..9 present, VS2-EC-3
@@ -231,7 +236,7 @@ predecessor has passed.
 | Stage | Question it settles | Status |
 |---|---|---|
 | **M2a — decision-contract calibration** | Does the model-facing request state the decision the actor actually faces, and do the actor's answers fall inside what the world admits? | **PASSED 2026-10-18, ticket 36**, against the criterion pre-declared in `.scratch/36-harness-vocabulary/spec.md` before the first probe call: **0/40 inadmissible** answers under `natural-claim/v4` (v1 baseline 86.7 %, v2 shortcut 0 %), and the model's own account of what it can do agrees with the code's admissibility ladder on **20/20 cells and 5/5 exact sets** (the falsifier). The criterion contained no action-variety threshold, so this stage claims none. |
-| **M2b — fidelity metric and reference anchor** | Is "designed to approach the R reference" a valid objective at all? Ticket 35 showed full cognition suppresses reproduction and dies out, so fidelity-to-R currently rewards extinction. This is Q1 in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md): a civilization-level distance measure with a defended anchor. | Not started. M2a passed; acceptance to be pre-declared by its own ticket. |
+| **M2b — fidelity metric and reference anchor** | Is "designed to approach the R reference" a valid objective at all? The R reference itself goes extinct at this fixture and horizon (ticket 35: `R` at 0-1 births and ≤1 alive at h143), so fidelity-to-R rewards a trajectory that loses population. Ticket 36 withdrew the stronger reading that cognition *suppresses* reproduction: under `natural-claim/v4`, the one full-wake replicate reproduced at the no-AI control's rate (2 births). The question is therefore the anchor, not an AI-arm effect. This is Q1 in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md): a civilization-level distance measure with a defended anchor. | Not started. M2a passed; acceptance to be pre-declared by its own ticket. |
 | **M2c — allocation policy on the calibrated instrument** | Under the M2a contract and the M2b metric, does any budgeted allocation arm separate from the periodic and uniform arms on demographic KPIs? (Ticket 35's arm comparisons are v1/v2-contract results and do not answer this.) | Not started. Requires M2a (passed) and M2b. |
 | **M2d — replication across cells and seeds** | Does any M2c separation reproduce at f12-s0 and other seeds? Every verdict after ticket 35's single-cell re-plan is single-cell, and the frozen rule's "in both cells" condition has been met only vacuously. | Not started. Requires M2c. |
 

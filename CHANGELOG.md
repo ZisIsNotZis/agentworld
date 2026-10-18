@@ -107,9 +107,12 @@ for anything: current truth lives in the authoritative documents — the active 
   deaths, age deaths and exchange identical to the no-AI world at every hour and in every replicate; its
   wealth and granary state still differ — `max_capital` diverges at 70-76 hours per replicate from h13/h19),
   and the **v1 value model is the closest arm to the R reference** while `vs2-value/2` is indistinguishable
-  from A0 **on the demographic KPIs** (the tool still separates `A0 vs A` on `capital_hist[0]`) — because R
-  produces 0-1 births and dies out, so **fidelity-to-R rewards suppressing reproduction and the R anchor is
-  an unvalidated objective** (Q1). Re-grading every held artefact under alternative metric families
+  from A0 **on the demographic KPIs** (the tool still separates `A0 vs A` on `capital_hist[0]`) — R produces
+  0-1 births and dies out in these runs, so **fidelity-to-R rewards a trajectory that loses population and
+  the R anchor is an unvalidated objective** (Q1). *(Corrected by ticket 36: the stronger reading — that
+  cognition suppresses reproduction — is withdrawn; under `natural-claim/v4` one full-wake replicate
+  reproduced at the no-AI control's rate, 2 births, so the v1/v2 birth deficits are not separable from
+  instrument loss.)* Re-grading every held artefact under alternative metric families
   (births, starvation, age deaths, population at fixed hours, wealth/granary dispersion, coverage, action mix)
   showed that **no demographic indicator separates `A` from `P` or from `A0`** (all ≤1.23 pooled SDs, inside
   the replicate band) while the candidate metrics **rank the arms in opposite orders** (by R-distance
@@ -172,9 +175,10 @@ for anything: current truth lives in the authoritative documents — the active 
   the comprehension probe (v1 baseline 86.7 %, v2 shortcut 0 %) with the model's own account of what it can
   do agreeing with the code's ladder on **20/20 cells and 5/5 exact sets**; one live full-wake replicate at
   144 h, cell f10-s0, effort `low` gives **2 births, final population 1 against the no-AI control's 2,
-  0 inadmissible in 1 325 decisions**, with the birth gate demonstrably reached and held (58 and 101
-  actor-hours) and no further birth — so the binding constraint is downstream of capital/granary and is not
-  identified here. Ticket 35's reading of its own 30-request v2 probe is corrected in that record: 29 of
+  0 inadmissible in 1 325 decisions**, with the two one-actor birth floors (`capital >= 2`, `granary >= 3`) held for 58 and 101
+  escalated actor-hours and no further birth; reproduction is a two-parent conjunction (filing floor, free
+  request row, kin/patch-allowed addressee, reply-instant re-check, granary payment), so which remaining
+  conjunct binds is unmeasured here. Ticket 35's reading of its own 30-request v2 probe is corrected in that record: 29 of
   those 30 states admitted only gather-or-wait, so the near-constant answer was the fixture's action space,
   not model degeneration. M2's work is staged (M2a passed as instrument calibration, M2b–M2d declared as
   ordered successors that may not start before their predecessor passes); **the central claim and the M2
