@@ -1,4 +1,4 @@
-# run at 2026-10-18T14:58:46Z
+# run at 2026-10-18T15:01:58Z
 # cwd: /home/z/vibe/worktrees/agentworld/wt-fidelity
 # command: python3 .scratch/37-fidelity-metric/score.py --primary /home/z/vibe/agentworld/.tmp/35-v2-evaluation.json --secondary /home/z/vibe/agentworld/.tmp/35-stage3-evaluation.json --corroboration /home/z/vibe/agentworld/.tmp/36-v4-evaluation.json --self-test --json-out .scratch/37-fidelity-metric/scores.json --svg .scratch/37-fidelity-metric/ranking.svg
 
@@ -47,7 +47,7 @@ fid/1 equal-weight mean8 ranking (arm mean; lower = closer to R): A1(0.1520) < P
 fid/1 seven-indicator mean vs R3, every arm (no decision-error term, so not comparable to mean8): R(0.1562) < A1(0.1721) < P(0.1988) < A0(0.2094) < A(0.3127) < U(1.0139)
   (R3 is the reference itself (replicate 3) and scores 0 by construction; among the other arms the extinct A1 remains closest to R)
 vrd/1 arm means (lower = more viable): A0(0.0000) < P(0.0000) < A(0.1084) < U(0.7274) < R(1.0465) < A1(1.1925)
-end/1 (mean endpoint alive, then mean births, then -mean starvation; best to worst): U > A > A0 > P > R > A1
+end/1 (mean endpoint alive, then mean births, then -mean starvation; best to worst): U > A > P > A0 > R > A1
 
 == secondary ==
 artefact: /home/z/vibe/agentworld/.tmp/35-stage3-evaluation.json

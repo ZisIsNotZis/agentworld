@@ -234,11 +234,11 @@ python3 .scratch/37-fidelity-metric/score.py \
   --svg .scratch/37-fidelity-metric/ranking.svg
 ```
 
-- Outputs committed beside this file: `score.py` (sha256 `78c330bd…`), `score-run.log` (sha256
-  `9fb63e64…`, the full transcript with per-pair arithmetic), `scores.json` (sha256 `d709dfa3…`),
-  `ranking.svg` (sha256 `90f6041f…`, byte-identical before and after the review fixes), and
-  `negative-control.log` (sha256 `f81872bc…`, the `--expect-fail` transcript behind gate row 9).
-  Every number below is from one of those logs or `scores.json`.
+- Outputs committed beside this file: `score.py` (sha256 `79fdcf77…`), `score-run.log` (sha256
+  `869df659…`, the full transcript with per-pair arithmetic), `scores.json` (sha256 `d709dfa3…`),
+  `ranking.svg` (sha256 `284ee9df…`, regenerated to repair its subtitle; the bars and numbers are
+  unchanged), and `negative-control.log` (sha256 `9878cf02…`, the `--expect-fail` transcript behind
+  gate row 9). Every number below is from one of those logs or `scores.json`.
 - **Live model calls: 0.** All quantities come from the recorded evaluation JSONs.
 
 ## The recorded matrix, scored two ways (primary: `natural-claim/v2`, f10-s0, H=144, 3 reps)
@@ -295,10 +295,10 @@ the extinct arm is.
 viability measure calls least viable, and it is extinct in all three replicates.**
 
 Figure: `.scratch/37-fidelity-metric/ranking.svg` (self-contained SVG, two panels, same arm order).
-Left panel: `fid/1`; its lowest bar is A1 (extinct, red; the figure's subtitle calls this hatching, which no hatch implements — a caption defect recorded by the review as non-blocking). Right panel: `vrd/1`; A0 and P sit
-at 0 and A1 is the highest bar. The left panel plots the instrument's recorded rows only, so A0 and R
-are absent from it; their old-measure values are the supplementary seven-indicator column above,
-which exists in the table and the log, not in the figure.
+Left panel: `fid/1`; its lowest bar is A1 (extinct, red, as the subtitle and legend say). Right
+panel: `vrd/1`; A0 and P sit at 0 and A1 is the highest bar. The left panel plots the instrument's
+recorded rows only, so A0 and R are absent from it; their old-measure values are the supplementary
+seven-indicator column above, which exists in the table and the log, not in the figure.
 
 ## What the current metric actually sums (H1 and H2)
 
@@ -369,7 +369,7 @@ uncertainty is propagated.
 |---|---|---|---|---|---|
 | C1 `fid/1` (status quo) | the R trajectory | 8 frozen indicators | **A1** (0.1520), then P (0.1757) | resemblance to R: depleted wealth state + a birth count within one of R's | A1 is extinct with 0 births; the control A0 is not scored at all |
 | C2 `vrd/1` (recommended) | the no-AI control's realised outcome as a viability floor | actor-hours H, births B, starvation deaths S | **A0 and P** (0.0000), then A (0.1084), U (0.7274), R (1.0465), A1 (1.1925) | persistence + reproduction at the world's own no-cognition floor, deaths avoided | ties at 0 cannot be ordered; identity/diversity of survivors and age-death timing are lost |
-| C3 `end/1` (alternative) | none (reproduction / endpoint survival as the objective) | terminal alive, births, −starvation | **U**, then A, A0, P, R, A1 | headcount at the horizon | U buys its 2.33 mean endpoint headcount with 4-6 starvation deaths and 15-28 % fewer actor-hours; it ignores the path |
+| C3 `end/1` (alternative) | none (reproduction / endpoint survival as the objective) | terminal alive, births, −starvation | **U**, then A, A0, P, R, A1 | headcount at the horizon | U buys its **2.00 mean h144 headcount** — 2.33 is the h143 mean, which `end/1` does not read — with 4-6 starvation deaths and **17.0-28.4 % fewer actor-hours on the primary matrix** (14.3-23.2 % on the secondary: 15 % belongs to that matrix, not this one); it ignores the path |
 
 The three candidates rank the same recorded arms differently: **A1 wins under C1 and loses under C2;
 U wins under C3 and is fourth under C2; A0/P win under C2 and are unranked under C1.** They are
@@ -472,7 +472,10 @@ pair was detected as a failure`. As wired before this review round the mode inve
 the unchanged pair list, so `main()` printed `NEGATIVE CONTROL PASS` unconditionally; that is repaired.
 The repaired mode's ability to fail was exercised by a bounded mutation of an isolated copy of the
 script (`/tmp/37mut/score.py`, declared pairs written in their swapped order): it prints `NEGATIVE
-CONTROL FAIL: every swapped pair was detected as a failure` and exits 2.
+CONTROL FAIL: every swapped pair was detected as a failure` and exits 2. That copy and its output are
+**not durable artefacts** — they are not committed and will not be found by a later reader; the
+ability to fail is proven by the code itself at `score.py:541-545`, which calls `fail()` when any
+swapped pair is not detected, and the mutation is corroboration of that code path.
 
 **Secondary recorded matrix** (`natural-claim/v1`, stage 3, f10-s0, H=144, 3 reps; no R arm, so no
 `fid/1`): `vrd/1` arm means A0 0.0000, P 0.0000, A 0.4024, U 0.7113; A's r3 is extinct (0 alive, 0
@@ -676,7 +679,12 @@ no live call:
   the eighth indicator is footnoted as unavailable in the evaluation artefact.
 - **Gate row 9 is now executable evidence.** The `--expect-fail` mode performs a real pair inversion
   and its transcript is committed as `negative-control.log`; that the mode can fail is shown by a
-  bounded mutation of an isolated copy (`/tmp/37mut/score.py`), which exits 2 with `NEGATIVE CONTROL
-  FAIL`.
+  bounded mutation of a temporary copy of the script (not a durable artefact, see §Discrimination),
+  which exits 2 with `NEGATIVE CONTROL FAIL`.
+- **Two user-facing fact errors repaired after the review's follow-up.** The figure's subtitle no longer
+  claims a hatch the file does not draw (`ranking.svg` regenerated; bars and numbers unchanged), and
+  `end/1`'s U figures now state the quantity they read — the 2.00 mean h144 headcount, not the 2.33
+  h143 mean — with the primary matrix's 17.0-28.4 % actor-hour range named separately from the
+  secondary matrix's 14.3-23.2 %.
 - Rows 1-3 (build, vet, gofmt), 8 (scoring reproducibility) and 10 (`git diff --check fa3f579`) were
   re-executed after these changes; row 7 (the full suite) was not, for the reason recorded above.

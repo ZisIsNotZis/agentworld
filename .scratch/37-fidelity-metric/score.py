@@ -452,7 +452,7 @@ def svg_figure(results, path):
            '<rect width="100%" height="100%" fill="#ffffff"/>',
            '<text x="%d" y="30" font-family="sans-serif" font-size="18" font-weight="bold">M2b: what each measure rewards on the recorded natural-claim/v2 matrix</text>' % pad_l,
            '<text x="%d" y="52" font-family="sans-serif" font-size="13" fill="#444">'
-           'f10-s0 · H=144 · 3 replicates · hatched = extinct at h144 · numbers are replicate means</text>' % pad_l]
+           'f10-s0 · H=144 · 3 replicates · red = extinct at h144 (all replicates) · numbers are replicate means</text>' % pad_l]
 
     def panel(x0, title, subtitle, values, note_unknown):
         out.append('<text x="%.1f" y="%d" font-family="sans-serif" font-size="15" font-weight="bold">%s</text>' % (x0, 92, title))
