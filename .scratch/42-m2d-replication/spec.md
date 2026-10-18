@@ -183,21 +183,22 @@ the contract gate and the inventory gate are the evidence, and every number in �
 | item | value |
 |---|---|
 | hard cap, this ticket | **`$1.40`** (operator/supervisor declaration for ticket 42) |
-| operator stop | realised spend **> `$1.12`** (80 % of the hard cap) |
-| attempts, cumulative across runs | the 7 000 operator cap; 3 020 (ticket 39) + 2 948 (ticket 41) = 5 968 used, so ≤ **1 032** remain — **this run's declared 30 cells exceed that**, see below |
+| operator stop | realised spend **> `$1.30`** (93 % of the hard cap) — **raised from the initially declared `$1.12` by the supervisor before the launch, §5.3**; or a realised rate projecting above `$1.40` |
+| attempts, cumulative across runs | **9 500** — **raised from the initial 7 000 by the supervisor before the launch (§5.3)**; 3 020 (ticket 39) + 2 948 (ticket 41) = 5 968 used, so ≤ 3 532 remain against this ticket's declared 5 952-6 144 |
 | attempts, this ticket | ≤ 6 144 (`24 × 256`) at the ceiling; 5 952 expected (`24 × 248`) |
 | expected spend | measured at ticket 41: `$1.932e-4` per charged attempt → 5 952 × `$1.932e-4` = **≈ $1.15**; the per-cell-replicate spread measured there ($0.040-$0.061 over 12 cells) puts the plausible range at **$1.05-$1.30** |
 | wall clock | ≈17 min per cell, ≈35 min total (§2.3), 6 h deadline, `-budget-min 240` per invocation |
 
-**The cumulative-attempt cap and the spend caps conflict with the declared matrix, and that conflict is
-recorded rather than resolved silently.** 1 032 attempts remain under the 7 000-attempt cap, but the
-declared 30-cell matrix needs 5 952-6 144. And the expected spend `$1.15` exceeds the `$1.12` operator
-stop while remaining inside the `$1.40` hard cap: at the measured rate the run reaches `$1.12` at
-≈96 % of its own decisions, so applying the stop literally would halt the second cell near its end, void
-its artefact as `NOT RUN`, and leave the ticket with one cell — after the spend was already sunk.
+**The cumulative-attempt cap and the spend caps conflicted with the declared matrix, and both were amended
+by the supervisor before the launch rather than resolved silently (§5.3).** The initially declared
+cumulative cap was 7 000 attempts, of which 1 032 remained, while the declared 30-cell matrix needs
+5 952-6 144; and the expected spend `$1.15` exceeded the initially declared `$1.12` operator stop while
+remaining inside the `$1.40` hard cap: at the measured rate the run reaches `$1.12` at ≈96 % of its own
+decisions, so applying that stop literally would have halted the second cell near its end, voided its
+artefact as `NOT RUN`, and left the ticket with one cell — after the spend was already sunk.
 
-The resolution is the supervisor's, not this record's, and the escalation and its answer are recorded in
-§5.3 before the launch.
+§5.3 records the escalation, its measured basis and the answer. The stops as they stand after that answer
+are the two rows of the table above.
 
 The harness enforces calls, not dollars (`budgetFor` sets `MaxCostMicros: 1<<60`; the report cost is
 `UNPRICED` because the gateway exposes no price), so both dollar caps are enforced by the operator poll
@@ -219,8 +220,34 @@ matrix for its cell; otherwise that cell's verdict is `NOT RUN`.
 
 ### 5.3 The spend escalation and its answer, recorded before the launch
 
-Filled before the launch from the supervisor exchange (§5.1's conflict). No live call is made before this
-section states the answer.
+**Escalated and answered before any live call of the matrix.** The conflict put to the supervisor was
+§5.1's: the declared matrix cannot be run inside the initially declared stop, and the cumulative attempt
+cap was unreachable by design.
+
+The measured basis, from ticket 41's own ledgers on this machine under the same contract, effort and
+horizon: **`$1.932e-4` per charged attempt** (2 948 attempts → `$0.5696`); the declared matrix bills
+5 952 attempts, so the projection is **≈ `$1.15`**, with the per-cell-replicate spread measured there
+(`$0.040`-`$0.061` over 12 cells) putting the plausible range at **`$1.05`-`$1.30`**. The initially
+declared `$1.12` stop therefore sat above the low end of that range and below its projection: it would have
+truncated the matrix at ≈96 % and voided cell 2 after its ≈`$0.55` was already spent. A stop that is only
+ever reached after the money is gone is not a safeguard.
+
+**The supervisor's answer (verbatim in substance):**
+
+- **Operator stop raised to `$1.30`** (93 % of the `$1.40` hard cap), which stays unchanged; the run
+  proceeds as declared — 5 arms × 3 replicates × 2 cells, nothing cut.
+- **Cumulative attempt cap raised to `9 500`**, stated as a supervisor decision here, because 1 032
+  remaining attempts against a 5 952-6 144 requirement made the old `7 000` unreachable by design. The
+  number is recorded as changed and by whom, so an auditor sees it rather than a ticket quietly
+  superseding its own cap.
+- Unchanged, and non-negotiable: a stop is executed **only by the recorded pid**, liveness is pid **plus**
+  ledger growth, spend is polled against **the realised rate as well as the running total** — if the
+  realised per-attempt price or the attempts-per-minute implies crossing `$1.40` before the matrix
+  completes, the run is stopped and reported rather than discovered at the end — no cell is scored from a
+  partial artefact, and no verdict is derived from fewer than the declared 3 replicates.
+
+The authority for both amended numbers is that answer; this section is its record, written before the
+launch.
 
 ### 5.4 The post-run checks, in order (ticket 39 §9.6 / ticket 41 §5.9, per cell)
 
