@@ -410,7 +410,7 @@ One condition fails, so the matrix is **truncated** and §7.4 applies verbatim: 
 
 - `ceiling_rows[0]`: `ceiling cognitive-calls, threshold 256, observed 256, projected_binding_hour 143` —
 the ceiling it hit is the declared budget axis `N = 256`, not a token or cost ceiling (those rows report
-threshold `2^60` and are three orders of magnitude away).
+threshold `2^60` and are ~7×10^12× away, i.e. twelve orders of magnitude).
 - `hours` ends at `143`; `alive_by_hour` has **144** samples, so the terminal sample `h = H = 144` — the one
 that carries tier 1's persistence predicate — **does not exist for this cell**. Its `H = 1442` is a sum
 over hours 0..143 against 1437–1444 summed over 0..144 for the other cells: the two are not comparable.
@@ -523,7 +523,145 @@ the truncated replicate). One cell, one contract (`natural-claim/v4`), one horiz
 | poll record and its script | `.scratch/39-m2c-matrix/phase-b-poll.log`, `phase-b-poll.py` |
 | run root (126 MB of bundles; not tracked) | `.tmp/39-m2c-runs/` |
 
-**Next action (not done here):** a re-run of `A1` only would still need one invocation over all five arms to
-keep the single-artefact scoring path, and the ceiling must first be raised or the arm's exploration reserve
-brought under it — `A1` finishes the horizon on exactly 256 attempts, so `N = 256` leaves no room for one
-retry. That is a plan-level change (a declared run parameter), so it is proposed, not applied.
+**Next action (not done here):** the options and their costs are §11.5. Two clauses of the first draft of
+this paragraph are repaired by §11.2 and §11.5: a single-cell re-run *is* mechanically available
+(`-arms A1 -reps 1`), so the obstacle is the scoring artefact, not the CLI; and **raising `N` adds no
+headroom**, because the per-hour quota is derived from `N` and always sums to it (§11.1) — an arm at
+`N = 264` would still end with zero spare. Any change here is at the level of a declared run parameter, so
+it is proposed, not applied.
+
+## 11. Diagnosis — what stopped `A1-f10-s0-r1`
+
+Diagnosis only: **zero live calls, no re-run, no scoring change, no edit to any declared rule or to the scorer.** The verdict stays `NOT RUN` (§10.5). Bound to the artefact of §10: the committed evaluation JSON `sha256 56d3b300…4df26` (byte-identical to `.tmp/39-m2c-evaluation.json`) and the run root `.tmp/39-m2c-runs`. Every number below is re-derived by `diagnose.py` from those two inputs, whose output is committed as `halt-evidence.json`; the script computes no band, no effect floor and no pair comparison, so nothing here is a score.
+
+### 11.1 Q1 — the halt path, its unit, its number, its source
+
+The chain, end to end:
+
+| step | where | what it does |
+|---|---|---|
+| the declared number | `cmd/vs2/config.go:37` | `const DeclaredCallCeiling uint64 = 256` |
+| the per-arm ceiling | `cmd/vs2/config.go:172-184` | `budgetFor(arm)`: `MaxCalls: calls` = 256 for every arm but `R` (4 096); the other three axes are `1<<60` (`MaxCostMicros: 1 << 60`, `cmd/vs2/config.go:181`), so cost is not the binding axis |
+| one account per cell | `cmd/vs2/run.go:93` → `cmd/vs2/harness.go:123-127` | `wireStack(…, budgetFor(spec.Arm), …)` builds `NewCognitiveAccount(budget)` once per arm-replicate and hands it to that cell's `Recorder` |
+| the pre-call guard | `internal/cognition/client.go:353` | `if err := r.budget.AllowCall(req.Hour); err != nil { return CallResult{}, err }` — **inside the retry loop**, so every physical attempt passes it |
+| the refusal | `internal/cognition/budget.go:163-170` | `if a.calls+1 > a.budget.MaxCalls { return a.cross(CognitiveCeilingCalls, …) }` |
+| the charge | `internal/cognition/budget.go:184-186` | `a.calls++` per attempt, then `if a.calls > a.budget.MaxCalls` |
+| the halt | `cmd/vs2/run.go:106-113` | the typed `*CognitiveCeilingHitError` sets `cr.halted = true` and `break`s the step loop — the cell stops, it does not continue on fallback decisions |
+| the blind spot | `cmd/vs2/run.go:189` | `if !cr.halted { … realizedCalls++ }` — a halted cell reports `realized_calls: 0` (§10.8 item 2) |
+
+**The unit is one cell-run (one arm × one replicate × one cell), counting physical attempts, over the whole simulated horizon.** Not per actor (`budget.go` has no actor dimension), not per arm (each of the three `A1` replicates owns its own account, which is why the arm total is 768), not per wall-clock window and not per simulated hour (nothing resets the account). Nor is it a dollar ceiling: `MaxCostMicros` is `1<<60` and the report cost is `UNPRICED`, which is why §3 spends by the operator poll rule instead.
+
+**The halt, in the ledger.** `A1-f10-s0-r1` has 655 rows: 144 `allocation`, 256 `call`, 255 `role-a`. The last two rows are `seq 652`, a `call` at actor-hour 142 with `status: ok`, and `seq 654`, an `allocation` at hour 143 with `quota 1`, `roster_size 2`, `shortfall 0`, `selected [2017]` — and **no `call` row after it**. The 257th attempt that hour-143 decision required was refused. The cell row records the same crossing in typed form:
+
+```
+ceiling_rows[0] = {"ceiling": "cognitive-calls", "threshold": 256, "observed": 256,
+                   "rate_last_hour": 256, "projected_binding_hour": 143}
+ceiling_hit = "cognitive-calls"      halted = true      samples = 144 (hours 0..143)
+```
+
+(`rate_last_hour` equals the whole-run total because `ObserveHour` is called once at finalize, so this row records threshold and observed correctly but is not a trailing rate; the two token axes read 160 542 and 125 597 against a threshold of `2^60`, twelve orders of magnitude away.)
+
+**The trigger is one retried attempt.** `seq 606` is `status: timeout`, `attempt: 1`, `latency_micros: 300001867` — exactly the declared `-attempt-timeout 300` — and `seq 607` retries it, `attempt: 2`, `status: ok`. `retryable()` (`internal/cognition/client.go:179-187`) returns true for `timeout`, so the retry is the declared behaviour. That retry bought no decision: matrix-wide, 3 020 charged calls produced 3 019 `role-a` decisions, and **the single difference is this row**. `A1`'s declared quota schedule is `q(h) = floor(N/H) + (1 if h < N mod H)` (`internal/cognition/priority.go:250-259`, whose comment says "so sum_{h<H} q(h) = N"), i.e. `q(h) = 2` for h < 112 and `1` for h ≥ 112, summing to exactly 256 over the 144 decision hours (hours 0..143 — the horizon's 145 samples 0..144 contain 144 decision hours). So the cell reached 256 attempts at hour 142 and hour 143's decision needed attempt 257.
+
+**Where 256 comes from.** The value is not computed at run time. Ticket 38 §7.1 declares it as the budget axis (`| budget axis | the declared call ceiling N = 256 per budgeted arm-run (unchanged) |`) and §7.3 declares that it is charged in physical attempts ("Ceiling 3 072 physical attempts, because `AllowCall` is charged per attempt (`internal/cognition/client.go:353`)"). The value itself is inherited from the VS2 design: `.scratch/24-vs2-attention/spec.md:477` proposes `N = 256` calls per cell, and §5.1 there fixes it from the **model-free `A0` claim-wake projection** and the VS1 periodic-6 arm (≈300/cell) — deliberately "not derived from any model-bearing arm's realized candidate count". In other words **`N` was sized from the control's candidate supply, never from an escalation rate**, which matters for Q4.
+
+### 11.2 Q2 — why `r1` and not `r2`/`r3`
+
+All three `A1` replicates are at exactly 256 charged attempts; they are not distinguished by spend or by escalation rate at all, but by one retried attempt.
+
+| replicate | charged calls | decisions (`role-a`) | decision hours with a call | decision rate (per sim. hour) | wall span | calls/min | first hour at 250 / 254 / 255 / 256 | left under 256 | non-`ok` rows |
+|---|---|---|---|---|---|---|---|---|---|
+| `A1-r1` | 256 | **255** | 143 (h0..h142) | 1.783 | 15:45:38→16:13:57 (28.3 min) | 9.04 | 136 / 140 / 141 / **142** | 0 | 1 `timeout` (h127, retried) |
+| `A1-r2` | 256 | 256 | 144 (h0..h143) | 1.778 | 15:48:54→16:10:02 (21.1 min) | 12.12 | 137 / 141 / 142 / **143** | 0 | none |
+| `A1-r3` | 256 | 256 | 144 | 1.778 | 15:30:26→15:49:59 (19.5 min) | 13.10 | 137 / 141 / 142 / **143** | 0 | none |
+
+Read off that table:
+
+- **By spend: no.** Call count is identical (256 = 100.0 % of the ceiling for all three); the quota schedule, not the arm, fixes it. By *dollars* `r1` is the most expensive cell in the matrix (`$0.0789` against `$0.0629`/`$0.0466`) but only because its answers were longer (125 597 output tokens against 93 629/61 046) — output verbosity, not the halt, which is a call-count event.
+- **By escalation count: no.** All three *planned* 256 decisions (the quota schedule is a declaration, not an outcome); `r1` realized 255 because the retry consumed the unit that hour 143's decision needed.
+- **By decision mix: no.** The ten founding actors' escalation counts are `{1:13, 2:2, 3:4, 4:1, 5:8, 6:4, 7:4, 8:8, 9:12, 10:8}` in `r1` and in `r2`; `r3` differs only in three actors (`2:3, 9:14, 10:14`). The two newborn actors differ across all three, as they must on temperature-sampled trajectories.
+- **By rate: only in wall clock.** `r1` ran at 9.0 calls/min against 12.1/13.1 — because the 300 s timeout is 5 of its 28.3 minutes. Per simulated hour nothing differs: the schedule is fixed.
+- **The one difference that matters:** the cumulative-attempt milestone table. From hour 127 (`q = 1`) `r1` is exactly **one attempt ahead** of `r2`/`r3` for the rest of the run: 241 vs 240 at h127, 254 vs 253 at h140, 256 vs 255 at h142, and at h143 `r1` has 0 remaining while they spend their 256th on that hour's decision. `r1` is not an outlier; it is `r2`/`r3` shifted by one retried attempt, and one attempt is the whole of `A1`'s headroom.
+
+### 11.3 Q3 — every arm against its ceiling
+
+Ceiling `N = 256` per cell; `A0` carries no account (`cmd/vs2/harness.go:103` returns before the ledger is created) and no ceiling.
+
+| arm | charged calls r1 / r2 / r3 | % of the 256 ceiling | left under the ceiling | hits |
+|---|---|---|---|---|
+| `A0` | 0 / 0 / 0 | — (no account, 0 calls by construction) | — | 0 |
+| `P` | 244 / 228 / 244 | 95.31 / 89.06 / 95.31 | 12 / 28 / 12 | 0 |
+| `U` | 256 / 256 / 256 | **100.00 / 100.00 / 100.00** | **0 / 0 / 0** | 0 |
+| `A` | 256 / 256 / 256 | **100.00 / 100.00 / 100.00** | **0 / 0 / 0** | 0 |
+| `A1` | 256 / 256 / 256 | **100.00 / 100.00 / 100.00** | **0 / 0 / 0** | **1 (`r1`)** |
+| arm totals | `P` 716/768, `U` 768/768, `A` 768/768, `A1` 768/768 | 93.23 / 100.00 / 100.00 / 100.00 | | |
+
+**There was no second near-miss because there was no miss: eight of the twelve model-bearing cells finished on exactly their last permitted attempt, with zero reserve.** `U`×3, `A`×3 and `A1`×2 are at 100.0 % of the ceiling *and complete*, which is only possible because every one of their attempts bought a decision. The margin between those eight cells and `A1-r1` is a single retried attempt, and the matrix came within one HTTP status code of losing a second cell: `A-r1` carries one `http-error 400` (content-policy, `seq 63`, h12), which `retryable()` classifies as **not** retryable, so it consumed exactly one attempt; had it been a `timeout`/`5xx`/`429` it would have been retried, taken that zero-headroom cell to a 257th attempt, and halted it identically. `P-r3`'s identical `400` (`seq 311`, h72) is not a near miss: `P` had 12 attempts of headroom.
+
+`P` is the only arm with headroom, and it has it by accident of its own gate rather than by declaration: it escalates only at `h ≡ 0 (mod 6)` (`cmd/vs2/config.go:51`), so at most 24 decision hours can supply calls, and its three runs supplied 244/228/244 against a ceiling of 256. The four "equal-budget" arms are therefore not equal in headroom: `P` is structurally under-supplied, and `U`/`A`/`A1` are structurally *exactly*-supplied by the quota formula.
+
+### 11.4 Q4 — classification
+
+**It is a plan error, and specifically the one the phrase "sized from a different escalation rate" does not name.** It is not an infrastructure fault and it is not a legitimate arm outcome the criterion left unhandled.
+
+**Not (b), an infrastructure fault.** A 300 s attempt timeout is an external event, but nothing malfunctioned: the retry fired the declared `retryable` rule, each attempt's record was appended and fsynced before it was charged (`internal/cognition/client.go:392` then `:423`; `internal/cognition/ledger.go:130-140`), the crossing was typed, the cell was marked `halted`, the other 14 cells finished, the report was written, and the operator stop was never approached (peak `$0.6007` of the `$1.60`/`$2.00` limits). The harness did exactly what the design's §5.2 (`.scratch/24-vs2-attention/spec.md`) and `VS2-EC-2` declare. Calling this infrastructure would blame the transport for a scheduling decision taken in the plan.
+
+**Not (a), "the budget doing what a budgeted arm should do".** §7.4 *has* the rule — "no cell whose run halted at its call ceiling … Anything else prints `NOT RUN`" — and the rule fired correctly; there is no gap in the verdict machinery. What is wrong is the plan underneath it, in three linked places:
+
+1. **The quota schedule spends 100 % of `N` by construction.** `q(h)` is defined so that `Σ_{h<H} q(h) = N` (`internal/cognition/priority.go:250-259`), so a *completing* `U`/`A`/`A1` cell also ends on exactly its last permitted attempt (§11.3). Headroom is not a parameter of the declared design; it is zero for every arm the formula binds.
+2. **The ceiling counts a different unit from the schedule.** The schedule counts *decisions* (`s.spent += uint64(len(selected))` at `internal/cognition/priority.go:149,171,208`); the account counts *physical attempts* (`a.calls++` per attempt, `internal/cognition/budget.go:184-186`), and the frozen criterion says so outright: `VS2-EC-2`'s string is "an (N+1)-th attempt is the typed fail-loud halt" (`cmd/vs2/bands.go:141`). One retried attempt therefore buys no decision and costs a decision's worth of budget. Ticket 38 §7.3 restated the attempt charging but §7.1 restated `N = 256` as the arm's *call* budget, so the pre-registration inherited the mismatch without resolving it.
+3. **The consequence was already in the project's own record.** Ticket 34 recorded the identical halt — "256 call records = 253 logical calls + 3 retried transport timeouts … the budget charges every physical attempt while the P selector schedules logical calls, so the 257th attempted call was refused" (`.scratch/34-vs2-live-matrix/spec.md:153-160`) — and wrote that "the milestone review owns the reading (attempt-charged vs logical-call ceiling); no source edit was authorised or made". `docs/VERTICAL-SLICES.md:163` carries the same sentence. Ticket 38 §8.1 then used that halt to justify the *dollar* cap ("the cap absorbs a retry storm (ticket 34's EC-2 halt was caused by retries charged per attempt)") while leaving the *attempt* headroom at zero.
+
+**Not (c) as phrased.** `N = 256` was not sized from an escalation rate at all — it came from the model-free `A0` candidate count (§11.1), and the arm's escalation count is a declared schedule that always spends exactly `N`. The error is not the number; it is that the number is enforced in a unit (`attempts`) the arm does not schedule in (`decisions`), combined with a schedule that leaves the difference at zero.
+
+**What this decides for the rerun question.** A rerun at the identical declaration is *legitimate* — the artefact genuinely fails the declared inventory and the rule that refuses it is sound — but it is **not a fix**: at zero headroom the same single retryable transport event truncates the same arm again, and nothing about `r1` was exceptional (§11.2). The rule that is incomplete is not the verdict rule; it is the inherited declaration that one number can be both the arm's decision budget and the harness's attempt ceiling. A one-event sample cannot estimate the retry rate, so no completion probability is quoted here; what is certain is the structure, not its failure frequency.
+
+### 11.5 Q5 — options, with costs
+
+Costs are estimated from this run's own measurements — `$0.6007` for 3 020 attempts, i.e. `$1.989e-4` per attempt (`halt-evidence.json`), and `$0.0366–$0.0789` per model-bearing cell — not from ticket 38's pre-run projection, whose upper bound (`$4.2e-4`/call) was 2.1× the realised price. Attempt counts are exact. Wall clock is the realised 44 min for a full matrix (15–28 min per lane, two waves at `-parallel 8`).
+
+| # | option | $ cost | time | new declaration needed | what it does to the cause |
+|---|---|---|---|---|---|
+| i | keep the declaration, re-run `A1-r1` only at the identical `N` | **$0.05–0.08** (256 attempts) | 20–30 min run + 1 review cycle | **yes** — a merge rule, a stopping rule, and a rewritten `§10.2` gate row (see below) | **nothing**: same zero headroom, so it is the same coin flip |
+| ii | raise the per-arm ceiling for all arms, re-run the whole matrix | **$0.63** (3 168 attempts at `N=264`) | 45–60 min + re-pre-registration + review | yes — 5 sentences (below) | **nothing**: `q` is derived from `N` and still sums to it, so headroom stays 0 |
+| iii | declare budget exhaustion an arm state; score the terminal sample at h143 | **$0.00** | 2–4 h scorer + declaration + review | yes — 6 sentences **and** a scorer change | **hides** it: the transport loss becomes an arm state |
+| iv | shorten the horizon so the declared `N` suffices | **$0.00** | — | yes — `H` is cited in §7.1, the M2c question and every tier | **nothing**: `Σq(h) = N` for *any* `H`; shorter horizon, same zero headroom |
+| v-a | split the ceilings: `N` = decisions, attempts = `N + R` | **$0.63** + code/test | 45–60 min run + 2–4 h work | yes — and it changes `VS2-EC-2`'s frozen criterion | **fixes** it, at the price of touching the instrument |
+| v-b | keep the 256 attempt ceiling, declare a transport reserve inside it (`Σq(h) = N − R`) | **$0.63** + one constant | 45–60 min run + 1–2 h work | yes — one design-parameter sentence + one constant | **fixes** it, at the price of changing what the arms spend |
+| v-c | stop spending on M2c now; record `NOT RUN`, carry the question to M2d | **$0.00** | 0 | no | leaves it open; spends nothing |
+
+Per option, the sentences and conclusions that change:
+
+- **(i)** Mechanically available — `-arms A1 -reps 1` produces exactly `A1-f10-s0-r1` — but `main.go:190` `os.RemoveAll(*root)` wipes a root at launch and `prepareRunDir` refuses an existing cell directory (`cmd/vs2/harness.go:24-33`), so a second invocation needs a fresh root, and `vrd2.py --live` takes **one** path (`vrd2.py:837`). The matrix could only be scored by merging two artefacts, which contradicts §3's premise ("the declared scoring path only exists if the matrix is one invocation") and §10.2's "one runner, one run root" gate row. A merge also needs a **stopping rule** declared in advance (if the re-run is truncated again, does it re-run again?), otherwise which artefact is reported becomes a choice made after seeing the data. Invalidates: §3's premise sentence and §10.2's gate row; nothing already concluded (there is no verdict) and none of §10.6's vectors for the other 14 cells. Within the currently declared caps (`$2.00`, 4 000 attempts: 3 276 total).
+- **(ii)** Needs ticket 38 §7.1's budget-axis row, §7.3's "12 model-bearing runs at `N = 256` … 3 072 physical attempts", §8.1's `3 027`-call arithmetic and its "1.56×" justification, ticket 39 §2's citation table, and the inherited "`N = 256` calls per cell" of `.scratch/24-vs2-attention/spec.md:477`. It also changes the arms, not just the margin: at `N = 264`, `q(h) = 2` for h < 120 instead of 112, so `U`/`A`/`A1` make 264 decisions instead of 256 and the per-hour pressure is different — a different experiment. Invalidates the 14 complete cells of this run (different `N`, cannot be combined), and it **exceeds the currently declared 4 000-attempt cap** (3 020 + 3 168 = 6 188), so it needs fresh authority even though the dollars stay under `$2.00` (`$1.23` cumulative). Does not touch `vrd/2`, the `v4` contract or the `A0` anchor. **Its declared purpose is not achieved**: `Σq(h) = N` holds for the new `N` too.
+- **(iii)** The biggest change for the least spend, and the one that hides the most. It edits ticket 38 §7.1 (`horizon H = 144 (samples 0..144)`), §7.4's inventory-precondition sentence, §7.5's "terminal-sample sensitivity" (the variant becomes the primary), the effect floor's basis (`ε₂ = 0.01` is 1 % of the control's 1 444 actor-hours; the control's h143 sum is 1 443), and ticket 39 §2 — plus a scorer change, because `cells_of` sums **all** samples for `H` and reads `alive_by_hour[-2]` as "alive@143" (`vrd2.py:405-424`), which for a 144-sample cell is h142, not h143. It would hide (1) that a *transport attempt*, not the allocation policy, consumed the arm's last unit — hour 143's decision was never made, so labelling this an arm state is false; (2) that 8 of 12 cells sat at 100 % of the ceiling with zero reserve, so the next retryable event truncates the next cell the same way; (3) the h144 sample on every cell, including the boundary case §7.5 names. It is also **post hoc**: the amendment would be chosen after seeing which cell failed, which is the selection effect the precondition exists to prevent. It does not "score a truncated matrix" if it is declared — but it cannot make this artefact a result, only a differently-labelled one.
+- **(iv)** Is void as a repair, and the reason is structural: `q(h) = floor(N/H) + (1 if h < N mod H else 0)` sums to `N` for **every** `H`, so shortening the horizon raises `q(h)` and leaves the arm on exactly its last permitted attempt. It changes `H` (cited in §7.1, in the M2c question's horizon, and in the basis of all four tiers' `H`-sums), invalidates every `H = 144` baseline in tickets 35–39, and buys nothing.
+- **(v-a)** Makes `N` mean what the M2c question says it means ("equal declared call ceiling"), keeps the 256-decision schedule and therefore the arms, and gives retries a separate fail-loud ceiling. Cost: `budget.go` (`AllowCall`/`Charge`), `client.go:353`, the selector's `CallCeiling` guard (`priority.go:115-117`, which refuses a budget that disagrees with the declared `N`), tests, one §7.1/§7.3 sentence pair, and a full re-run (`$0.63`, 3 072 attempts — over the current 4 000-attempt cap with run 1). It **changes the frozen instrument**: `VS2-EC-2`'s criterion string (`cmd/vs2/bands.go:141`) declares the `(N+1)`-th *attempt* as the halt, so this option edits a ticket-34 exit criterion, and §7.7 forbids re-opening tickets 34–37 without authority. It does not change `vrd/2`.
+- **(v-b)** Keeps `VS2-EC-2` and `N = 256` exactly as declared and gives the *schedule* a declared reserve: `Σq(h) = N − R` for a declared `R` (e.g. 8 retried attempts; one call can spend at most 3 attempts, `DefaultMaxAttempts = 3`, `internal/cognition/client.go:52`). The ceiling still fires on the `(N+1)`-th attempt, so `VS2-EC-2` and the halt path are untouched; what changes is that the schedule stops selecting at `N − R` decisions and leaves `R` attempts unconsumed for retries. Cost: one declared constant, the quota function's numerator, one design-parameter sentence, tests, and a full re-run (`$0.63`, 3 072 attempts, over the current 4 000-attempt cap). It **changes what the arms spend** (`N − R = 248` decisions instead of 256 for `U`/`A`/`A1`), which is a change to the arms rather than to the instrument — the opposite tradeoff to (v-a).
+- **(v-c)** The only option that spends nothing: `NOT RUN` stands as M2c's answer, the `$0.6007` buys the anchor, contract, cost and ceiling-path evidence of §11.6, and the open question moves to M2d. It invalidates nothing and answers nothing.
+
+The choice between (v-a) and (v-b) turns on one question that is not mine to settle: **is `N` the arm's decision budget or the harness's attempt ceiling?** The M2c question, the quota formula and ticket 24 §5.1 say decisions; `VS2-EC-2` says attempts; the two cannot both be `256` on an arm whose schedule spends everything. No option is recommended here.
+
+### 11.6 Q6 — what the current artefacts still support without scoring
+
+Supported, from the committed artefact and the run root:
+
+- **A complete inventory statement.** 14 of 15 cells and 11 of 12 model-bearing cells ran the full horizon (145 samples, h0..h144); one cell (`A1-f10-s0-r1`) ran 144 samples (h0..h143) and is `halted` with `ceiling_hit: cognitive-calls`. `inventory {declared 15, ran 15, skipped null}`, 15 cell directories, one runner (`§10.2`).
+- **The `A0` anchor, exactly.** Three in-matrix replicates at `H = 1444`, `B = 2`, `S = 0`, `alive@144 = 1`, reproducing the zero-spend gate of §4 row 7 (`anchor-gate.json`) — a measurement of the control, not a comparison.
+- **The contract held.** `inadmissible: 0` on all four model-bearing arms (`m2c-contract-gate.log`); 3 019 decisions, 8 malformed answers all rejected by `natural-claim/v4` rather than applied; 3 non-`ok` call rows in 3 020 (2 content-policy `400`, 1 `timeout`).
+- **The ceiling path works and is measurable.** A crossing is typed, the ledger is flushed before the charge, the cell is marked, the run stops, and the crossing is visible in the cell row and in `vrd2.py`'s inventory check — with the two report blind spots already recorded in §10.8 items 1–2 (a halted cell reports `realized_calls: 0`; `A1` is outside `budgetedArms`, so `VS2-EC-2`'s own band did not see the halt).
+- **A realised cost model.** 3 020 attempts, `$0.6007`, 1 897 637 in / 821 860 out = `$1.989e-4` per attempt, against ticket 38 §8.1's projected band (`$1.5e-4` lower / `$4.2e-4` upper).
+- **Descriptive state vectors at h144 for the 14 complete cells** (`§10.6`) — an inventory to compare a future run against, explicitly not a comparison.
+- **The full-horizon terminal sample exists for every cell except `A1-r1`**, and every cell's h143 sample exists; every cell is alive at h143 (2 or 3), and every complete cell at h144 (1 or 2). That is a property of the tier-1 predicate's input at the two candidate samples and decides nothing on its own.
+
+Not supported — and not to be inferred from any of the above:
+
+- **No verdict, and no pair, under §7.4.** The precondition is artefact-wide ("A verdict is computed only over an artefact carrying the declared inventory … Anything else prints `NOT RUN`"), so not even `A` vs `P` — a pair that never touches `A1` — may be read. `NOT RUN` is not a negative result and says nothing about whether any arm separates.
+- **No tier, band, effect floor, permutation or `h = H−1` variant.** Each is a comparison the declared rule refuses on this artefact (`§10.4` returns 3, `§10.5`).
+- **No arm-level statement about `A1`.** Two complete replicates plus one 144-sample replicate cannot give an envelope; `A1`'s `H` would mix 144- and 145-sample sums (`1437/1442/1444`), which is the comparison §7.4 excludes by name.
+- **No substitute from the curve report.** Its 9-of-10 `DISTINGUISHABLE` lines are declared corroboration, do not carry the `vrd/2` order, and pool the truncated replicate (`§10.4` item d).
+- **No score computed here.** `diagnose.py` reads only counts, hours and state vectors; it prints no difference, band or verdict. The `h143` numbers in `halt-evidence.json` are raw sums at a named sample, not a re-scored matrix.
+
+### 11.7 What this section did not do
+
+No live call, no re-run, no scorer or ledger edit, no change to ticket 38 §7, and no push. The declared verdict remains `NOT RUN`; the options of §11.5 are proposals for the product owner, not applied.
