@@ -381,3 +381,35 @@ gather-or-wait, so a narrow action mix is a property of the state space, not of 
 below the capital/granary gate; the fidelity anchor (Q1), which is M2b; any allocation comparison, which is
 M2c. **The central claim is not addressed by this ticket, and the M2 milestone remains not accepted.**
 
+
+## Completion record
+
+**Commits** (branch `feature/36-harness-vocabulary`, branched from `master` `8269765`; not pushed):
+`0f10f30` v4 vocabulary + one label table + v4 system prompt · `e6f5220` pre-declared comprehension test
+and its results · `124ccea`/`d5e02dc`/`78f332e`/`a8543a4`/`92504be`/`41111e0` D progress, the ticket-35
+correction, the complete field sweep, the M2 stage declaration, the D result and the CHANGELOG entry.
+
+**Artefact hashes (sha256)**
+
+| artefact | sha256 |
+|---|---|
+| `.tmp/36-v4-evaluation.json` (D, live) | `8aa4342eab551fd8de53d0a5ef0cbcec3f3eb79976993c7ed8325d9218146463` |
+| `.tmp/36-v4-evaluation.txt` (D, live) | `b7b2bec1256474e5d2558516fd06785475b977aaa8be8c18eb928d679f2d9e3c` |
+| `.tmp/36-v4-runs/R-f10-s0-r1/calls.jsonl` (D ledger, hash-chained) | `c85746de35c7f2aeb7c7509785a8eb7788c07de7f02212b1c12589bdc839403a` |
+| `.tmp/36-v4-runs/R-f10-s0-r1/natural-root.bundle` | `cfafad62933e454a761153e51e9b6e06e6838c9753070e8f17c9786d8df6fcce` |
+| `.tmp/36-v4-runs/R-f10-s0-r1/natural-branch-enabled.bundle` | `c76013dd348b540a0abc77607cee72b512e35f27077c856af168d2a221ddb2cf` |
+| `.tmp/36-hermetic-eval.json` (fresh-request source, hermetic) | see the D table; 1 443 v4 requests, 0 live calls |
+| `.tmp/36-comprehension-results.json` (probe analysis) | produced by `.tmp/36-analyse.py` from the raw answers and `.tmp/36-verdicts.jsonl` |
+| `.tmp/36-vs2-bin` (binary used for both the hermetic and the live run) | `8b573f72a31938d1b5d4758aca425fa655543a1a0813f020ff36a45e4eca9598` |
+
+**Gates.** At the final tree: `go build ./...` PASS, `go vet ./...` PASS, `gofmt -l` (tracked `.go`) clean,
+`git diff --check` clean, `go test ./internal/cognition/... ./cmd/vs2 ./internal/experiment` **193 tests
+PASS**, `go test ./internal/world -run 'Cognition|Seam|Vocabulary|Portrait'` **38 tests PASS**. The **full
+suite** `go test -timeout 30m ./...` passed at the code tip `e6f5220` (`EXIT=0`, every package `ok`,
+`internal/world` 1 260.178 s, zero FAIL lines); only documentation changed after that tip.
+
+**Spend for this ticket**: **1 370 live model calls** — 45 comprehension/falsifier probe calls
+(28 332 input + 6 442 output tokens ≈ $0.0061) plus 1 325 run calls (824 408 + 234 007 tokens ≈ $0.199) —
+**≈ $0.21**, inside the supervisor's corrected **1 600-call / $3** budget. The dispatch's "200 live model
+calls" was sized for the comprehension test and had been applied to the whole ticket; the supervisor
+corrected it to 1 600 and approved deliverable D as written (recorded above).
