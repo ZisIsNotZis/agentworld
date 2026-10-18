@@ -16,3 +16,12 @@ ok  	agentworld/internal/scheduler	0.171s
 ok  	agentworld/internal/sim	0.016s
 ok  	agentworld/internal/strategy	2.192s
 ok  	agentworld/internal/world	560.064s
+=== revision binding (appended after the ticket-40 review noted these logs carried none) ===
+commit: f4e3924ddc53c39c63606ffc950f478fa3ec2d06
+    the code commit. The suite ran on the working tree committed there, before three comments in
+    internal/cognition/priority.go were rewrapped (comment-only, no code token), so this log is bound
+    to f4e3924 in code rather than byte for byte; dd95308 changes no .go file.
+command: go test ./... detached under setsid nohup (ticket 40 section 8). The exact wrapper line was
+    not captured at run time and is not reconstructed here.
+limit: -race was not run. The two packages that own the change were re-run at the final revision
+    (unit-tests-final.log, PASS), which is what covers the rewrap above.

@@ -1,3 +1,9 @@
 ok  	agentworld/internal/cognition	0.384s
 ok  	agentworld/internal/cognition/protocol	0.003s
 ok  	agentworld/cmd/vs2	13.144s
+=== revision binding (appended after the ticket-40 review noted these logs carried none) ===
+commit: f4e3924ddc53c39c63606ffc950f478fa3ec2d06
+    the code commit at the final revision; dd95308 changes no .go file.
+command: go test ./internal/cognition/... ./cmd/vs2/
+    (internal/cognition, internal/cognition/protocol and cmd/vs2 are exactly that command's package set)
+limit: -race was not run; the binding is reconstructed from the commit order, not captured at run time.

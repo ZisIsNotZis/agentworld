@@ -1,0 +1,76 @@
+=== ticket 40 follow-up: the H = 144 schedule-shape assertions (review notes, P2) ===
+=== revision binding ===
+parent revision: dd95308 (the ticket-40 tip)
+this revision: dd95308 + the follow-up diff committed together with this log. The only .go change in
+    that diff is cmd/vs2/accounting_test.go (TestQuotaScheduleSumAndShape asserted at H = 144 as well as
+    at DeclaredHorizonHours); no production file changed.
+working tree: unchanged between the runs below and the commit (`git diff --stat` clean apart from the
+    recorded files, `git diff --check` exit 0)
+go version go1.24.13 linux/amd64
+toolchain: GOROOT /home/z/vibe/agentworld/.tmp/go-toolchain/root/usr/lib/go-1.24 (no system go on PATH;
+    sourced from .tmp/go-env.sh)
+
+=== go build ./... ===
+exit 0
+=== go vet ./cmd/vs2/ ./internal/cognition/ ===
+exit 0
+=== gofmt -l on tracked .go ===
+GOFMT-DONE (empty above = no file listed)
+=== git diff --check ===
+exit 0
+=== go test -run 'QuotaSchedule|Reserve|DecisionBudget' -v ./cmd/vs2/ ./internal/cognition/ ===
+exit 0
+=== RUN   TestQuotaScheduleSumAndShape
+--- PASS: TestQuotaScheduleSumAndShape (0.00s)
+=== RUN   TestQuotaScheduleMirrorsSelector
+--- PASS: TestQuotaScheduleMirrorsSelector (0.00s)
+=== RUN   TestArmStopsAtDecisionBudget
+--- PASS: TestArmStopsAtDecisionBudget (0.00s)
+=== RUN   TestDeclaredScheduleLeavesTheTransportReserve
+--- PASS: TestDeclaredScheduleLeavesTheTransportReserve (0.00s)
+=== RUN   TestCellWithoutRetriesLeavesTheReserveUnspent
+--- PASS: TestCellWithoutRetriesLeavesTheReserveUnspent (0.00s)
+=== RUN   TestCellRetryingWithinTheReserveStillCompletes
+--- PASS: TestCellRetryingWithinTheReserveStillCompletes (0.00s)
+=== RUN   TestReservePlusOneRetryStillHaltsTypedOnTheNPlusOnethAttempt
+--- PASS: TestReservePlusOneRetryStillHaltsTypedOnTheNPlusOnethAttempt (0.00s)
+=== RUN   TestPeriodicArmReserveIsNotItsBindingStop
+--- PASS: TestPeriodicArmReserveIsNotItsBindingStop (0.00s)
+PASS
+ok  	agentworld/cmd/vs2	0.010s
+=== RUN   TestDecisionBudgetReservesTransportAttempts
+--- PASS: TestDecisionBudgetReservesTransportAttempts (0.00s)
+=== RUN   TestPrioritySelectorQuotaScheduleMatchesDeclared
+--- PASS: TestPrioritySelectorQuotaScheduleMatchesDeclared (0.00s)
+=== RUN   TestPrioritySelectorExactDecisionBudgetOnAmpleStream
+--- PASS: TestPrioritySelectorExactDecisionBudgetOnAmpleStream (0.00s)
+=== RUN   TestPrioritySelectorStopsAtDecisionBudgetAndHonoursBudget
+--- PASS: TestPrioritySelectorStopsAtDecisionBudgetAndHonoursBudget (0.00s)
+PASS
+ok  	agentworld/internal/cognition	0.007s
+
+=== go test ./internal/cognition/... ./cmd/vs2/ ===
+exit 0
+ok  	agentworld/internal/cognition	0.387s
+ok  	agentworld/internal/cognition/protocol	0.003s
+ok  	agentworld/cmd/vs2	13.229s
+
+=== negative control 1: DeclaredTransportReserveAttempts temporarily 0 (bounded, restored) ===
+exit 1
+=== RUN   TestQuotaScheduleSumAndShape
+    accounting_test.go:67: H=144: sum q(h) = 256, want N-R = 248 (invariant in H)
+--- FAIL: TestQuotaScheduleSumAndShape (0.00s)
+restored to 8 before any further run; internal/cognition/priority.go is unchanged afterwards.
+
+=== negative control 2: quotaSchedule places the extra decisions at the tail (bounded, restored) ===
+exit 1
+=== RUN   TestQuotaScheduleSumAndShape
+    accounting_test.go:75: H=144: q(0) = 1, want 2 (2 for h < 104, 1 after it)
+--- FAIL: TestQuotaScheduleSumAndShape (0.00s)
+This mutant keeps sum q(h) = 248 at both horizons and moves only where the second decision falls, so
+this line is the evidence that the hour-by-hour shape assertion catches what the horizon-invariant sum
+cannot. cmd/vs2/config.go restored from a copy taken before the mutation; `git diff` clean afterwards.
+
+=== not run ===
+-race, and the full suite `go test ./...`: the change adds test assertions only, and the two packages
+that own it were run in full above.

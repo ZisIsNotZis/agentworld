@@ -42,12 +42,16 @@ costed seven repairs and stated the one question it could not settle. That readi
   the frozen `VS2-EC-2` exit criterion of ticket 34, which ticket 38 §7.7 forbids without user authority.
   v-b reaches the same place inside the instrument that already exists.
 
-**This is a re-pre-registration, and it is legitimate on one ground only**: no verdict has ever been
-computed for M2c. The only artefact is `NOT RUN` (`§5`/`.scratch/39-m2c-matrix/spec.md` §10.5), so nothing
-is being reworded to fit data — there is no data to fit. Ticket 38 §7.4–§7.7 (band, per-tier effect floors,
-unanimity, falsifier, inventory precondition, exclusions) is **unchanged in text and in value**; only the
-declared budget axis and the cost arithmetic that follows from it change. Every changed sentence is listed
-in §6 with its before and after.
+**This is a re-pre-registration, and it is legitimate on one ground only**: no verdict was ever computed
+for M2c. The only verdict artefact is `NOT RUN` (`§5`/`.scratch/39-m2c-matrix/spec.md` §10.5), so no
+threshold is being reworded to fit a computed result; ticket 38 §7.4–§7.7 (band, per-tier effect floors,
+unanimity, falsifier, inventory precondition, exclusions) is **byte-identical, compared against
+`1186e36`** — the pre-registration's base revision — in text and in value, and only the declared budget
+axis and the cost arithmetic that follows from it change. Run-1 data does exist (the 15-cell artefact and
+`.scratch/39-m2c-matrix/m2c-curve.txt`, which makes pairwise-distinguishability calls on it), and it was
+used only to diagnose the transport mechanism (§1), to price the re-run (§7) and, in §5, to say what
+ticket 39's `$0.6007` bought; no threshold, floor or verdict rule was read off it. Every changed sentence
+is listed in §6 with its before and after.
 
 ## 3. The constant, its home, and its arithmetic
 
@@ -180,19 +184,20 @@ and no sentence anywhere is reworded to fit a computed result, because none exis
 | # | file, location | before | after (current fact) |
 |---|---|---|---|
 | 1 | ticket 38 §7 preamble | "Fixed here, before any live call of the M2c matrix." | the same, plus: the budget axis is the one item re-declared after the first run produced no verdict (`NOT RUN`, ticket 39 §10.5); the reserve is ticket 40 §3; §7.4–§7.7 are unchanged |
-| 2 | ticket 38 §7.1, budget-axis row | "the declared call ceiling `N = 256` per budgeted arm-run (unchanged)" | "the declared call ceiling `N = 256` **physical attempts** per budgeted arm-run (unchanged), of which the schedule selects at most `N − R = 248` decisions; `R = 8` is the declared transport reserve (ticket 40 §3)" |
-| 3 | ticket 38 §7.3 | "12 model-bearing runs at `N = 256` calls (`A0` runs 3 times at 0 calls). Ceiling 3 072 physical attempts, because `AllowCall` is charged per attempt" | "12 model-bearing runs at `N − R = 248` decisions each (`A0` runs 3 times at 0 calls), inside a ceiling of `N = 256` physical attempts, because `AllowCall` is charged per attempt: 12 × 248 = **2 976 decisions**, 12 × 256 = **3 072 attempts**, with `R = 8` per cell left unconsumed for retries" |
+| 2 | ticket 38 §7.1, budget-axis row | "the declared call ceiling `N = 256` per budgeted arm-run (unchanged)" | "the declared call ceiling `N = 256` **physical attempts** per budgeted arm-run (unchanged), of which the schedule selects at most `N − R_t = 248` decisions; `R_t = 8` is the declared transport reserve (ticket 40 §3, `DeclaredTransportReserveAttempts` in the code)" |
+| 3 | ticket 38 §7.3 | "12 model-bearing runs at `N = 256` calls (`A0` runs 3 times at 0 calls). Ceiling 3 072 physical attempts, because `AllowCall` is charged per attempt" | "12 model-bearing runs at `N − R_t = 248` decisions each (`A0` runs 3 times at 0 calls), inside a ceiling of `N = 256` physical attempts, because `AllowCall` is charged per attempt: 12 × 248 = **2 976 decisions**, 12 × 256 = **3 072 attempts**, with `R_t = 8` per cell left unconsumed for retries" |
 | 4 | ticket 38 §8.1, lower bound | "`$0.199 × 3 072 / 1 325 = $0.46`" | "`$0.199 × 2 976 / 1 325 = $0.45` at the expected 2 976 attempts, `$0.46` at the 3 072-attempt ceiling" |
 | 5 | ticket 38 §8.1, upper bound | "`244·3 + 256·3 + 256·3 + 253·3 = 3 027` calls → **≈ $1.28**" | "`244·3 + 248·3 + 248·3 + 248·3 = 2 964` calls → **≈ $1.25**" (`P`'s 244 is its own recorded gate-bound rate and the reserve does not bind it; the three quota-bound arms are 248 by schedule) |
-| 6 | ticket 38 §8.1, caps | "**Hard cap for ticket 39: $2.00, and 4 000 physical attempts.**" and its "1.56×" justification | "**Hard cap for one M2c matrix run: $1.20, and 7 000 physical attempts cumulative across runs**", sized from the realised `$1.989e-4` per attempt instead of the pre-run projection (ticket 39 used 3 020 attempts and `$0.6007`; a full re-run adds at most 3 072, leaving 908 for one cell re-run) |
-| 7 | ticket 38 §8.1, stop rule | "more than **$1.60** … projects above **$2.00**" | "more than **$0.96** … projects above **$1.20**" (the same 80 % rule, against the new cap) |
+| 6 | ticket 38 §8.1, caps | "**Hard cap for ticket 39: $2.00, and 4 000 physical attempts.**" and its "1.56×" justification | "**Hard cap for one M2c matrix run: $1.30, and 7 000 physical attempts cumulative across runs**", sized from the realised `$1.989e-4` per attempt instead of the pre-run projection (ticket 39 used 3 020 attempts and `$0.6007`; a full re-run adds at most 3 072, leaving 908 for one cell re-run). `$1.30` also sits 1.04× above §8.1's own `$1.25` pessimistic upper bound; the `$1.20` first recorded here was 0.96× of it, i.e. below the bound the cap exists to absorb |
+| 7 | ticket 38 §8.1, stop rule | "more than **$1.60** … projects above **$2.00**" | "more than **$1.04** (80 % of `$1.30`) … projects above **$1.30**" (the same 80 % rule, against the new cap) |
 | 8 | ticket 38 §8.2 | "3 072 attempts → **169–194 min**" | "2 976 expected / 3 072 ceiling attempts → **163–194 min**; realised for a full matrix on this machine: **44 min** (ticket 39 §11.5)" |
 | 9 | ticket 38 §8 heading | "The run plan ticket 39 executes (costed)" | "The M2c run plan (costed)" — one plan, executed by ticket 39 and re-executed by ticket 41 |
 | 10 | ticket 39 §1, the M2c question | "at equal declared call ceiling `N = 256`" | "at equal declared call ceiling `N = 256` and equal declared decision budget `N − R = 248` (`R = 8`, ticket 40 §3)" |
 | 11 | ticket 39 §2, budget-axis row | "declared call ceiling `N = 256` per budgeted arm-run" | "declared call ceiling `N = 256` physical attempts per budgeted arm-run, of which the schedule selects at most 248 decisions (`R = 8` reserve, ticket 40 §3)" |
-| 12 | ticket 39 §11.5, closing paragraph | "The choice between (v-a) and (v-b) turns on one question that is not mine to settle … No option is recommended here." | the question was settled by the product owner: option **v-b**, recorded and implemented in ticket 40, re-run in ticket 41; the raised caps (7 000 attempts cumulative, `$1.20` per run) are named there, and the choice did not turn on the cap clauses inside (i)/(ii)/(v-a)/(v-b) |
+| 12 | ticket 39 §11.5, closing paragraph | "The choice between (v-a) and (v-b) turns on one question that is not mine to settle … No option is recommended here." | the question was settled by the product owner: option **v-b**, recorded and implemented in ticket 40, re-run in ticket 41; the raised caps (7 000 attempts cumulative, and the per-run dollar cap that has its home in ticket 38 §8.1) are named there, and the choice did not turn on the cap clauses inside (i)/(ii)/(v-a)/(v-b) |
 | 13 | ticket 39 §11.7 | "the options of §11.5 are proposals for the product owner, not applied" | "the options of §11.5 were proposals for the product owner; ticket 40 records the decision (v-b) and implements it, and ticket 41 owns the re-run. No live call, re-run or scoring change happened here" |
-| 14 | `docs/VERTICAL-SLICES.md`, M2c row | "the live matrix is not run … (≈3 027 calls, ≈$1.28 expected, hard cap $2.00, 3-4 h) for ticket 39. Zero live calls so far." | the current state: matrix run once (ticket 39) and refused as `NOT RUN` (one halted cell), the halt diagnosed as a budget/attempt unit mismatch, re-pre-registered with a declared transport reserve (ticket 40), arms now make 248 decisions each, re-run pending (ticket 41) at ≈2 976 attempts / ≈$0.59 expected |
+| 14 | `docs/VERTICAL-SLICES.md`, M2c row | "the live matrix is not run … (≈3 027 calls, ≈$1.28 expected, hard cap $2.00, 3-4 h) for ticket 39. Zero live calls so far." | the current state: matrix run once (ticket 39) and refused as `NOT RUN` (one halted cell), the halt diagnosed as a budget/attempt unit mismatch, re-pre-registered with a declared transport reserve (ticket 40), arms now make 248 decisions each, re-run pending (ticket 41) at ≈2 976 attempts / ≈$0.59 expected under the `$1.30` cap of ticket 38 §8.1 |
+| 15 | ticket 38 §7 preamble, §7.1 budget-axis row and §7.3, the reserve's symbol | `R = 8` named the transport reserve in the same §7.1 table whose next row declares `R` **excluded**, and in prose that calls `R` the full-wake reference arm | the reserve is written `R_t = 8` (`N − R_t`, "the declared transport reserve `R_t = 8`"), and `R` alone keeps its pre-registered meaning, the full-wake arm; §7 says why. No number, threshold or rule changed |
 
 `docs/VALIDATION.md` §51's M2c rule sentence and the M2c criterion of ticket 38 §7.4–§7.7 are unchanged:
 the inventory precondition, the band, the effect floors, the verdict alphabet and the falsifier are
@@ -213,15 +218,15 @@ $1.989e-4` per physical attempt (`halt-evidence.json`).
 | `A0` cells | 3, at 0 calls, zero spend |
 | **expected spend** | 2 976 × `$1.989e-4` = **≈ $0.59** |
 | **worst case at the ceiling with every reserve spent** | 3 072 × `$1.989e-4` = **≈ $0.61** |
-| declared cap for the re-run | **$1.20** (≈2× the worst case; supervisor-raised from $0.41–$0.50/$2.00 when the matrix was priced for one run) |
+| declared cap for the re-run | **$1.30** (≈2.1× the `$0.61` worst case and 1.04× §8.1's `$1.25` pessimistic upper bound; supervisor-raised from $0.41–$0.50/$2.00 when the matrix was priced for one run, and from `$1.20` when the review found `$1.20` sat below the `$1.25` bound it exists to absorb) |
 | declared attempt cap | **7 000 cumulative** (ticket 39's 3 020 + this run's ≤3 072 = 6 092, leaving 908 for one cell re-run). This exceeds the earlier 4 000-attempt operator cap, which was sized for a single run |
 | cumulative project spend after the re-run | `$0.6007 + ≈$0.61 = ≈$1.21` across both runs, far under the user's `$50` |
 | wall clock | 3–4 h projected (ticket 38 §8.2), 6 h deadline, `-budget-min 720`; realised 44 min for a full matrix at `-parallel 8` (ticket 39 §11.5) |
-| per-cell attempt ratio to verify after the run | `attempts − decisions ≤ 8` for every cell, and `realized_calls = 248` for every quota-bound cell with no halt |
+| per-cell attempt ratio to verify after the run | `attempts − decisions ≤ 8` for every cell, and `realized_calls = 248` for every quota-bound cell with no halt; `under_budget` true with `budget_shortfall 8` is that state, not an alarm (declared in the ticket-41 run record, `.scratch/41-m2c-rerun/spec.md` §1) |
 
 The operator poll rule stays as declared: every 15 min compute realised spend from every `calls.jsonl`
 `usage` row at `$0.10/M` input and `$0.50/M` output; stop the runner and report a partial matrix if
-realised spend exceeds **$0.96** (80 % of `$1.20`) or the realised rate projects above `$1.20`.
+realised spend exceeds **$1.04** (80 % of `$1.30`) or the realised rate projects above `$1.30`.
 
 ## 8. Gates (each recorded verbatim, with its result)
 
@@ -236,6 +241,24 @@ realised spend exceeds **$0.96** (80 % of `$1.20`) or the realised rate projects
 | `vrd2.py --self-test` (zero spend) | PASS — `evaluator-gate.log` |
 | `vrd2.py --live` on ticket 39's committed artefact (zero spend) | exit 3, **`NOT RUN`** — the scorer still refuses the ticket-39 matrix, which is the check that this re-pre-registration does not re-read the old artefact (`m2c-scores-rerun.log`) |
 | the live matrix | **not run** (ticket 41), and nothing pushed |
+
+**Revision binding of these logs.** `gates.log`, `unit-tests-final.log` and `full-suite.log` were produced
+on the working tree that was committed as `f4e3924` (the code commit; `dd95308` adds this record and these
+logs and changes no `.go` file, `git diff --quiet f4e3924 dd95308 -- '*.go'` is empty). None of the three
+carried a hash, a command line or a timestamp of its own, so each now ends with a binding section naming
+the commit and the exact command; that binding is reconstructed from the commit order, not captured at run
+time, and it says so.
+
+**Not exercised, and declared.** No gate above passes `-race`: the full suite ran without it, so no
+evidence here comes from the race detector. No live retried transport ran inside a full cell either: the
+joint tests charge retries directly against `AllowCall`/`Charge`, the same seam `Recorder` uses, and
+ticket 39's single retried 300 s timeout is the only field evidence of that path.
+
+**Follow-up pass (review notes).** The `H = 144` schedule-shape assertions the review asked for were added
+after this revision and run against this code: `go test -run 'QuotaSchedule|Reserve|DecisionBudget' ./cmd/vs2/ ./internal/cognition/`
+and `go test ./internal/cognition/... ./cmd/vs2/` PASS, `go build ./...` and `git diff --check` PASS —
+`fix-tests.log`. The full suite was **not** re-run for a test-assertion-only change; that limit is stated
+rather than implied.
 
 ## 9. What this ticket may not conclude
 
@@ -254,5 +277,6 @@ contract, the effect floors or the inventory precondition.
 | negative control (`R = 0` mutation) | `.scratch/40-m2c-transport-reserve/mutation-R0.log` |
 | evaluator gate (zero spend) | `.scratch/40-m2c-transport-reserve/evaluator-gate.log` |
 | logged-data score run on ticket 39's artefact (zero spend) | `.scratch/40-m2c-transport-reserve/m2c-scores-rerun.log` |
+| the follow-up test run (the `H = 144` shape assertions, review notes pass) | `.scratch/40-m2c-transport-reserve/fix-tests.log` |
 | the code | `internal/cognition/priority.go`, `internal/cognition/priority_reserve_test.go`, `cmd/vs2/config.go`, `cmd/vs2/accounting_test.go` |
 | the diagnosis this implements | `.scratch/39-m2c-matrix/spec.md` §11 |

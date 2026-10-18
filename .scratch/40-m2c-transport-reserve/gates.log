@@ -10,3 +10,15 @@ GOFMT-DONE (empty above = no files)
 DIFFCHK-OK exit=0
 === gofmt -l on the new untracked test file ===
 NEW-FILE-GOFMT-DONE (empty above = clean)
+=== revision binding (appended after the ticket-40 review noted these logs carried none) ===
+commit: f4e3924ddc53c39c63606ffc950f478fa3ec2d06
+    the code commit. The gate ran on the working tree committed there; dd95308 adds records and logs
+    only (`git diff --quiet f4e3924 dd95308 -- '*.go'` is empty).
+commands, in the order recorded above:
+    go build ./...
+    go vet ./...
+    gofmt -l <tracked .go>
+    git diff --check 279f0ba
+    gofmt -l cmd/vs2/accounting_test.go   (the new file, then untracked)
+limit: this binding is reconstructed from the commit order, not captured at run time, and no gate
+    above ran with -race.

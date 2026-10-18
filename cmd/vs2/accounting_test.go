@@ -40,19 +40,42 @@ func testRoster(n, hour int) []protocol.EscalationCandidate {
 
 func simID(i int) sim.EntityID { return sim.EntityID(i) }
 
-// TestQuotaScheduleSumAndShape pins q(h) = floor((N-R)/H) + (1 if h < (N-R) mod H)
-// and sum_{h<H} q(h) = N - R: the declared schedule stops the transport reserve
-// short of the ceiling.
+// matrixHorizon is H at which the declared M2c matrix runs (ticket 38 §7.1, launched
+// with -hours 144); DeclaredHorizonHours is the fixture family's horizon.
+const matrixHorizon = 144
+
+// TestQuotaScheduleSumAndShape pins q(h) = floor((N-R)/H) + (1 if h < (N-R) mod H) at
+// both declared horizons: sum_{h<H} q(h) = N - R is invariant in H, and the second
+// decision of an hour falls in the first (N-R) mod H hours -- h < 104 at the matrix
+// horizon H = 144 (ticket 40 §3.2), h < 80 at H = DeclaredHorizonHours. The shape is
+// asserted hour by hour, so the schedule the matrix actually spends is pinned and not
+// only its horizon-invariant sum.
 func TestQuotaScheduleSumAndShape(t *testing.T) {
-	q := quotaSchedule(256, 168)
-	if len(q) != 168 {
-		t.Fatalf("schedule length %d", len(q))
+	cases := []struct {
+		horizon int
+		extra   int // (N-R) mod H: the hours that select two decisions
+	}{
+		{horizon: matrixHorizon, extra: 104},
+		{horizon: DeclaredHorizonHours, extra: 80},
 	}
-	if got := sumInts(q); got != 248 {
-		t.Fatalf("sum q(h) = %d, want N-R = 248", got)
-	}
-	if q[0] != 2 || q[79] != 2 || q[80] != 1 || q[167] != 1 {
-		t.Fatalf("q(h) shape: q0=%d q79=%d q80=%d q167=%d", q[0], q[79], q[80], q[167])
+	for _, c := range cases {
+		q := quotaSchedule(DeclaredCallCeiling, c.horizon)
+		if len(q) != c.horizon {
+			t.Fatalf("H=%d: schedule length %d", c.horizon, len(q))
+		}
+		if got := sumInts(q); got != 248 {
+			t.Fatalf("H=%d: sum q(h) = %d, want N-R = 248 (invariant in H)", c.horizon, got)
+		}
+		for h, got := range q {
+			want := 1
+			if h < c.extra {
+				want = 2
+			}
+			if got != want {
+				t.Fatalf("H=%d: q(%d) = %d, want %d (2 for h < %d, 1 after it)",
+					c.horizon, h, got, want, c.extra)
+			}
+		}
 	}
 }
 
