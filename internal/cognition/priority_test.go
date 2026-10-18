@@ -70,8 +70,10 @@ func mustSelector(t *testing.T, p cognition.WakePolicy) *cognition.PrioritySelec
 }
 
 // TestPrioritySelectorQuotaScheduleMatchesDeclared pins the declared fixed
-// per-hour quota q(h) = floor(N/H) + (1 if h < N mod H else 0), so sum q(h) = N
-// over the horizon. An empty roster records the schedule without spending.
+// per-hour quota q(h) = floor((N-R)/H) + (1 if h < (N-R) mod H else 0), so
+// sum q(h) = N - R over the horizon: the schedule leaves the declared transport
+// reserve R of attempts to retries. An empty roster records the schedule without
+// spending.
 func TestPrioritySelectorQuotaScheduleMatchesDeclared(t *testing.T) {
 	cases := []struct {
 		ceiling uint64
@@ -79,9 +81,9 @@ func TestPrioritySelectorQuotaScheduleMatchesDeclared(t *testing.T) {
 		secondQ int
 		split   int // q(h) = firstQ for h < split, secondQ otherwise
 	}{
-		{256, 2, 1, 88},
-		{168, 1, 1, 168},
-		{100, 1, 0, 100},
+		{256, 2, 1, 80},
+		{168, 1, 0, 160},
+		{100, 1, 0, 92},
 	}
 	for _, tc := range cases {
 		s := mustSelector(t, testPolicy(cognition.StrategyAdaptive, 1, tc.ceiling, 250000, 6, 0))
@@ -100,16 +102,19 @@ func TestPrioritySelectorQuotaScheduleMatchesDeclared(t *testing.T) {
 			}
 			total += sel.Quota
 		}
-		if uint64(total) != tc.ceiling {
-			t.Fatalf("N=%d: sum q(h) = %d, want %d", tc.ceiling, total, tc.ceiling)
+		if want := cognition.DecisionBudget(tc.ceiling); uint64(total) != want {
+			t.Fatalf("N=%d: sum q(h) = %d, want N-R = %d", tc.ceiling, total, want)
 		}
 	}
 }
 
-// TestPrioritySelectorExactNOnAmpleStream pins VS2-EC-2 on an ample roster:
-// P/U/A each realize exactly N over the declared horizon and never exceed it.
-func TestPrioritySelectorExactNOnAmpleStream(t *testing.T) {
+// TestPrioritySelectorExactDecisionBudgetOnAmpleStream pins the schedule's exact
+// spend on an ample roster: P/U/A each realize exactly the decision budget N-R
+// over the declared horizon, never exceed it, and the remaining R attempts are
+// the declared transport reserve.
+func TestPrioritySelectorExactDecisionBudgetOnAmpleStream(t *testing.T) {
 	const ceiling uint64 = 256
+	want := cognition.DecisionBudget(ceiling)
 	for _, strategy := range []cognition.PriorityStrategy{
 		cognition.StrategyPeriodic, cognition.StrategyUniformRandom, cognition.StrategyAdaptive,
 	} {
@@ -130,8 +135,12 @@ func TestPrioritySelectorExactNOnAmpleStream(t *testing.T) {
 				t.Fatalf("%s hour %d: recorded ceiling %d", strategy, h, sel.Budget.CallsBudget)
 			}
 		}
-		if got := s.CallsSpent(); got != ceiling {
-			t.Fatalf("%s realized %d calls, want exactly N=%d", strategy, got, ceiling)
+		if got := s.CallsSpent(); got != want {
+			t.Fatalf("%s realized %d calls, want exactly N-R=%d", strategy, got, want)
+		}
+		if left := ceiling - s.CallsSpent(); left != cognition.DeclaredTransportReserveAttempts {
+			t.Fatalf("%s left %d attempts under the ceiling, want the declared reserve R=%d",
+				strategy, left, cognition.DeclaredTransportReserveAttempts)
 		}
 	}
 }
@@ -198,8 +207,8 @@ func TestPrioritySelectorAdaptiveExplorationInterleaving(t *testing.T) {
 	if want := 64; explored != want { // E = ceil(0.25*256)
 		t.Fatalf("q=0.25 explored %d calls, want E=%d", explored, want)
 	}
-	if selected != int(ceiling) {
-		t.Fatalf("q=0.25 selected %d calls, want N=%d", selected, ceiling)
+	if selected != int(cognition.DecisionBudget(ceiling)) {
+		t.Fatalf("q=0.25 selected %d calls, want N-R=%d", selected, cognition.DecisionBudget(ceiling))
 	}
 
 	q0 := mustSelector(t, testPolicy(cognition.StrategyAdaptive, 11, ceiling, 0, 6, 0))
@@ -212,16 +221,17 @@ func TestPrioritySelectorAdaptiveExplorationInterleaving(t *testing.T) {
 			t.Fatalf("q=0 hour %d explored %v, want none", h, sel.Exploration)
 		}
 	}
-	if q0.CallsSpent() != ceiling {
-		t.Fatalf("q=0 realized %d calls, want N=%d", q0.CallsSpent(), ceiling)
+	if q0.CallsSpent() != cognition.DecisionBudget(ceiling) {
+		t.Fatalf("q=0 realized %d calls, want N-R=%d", q0.CallsSpent(), cognition.DecisionBudget(ceiling))
 	}
 }
 
 // TestPrioritySelectorPeriodicGate pins P's declared rule: it escalates only in
 // hours h ≡ phase (mod period), in the declared deterministic actor order, with
-// Quota = remaining budget and Shortfall = 0, and stops at N.
+// Quota = remaining decision budget and Shortfall = 0, and stops at N-R.
 func TestPrioritySelectorPeriodicGate(t *testing.T) {
 	const ceiling uint64 = 256
+	decisions := cognition.DecisionBudget(ceiling)
 	s := mustSelector(t, testPolicy(cognition.StrategyPeriodic, 0, ceiling, 0, 6, 0))
 	for h := 0; h < declaredHorizon; h++ {
 		before := s.CallsSpent()
@@ -239,22 +249,25 @@ func TestPrioritySelectorPeriodicGate(t *testing.T) {
 			continue
 		}
 		// An escalated hour selects whenever budget remains; once the arm has
-		// spent N it selects nothing and only then records Quota 0.
-		if before < ceiling && len(sel.Selected) == 0 {
-			t.Fatalf("periodic selected none in an escalated hour %d with %d budget remaining", h, ceiling-before)
+		// spent its decision budget it selects nothing and only then records Quota 0.
+		if before < decisions && len(sel.Selected) == 0 {
+			t.Fatalf("periodic selected none in an escalated hour %d with %d budget remaining", h, decisions-before)
 		}
 	}
-	if s.CallsSpent() != ceiling {
-		t.Fatalf("periodic realized %d calls, want N=%d", s.CallsSpent(), ceiling)
+	if s.CallsSpent() != decisions {
+		t.Fatalf("periodic realized %d calls, want N-R=%d", s.CallsSpent(), decisions)
 	}
 }
 
-// TestPrioritySelectorStopsAtNAndHonoursBudget pins the hard ceiling: the
-// selector never selects past N, its own recorded state is authoritative (an
-// unrelated world budget view does not perturb the selection), and a budget
-// ceiling that disagrees with the declared one is refused.
-func TestPrioritySelectorStopsAtNAndHonoursBudget(t *testing.T) {
-	const ceiling uint64 = 2
+// TestPrioritySelectorStopsAtDecisionBudgetAndHonoursBudget pins the schedule's
+// hard stop: the selector never selects past its decision budget N-R, its own
+// recorded state is authoritative (an unrelated world budget view does not
+// perturb the selection), and a budget ceiling that disagrees with the declared
+// one is refused.
+func TestPrioritySelectorStopsAtDecisionBudgetAndHonoursBudget(t *testing.T) {
+	// N = 10 declares a decision budget of 2 at R = 8, so the shape below is the
+	// same two-decision schedule as a bare N = 2 would give without a reserve.
+	const ceiling uint64 = 10
 	s := mustSelector(t, testPolicy(cognition.StrategyAdaptive, 5, ceiling, 0, 6, 0))
 	wantPerHour := []int{1, 1, 0, 0}
 	for h, want := range wantPerHour {
@@ -266,8 +279,8 @@ func TestPrioritySelectorStopsAtNAndHonoursBudget(t *testing.T) {
 			t.Fatalf("hour %d selected %d, want %d", h, len(sel.Selected), want)
 		}
 	}
-	if s.CallsSpent() != ceiling {
-		t.Fatalf("realized %d calls, want N=%d", s.CallsSpent(), ceiling)
+	if s.CallsSpent() != cognition.DecisionBudget(ceiling) {
+		t.Fatalf("realized %d calls, want N-R=%d", s.CallsSpent(), cognition.DecisionBudget(ceiling))
 	}
 
 	// The accumulator owns the budget state: an in-sync world view (non-zero
@@ -375,7 +388,8 @@ func TestPrioritySelectorSeedDrivesPolicyPRNG(t *testing.T) {
 
 // TestPrioritySelectorRefusesBadConfig pins the construction-time refusals: a
 // nil Priority (the degenerate path), the full marker, an undeclared ceiling or
-// horizon, an out-of-range exploration fraction, and an invalid periodic gate.
+// horizon, a ceiling that does not exceed the declared transport reserve, an
+// out-of-range exploration fraction, and an invalid periodic gate.
 func TestPrioritySelectorRefusesBadConfig(t *testing.T) {
 	degenerate := cognition.WakePolicy{Name: "periodic", PeriodHours: 6}
 	if _, err := cognition.NewPrioritySelector(degenerate, declaredHorizon, protocol.CallPrice{}); !errors.Is(err, cognition.ErrPrioritySelector) {
@@ -384,6 +398,8 @@ func TestPrioritySelectorRefusesBadConfig(t *testing.T) {
 	bad := []cognition.WakePolicy{
 		testPolicy(cognition.StrategyFull, 1, 256, 0, 6, 0),
 		testPolicy(cognition.StrategyAdaptive, 1, 0, 0, 6, 0),
+		testPolicy(cognition.StrategyAdaptive, 1, 8, 0, 6, 0),
+		testPolicy(cognition.StrategyAdaptive, 1, 4, 0, 6, 0),
 		testPolicy(cognition.StrategyAdaptive, 1, 256, 1_000_000, 6, 0),
 		testPolicy(cognition.StrategyAdaptive, 1, 256, -1, 6, 0),
 		testPolicy(cognition.StrategyPeriodic, 1, 256, 0, 6, 6),

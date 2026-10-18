@@ -16,11 +16,36 @@ import (
 // arm, seeded from the declared call ceiling N and the policy PRNG seed. It is
 // online (it consumes each hour's roster as it arrives), spends at most the
 // declared per-hour quota q(h) for U and A (or is period-gated for P), and stops
-// once it has spent N. It consumes no world random stream and needs no
-// run-total candidate count, no reservoir, and no model-free pre-pass; replay
+// once it has spent its decision budget N - R, leaving the declared transport
+// reserve R of attempts to retries. It consumes no world random stream and needs
+// no run-total candidate count, no reservoir, and no model-free pre-pass; replay
 // from the declared policy identity and the arm's own candidate stream
 // re-derives the identical selection sequence without a model call.
 var ErrPrioritySelector = errors.New("invalid priority selector")
+
+// DeclaredTransportReserveAttempts is R, the reserve of physical attempts the
+// declared quota schedule leaves unconsumed for transport retries (ticket 40).
+// The call ceiling N is untouched: AllowCall still refuses the (N+1)-th attempt
+// and VS2-EC-2's typed fail-loud halt fires exactly as declared. What changes is
+// the schedule, which selects at most N-R decisions, so a retried attempt (which
+// buys no decision but costs an attempt, DefaultMaxAttempts = 3 per call) no
+// longer truncates a cell that would otherwise complete. R = 8 covers two fully
+// retried calls (2 x 3) plus two single retries (2 x 1). The reserve applies
+// identically to every budgeted arm, so the equal-budget comparison holds.
+const DeclaredTransportReserveAttempts uint64 = 8
+
+// DecisionBudget is the number of decisions a schedule may select at the
+// declared call ceiling N: N - DeclaredTransportReserveAttempts. It is the one
+// home of that derivation, so the live selector and the runner's recorded
+// schedule cannot drift. A ceiling at or below the reserve floors at 0, and
+// NewPrioritySelector refuses such a ceiling rather than declare an arm that
+// makes no decision.
+func DecisionBudget(ceiling uint64) uint64 {
+	if ceiling <= DeclaredTransportReserveAttempts {
+		return 0
+	}
+	return ceiling - DeclaredTransportReserveAttempts
+}
 
 // PrioritySelector is the declared arm-local online accumulator for one
 // budgeted arm. Its state is exactly the recorded accumulator state: the
@@ -30,7 +55,8 @@ type PrioritySelector struct {
 	strategy     protocol.PriorityStrategy
 	periodHours  int
 	phaseHours   int
-	callCeiling  uint64
+	callCeiling  uint64 // N, the declared fail-loud attempt ceiling
+	decisions    uint64 // N - R, the most decisions the schedule may select
 	horizonHours int
 	exploration  int64 // ExplorationFraction over ExplorationScale, q in [0,1)
 	valueModel   protocol.ValueModelSpec
@@ -71,6 +97,10 @@ func NewPrioritySelector(policy protocol.WakePolicy, horizonHours int, price pro
 	if p.CallCeiling == 0 {
 		return nil, fmt.Errorf("%w: undeclared call ceiling", ErrPrioritySelector)
 	}
+	if p.CallCeiling <= DeclaredTransportReserveAttempts {
+		return nil, fmt.Errorf("%w: call ceiling %d does not exceed the declared transport reserve %d",
+			ErrPrioritySelector, p.CallCeiling, DeclaredTransportReserveAttempts)
+	}
 	if horizonHours < 1 {
 		return nil, fmt.Errorf("%w: horizon %d", ErrPrioritySelector, horizonHours)
 	}
@@ -85,6 +115,7 @@ func NewPrioritySelector(policy protocol.WakePolicy, horizonHours int, price pro
 		periodHours:  policy.PeriodHours,
 		phaseHours:   policy.PhaseHours,
 		callCeiling:  p.CallCeiling,
+		decisions:    DecisionBudget(p.CallCeiling),
 		horizonHours: horizonHours,
 		exploration:  p.ExplorationFraction,
 		valueModel:   p.ValueModel,
@@ -107,12 +138,13 @@ func (s *PrioritySelector) CallCeiling() uint64 { return s.callCeiling }
 
 // Select implements protocol.EscalationSelector for one candidate hour. It is
 // online: it spends at most the declared per-hour quota q(h) (U/A) or the
-// remaining budget (P), stops at N, and records the selection, the per-candidate
-// scores, the exploration set, the budget state, and the PRNG position. The
-// accumulator owns the authoritative budget state (spec section 4.1 item 5), so
-// the selection depends only on the declared policy identity, the candidate
-// stream, and the accumulator state; the passed budget is the world's declared
-// view and is used only to reject a ceiling that disagrees with the declared N.
+// remaining budget (P), stops at the decision budget N - R, and records the
+// selection, the per-candidate scores, the exploration set, the budget state, and
+// the PRNG position. The accumulator owns the authoritative budget state (spec
+// section 4.1 item 5), so the selection depends only on the declared policy
+// identity, the candidate stream, and the accumulator state; the passed budget is
+// the world's declared view and is used only to reject a ceiling that disagrees
+// with the declared N.
 func (s *PrioritySelector) Select(hour int, roster []protocol.EscalationCandidate, budget protocol.BudgetState) (protocol.Selection, error) {
 	if budget.CallsBudget != 0 && budget.CallsBudget != s.callCeiling {
 		return protocol.Selection{}, fmt.Errorf("%w: budget ceiling %d, declared %d", ErrPrioritySelector, budget.CallsBudget, s.callCeiling)
@@ -133,8 +165,8 @@ func (s *PrioritySelector) Select(hour int, roster []protocol.EscalationCandidat
 // selectPeriodic is the period-gated baseline P: it escalates candidates only
 // in selected hours, in the declared deterministic roster order (sorted by
 // actor), and stops at the remaining budget. It has no per-hour quota, so its
-// Quota is the remaining budget (N - CallsSpent) and its Shortfall is 0 (spec
-// section 5.1).
+// Quota is the remaining decision budget (N - R - CallsSpent) and its Shortfall
+// is 0 (spec section 5.1).
 func (s *PrioritySelector) selectPeriodic(hour int, roster []protocol.EscalationCandidate, remaining uint64) protocol.Selection {
 	order := sortedRoster(roster)
 	scores := s.scoreCandidates(order, hour)
@@ -155,7 +187,7 @@ func (s *PrioritySelector) selectPeriodic(hour int, roster []protocol.Escalation
 // selectUniform is the uniform-random baseline U: at each hour it spends at most
 // the declared per-hour quota q(h) on candidates chosen by the policy PRNG,
 // drawn without replacement from that hour's roster (sorted by actor), and stops
-// at N.
+// at the decision budget N - R.
 func (s *PrioritySelector) selectUniform(hour int, roster []protocol.EscalationCandidate, remaining uint64) protocol.Selection {
 	order := sortedRoster(roster)
 	scores := s.scoreCandidates(order, hour)
@@ -180,8 +212,8 @@ func (s *PrioritySelector) selectUniform(hour int, roster []protocol.EscalationC
 // ranked exploitation slots, per the declared section 4.5 interleaving rule.
 // Exploration draws uniformly from the hour's not-yet-selected candidates with
 // the policy PRNG; exploitation takes the highest-Priority remaining candidate,
-// ties broken by actor id. The arm stops at N. With q = 0 every slot is
-// exploitation.
+// ties broken by actor id. The arm stops at the decision budget N - R. With
+// q = 0 every slot is exploitation.
 func (s *PrioritySelector) selectAdaptive(hour int, roster []protocol.EscalationCandidate, remaining uint64) protocol.Selection {
 	order := sortedRoster(roster)
 	scores := s.scoreCandidates(order, hour)
@@ -239,27 +271,32 @@ func (s *PrioritySelector) finish(hour int, selected, exploration []sim.EntityID
 	}
 }
 
-// remaining is the undecremented budget: N - CallsSpent, floored at 0.
+// remaining is the undecremented decision budget: (N-R) - CallsSpent, floored
+// at 0, so a completing arm stops with the declared reserve of attempts unspent.
 func (s *PrioritySelector) remaining() uint64 {
-	if s.spent >= s.callCeiling {
+	if s.spent >= s.decisions {
 		return 0
 	}
-	return s.callCeiling - s.spent
+	return s.decisions - s.spent
 }
 
-// quota is the declared fixed per-hour schedule q(h) = floor(N/H) +
-// (1 if h < N mod H else 0), so sum_{h<H} q(h) = N. It depends on no arm's
-// realized stream (spec section 5.1).
+// quota is the declared fixed per-hour schedule q(h) = floor((N-R)/H) +
+// (1 if h < (N-R) mod H else 0), so sum_{h<H} q(h) = N - R: the schedule stops R
+// attempts short of the declared ceiling and leaves them for transport retries
+// (DeclaredTransportReserveAttempts). It depends on no arm's realized stream
+// (spec section 5.1).
 func (s *PrioritySelector) quota(hour int) int {
-	q := s.callCeiling / uint64(s.horizonHours)
-	if h := uint64(hour); h < s.callCeiling%uint64(s.horizonHours) {
+	q := s.decisions / uint64(s.horizonHours)
+	if h := uint64(hour); h < s.decisions%uint64(s.horizonHours) {
 		q++
 	}
 	return int(q)
 }
 
 // reservedExploration is E = ceil(q*N) = (N*frac + scale - 1)/scale, the
-// declared reserved protected-exploration calls (spec section 4.5).
+// declared reserved protected-exploration calls (spec section 4.5). It is a
+// fraction of the declared ceiling N, not of the reduced decision budget, so the
+// declared exploration reserve is unchanged by the transport reserve.
 func (s *PrioritySelector) reservedExploration() int64 {
 	return (int64(s.callCeiling)*s.exploration + protocol.ExplorationScale - 1) / protocol.ExplorationScale
 }

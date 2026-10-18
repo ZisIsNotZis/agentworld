@@ -174,7 +174,9 @@ func observationFeature(name string) bool {
 // recorded run state, so replay re-derives the identical selection sequence. It
 // is online: it consumes each hour's roster as it arrives, spends at most the
 // declared per-hour quota q(h) for U and A (or is period-gated for P), and stops
-// once it has spent N. It needs no run-total candidate count and never exceeds N.
+// once it has spent its decision budget, the declared call ceiling N less the
+// declared transport reserve of attempts (ticket 40). It needs no run-total
+// candidate count and never exceeds N.
 type EscalationSelector interface {
 	Select(hour int, roster []EscalationCandidate, budget BudgetState) (Selection, error)
 }

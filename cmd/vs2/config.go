@@ -33,7 +33,10 @@ var budgetedArms = []string{ArmP, ArmU, ArmA}
 
 // DeclaredCallCeiling is N, the declared call ceiling of every budgeted arm
 // (spec section 5.1, fixed before any run). It is not derived from any
-// model-bearing arm's realized candidate count.
+// model-bearing arm's realized candidate count. It is the fail-loud ceiling on
+// physical attempts; the schedule selects at most N less the declared transport
+// reserve (cognition.DeclaredTransportReserveAttempts, ticket 40), so a retried
+// attempt lands inside the reserve instead of truncating a completing cell.
 const DeclaredCallCeiling uint64 = 256
 
 // DeclaredExplorationFraction is q = 25% protected exploration for arm A
@@ -166,8 +169,8 @@ func isBudgeted(arm string) bool {
 }
 
 // budgetFor returns the declared fail-loud cognitive ceiling of an arm. A hit
-// on a budgeted arm is a gate failure: the declared rule must stop at N on its
-// own (spec section 5.2). R's ceiling is the generous reference bound. A0 has
+// on a budgeted arm is a gate failure: the declared rule must stop before N on
+// its own (spec section 5.2). R's ceiling is the generous reference bound. A0 has
 // no cognition and no ceiling.
 func budgetFor(arm string) cognition.CognitiveBudget {
 	calls := DeclaredCallCeiling
@@ -323,14 +326,16 @@ func basePolicy() strategy.NaturalRef { return strategy.FrozenNaturalPolicy7().R
 func mechanism() world.NaturalMechanism { return world.NaturalMechanismV6 }
 
 // quotaSchedule is the declared fixed per-hour quota schedule
-// q(h) = floor(N/H) + (1 if h < N mod H else 0), so sum_{h<H} q(h) = N
-// (spec section 5.1). It depends on no arm's realized stream and is frozen
-// before any run. It mirrors the L3 accumulator's own schedule; a test pins the
-// two together.
+// q(h) = floor((N-R)/H) + (1 if h < (N-R) mod H else 0), so sum_{h<H} q(h) =
+// N - R (spec section 5.1, ticket 40): the schedule stops the declared transport
+// reserve R of attempts short of the ceiling N and leaves them to retries. It
+// depends on no arm's realized stream and is frozen before any run. It mirrors
+// the L3 accumulator's own schedule; a test pins the two together.
 func quotaSchedule(ceiling uint64, horizon int) []int {
 	q := make([]int, horizon)
-	base := ceiling / uint64(horizon)
-	extra := ceiling % uint64(horizon)
+	decisions := cognition.DecisionBudget(ceiling)
+	base := decisions / uint64(horizon)
+	extra := decisions % uint64(horizon)
 	for h := 0; h < horizon; h++ {
 		q[h] = int(base)
 		if uint64(h) < extra {
