@@ -1,0 +1,30 @@
+=== go version ===
+go version go1.24.13 linux/amd64
+=== go build ./... ===
+BUILD-OK exit=0
+=== go vet ./... ===
+VET-OK exit=0
+=== gofmt -l tracked .go ===
+GOFMT-DONE (empty above = no files)
+=== git diff --check 279f0ba ===
+DIFFCHK-OK exit=0
+=== build .tmp/39-vs2-bin ===
+BUILD-BIN-OK
+-rwxrwxr-x 1 z z 11952034 Oct 18 23:29 .tmp/39-vs2-bin
+=== curve step gate (cmd/vs2 -curve-in/-curve-out on an existing evaluation JSON) ===
+VS2 curve report (ticket 35; criterion pre-declared before data)
+decision rule: distinguishable iff some KPI has SNR >= 2.0 AND its paired difference exceeds the
+  replicate band for >= 24 consecutive hours in every cell; no condition is called better on a scalar.
+conditions: R@low
+cells: 1 replicates: 1 horizon: 145
+source: .tmp/36-v4-evaluation.json
+
+NOISE FLOOR (band over replicates: mean [95% CI] envelope, and across-replicate CV)
+
+[R@low] f10-s0 (columns are the band AT the final hour H; CV is the across-replicate coefficient of variation averaged over hours, with the worst hour)
+kpi                        mean@H      ci_lo@H      ci_hi@H       envelope@H    meanCV   worstCV
+population                 1.0000       1.0000       1.0000   1.0000..1.0000    0.0000    0.0000
+births_cum                 2.0000       2.0000       2.0000   2.0000..2.0000    0.0000    0.0000
+                       (5 hours excluded from CV: mean 0)
+deaths_starve_cum          1.0000       1.0000       1.0000   1.0000..1.0000    0.0000    0.0000
+                       (23 hours excluded from CV: mean 0)

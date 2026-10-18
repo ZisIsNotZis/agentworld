@@ -1,0 +1,17 @@
+ticket 39 — gateway reachability probe (one call; the declared wire, model and effort the harness sends)
+utc start: 2026-10-18T15:30:02Z
+command (verbatim):
+  curl -s -m 300 -w '\nHTTP:%{http_code} total:%{time_total}s\n' -X POST http://127.0.0.1:4000/v1/responses \
+    -H 'Content-Type: application/json' --data-binary @.tmp/39-probe-request.json -o .tmp/39-probe-response.json
+request body (verbatim):
+  {"model":"github_copilot/gpt-6-luna","max_output_tokens":16,"reasoning":{"effort":"low"},"text":{"format":{"type":"json_object"}},"input":[{"role":"system","content":[{"type":"input_text","text":"Reply with one JSON object and no prose."}]},{"role":"user","content":[{"type":"input_text","text":"Return {\"action\":\"wait\"} exactly."}]}]}
+response:
+  http_status: 200
+  gateway time_total: 4.195331s
+  body status: completed
+  model echoed: github_copilot/gpt-6-luna
+  usage input_tokens: 27 output_tokens: 12
+  output_text: "{\"action\":\"wait\"}"
+  cost at $0.10/M in, $0.50/M out: $0.000009
+  zero-spend reachability also confirmed: GET /health/liveliness -> 200; GET /v1/models -> 97 ids including github_copilot/gpt-6-luna
+verdict: PASS — the gateway serves the declared model on /v1/responses with json_object output mode and effort low

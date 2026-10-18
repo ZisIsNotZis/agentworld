@@ -1,0 +1,54 @@
+{
+ "ticket": "39",
+ "gate": "anchor reproduction (ticket 38 section 7.6 gate 2, section 8.4 step 3)",
+ "command": ".tmp/39-vs2-bin -arms A0 -cells f10-s0 -reps 3 -hours 144 -replay=false -claim-contract natural-claim/v4 -root .tmp/39-a0-runs -out .tmp/39-a0-evaluation.json -out-txt .tmp/39-a0-evaluation.txt",
+ "exit": 0,
+ "inventory": {
+  "declared": 3,
+  "ran": 3,
+  "skipped": null
+ },
+ "replicates": [
+  {
+   "replicate": 1,
+   "H": 1444,
+   "B": 2,
+   "S": 0,
+   "alive_h143": 2,
+   "alive_h144": 1,
+   "realized_calls": 0,
+   "halted": false,
+   "projection_hash": "33b7692ad323957230c4a3d1825b7bf2a97d4f968389e029024168bd63bfdd21",
+   "claim_contract": "natural-claim/v4",
+   "duration_ms": 4319
+  },
+  {
+   "replicate": 2,
+   "H": 1444,
+   "B": 2,
+   "S": 0,
+   "alive_h143": 2,
+   "alive_h144": 1,
+   "realized_calls": 0,
+   "halted": false,
+   "projection_hash": "33b7692ad323957230c4a3d1825b7bf2a97d4f968389e029024168bd63bfdd21",
+   "claim_contract": "natural-claim/v4",
+   "duration_ms": 4374
+  },
+  {
+   "replicate": 3,
+   "H": 1444,
+   "B": 2,
+   "S": 0,
+   "alive_h143": 2,
+   "alive_h144": 1,
+   "realized_calls": 0,
+   "halted": false,
+   "projection_hash": "33b7692ad323957230c4a3d1825b7bf2a97d4f968389e029024168bd63bfdd21",
+   "claim_contract": "natural-claim/v4",
+   "duration_ms": 4378
+  }
+ ],
+ "expected": "3/3 replicates at H=1444 B=2 S=0 alive@143=2 alive@144=1, 0 calls (ticket 37 recorded anchor)",
+ "verdict": "PASS"
+}

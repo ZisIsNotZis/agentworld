@@ -105,7 +105,38 @@ its own `calls.jsonl` ledger — which is the per-arm granularity the liveness c
 
 ## 4. Gates (each recorded verbatim with its result before any live call)
 
-Filled in by the second commit of this ticket (§9 records the order in which it was measured).
+All of §4 was measured and committed **before** the launch of §9. Raw transcripts committed beside this
+file: `gates.log` (build/vet/gofmt/diff-check/binary/curve), `evaluator-gate.log` (the scorer
+self-test), `anchor-gate.json` (the `A0` re-run vector), `gateway-probe.txt` (the probe).
+
+| # | gate | exact command (cwd = branch worktree) | result |
+|---|---|---|---|
+| 1 | build | `. .tmp/go-env.sh && go build ./...` | exit 0 — **PASS** (go1.24.13 linux/amd64, `GOTOOLCHAIN=local`) |
+| 2 | vet | `go vet ./...` | exit 0 — **PASS** |
+| 3 | gofmt on tracked `.go` | `git ls-files -z '*.go' \| xargs -0 gofmt -l` | no output, exit 0 — **PASS** |
+| 4 | whitespace/conflict vs the base | `git diff --check 279f0ba` | exit 0 — **PASS** |
+| 5 | runner binary | `go build -o .tmp/39-vs2-bin ./cmd/vs2` | exit 0 — **PASS** |
+| 6 | evaluator gate (ticket 38 §7.6 gate 1) | `python3 .scratch/38-m2c-preregistration/vrd2.py --self-test --scores .scratch/37-fidelity-metric/scores.json --log .scratch/39-m2c-matrix/evaluator-gate.log` | exit 0; T1–T7 PASS, every band/floor fixture PASS, `SELF-TEST: PASS` — **PASS** |
+| 7 | anchor gate (ticket 38 §7.6 gate 2, §8.4 step 3) | `.tmp/39-vs2-bin -arms A0 -cells f10-s0 -reps 3 -hours 144 -replay=false -claim-contract natural-claim/v4 -root .tmp/39-a0-runs -out .tmp/39-a0-evaluation.json -out-txt .tmp/39-a0-evaluation.txt` | exit 0 in 5.9 s wall; **3/3 identical replicates**, each `H = 1444`, `B = 2`, `S = 0`, alive@143 = 2, alive@144 = 1, `realized_calls = 0`, `halted = false`, identical `projection_hash 33b7692ad323…` — **PASS** (`anchor-gate.json`) |
+| 8 | curve step (ticket 38 §8.4 step 7) | `.tmp/39-vs2-bin -curve-in .tmp/36-v4-evaluation.json -curve-out .tmp/39-curve-gate.txt` | exit 0; 58-line report written, carries the noise floor, the per-condition accounting and the decision-rule statement — **PASS** (the command runs and produces the §7.5 corroboration quantity at zero spend) |
+| 9 | contract gate (ticket 38 §7.6 gate 3) | `python3 .tmp/35-admis.py .tmp/36-v4-runs` | `tally per arm (role-a records):` `R {'applied': 1323, 'rejected': 2, 'inadmissible': 0, 'malformed': 2, 'other': 0}` — the `inadmissible` count is read from `role_a.fallback_reason == "inadmissible"` over every `calls.jsonl` in the run root; **0** on the recorded `natural-claim/v4` run, and the same command is the gate phase B runs on `.tmp/39-m2c-runs` before reading a verdict — **PASS** |
+| 10 | gateway reachability | the one-call probe of `gateway-probe.txt` | HTTP 200 in 4.195 s, body `status: completed`, model echoed `github_copilot/gpt-6-luna`, usage 27 in / 12 out (≈$0.000009), `output_text` a valid JSON object under `text.format=json_object` with `reasoning.effort=low`; zero-spend `/health/liveliness` 200 and `/v1/models` lists 97 ids including the declared model — **PASS** |
+
+Two observations, recorded rather than dismissed:
+
+- **`VS2-EC-1` FAILs in the anchor report, and it is pre-existing and structural, not a regression.**
+  The evidence line is `A0 cells checked=1 missing=0 declared=12; mismatches=f10-s0:alive_by_hour,
+  f10-s0:event_body_bytes, f10-s0:events, f10-s0:history_bytes`. Two discriminating checks: at `H = 168`
+  (the frozen VS2 horizon) the same cell reports `mismatches=none` and still `FAIL` for `checked=1
+  declared=12`, so the four mismatches are the declared `H = 144` horizon truncation that ticket 35
+  already carries, and the FAIL itself is the one-cell inventory; and ticket 35's recorded
+  `natural-claim/v2` evaluation (`v2`), which runs the same cell at the same horizon, reports the
+  **identical** FAIL with the **identical four mismatches** (`mismatches=f10-s0:alive_by_hour,
+  f10-s0:event_body_bytes,f10-s0:events,f10-s0:history_bytes`). `VS2-EC-1` is satisfied only by the full
+  12-cell `A0` matrix, which this ticket does not run; it is not one of the ticket-38 gates and it does
+  not gate the launch. Recorded here so phase B does not read it as new.
+- **The gateway probe is real spend, $0.000009 of the $2.00 cap**, one call, and its `calls.jsonl`-free
+  cost is counted in §9's spend line.
 
 ## 5. Run bookkeeping
 
