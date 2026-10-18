@@ -997,11 +997,13 @@ spend accounting, max→high substitution.
 | `.tmp/35-depth-curve.txt` (low vs high and the v2 arms, post-`n/a`-repair) | `f5bdcbe6a799e5ca8306ac9fe9098f3ca4211f97d16e8753c6da6bcc2813a0fd` |
 | `.tmp/35-depth-curve.txt.pre-p14` (superseded) | `068767ed390bab1e7c96b7897ea4555863f8935950162f3228935b56abf81e51` |
 
-**Gates at the final tree** (`sh .tmp/35-gates2.sh` → `.tmp/35-gates2.out`): `go build ./...` PASS,
-`go vet ./...` PASS, `gofmt -l` (tracked .go) clean, `git diff --check` clean, and
-`go test -timeout 30m ./internal/cognition/... ./cmd/vs2 ./internal/experiment` all ok. The full-package
-gate `go test -timeout 30m ./...` passed earlier at the same code (`internal/world` 1501.272 s, zero FAIL
-lines, `.tmp/35-gates.out`). **Final lane spend: $13.17 over 31 191 recorded harness calls (≈ $14.4 with
+**Gates at the final tree** (post-review tip `f67eec9`): `sh .tmp/35-gates3.sh` →
+`.tmp/35-gates3.out` gives `go build ./...` PASS, `go vet ./...` PASS, `gofmt -l` (tracked .go) clean,
+`git diff --check` clean, and `go test -timeout 30m ./internal/cognition/... ./cmd/vs2
+./internal/experiment` all ok (162 tests). The **full suite** `go test -timeout 30m ./...` also passes at
+this tip: `.tmp/35-gates-full.out`, `EXIT=0`, every package `ok`, `internal/world` 1501.272 s, zero FAIL
+lines (cached results for the untouched packages, so the suite was also exercised uncached earlier at the
+same code via `.tmp/35-gates.out`). **Final lane spend: $13.17 over 31 191 recorded harness calls (≈ $14.4 with
 out-of-harness probes), inside the $25 cap. `max`@v2 is deliberately unrun** — the depth rung at `high` did
 not separate from `low`, so a 15-17 h single point would have bought nothing.
 
