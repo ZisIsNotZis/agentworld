@@ -450,7 +450,7 @@ Everything below was produced after the pre-declaration commit `6072af3`, with *
 Files committed beside this record: `vrd2.py` (the scorer), `self-test.log`, `recorded.log`,
 `negative-control.log`, `live-smoke.log`, and `anchor-check.json`. Inputs: this ticket's own
 `vrd2.py`, ticket 37's committed `.scratch/37-fidelity-metric/scores.json` (the recorded per-cell
-vectors), and two zero-spend `cmd/vs2` runs of the `A0` cell.
+vectors), and three zero-spend `cmd/vs2` runs of the `A0` cell.
 
 ## R1 — The anchor is reproducible with zero spend, and the claim contract cannot move it
 
@@ -518,7 +518,7 @@ The two rejected candidates, on the same four worlds (same transcript):
 **`vrd/2` is therefore the only candidate of the three whose ordering agrees with the declared
 priority on all four worlds, which is what T2–T4 require.**
 
-## R3 — The recorded matrix: the repair changes what the metric means, and no recorded ordering
+## R3 — The recorded matrix: the repair changes what the metric means, and no recorded arm ordering
 
 `python3 .scratch/38-m2c-preregistration/vrd2.py --scores .scratch/37-fidelity-metric/scores.json` —
 exit 0, transcript `recorded.log`. This is **verification, not the M2c comparison**: these are ticket
