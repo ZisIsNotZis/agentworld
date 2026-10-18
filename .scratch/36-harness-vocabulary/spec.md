@@ -567,11 +567,33 @@ correction, the complete field sweep, the M2 stage declaration, the D result and
 | `.tmp/36-verdicts.jsonl` (ladder verdicts for the 45 probe answers) | `983573731c379f325de1d4bc407f685466279c6bc23df6befa73da7c9b5592ce` |
 | `.tmp/36-vs2-bin` (binary used for both the hermetic and the live run) | `8b573f72a31938d1b5d4758aca425fa655543a1a0813f020ff36a45e4eca9598` |
 
-**Gates.** At the final tree: `go build ./...` PASS, `go vet ./...` PASS, `gofmt -l` (tracked `.go`) clean,
-`git diff --check` clean, `go test ./internal/cognition/... ./cmd/vs2 ./internal/experiment` **193 tests
-PASS**, `go test ./internal/world -run 'Cognition|Seam|Vocabulary|Portrait'` **38 tests PASS**. The **full
-suite** `go test -timeout 30m ./...` passed at the code tip `e6f5220` (`EXIT=0`, every package `ok`,
-`internal/world` 1 260.178 s, zero FAIL lines); only documentation changed after that tip.
+**Post-review additions (commits `57226c0`, `814bda0` and the correction sections):** EC-6 per-contract
+allow-list + sentinel under every contract + `-recheck-in` recomputation; the falsifier's second
+(declared) form; the two-parent restatement of the birth path; the withdrawal of the suppression claim in
+ticket 35's record, `docs/VERTICAL-SLICES.md` and this CHANGELOG. The **original D evaluation artefacts are
+unchanged** (their hashes above still hold): the corrected EC-6 verdict lives in the recheck artefact, not
+in a rewritten report, because the run's report is evidence of what was computed at run time — including
+the wrong band.
+
+**Post-review artefact hashes**
+
+| artefact | sha256 |
+|---|---|
+| `.tmp/36-ec6-recheck.json` (EC-6 recomputed over `.tmp/36-v4-runs`, no spend) | `162421ece4c2b2459552d6d5dab55edeee99b46ff61405ec64009e535db0da20` |
+| `.tmp/36-ec6-recheck.txt` | `e306d9c6034d48f7ec5d005fcfa8b26cac9a023b7831bac3b71c79e1153ebf48` |
+| `.tmp/36-ec6-recheck-35-v2.json` (cross-check, 6 580 v2 requests) | `1dd5835b549421f95e3079ee4ac4a18e7d6faf3ddfb7b1d65e03cb9595b93ac4` |
+| `.tmp/36-ec6-recheck-35-stage3.json` (cross-check, 2 265 v1 requests) | `7bae158fa84b173627bebbd7b8c6180fb81cb039b2b98b5168abf7abe84a165e` |
+| `.tmp/36-falsifier-recall.json` (falsifier form 2, 5 live calls) | `89ebc85ee6bfd5b3b39e7ba0b4c0a9d33f51c27b37410ac6e5728401cb3fdebb` |
+| `.tmp/36-vs2-bin2` (binary carrying the EC-6 repair and `-recheck-in`) | `8ba50f86ace87a39ef7b95b4257557c958150b48f1dd5429db4e9b0152f3258a` |
+
+**Gates.** At the post-review tree (`.tmp/36-gates2.out`): `go build ./...` PASS, `go vet ./...` PASS,
+`gofmt -l` (tracked `.go`) clean, `git diff --check` clean, and the **full suite** `go test -timeout 30m
+./...` **EXIT=0, every package `ok`, zero FAIL lines** (`internal/world` 630.158 s, `cmd/vs2` 23.886 s,
+`internal/cognition` 0.479 s). The new guards are inside that run:
+`TestDeclaredSeamRequestKeySetsMatchTheEncoders` and the pinned `goldenV4Request` in
+`internal/cognition`, and `cmd/vs2/privacy_test.go` (per-contract selection, undeclared contract, extra key,
+misplaced v1 name, live marker detection, sentinel coverage of every contract). The earlier gates at the
+code tip `e6f5220` (`internal/world` 1 260.178 s) are superseded by this run, not replaced.
 
 **Spend for this ticket**: **1 370 live model calls** — 45 comprehension/falsifier probe calls
 (28 332 input + 6 442 output tokens ≈ $0.0061) plus 1 325 run calls (824 408 + 234 007 tokens ≈ $0.199) —
