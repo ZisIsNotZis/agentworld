@@ -152,3 +152,31 @@ for anything: current truth lives in the authoritative documents — the active 
 - **Ticket 30 — VS2 lane L4c: equal-budget attention experiment runner `cmd/vs2`.** Revision `4a0ad28`.
 - **Ticket 31 — VS2 lane L2b: candidate feature derivations and escalation predicate.** Revision `48b4882` (spec commit `2517e3a`, implementation commit `5c56098`).
 - **Ticket 33 — VS2 lane L5: evidence record and current-state docs reconciliation.** Merge `2ef513b` (lane commit `ed438ef`, revision addendum `8ab4015`).
+
+## 2026-10-18
+
+- **Ticket 36 — harness vocabulary and comprehension test (M2a, instrument calibration).** Branch
+  `feature/36-harness-vocabulary`. The model-facing Role A request was a bare data dump with four
+  misleading action names; it is replaced by the declared contract **`natural-claim/v4`**: decision-facing
+  field names (gate outcomes instead of the timestamps that gate them, a count of the food waiting instead
+  of eight per-slot rows and unusable slot ids), the four claim actions written as display labels
+  (`take_slot_food_into_bag`, `eat_granary_food`, `take_granary_food_into_bag`, `wait_this_hour`), and a
+  real system prompt (situation, a deterministic persona card from the actor's own id/age/genome, the goal
+  in the actor's own words, and the four facts no field name can carry) at 414 estimated tokens. The
+  internal action IDs stay the frozen wire/storage tokens behind one declared mapping table
+  (`protocol.ClaimActionVocabularyTable`, bijection-tested), so replay and fingerprints are unaffected and
+  `v1`/`v2` request bytes are pinned unchanged. The field sweep dropped four rows that nothing decides on
+  (`hunger`, `invested_units`, `home_patch`, and the derived `identity_digest`) and the seven strategy
+  constants; the dispatch's "hunger is the starvation clock" was **wrong** — `NaturalBasalFor` kills on
+  `Energy == 0` and hunger never kills — and is recorded as corrected. Measured: **0/40 inadmissible** in
+  the comprehension probe (v1 baseline 86.7 %, v2 shortcut 0 %) with the model's own account of what it can
+  do agreeing with the code's ladder on **20/20 cells and 5/5 exact sets**; one live full-wake replicate at
+  144 h, cell f10-s0, effort `low` gives **2 births, final population 1 against the no-AI control's 2,
+  0 inadmissible in 1 325 decisions**, with the birth gate demonstrably reached and held (58 and 101
+  actor-hours) and no further birth — so the binding constraint is downstream of capital/granary and is not
+  identified here. Ticket 35's reading of its own 30-request v2 probe is corrected in that record: 29 of
+  those 30 states admitted only gather-or-wait, so the near-constant answer was the fixture's action space,
+  not model degeneration. M2's work is staged (M2a passed as instrument calibration, M2b–M2d declared as
+  ordered successors that may not start before their predecessor passes); **the central claim and the M2
+  milestone remain not accepted**. Spend: 1 370 live calls (45 probe + 1 325 run), ≈$0.21, inside the
+  declared 1 600-call / $3 budget. Evidence record: `.scratch/36-harness-vocabulary/spec.md`.
