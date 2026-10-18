@@ -795,3 +795,33 @@ still alive. A second launch ran alongside it and both were stopped by exact pid
 recorded runner pid is the `vs2-bin` process itself; liveness is verified by three independent facts —
 the pid exists, the three `calls.jsonl` ledgers grow materially, and the artefacts appear — never by log
 content, because the report is written only at exit.
+
+## Spend accounting (from recorded per-call usage, every root)
+
+Cost at the declared gpt-6-luna prices ($0.10/M input, $0.50/M output) over the recorded token totals of
+every harness ledger in this lane:
+
+| root | calls | input tokens | output tokens | cost |
+|---|---|---|---|---|
+| `.tmp/35-stage1-runs` (R@max, 72 h, 2 cells × 3) | 5 106 | 2 190 498 | 11 947 221 | $6.193 |
+| `.tmp/35-stage2-none-runs` (R@none, 144 h) | 4 085 | 1 759 468 | 80 007 | $0.216 |
+| `.tmp/35-stage2-low-runs` (R@low, 144 h) | 3 642 | 1 567 817 | 783 591 | $0.549 |
+| `.tmp/35-stage2-high-runs` (R@high, 144 h) | 3 638 | 1 567 386 | 1 755 742 | $1.035 |
+| `.tmp/35-stage2-max-runs` (R@max, v1, STOPPED at 2 246 calls) | 2 246 | 967 924 | 5 608 622 | $2.901 |
+| `.tmp/35-stage3-runs` (A0/P/U/A@low, v1) | 2 265 | 976 854 | 477 550 | $0.336 |
+| `.tmp/35-v2-runs` (v2 contract, 6 arms @low) | 6 580 | 2 921 449 | 992 927 | $0.789 |
+| `.tmp/35-v2max-runs` (R@max, v2 — in flight) | see progress note | | | |
+| smoke + `-parallel 2` probe | 47 | 18 888 | 97 421 | $0.050 |
+| **harness total so far** | **27 699** | **12 010 318** | **21 981 875** | **$12.19** |
+
+Outside the harness (probe spend, recorded here and nowhere else): 68 max-effort latency probes ≈ $0.90,
+60 contract probes ≈ $0.008, one body-shape probe ≈ $0.02, and the abandoned first stage-1 launch (193
+calls ≈ $0.22). **Lane spend ≈ $13.4 of the $25 hard cap** at the v2-max launch; the v2-max run is
+projected at ≈ $3.6 (full-wake at 144 h, 3 replicates), taking the lane to ≈ **$17**, i.e. below the
+supervisor's $23 estimate and inside the cap with margin.
+
+v2-max progress at 09:01: 89 calls, all `ok`, max-effort latencies 13-46 s, throughput ≈ 8.9 calls/min
+(≈ 6.8 h to the ≈ 3 600-call target). **Hard stop after this run: no further live model calls in this
+lane, whatever the result.** When it lands: `-relabel` it, hash it, re-run the curve report
+(`-curve-in` the v2 and v2max relabelled evaluations) for the low-vs-max contrast at one contract, and
+append the result here.
