@@ -312,3 +312,72 @@ file and never log content (the report is written only at exit).
 | 12:57 | 603 | 17.9 | all `ok` |
 | 13:07 | 780 | 18.1 | all `ok` |
 | 13:12 | 875 | 18.1 | 874 `ok`, 1 `http-error` (transport retry; the attempt was retried and the call completed) |
+| 13:29 | 1 132 | 17.2 | all `ok` |
+| 13:36 | 1 266 | 18.2 | 1 265 `ok`, 1 `http-error` (retried) |
+| 13:47 | 1 325 | — | run complete: **1 325 call records, 1 323 applied, 2 `malformed`, 0 `inadmissible`**, exit 0, report emitted |
+
+### Deliverable D — result: one full-AI replicate at v4 (144 h, cell f10-s0, effort `low`)
+
+Command as declared above; exit 0; 1/1 cell ran, 1 325 call records, `halted=false`, `under_budget=false`.
+Artefacts: `.tmp/36-v4-evaluation.json` (sha256 `8aa4342e…146463`), `.tmp/36-v4-evaluation.txt`
+(`b7b2bec1…2d9e3c`), ledger `.tmp/36-v4-runs/R-f10-s0-r1/calls.jsonl` (`c85746de…39403a`).
+
+| quantity | value |
+|---|---|
+| population at h 0/24/48/72/96/120/144 | 10, 11, 11, 11, 11, 4, **1** |
+| **final population vs the no-AI control's 2** | **1 — the replicate does NOT exceed the control** (A0 at this cell is deterministic: 10, 12, 12, 12, 12, 5, 2 with 2 births) |
+| births cumulative | **2** (both by h 24; none afterwards) |
+| starvation deaths cumulative | 1 |
+| age deaths cumulative | 10 |
+| applied / rejected decisions | 1 323 / 2, both `malformed`, **0 `inadmissible`** (0.15 % decision-error rate against 40–53 % under v1 and 0.7–1.3 % under v2) |
+| applied action mix (internal IDs) | `gather` 1 115 (84.3 %), `provision` 139 (10.5 %), `eat-stored` 62 (4.7 %), `wait` 7 (0.5 %) |
+| the frozen cascade's own mix at the same instants (recorded `frozen_action`) | `gather` 1 181, `provision` 119, `eat-stored` 25, `wait` 0 → **91 applied decisions (6.9 %) diverged from the frozen policy**, and the divergence runs in both directions |
+| calls / tokens / cost | 1 325 calls, 824 408 input + 234 007 output tokens ≈ **$0.199** at the declared gpt-6-luna prices (the report records cost as UNPRICED because the gateway exposes no price entry; the token totals are the evidence) |
+| coverage | min 23, max 139, Gini 0.119 |
+
+**Was the birth gate ever within reach? Yes — and that is the point of the measurement.** Per actor, the
+closest approach to `capital >= 2 AND granary >= 3` in an escalated hour of this replicate:
+
+| actor | max capital | max granary | closest hour (capital, granary, energy) | escalated actor-hours at the gate |
+|---|---|---|---|---|
+| 1 | 1 | 2 | h6 (1, 2, 7) | 0 |
+| 2 | 1 | 1 | h2 (1, 1, 9) | 0 |
+| 3 | 1 | 2 | h6 (1, 2, 7) | 0 |
+| 4 | 1 | 2 | h3 (1, 2, 8) | 0 |
+| 5 | 1 | 1 | h2 (1, 1, 9) | 0 |
+| 6 | 1 | 1 | h2 (1, 1, 9) | 0 |
+| 7 | 1 | 2 | h11 (1, 2, 5) | 0 |
+| 8 | 1 | 3 | h15 (1, 3, 3) | 0 (one capital short) |
+| 9 | 2 | 7 | h4 (2, 4, 7) | **3** |
+| 10 | 2 | 6 | h4 (2, 4, 7) | **3** |
+| 2017 (born h5) | 3 | 35 | h11 (2, 4, 4) | **58** |
+| 2018 (born h6) | 3 | 39 | h11 (2, 3, 4) | **101** |
+
+So the two meanings of "still no births" are separated by this run: **the gate was not merely approached, it
+was held open** — the two second-generation actors sat at or above both birth floors for 58 and 101
+escalated actor-hours each, and no third birth followed. The failure is therefore *downstream of
+capital/granary*: the birth path also needs a partner (proposal and consent are addressed and same-patch),
+a free request slot, an energy floor at the filing instant, and the granary payment at the reply. This run
+measures the claim-instant state, not the filing-instant state, and it cannot see partnership availability,
+so which of those binds is **not established here** — it is the next measurement, not a conclusion.
+
+**Limits of D, stated.** One cell, one replicate, one effort level, one contract; the no-AI control is the
+deterministic A0 cell at the same fixture (ticket 35 record), not a paired replicate of this run; and the
+arm is full wake (every claim-wake actor escalated), so this is not an allocation result. **No allocation
+conclusion is drawn and none may be** (the M2a/M2b/C stages above say why).
+
+### What the vocabulary change did and did not fix
+
+**Fixed:** the model's answers are now admissible without the world telling it the answer — 0/40 in the
+comprehension probe and 0/1 325 in the full run, against 86.7 % inadmissible under v1 — and the model's own
+account of what it can do agrees with the code's ladder (20/20 cells, 5/5 exact sets). The vocabulary is
+also what makes the whys legible: 1 323 of 1 325 applied decisions carry a recorded `why`, and they speak
+the world's actual mechanics ("the granary draw", "waiting slot food", "capital") rather than the old
+jargon.
+
+**Not fixed, and not claimed:** the near-constant `gather` majority (84 % of applied decisions) — ticket 35's
+v2 sample and this run's state distribution both show the fixture's escalations mostly admit only
+gather-or-wait, so a narrow action mix is a property of the state space, not of the prompt; the birth path
+below the capital/granary gate; the fidelity anchor (Q1), which is M2b; any allocation comparison, which is
+M2c. **The central claim is not addressed by this ticket, and the M2 milestone remains not accepted.**
+
