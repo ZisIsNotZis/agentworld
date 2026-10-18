@@ -103,17 +103,27 @@ for anything: current truth lives in the authoritative documents — the active 
   `vs2-value/2` added a staleness term and a per-actor coverage floor with a non-degeneracy regression test;
   in the v2 run its Gini is 0.14-0.23 against `vs2-value/1`'s 0.49-0.59 (same contract, arm `A1`), so the
   collapse was the value model. Two results cut against the redesign and are recorded: **periodic sampling has
-  zero demographic effect** at this fixture (244 applied decisions reproduce the no-AI world exactly), and the
-  **v1 value model is the closest arm to the R reference** while `vs2-value/2` is indistinguishable from A0 —
-  because R produces 0-1 births and dies out, so **fidelity-to-R rewards suppressing reproduction and the R
-  anchor is an unvalidated objective** (Q1). Re-grading every held artefact under alternative metric families
+  zero DEMOGRAPHIC effect** at this fixture (244 applied decisions leave population, births, starvation
+  deaths, age deaths and exchange identical to the no-AI world at every hour and in every replicate; its
+  wealth and granary state still differ — `max_capital` diverges at 70-76 hours per replicate from h13/h19),
+  and the **v1 value model is the closest arm to the R reference** while `vs2-value/2` is indistinguishable
+  from A0 **on the demographic KPIs** (the tool still separates `A0 vs A` on `capital_hist[0]`) — because R
+  produces 0-1 births and dies out, so **fidelity-to-R rewards suppressing reproduction and the R anchor is
+  an unvalidated objective** (Q1). Re-grading every held artefact under alternative metric families
   (births, starvation, age deaths, population at fixed hours, wealth/granary dispersion, coverage, action mix)
   showed that **no demographic indicator separates `A` from `P` or from `A0`** (all ≤1.23 pooled SDs, inside
   the replicate band) while the candidate metrics **rank the arms in opposite orders** (by R-distance
   `A1 < R < A < U < A0=P`; by births/survival `A ≈ A0 = P > U > R > A1`), which is the Q1 evidence. A depth
   rung was then run at `high` under v2: **`high` is not distinguishable from `low` on any KPI** (population
   SNR 0.49, births 0.82, starvation 0.05, age deaths 0.23), so the fixture cannot resolve depth at this
-  budget and `max`@v2 was deliberately left unrun (15-17 h for one point). Lane spend $13.17 over 31 191
+  budget and `max`@v2 was deliberately left unrun (15-17 h for one point). An independent review then found
+  four P1 factual overclaims and several P2s, all repaired in the record without new spend or data: the
+  "every KPI RMSE 0.0000" overclaim became the accurate demographic form with the wealth divergence stated;
+  "indistinguishable from A0" gained its demographic qualifier plus the wealth separations the tool actually
+  reports; the criterion's both-cell clause is now stated as met vacuously by every single-cell verdict; and
+  both-deterministic comparisons now report `n/a (both deterministic)` instead of `SNR = +Inf`, which
+  flipped exactly one verdict (`A0 vs P` in the v1 stage-3 run: distinguishable → not distinguishable) and
+  changed the driving KPI of two others without changing their verdicts. Lane spend $13.17 over 31 191
   recorded harness calls, ≈$14.4 with probes, inside the $25 cap. The ticket-34 verdict stands unchanged; no
   arm is called better; the central claim and M2 remain not accepted. Evidence record:
   `.scratch/35-vs2-curve/spec.md`.

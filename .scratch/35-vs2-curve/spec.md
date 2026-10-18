@@ -355,6 +355,13 @@ the pilot that establishes the noise floor, **not** as the reference for compari
    measured cost runs materially above it, and report if per-run calls differ materially from ~1600 at
    144 h.
 
+**The both-cell clause is met only trivially from here on.** The frozen decision rule requires a
+separation "in **both** cells" (the declared f10-s0 and f12-s0). This re-plan reduces every remaining
+condition to the single cell f10-s0, so for stages 2 and 3 and for every v2 verdict the both-cell
+condition is satisfied *vacuously* — there is one cell and the separation holds in it — and never
+substantively, because no second cell can disagree. A separation that would reproduce at f12 is therefore
+**untested** for every result after stage 1, and each verdict section below says so.
+
 **Report-labelling defect fixed before the next live report** (`cmd/vs2`): the report's status, label,
 honest-limit and EC-9 arm text are now parameterised by run mode. A live run prints
 `status: live/real-model`, a label naming the real model, endpoint, applied effort/output-bound/
@@ -417,17 +424,20 @@ it carries no information here and is reported as such rather than dropped.
 **Effect size against the replicate band, stated side by side (no level is called better):**
 
 - `none` vs `low`: births cumulative differs by 1.6 RMSE over hours (SNR 4.04, first separation at hour
-  7, 138 consecutive separating hours); max capital SNR 4.81 (first separation hour 6, 115 hours);
-  population SNR 1.74 with a non-contiguous 44-hour run; starvation deaths SNR 1.42 and age deaths SNR
-  1.43 do not separate. So the pair is **distinguishable** under the pre-declared rule via births and
-  max capital, and the replicate band for those KPIs is small (noise 0.40 and 0.35) relative to the
-  difference (1.63 and 1.68).
+  7, 138 consecutive separating hours); max capital SNR **4.83** (first separation hour 6, **117**
+  consecutive hours, run starting h28); population SNR 1.74 with a non-contiguous 44-hour run;
+  starvation deaths SNR 1.42 and age deaths SNR 1.43 do not separate. So the pair is
+  **distinguishable** under the pre-declared rule via births and max capital, and the replicate band for
+  those KPIs is small (noise 0.40 and 0.35) relative to the difference (1.63 and 1.69).
 - `none` vs `high`: the same picture — births SNR 4.06 (separation running 138 hours from hour 7), max
-  capital SNR 4.81; population 1.74. **Distinguishable** via births and max capital.
+  capital SNR **4.81** (first separation h6, 115 hours — this is the row an earlier draft mis-transcribed
+  into the `none` vs `low` line); population 1.74. **Distinguishable** via births and max capital.
 - `low` vs `high`: **not distinguishable at this noise floor** — no KPI reaches SNR 2 with a sustained
   separation. Their per-replicate population curves are effectively the same shape (h143 = 0/1/0 at
   both), and the decision-error rates differ (low 55–60 %, high 39–45 %) without that difference
   resolving into the aggregate KPIs.
+- **Both-cell clause**: these verdicts are single-cell (f10-s0), so the rule's "in both cells" condition
+  is met vacuously (see the re-plan note); reproduction at f12-s0 is untested.
 - The replicate band at this horizon is larger than at 72 h: population noise 0.66 actors and births
   noise 0.40 births, because the crash amplifies sampling differences (h120→h143 differ by one to two
   actors between replicates). The 72 h band (~1 actor ceiling, ≤5 % relative) was therefore the wrong
@@ -479,8 +489,8 @@ admissibility. The proposed-action × refusing-gate table is unambiguous:
 
 So the model answers `eat-stored` almost always, and that action is inadmissible for most hours. The
 consequence is that this matrix compares **admissibility luck, not allocation quality**: P's applied
-decisions turn its world into A0's world exactly (12→2, 2 births, 0 starvation, 11 age deaths in every
-replicate), A reproduces A0 in two replicates and diverges once (0 births, 0 alive at h143), and U — the
+decisions turn its world into A0's DEMOGRAPHIC world exactly (12→2 population, 2 births, 0 starvation,
+11 age deaths in every replicate; its wealth and granary state still differ), A reproduces A0 in two replicates and diverges once (0 births, 0 alive at h143), and U — the
 arm with the most applied decisions (486) — diverges hardest (3/2/1 alive, 3/3/1 births, 4/6/1
 starvation deaths). Recorded as the stage-3 result; no arm is called better, and the capacity to
 distinguish allocation policies is not demonstrated by this data.
@@ -499,10 +509,27 @@ verbatim per pair and with the numbers that matter:
 - **A vs U** separates through starvation deaths; **A vs P** only through `max_capital`.
 
 Methodological caveat this exposes: against the deterministic A0 control the denominator is a one-sided
-noise floor, so any structural difference at all reaches SNR ≥ 2 (max capital 0 vs 2). "Distinguishable
+noise floor, so a structural difference reaches SNR ≥ 2 easily (max capital 0 vs 2). "Distinguishable
 from A0" is therefore weak evidence; the informative comparisons are between two stochastic arms (A vs
 U, P vs U), where the replicate band is real. Those outcomes measure how much of each arm's model answer
 survives admissibility, not which policy is better.
+
+**`n/a (both deterministic)`, and what depended on the earlier `+Inf` convention** (corrected after
+review; the frozen criterion says that when both conditions are deterministic the SNR is reported
+`n/a (both deterministic)` with the raw RMSE of the difference, never as an infinite ratio). The first
+version of this report printed `+Inf` for that case. Recomputing with the literal rule changes exactly
+three verdict lines across the three curve reports, and nothing else:
+
+1. **`A0 vs P` (this stage-3 report) flipped from DISTINGUISHABLE to NOT distinguishable** — its only
+   driving KPI was `granary_hist[0]`, whose SNR was `+Inf` because both conditions are deterministic.
+   That single convention produced the pair's verdict, so the corrected statement is that P is not
+   distinguishable from A0 at all.
+2. **`A0 vs A1` and `A1 vs P` (v2 and depth reports) keep their DISTINGUISHABLE verdict, but their
+   driving KPI changes**: it was `population` via `+Inf` (both deterministic) and is now `max_capital`
+   (SNR 16.57 under a one-sided noise floor, first separation h5, 133 consecutive hours), which is a real
+   ratio. The verdicts stand; only their attribution was wrong.
+3. No other pair changed. Every remaining `+Inf` row either had no sustained separation or was not a
+   driver, and all `n/a` rows are now marked as the rule's declared state.
 
 ## EC-1 at 144 h is a horizon artefact, not a regression (proved for free)
 
@@ -603,11 +630,13 @@ Command as declared (`.tmp/35-run-v2.sh`), exit 0, 18/18 cells, **6580 call reco
 (`.tmp/35-v2-evaluation.json` sha256 `8efd819533d56b419d74639f6e6ba559fb678f013df7120bf6b8c3102d4bae3d`,
 text `857318f46f5c20516daa9b3a89099ba81a48f7ebedc743c950105f8de6563a3d`, curve report
 `.tmp/35-v2-curve.txt`). Cost from recorded tokens: 2 921 449 input + 992 927 output = **$0.789** at the
-declared prices, taking lane spend to ≈ $19.5 of the $25 cap.
+declared prices — a projection made at the time of writing; the authoritative figure is the spend section
+below ($13.17 of the $25 cap for the whole lane at completion).
 
 **1. The contract fix works.** Role-a tallies (`.tmp/35-admis.py .tmp/35-v2-runs`): R 3527 applied /
 26 rejected, A 763/5, A1 752/7, P 726/6, U 758/10 — and **zero inadmissible in every arm** (the
-remaining rejections are all `malformed`, 0.6-2.3 %). Against v1's 40-53 % inadmissible this is the
+remaining rejections are all `malformed`, 0.7-1.3 % — exactly A 5/768 = 0.65 %, R 26/3553 = 0.73 %,
+P 6/732 = 0.82 %, A1 7/759 = 0.92 %, U 10/768 = 1.30 %). Against v1's 40-53 % inadmissible this is the
 whole defect removed. The report label is correct too (`status: live/real-model`).
 
 **2. The value-model fix works on the thing it was built for.** Per-actor coverage (per replicate):
@@ -629,25 +658,34 @@ collapses, so the collapse was the value model, not the contract.
 |---|---|---|---|---|
 | A0 | 10,12,12,12,12,5,2 (identical ×3) | 2 | 0 | 11 |
 | P | identical to A0 ×3 | 2 | 0 | 11 |
-| A | 12,12,12,12,12,5,2 ×2 and 12,11,10,10,10,3,2 ×1 | 2 | 0/0/2 | 10/11/8 |
+| A | 10,12,12,12,12,5,2 (r1, r2) and 10,12,11,10,10,3,2 (r3) | 2 | 0/0/2 | 10/11/8 |
 | U | 10,10,7,9,8,6,3 / 10,11,9,9,9,5,2 / 10,10,10,7,6,4,2 | 3/3/2 | 5/4/6 | 5/7/5 |
 | A1 | 10,10,10,10,10,3,0 ×3 | 0 | 0 | 10 |
 | R | 10,10,9,9,9,3,0 / 10,10,10,10,10,3,0 / 10,11,11,11,11,4,1 | 0/0/1 | 1/0/0 | 9/10/11 |
 
 **4. Two conclusions, stated plainly.**
 
-> **(a) Periodically-sampled model reasoning has ZERO demographic effect in this fixture.** P applies 244
-> model decisions per replicate (all three applied 241-243 of 244) and reproduces the no-AI world exactly
-> — every KPI, every replicate, RMSE 0.0000. That can no longer be explained by admissibility loss,
-> because `natural-claim/v2` removed it; it is a real property of the periodic arm's decision points at
-> this cell and horizon.
+> **(a) Periodically-sampled model reasoning has ZERO DEMOGRAPHIC effect in this fixture.** P applies 244
+> model decisions per replicate (all three applied 241-243 of 244) and **every demographic KPI —
+> population, births, starvation deaths, age deaths, wages/exchange — is identical to A0 at every hour
+> and in every replicate (RMSE 0.0000)**. It is NOT identical on wealth state: **`max_capital` differs at
+> 70-76 hours per replicate (76/70/74), first divergence at h19 (r1) and h13 (r2, r3)**, and
+> `capital_hist[2]`/`[3]` differ over the same hours (the earlier draft's "every KPI, every replicate,
+> RMSE 0.0000" was an overclaim, corrected here). That demographic null can no longer be explained by
+> admissibility loss, because `natural-claim/v2` removed it; it is a real property of the periodic arm's
+> decision points at this cell and horizon.
 
 > **(b) The v1 value model — whose concentrated coverage I had called a defect — is by far the closest to
-> the R reference, while the "fixed" v2 model is indistinguishable from A0.** On the declared fidelity
-> metric the arm labelled buggy was the better one. A1 vs R is the only pair in the whole run that is
+> the R reference, while the "fixed" v2 model is indistinguishable from A0 *on the demographic KPIs*.** On
+> the declared fidelity metric the arm labelled buggy was **the closest to R**, not better (dominance
+> language is reserved to the frozen EC-3 instrument). A1 vs R is the only pair in the whole run that is
 > **not distinguishable** (population SNR 0.346, births 0.817, starvation 0.817, age 0.777, max capital
-> 1.764), while A vs R separates on births (SNR 4.03, 139-hour run) and A0 vs A does not separate on any
-> demographic KPI (population 0.83, births 1.63, starvation 0.82, age 0.91).
+> 1.764), while A vs R separates on births (SNR 4.03, 139-hour run). A0 vs A does not separate on any
+> **demographic** KPI (population 0.83, births 1.63, starvation 0.82, age 0.91) but the tool's own verdict
+> for that pair is **DISTINGUISHABLE via `capital_hist[0]`** (SNR 2.39, first separation h14, 120
+> consecutive hours) — a wealth-state separation, not a demographic one. Likewise A vs P is
+> distinguishable only through `capital_hist[0]`; the demographic separation is what fails, not all
+> separation.
 
 **5. The likely reason is the metric's own problem, not an arm ranking.** R (full cognition) produces 0-1
 births against A0's 2 and dies out (0.33-1 alive at h143), so "closer to R" currently means "converges on
@@ -661,26 +699,39 @@ Dynamic range of this horizon, stated so the numbers are readable: population sp
 0-3 (crash) and saturates at the fixture's cap until h96, so population separates mainly through the crash
 timing; births span 0-3 and starvation deaths 0-6, which is why they are the primary discriminators here.
 Against the deterministic A0 the denominator is one-sided (its replicate SD is 0 everywhere), so any
-structural difference reaches SNR ≥ 2 and `+Inf` appears where A0's curve is flat and the other arm's is
-not — read those rows as "A0 is deterministic here", not as an infinitely strong effect.
+demographic difference reaches SNR ≥ 2 and `Inf` appears where one side is flat and the other is not —
+read those rows as "A0 is deterministic here", not as an infinitely strong effect. Where **both**
+conditions are deterministic the frozen rule reports **`n/a (both deterministic)`** with the raw RMSE and
+not a ratio, so those KPIs cannot drive a verdict; the table below is regenerated from
+`.tmp/35-v2-curve.txt` (`python3 .tmp/35-table.py`) rather than transcribed, after the review found two
+transcription errors in an earlier draft.
 
 | pair | population | births | starvation | age deaths | max capital | verdict |
 |---|---|---|---|---|---|---|
-| A0 vs P | 0.00 | 0.00 | 0.00 | 0.00 | 3.87 | distinguishable via granary_hist[0] only |
-| A0 vs A | 0.83 | 1.63 | 0.82 | 0.91 | 4.36 | distinguishable via capital_hist[0] only |
-| A0 vs A1 | +Inf | +Inf | 0.00 | +Inf (run 1) | 16.57 | distinguishable |
-| A0 vs R | 3.09 | 4.07 | 0.82 | 0.89 | 48.30 | distinguishable |
-| A0 vs U | 3.78 | 1.07 | 7.40 | 5.25 | 2.84 | distinguishable |
-| P vs A | 0.83 | 1.63 | 0.82 | 0.91 | 1.44 | distinguishable via capital_hist[0] only |
-| P vs A1 | +Inf | +Inf | 0.00 | +Inf | 8.38 | distinguishable |
-| P vs R | 3.09 | 4.07 | 0.82 | 0.89 | 10.55 | distinguishable |
-| P vs U | 3.78 | 1.07 | 7.40 | 5.25 | 1.31 | distinguishable |
-| A vs A1 | 2.59 | 40.76 | 0.82 | 0.75 | 8.16 | distinguishable |
-| A vs R | 1.68 | 4.03 | 0.35 | 0.32 | 10.59 | distinguishable via births |
-| A vs U | 2.50 | 1.05 | 4.07 | 4.30 | 0.96 | distinguishable |
+| A0 vs A1 | n/a | n/a | n/a | n/a | 16.57 | distinguishable via `max_capital` (one-sided floor) |
+| A0 vs A | 0.83 | 1.63 | 0.82 | 0.91 | 4.36 | distinguishable via `capital_hist[0]` |
+| A0 vs P | n/a | n/a | n/a | n/a | 3.87 | distinguishable via `granary_hist[0]` (SNR 15.43, 46 h run) |
+| A0 vs R | 3.09 | 4.07 | 0.82 | 0.89 | 48.30 | distinguishable via population |
+| A0 vs U | 3.78 | 1.07 | 7.40 | 5.25 | 2.84 | distinguishable via population |
+| A1 vs A | 2.59 | 40.76 | 0.82 | 0.75 | 8.16 | distinguishable via population |
+| A1 vs P | n/a | n/a | n/a | n/a | 8.38 | distinguishable via `max_capital` (one-sided floor) |
 | A1 vs R | 0.35 | 0.82 | 0.82 | 0.78 | 1.76 | **NOT distinguishable** |
-| A1 vs U | 2.19 | 4.79 | 7.40 | 5.21 | 6.68 | distinguishable |
-| R vs U | 1.60 | 3.20 | 5.72 | 4.34 | 7.79 | distinguishable |
+| A1 vs U | 2.19 | 4.79 | 7.40 | 5.21 | 6.68 | distinguishable via population |
+| A vs P | 0.83 | 1.63 | 0.82 | 0.91 | 1.44 | distinguishable via `capital_hist[0]` |
+| A vs R | 1.68 | 4.03 | 0.35 | 0.32 | 10.59 | distinguishable via births |
+| A vs U | 2.50 | 1.05 | 4.07 | 4.30 | 0.96 | distinguishable via population |
+| P vs R | 3.09 | 4.07 | 0.82 | 0.89 | 10.55 | distinguishable via population |
+| P vs U | 3.78 | 1.07 | 7.40 | 5.25 | 1.31 | distinguishable via population |
+| R vs U | 1.60 | 3.20 | 5.72 | 4.34 | 7.79 | distinguishable via births |
+
+`n/a` in this table means both conditions are deterministic on that KPI (the frozen rule's declared state),
+not "no difference" and not "an infinite difference" — the raw RMSE and the separation hours are in the
+curve report. In the v2 run the pair `A0 vs P` is distinguishable through the **granary** histogram
+(`granary_hist[0]` SNR 15.43, 46 consecutive hours from h37; max capital only 3 hours, so it does not
+drive), which is a real ratio on a one-sided floor: P's food storage differs from A0 even though every
+demographic KPI is identical. In the stage-3 (v1) run the same pair's only driver was `granary_hist[0]`
+at `+Inf`, so it fell to `n/a` and the pair became NOT distinguishable — that is the difference between a
+real ratio and the `+Inf` convention.
 
 No arm is called better. What the table establishes is which separations exceed the replicate band and by
 how much; what it does not establish is that any of them is an improvement, because the reference the
@@ -694,9 +745,12 @@ The stage-1/2/3 reports were emitted by a binary built before the mode-parameter
 nothing else: `live: true` (inferred for the legacy JSONs from the recorded applied bounds),
 `status: synthetic/model-conditional → live/real-model`, the label (hermetic "no authorised spend" text →
 the live text naming model, wire, applied effort/output/response bounds, run-only spend authorisation and
-the UNPRICED cost state), and the VS2-EC-9 arm line ("blocked on spend" → "the live-model arm RAN; no
-acceptance is claimed here"). Every measured field, series, count and band decision is byte-identical to
-the original.
+the UNPRICED cost state), the added `applied:` header line (`applied: effort=… output-bound=…
+response-bound=… votes=… replicates=…`, which the earlier binary did not print — added to the change list
+after review; the path now detects its absence and reports it), and the VS2-EC-9 arm line ("blocked on
+spend" → "the live-model arm RAN; no acceptance is claimed here"). Every measured field, series, count and
+band decision is byte-identical to the original; the relabelled artefacts were re-generated after the
+change-list repair and are byte-identical to the first regeneration (`sha256sum -c` OK on all seven).
 
 | artefact | sha256 |
 |---|---|
@@ -708,7 +762,8 @@ the original.
 | `.tmp/35-stage2-high-evaluation.json` (original) | `c39d4a61ee1099ca38fed5025a92294d2ac63a1e974b2b240eeb5e91dcc08c37` |
 | `.tmp/35-stage3-evaluation.json` (original) | `808de6230b0a7491171eaa037444e4e34229a83ecdec4368dafdc1a22076b8ed` |
 | `.tmp/35-stage3-evaluation-relabelled.json` | `de2af4bac6faf08be91bf6e26d77f53aff5e6ac562825ff41b4b8b76e4c1a1f9` |
-| `.tmp/35-curve-report.txt` (stages 1-3 curve report) | `2f1642d66c7350202d501e01e7a724256616fe345d840a0d50ba53b7059bbafa` |
+| `.tmp/35-curve-report.txt` (stages 1-3, post-`n/a`-repair) | `14665daaec7b0b06dd3a3e2fde38088a5a76928c631dc9be22c12af31ae846cf` |
+| `.tmp/35-curve-report.txt.pre-p14` (superseded: `+Inf` convention + old column label) | `2f1642d66c7350202d501e01e7a724256616fe345d840a0d50ba53b7059bbafa` |
 
 Progressive evidence: `.tmp/35-stage1.progress` (poll log), `.tmp/35-stage23.progress`, per-cell
 hash-chained ledgers and checkpoint bundles under `.tmp/35-stage{1,2-*,3,v2}-runs/`.
@@ -766,12 +821,20 @@ Separation statistic per pair, `|mean difference| / pooled replicate SD` (identi
 | P vs A0 | – | – | – | – | – | – | – | – | inf | inf |
 
 **Which indicators can even see the differences.** Population, births, starvation deaths and wealth
-dispersion all separate `A1`/`R` from `A0`/`P`/`A` and separate `U` from everything — but **no demographic
+dispersion all separate `A1`/`R` from `A0`/`P`/`A` and separate `U` from everything — but **no DEMOGRAPHIC
 indicator separates `A` from `P` or `A` from `A0`**: every demographic value for that pair sits at or below
-1.23 pooled SDs, i.e. inside the replicate band. The only indicator that moves for that pair is
-**coverage Gini** (3.20 vs P, 4.98 vs A0) and the realised call count — a process measure, not a
-civilization outcome. So the value model changes *how* the budget is spent and, at this fixture and
-horizon, nothing that the demographic KPIs can resolve.
+1.23 pooled SDs, i.e. inside the replicate band. Among the indicators sampled here the only one outside the
+band for that pair is **coverage Gini** (3.20 vs P, 4.98 vs A0) and the realised call count — process
+measures, not civilization outcomes.
+
+Two caveats on reading that table as a verdict, both of which the review caught: (i) this table is a
+different instrument from the frozen criterion — `|Δmean| / pooled replicate SD` over five sampled hours
+— so its `inf`/`–` cells are not the criterion's SNR and it can miss a separation that a full-curve test
+finds; (ii) the tool's own full-curve verdicts do separate this pair on **wealth state**: `A0 vs A` and
+`A vs P` are DISTINGUISHABLE via `capital_hist[0]` (SNR 2.39, 120 consecutive hours from h25), and in the
+v2 run `A0 vs P` is distinguishable via `granary_hist[0]`. So the accurate statement is: **the DEMOGRAPHIC
+separation fails for `A` vs `P`/`A0`; a wealth-state and process separation exists.** The value model
+changes *how* the budget is spent and, at this fixture and horizon, nothing the demographic KPIs resolve.
 
 **The indicators rank the arms differently from the R-anchored fidelity**, which is the Q1 evidence: by
 r-distance the order is `A1 (0.205) < R (0.686) < A (1.576) < U (1.747) < A0 = P (1.833)`, i.e. the arm
@@ -866,60 +929,6 @@ report SNR per KPI, call no arm better, and state the fixture's dynamic range al
 from `low` on births/population, say so; if it does not, state that the fixture cannot resolve depth at this
 budget.
 
-## Completion record (2026-10-18, branch `feature/35-vs2-curve`)
-
-**Commits** (in order): `2c7fbcc` pre-registered criterion · `99e3a6c` 72 h + `-parallel 8` declaration ·
-`fa79953` applied effort/bound provenance + `-votes` · `6c08536` flags, KPI export, replicate dirs, curve
-statistics + tests · `8562195` smoke + live attempt/call timeouts · `fb27465` live-only 1 MiB response
-bound + per-call applied bound/body length · `df54d93` stage-1 result + re-plan + mode-corrected labels +
-`-relabel` · later commits: stage-2/3 results, EC-1 continuity, admissibility quantification and
-`natural-claim/v2`, `vs2-value/2` + coverage reporting + regression test, v2 result, re-grading, docs,
-spend accounting, max→high substitution.
-
-**Artefact hashes (sha256)**
-
-| artefact | sha256 |
-|---|---|
-| `.scratch/35-vs2-curve/spec.md` (this record; hash changes with each commit) | `f7bbf118ac1e626d83b1169c6650bbe7f320f7fbf97b0cc91d3f007ea1fa4ed3` |
-| `.tmp/35-stage1-evaluation.json` | `c75c807f4e13c2183a856bd9eaadcc6358c6868a8b639b46eb22007f7fc0e4b2` |
-| `.tmp/35-stage2-none-evaluation.json` | `6fb3c2ecc161a6c99ac7b9a579f8d017bf507203339ddf792b92ab6f16f2f14b` |
-| `.tmp/35-stage2-low-evaluation.json` | `d579aa77b3246ea4ff9240d6161c8f15457e11997429d7943a1006406f5ae8e3` |
-| `.tmp/35-stage2-high-evaluation.json` | `c39d4a61ee1099ca38fed5025a92294d2ac63a1e974b2b240eeb5e91dcc08c37` |
-| `.tmp/35-stage3-evaluation.json` | `808de6230b0a7491171eaa037444e4e34229a83ecdec4368dafdc1a22076b8ed` |
-| `.tmp/35-v2-evaluation.json` | `8efd819533d56b419d74639f6e6ba559fb678f013df7120bf6b8c3102d4bae3d` |
-| `.tmp/35-v2-evaluation.txt` | `857318f46f5c20516daa9b3a89099ba81a48f7ebedc743c950105f8de6563a3d` |
-| `.tmp/35-v2-curve.txt` | `62d9e989e451f6be2bb21970a66e6502e5294f33aa32dae4d618fe9283b32feb` |
-| `.tmp/35-curve-report.txt` (stages 1-3) | `2f1642d66c7350202d501e01e7a724256616fe345d840a0d50ba53b7059bbafa` |
-| `.tmp/35-ec1-evaluation.json` (A0@168 h continuity) | `ed01e3229d93def1fceb34e8450c5fc4d081dabda5d52538569d152eb3234bb8` |
-| `.tmp/35-claimv2-results.json` (v1 vs v2 probe) | `059a256143813cab38d4defc254366a7edb9b3fc9dfea447ebdf23375cc60411` |
-| `cmd/vs2/curves.go` | `0404f81534daf569b0483e0e2085cbc9c91d595673ececd6a4c062ed01d5d8d1` |
-| `cmd/vs2/curves_test.go` | `529c568ebba13e1ec0f09f47171cebb2afa92c57ae2d6ba24cb65742e5f83b11` |
-| `.tmp/35-v2high-evaluation.json` (depth run, `high`@v2) | `fa28644877bec6a40045d64006fa3d4a606776e3d7d36e858e4273569eddaae6` |
-| `.tmp/35-v2high-evaluation-relabelled.json` | `8278d3f818919c83d438b41734915524b39ed466a5ea5dbb484b15f4b34601b6` |
-| `.tmp/35-depth-curve.txt` (low vs high and the v2 arms) | `068767ed390bab1e7c96b7897ea4555863f8935950162f3228935b56abf81e51` |
-
-**Gates at the final tree** (`sh .tmp/35-gates2.sh` → `.tmp/35-gates2.out`): `go build ./...` PASS,
-`go vet ./...` PASS, `gofmt -l` (tracked .go) clean, `git diff --check` clean, and
-`go test -timeout 30m ./internal/cognition/... ./cmd/vs2 ./internal/experiment` all ok. The full-package
-gate `go test -timeout 30m ./...` passed earlier at the same code (`internal/world` 1501.272 s, zero FAIL
-lines, `.tmp/35-gates.out`). **Final lane spend: $13.17 over 31 191 recorded harness calls (≈ $14.4 with
-out-of-harness probes), inside the $25 cap. `max`@v2 is deliberately unrun** — the depth rung at `high` did
-not separate from `low`, so a 15-17 h single point would have bought nothing.
-
-**Final statement of what this lane establishes and what it does not.**
-Establishes: the harness now records what it applies (effort, output bound, response bound, body length)
-per call; the ticket-34 harness bounds (30 s attempt, 64 KiB body) were silent live decision-loss
-channels and are fixed for live runs; the dominant loss in the v1 matrix was **admissibility** (40-53 %)
-and a versioned contract change removes it (`natural-claim/v2`: 0 inadmissible in 6 580 calls); the
-coverage collapse was the value model and `vs2-value/2` fixes it (Gini 0.14-0.23 vs 0.49-0.59 in the same
-run); and the aggregate noise floor at this fixture is ~1 actor / ≤5 % relative. Does not establish: that
-any allocation policy is better. Periodic sampling reproduces the no-AI world exactly at 144 h; no
-demographic indicator separates A from P or from A0; and the candidate metric families rank the arms in
-**opposite orders**, because **the R anchor is unvalidated** (full cognition suppresses reproduction and
-dies out, so fidelity-to-R rewards extinction). **Open question Q1 (a civilization-level distance measure)
-is not resolved here and is the blocking question for any further VS2 claim.** The ticket-34 verdict
-(central claim NOT accepted under EC-3 as written) stands unchanged, and the M2 milestone is not accepted.
-
 ## Depth result: full-wake at `high` under contract v2 (144 h, f10-s0, 3 reps)
 
 Command as declared (`.tmp/35-run-v2high.sh`), exit 0, 3/3 cells, **3 417 call records, all `ok`**
@@ -939,7 +948,9 @@ Per replicate: population h0/48/96/120/143 = 10,10,10,3,0 (r1), 10,9,9,3,0 (r2),
 |---|---|---|---|---|---|---|
 | **R@high vs R@low** | 0.487 | 0.817 | 0.054 | 0.225 | 1.291 | **NOT distinguishable** |
 
-Every demographic separation is below SNR 2, and no separation runs 24 consecutive hours. So at this
+Every KPI separation is below SNR 2 (demographic and wealth alike), and no separation runs 24 consecutive
+hours. **Both-cell clause**: single cell (f10-s0), so the rule's "in both cells" condition is met
+vacuously — depth reproduction at f12-s0 is untested. So at this
 fixture and horizon **the depth of thinking is not resolvable**: `low` and `high` produce the same
 demographic trajectory (both die out by h143 with zero births), and `A1@low` is also not distinguishable
 from `R@high` (population 0.817, births 0.000, starvation 0.817, age 0.817). Per the pre-declared reading,
@@ -947,6 +958,112 @@ the limiting factor is the **fixture's resolution** — population capped at 12,
 births under any full-cognition arm — not the depth of thinking. `max` would have been an expensive way to
 learn the same thing, which is why it is deliberately unrun.
 
-Everything else in the same curve report is unchanged from the v2 section above: `A` vs `P`/`A0` still
-separate only through process measures (coverage), `U` separates from everything, and `A1` remains the arm
-closest to `R` — i.e. the unvalidated-anchor problem (Q1) is untouched by the depth result.
+Everything else in the same curve report is unchanged from the v2 section above: `A` vs `P`/`A0` still fail
+to separate on every **demographic** KPI (they separate on wealth state and process measures only), `U`
+separates from everything, and `A1` remains the arm closest to `R` — i.e. the unvalidated-anchor problem
+(Q1) is untouched by the depth result.
+
+## Completion record (2026-10-18, branch `feature/35-vs2-curve`)
+
+**Commits** (in order): `2c7fbcc` pre-registered criterion · `99e3a6c` 72 h + `-parallel 8` declaration ·
+`fa79953` applied effort/bound provenance + `-votes` · `6c08536` flags, KPI export, replicate dirs, curve
+statistics + tests · `8562195` smoke + live attempt/call timeouts · `fb27465` live-only 1 MiB response
+bound + per-call applied bound/body length · `df54d93` stage-1 result + re-plan + mode-corrected labels +
+`-relabel` · later commits: stage-2/3 results, EC-1 continuity, admissibility quantification and
+`natural-claim/v2`, `vs2-value/2` + coverage reporting + regression test, v2 result, re-grading, docs,
+spend accounting, max→high substitution.
+
+**Artefact hashes (sha256)**
+
+| artefact | sha256 |
+|---|---|
+| `.scratch/35-vs2-curve/spec.md` at its **pre-registration** commit `2c7fbcc` (the frozen criterion; this file changes with each later commit, so a self-referential hash would be unstable — the current value is in the final commit's message) | `89a0c3b4bf4eac26dbdff4ca9874ae6f67c35fbbcd7d0055fb0ffb2e405de9cd` |
+| `.tmp/35-stage1-evaluation.json` | `c75c807f4e13c2183a856bd9eaadcc6358c6868a8b639b46eb22007f7fc0e4b2` |
+| `.tmp/35-stage2-none-evaluation.json` | `6fb3c2ecc161a6c99ac7b9a579f8d017bf507203339ddf792b92ab6f16f2f14b` |
+| `.tmp/35-stage2-low-evaluation.json` | `d579aa77b3246ea4ff9240d6161c8f15457e11997429d7943a1006406f5ae8e3` |
+| `.tmp/35-stage2-high-evaluation.json` | `c39d4a61ee1099ca38fed5025a92294d2ac63a1e974b2b240eeb5e91dcc08c37` |
+| `.tmp/35-stage3-evaluation.json` | `808de6230b0a7491171eaa037444e4e34229a83ecdec4368dafdc1a22076b8ed` |
+| `.tmp/35-v2-evaluation.json` | `8efd819533d56b419d74639f6e6ba559fb678f013df7120bf6b8c3102d4bae3d` |
+| `.tmp/35-v2-evaluation.txt` | `857318f46f5c20516daa9b3a89099ba81a48f7ebedc743c950105f8de6563a3d` |
+| `.tmp/35-v2-curve.txt` (post-`n/a`-repair) | `b8d9f181d1601343381911fc78591d3a2f261f07d46462b82ae9004d14487a2a` |
+| `.tmp/35-v2-curve.txt.pre-p14` (superseded) | `62d9e989e451f6be2bb21970a66e6502e5294f33aa32dae4d618fe9283b32feb` |
+| `.tmp/35-curve-report.txt` (stages 1-3, post-`n/a`-repair) | `14665daaec7b0b06dd3a3e2fde38088a5a76928c631dc9be22c12af31ae846cf` |
+| `.tmp/35-ec1-evaluation.json` (A0@168 h continuity) | `ed01e3229d93def1fceb34e8450c5fc4d081dabda5d52538569d152eb3234bb8` |
+| `.tmp/35-claimv2-results.json` (v1 vs v2 probe) | `059a256143813cab38d4defc254366a7edb9b3fc9dfea447ebdf23375cc60411` |
+| `cmd/vs2/curves.go` | `0404f81534daf569b0483e0e2085cbc9c91d595673ececd6a4c062ed01d5d8d1` |
+| `cmd/vs2/curves_test.go` | `529c568ebba13e1ec0f09f47171cebb2afa92c57ae2d6ba24cb65742e5f83b11` |
+| `.tmp/35-v2high-evaluation.json` (depth run, `high`@v2) | `fa28644877bec6a40045d64006fa3d4a606776e3d7d36e858e4273569eddaae6` |
+| `.tmp/35-v2high-evaluation-relabelled.json` | `8278d3f818919c83d438b41734915524b39ed466a5ea5dbb484b15f4b34601b6` |
+| `.tmp/35-depth-curve.txt` (low vs high and the v2 arms, post-`n/a`-repair) | `f5bdcbe6a799e5ca8306ac9fe9098f3ca4211f97d16e8753c6da6bcc2813a0fd` |
+| `.tmp/35-depth-curve.txt.pre-p14` (superseded) | `068767ed390bab1e7c96b7897ea4555863f8935950162f3228935b56abf81e51` |
+
+**Gates at the final tree** (`sh .tmp/35-gates2.sh` → `.tmp/35-gates2.out`): `go build ./...` PASS,
+`go vet ./...` PASS, `gofmt -l` (tracked .go) clean, `git diff --check` clean, and
+`go test -timeout 30m ./internal/cognition/... ./cmd/vs2 ./internal/experiment` all ok. The full-package
+gate `go test -timeout 30m ./...` passed earlier at the same code (`internal/world` 1501.272 s, zero FAIL
+lines, `.tmp/35-gates.out`). **Final lane spend: $13.17 over 31 191 recorded harness calls (≈ $14.4 with
+out-of-harness probes), inside the $25 cap. `max`@v2 is deliberately unrun** — the depth rung at `high` did
+not separate from `low`, so a 15-17 h single point would have bought nothing.
+
+**Final statement of what this lane establishes and what it does not.**
+Establishes: the harness now records what it applies (effort, output bound, response bound, body length)
+per call; the ticket-34 harness bounds (30 s attempt, 64 KiB body) were silent live decision-loss
+channels and are fixed for live runs; the dominant loss in the v1 matrix was **admissibility** (40-53 %)
+and a versioned contract change removes it (`natural-claim/v2`: 0 inadmissible in 6 580 calls); the
+coverage collapse was the value model and `vs2-value/2` fixes it (Gini 0.14-0.23 vs 0.49-0.59 in the same
+run); and the aggregate noise floor at this fixture is ~1 actor / ≤5 % relative. Does not establish: that
+any allocation policy is better. Periodic sampling reproduces the no-AI world on **every demographic KPI**
+at 144 h (its wealth state and granary state still differ); no **demographic** indicator separates A from P
+or from A0 (they separate on wealth state and process measures only); and the candidate metric families
+rank the arms in **opposite orders**, because **the R anchor is unvalidated** (full cognition suppresses
+reproduction and dies out, so fidelity-to-R rewards extinction). **Open question Q1 (a civilization-level
+distance measure) is not resolved here and is the blocking question for any further VS2 claim.** The
+ticket-34 verdict (central claim NOT accepted under EC-3 as written) stands unchanged, and the M2
+milestone is not accepted.
+
+## Post-review corrections (no new spend, no new data)
+
+An independent review returned "OK with notes" with pre-registration **INTACT** (criterion and executable
+rule committed before any live call; no evidence of post-hoc tuning; no headline direction reverses) and
+four P1 factual overclaims plus several P2s, all repaired in this record, in `CHANGELOG.md`, in
+`docs/VERTICAL-SLICES.md`, in the curve reports and in the curve-report code:
+
+- **P1-1** "every KPI … RMSE 0.0000" → the accurate demographic form, with the wealth divergence stated
+  (`max_capital` differs at 70-76 hours per replicate, first divergence h19/h13/h13; `capital_hist[2]`/`[3]`
+  over the same hours). Verified independently here before editing.
+- **P1-2** "indistinguishable from A0" and "separate only through process measures" now carry the
+  demographic qualifier, and the passages name the wealth-state separations the tool actually reports
+  (`capital_hist[0]` for `A0 vs A` and `A vs P`; `granary_hist[0]` for `A0 vs P` in the v2 run).
+- **P1-3** the criterion's **both-cell clause** is now stated where the single-cell re-plan is recorded and
+  referenced by each single-cell verdict: the clause is met vacuously, never substantively, and f12-s0
+  reproduction is untested after stage 1.
+- **P1-4** both-deterministic comparisons now report **`n/a (both deterministic)`** with the raw RMSE
+  instead of `SNR = +Inf` (code + tests + report label + every table), and the three verdict lines that
+  depended on the `+Inf` convention are named: `A0 vs P` (stage 3) **flipped** DISINGUISHABLE →
+  NOT distinguishable; `A0 vs A1` and `A1 vs P` kept their verdicts but their driving KPI changed from
+  `population` (`+Inf`) to `max_capital` (real ratio). No other verdict changed.
+- **P2s** the stage-2 `none` vs `low` row (`max_capital` **4.83 / 117 h**, not 4.81 / 115 — that is the
+  `high` vs `none` row); A's population row (`h0 = 10` in all replicates); the rejection-rate band
+  (0.7-1.3 %, per-arm figures given); the stale `≈$19.5 of the $25 cap` projection (labelled as a
+  projection and pointed at the spend section, which is authoritative); "the arm labelled buggy was the
+  better one" → "**was the closest to R**" (dominance language stays with the frozen EC-3 instrument);
+  the `-relabel` difference list now includes the `applied:` header line it had omitted (the path detects
+  its absence and reports it); and the curve report's noise-floor columns are relabelled `mean@H`,
+  `ci_lo@H`, `ci_hi@H`, `envelope@H`, `meanCV`, `worstCV` with a line stating that the columns are the band
+  at the final hour — the earlier `band@H` label named something other than what the column held.
+
+**What the review could not verify, and who did.** The review had no shell, so three mechanical claims were
+checked by the supervisor and are recorded here with the commands:
+
+1. `git diff --name-status 3faa480..HEAD` → **6 added, 20 modified**, and the set matches the expected
+   one (the six additions are exactly `cmd/vs2/curves.go`, `cmd/vs2/curves_test.go`,
+   `internal/cognition/claim_contract_test.go`, `internal/cognition/client_applied_bound_test.go`,
+   `internal/cognition/priority_coverage_test.go` and this study record).
+2. **The criterion was not edited after data existed.** Diffing the pre-declared section between the
+   pre-registration commit and HEAD (`git show 2c7fbcc:.scratch/35-vs2-curve/spec.md` vs
+   `git show HEAD:…`, slicing `## The pre-declared acceptance criterion` to the next `## `) yields
+   **no differences — 63 lines byte-identical**. Only design parameters changed afterwards, each recorded
+   as such (e.g. the horizon note "the criterion is unchanged").
+3. **The `P vs A0` wealth divergence is real**: recomputing from `.tmp/35-v2-evaluation.json`,
+   `max_capital` differs from A0 in **76/70/74 hours** across the three P replicates, first divergence at
+   h19/h13/h13, with `capital_hist[2]` and `[3]` following it; every demographic series is identical.

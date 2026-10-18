@@ -340,21 +340,22 @@ func compareKPIs(cell, kpi string, a, b [][]float64) curveComparison {
 	cmp.Wasserstein = math.NaN() // filled by the caller for the right KPI shape
 	oneSidedA := aDiffSum == 0 && bDiffSum > 0
 	oneSidedB := bDiffSum == 0 && aDiffSum > 0
+	// The frozen criterion's degenerate-denominator rule, applied literally:
+	// when one condition is deterministic the denominator is the other side's
+	// replicate variance and the comparison is flagged as a one-sided noise floor;
+	// when BOTH are deterministic the SNR is undefined and reported as
+	// `n/a (both deterministic)` with the raw RMSE of the difference, never as an
+	// infinite ratio (an undefined denominator is not an infinitely strong effect,
+	// and an SNR the rule cannot express must not fire the rule).
 	switch {
 	case cmp.Noise > 0:
 		cmp.SNR = cmp.RMSE / cmp.Noise
 		if oneSidedA || oneSidedB {
 			cmp.Note = "one-sided noise floor (one condition deterministic)"
 		}
-	case cmp.RMSE == 0:
-		cmp.Note = "both deterministic (identical curves)"
 	default:
-		cmp.SNR = math.Inf(1)
-		if oneSidedA || oneSidedB {
-			cmp.Note = "one-sided noise floor (one condition deterministic)"
-		} else {
-			cmp.Note = "zero replicate noise"
-		}
+		cmp.SNR = math.NaN()
+		cmp.Note = "n/a (both deterministic)"
 	}
 	if len(a) < 2 || len(b) < 2 {
 		cmp.Note = "single replicate: no noise estimate"
@@ -782,8 +783,8 @@ func renderCurveReport(report curveReport) string {
 		}
 		sort.Strings(cells)
 		for _, cell := range cells {
-			fmt.Fprintf(&b, "\n[%s] %s\n", condition, cell)
-			fmt.Fprintf(&b, "%-20s %12s %12s %12s %12s %7s %7s\n", "kpi", "band@H", "ci_lo@H", "ci_hi@H", "env", "meanCV", "worstCV")
+			fmt.Fprintf(&b, "\n[%s] %s (columns are the band AT the final hour H; CV is the across-replicate coefficient of variation averaged over hours, with the worst hour)\n", condition, cell)
+			fmt.Fprintf(&b, "%-20s %12s %12s %12s %16s %9s %9s\n", "kpi", "mean@H", "ci_lo@H", "ci_hi@H", "envelope@H", "meanCV", "worstCV")
 			bands := report.Bands[condition][cell]
 			for _, kpi := range sortedKPIs(bands) {
 				band := bands[kpi]
@@ -791,7 +792,7 @@ func renderCurveReport(report curveReport) string {
 					continue
 				}
 				last := band.Hours - 1
-				fmt.Fprintf(&b, "%-20s %12s %12s %12s %12s %7s %7s\n", kpi,
+				fmt.Fprintf(&b, "%-20s %12s %12s %12s %16s %9s %9s\n", kpi,
 					fmtFloat(band.Mean[last]), fmtFloat(band.CILo[last]), fmtFloat(band.CIHi[last]),
 					fmt.Sprintf("%s..%s", fmtFloat(band.EnvLo[last]), fmtFloat(band.EnvHi[last])),
 					fmtFloat(band.MeanCV), fmtFloat(band.WorstCV))
@@ -838,7 +839,7 @@ func renderCurveReport(report curveReport) string {
 				"cell", "kpi", "rmse_d", "noise", "snr", "firstsep", "run_len", "run_at", "wasserstein", "note")
 			for _, cmp := range pair.Comparisons {
 				fmt.Fprintf(&b, "  %-10s %-20s %10s %10s %8s %8d %8d %8d %10s %s\n",
-					cmp.Cell, cmp.KPI, fmtFloat(cmp.RMSE), fmtFloat(cmp.Noise), fmtFloat(cmp.SNR),
+					cmp.Cell, cmp.KPI, fmtFloat(cmp.RMSE), fmtFloat(cmp.Noise), fmtSNR(cmp.SNR),
 					cmp.FirstSeparation, cmp.RunLength, cmp.RunStart, fmtFloat(cmp.Wasserstein), cmp.Note)
 			}
 		}
@@ -922,4 +923,14 @@ func kpiOrder(name string) int {
 		return base + 1000 + bucket
 	}
 	return 10_000
+}
+
+// fmtSNR renders a comparison's SNR: a number when the denominator is defined,
+// `n/a` when both conditions are deterministic (the frozen criterion's declared
+// state, never an infinite ratio).
+func fmtSNR(snr float64) string {
+	if math.IsNaN(snr) {
+		return "n/a"
+	}
+	return fmtFloat(snr)
 }

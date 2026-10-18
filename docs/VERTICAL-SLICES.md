@@ -123,7 +123,9 @@ Under that criterion the lane also found that **depth is not resolvable at this 
 `high` is **not distinguishable** from full-wake at `low` on any KPI (population SNR 0.49, births 0.82,
 starvation 0.05, age deaths 0.23, max capital 1.29 — all below the pre-declared threshold), because the
 fixture saturates (population capped at 12, extinction by h156, zero births under full cognition), so
-`max`@v2 was deliberately unrun rather than spending 15-17 h of wall time to learn the same thing. The
+`max`@v2 was deliberately unrun rather than spending 15-17 h of wall time to learn the same thing. Every
+verdict after stage 1 is single-cell (f10-s0), so the criterion's "both cells" clause is met vacuously
+rather than substantively: reproduction at f12-s0 is untested. The
 remaining findings, live and spend-authorised: the ticket-34 ledger's `max_tokens: 128` provenance lie is fixed
 (applied effort, output bound and response-body bound are recorded per call beside the declared
 sampling); the frozen 30 s attempt timeout and the spec's 64 KiB recorded-body bound were both silent
@@ -135,11 +137,13 @@ new `natural-claim/v2` contract, which states the observation-derived admissible
 falls to 0 inadmissible in a 30-request probe and 0 across a 6 580-call run. `vs2-value/2` (a
 staleness term plus a per-actor coverage floor) fixes the coverage collapse it was built for (Gini
 0.14-0.23 against `vs2-value/1`'s 0.49-0.59 in the same run, same contract). Two results cut the other
-way and are recorded rather than buried: **periodic sampling has zero demographic effect at this
-fixture** (244 applied model decisions reproduce the no-AI world exactly), and **the v1 value model,
-whose concentrated coverage was called a defect, is the arm closest to the R reference while the
-"fixed" model is indistinguishable from A0** — because R produces 0-1 births and dies out, so
-fidelity-to-R currently rewards suppressing reproduction. **The R anchor is an unvalidated objective**
+way and are recorded rather than buried: **periodic sampling has zero DEMOGRAPHIC effect at this
+fixture** (244 applied model decisions leave population, births, starvation deaths, age deaths and
+exchange identical to the no-AI world at every hour and in every replicate, while wealth and granary state
+still differ), and **the v1 value model, whose concentrated coverage was called a defect, is the arm
+closest to the R reference while the "fixed" model is indistinguishable from A0 *on the demographic
+KPIs*** (the frozen instrument still separates them on capital and granary histograms) — because R
+produces 0-1 births and dies out, so fidelity-to-R currently rewards suppressing reproduction. **The R anchor is an unvalidated objective**
 (open question Q1: a civilization-level distance measure), so no arm is called better, the ticket-34
 verdict stands unchanged, and **the central claim and the M2 milestone remain not accepted**. Record:
 `.scratch/35-vs2-curve/spec.md`.

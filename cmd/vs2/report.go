@@ -515,6 +515,16 @@ func joinOrNone(items []string) string {
 
 func fmtFloat(v float64) string { return fmt.Sprintf("%.4f", v) }
 
+// textHasLine reports whether any line of a rendered report starts with prefix.
+func textHasLine(body []byte, prefix string) bool {
+	for _, line := range strings.Split(string(body), "\n") {
+		if strings.HasPrefix(line, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // anyCellLive reports whether any cell carries the applied wire settings only a
 // live gateway run records.
 func anyCellLive(cells []cellReport) bool {
@@ -574,6 +584,14 @@ func relabelEvaluationFile(jsonPath string) (string, []string, error) {
 	base := strings.TrimSuffix(jsonPath, filepath.Ext(jsonPath))
 	jsonOut := base + "-relabelled.json"
 	textOut := base + "-relabelled.txt"
+	// The regenerated text also carries the applied-configuration header line
+	// (`applied: effort=… output-bound=… response-bound=… votes=… replicates=…`),
+	// which a report emitted before that line existed does not have. The change
+	// list must name it: silent additions are exactly what this path exists to
+	// avoid.
+	if original, err := os.ReadFile(base + ".txt"); err == nil && !textHasLine(original, "applied:") {
+		changes = append(changes, "header: added the applied-configuration line (applied: effort/output-bound/response-bound/votes/replicates), which the earlier report did not print")
+	}
 	body, err := json.MarshalIndent(ev, "", "  ")
 	if err != nil {
 		return "", nil, err

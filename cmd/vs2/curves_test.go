@@ -93,11 +93,28 @@ func TestCompareKPIsOneSidedNoiseFloor(t *testing.T) {
 	}
 }
 
-func TestCompareKPIsIdenticalDeterministicIsNotDistinguishable(t *testing.T) {
+func TestCompareKPIsBothDeterministicReportsNotApplicable(t *testing.T) {
+	// The frozen criterion: when both conditions are deterministic the SNR is
+	// undefined and reported `n/a (both deterministic)` with the raw RMSE of the
+	// difference. It is never an infinite ratio, because an undefined denominator
+	// must not fire the decision rule.
 	a := [][]float64{{4, 4}, {4, 4}, {4, 4}}
 	cmp := compareKPIs("f10-s0", "population", a, a)
-	if cmp.SNR != 0 || cmp.Note != "both deterministic (identical curves)" {
+	if !math.IsNaN(cmp.SNR) || cmp.Note != "n/a (both deterministic)" {
 		t.Fatalf("identical deterministic curves: snr=%v note=%q", cmp.SNR, cmp.Note)
+	}
+	if fmtSNR(cmp.SNR) != "n/a" || !closeEnough(cmp.RMSE, 0) {
+		t.Fatalf("rendered snr=%q rmse=%v", fmtSNR(cmp.SNR), cmp.RMSE)
+	}
+	// Differing deterministic curves keep the raw RMSE and stay n/a, so a KPI the
+	// rule cannot express never drives a verdict.
+	b := [][]float64{{6, 6}, {6, 6}, {6, 6}}
+	cmp = compareKPIs("f10-s0", "population", a, b)
+	if !math.IsNaN(cmp.SNR) || cmp.Note != "n/a (both deterministic)" || !closeEnough(cmp.RMSE, 2) {
+		t.Fatalf("differing deterministic curves: snr=%v note=%q rmse=%v", cmp.SNR, cmp.Note, cmp.RMSE)
+	}
+	if cmp.SNR >= curveSNRThreshold {
+		t.Fatalf("an n/a SNR must not satisfy the threshold")
 	}
 }
 
