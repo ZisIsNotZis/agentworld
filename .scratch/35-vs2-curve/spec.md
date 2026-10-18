@@ -495,8 +495,9 @@ arm with the most applied decisions (486) — diverges hardest (3/2/1 alive, 3/3
 starvation deaths). Recorded as the stage-3 result; no arm is called better, and the capacity to
 distinguish allocation policies is not demonstrated by this data.
 
-Corresponding curve comparison (`-curve-in .tmp/35-stage3-evaluation.json`, `.tmp/35-stage3-curve.txt`),
-verbatim per pair and with the numbers that matter:
+Corresponding curve comparison (`-curve-in .tmp/35-stage3-evaluation.json`; the pair numbers are in
+`.tmp/35-curve-report.txt` from its `STAGE STAGE3` section at line 442 — no separate stage-3 curve file was
+written), verbatim per pair and with the numbers that matter:
 
 - **A0 vs P: NOT distinguishable.** Every population/birth/starvation/age-death/churn curve is identical
   (RMSE 0.0000, `n/a (both deterministic)`), and the two KPI families that do differ cannot carry the rule
@@ -688,8 +689,7 @@ collapses, so the collapse was the value model, not the contract.
 > **demographic** KPI (population 0.83, births 1.63, starvation 0.82, age 0.91) but the tool's own verdict
 > for that pair is **DISTINGUISHABLE via `capital_hist[0]`** (SNR 2.39, first separation h14, 120
 > consecutive hours) — a wealth-state separation, not a demographic one. Likewise A vs P is
-> distinguishable only through `capital_hist[0]`; the demographic separation is what fails, not all
-> separation.
+> distinguishable via `capital_hist[0]`; the demographic separation is what fails, not all separation.
 
 **5. The likely reason is the metric's own problem, not an arm ranking.** R (full cognition) produces 0-1
 births against A0's 2 and dies out (0.33-1 alive at h143), so "closer to R" currently means "converges on
@@ -718,7 +718,7 @@ transcription errors in an earlier draft.
 | A0 vs R | 3.09 | 4.07 | 0.82 | 0.89 | 48.30 | distinguishable via population |
 | A0 vs U | 3.78 | 1.07 | 7.40 | 5.25 | 2.84 | distinguishable via population |
 | A1 vs A | 2.59 | 40.76 | 0.82 | 0.75 | 8.16 | distinguishable via population |
-| A1 vs P | n/a | n/a | n/a | n/a | 8.38 | distinguishable via `max_capital` (one-sided floor) |
+| A1 vs P | n/a | n/a | n/a | n/a | 8.38 | distinguishable via `max_capital` (pooled two-sided denominator) |
 | A1 vs R | 0.35 | 0.82 | 0.82 | 0.78 | 1.76 | **NOT distinguishable** |
 | A1 vs U | 2.19 | 4.79 | 7.40 | 5.21 | 6.68 | distinguishable via population |
 | A vs P | 0.83 | 1.63 | 0.82 | 0.91 | 1.44 | distinguishable via `capital_hist[0]` |
@@ -735,11 +735,19 @@ curve report. In the v2 run the pair `A0 vs P` is distinguishable through the **
 drive), which is a real ratio on a one-sided floor: P's food storage differs from A0 even though every
 demographic KPI is identical. In the stage-3 (v1) run the same pair's only driver was `granary_hist[0]`
 at `+Inf`, so it fell to `n/a` and the pair became NOT distinguishable — that is the difference between a
-real ratio and the `+Inf` convention.
+real ratio and the `+Inf` convention. For the pair `A1 vs P` the `max_capital` denominator is stated
+explicitly because it is **not** a one-sided floor: both arms vary across replicates on that KPI (P at 27
+of 145 hours, A1 at 16), so the reported 8.38 is the pooled two-sided within-condition SD over both arms'
+three replicates (noise 0.2223), which sits between the two one-sided variants (9.72 against A1's own SD
+0.192, 7.48 against P's 0.249) — the verdict holds under either denominator.
 
 No arm is called better. What the table establishes is which separations exceed the replicate band and by
 how much; what it does not establish is that any of them is an improvement, because the reference the
 metric measures against is the unvalidated R anchor of point 5.
+
+**Both-cell clause**: these verdicts are single-cell (f10-s0), so the rule's "in both cells" condition is
+met vacuously (see the re-plan note) and only trivially — f12-s0 is unmeasured under contract v2 — so
+reproduction at f12-s0 is untested.
 
 ## Report regeneration (originals kept, both hashed)
 
@@ -768,6 +776,10 @@ change-list repair and are byte-identical to the first regeneration (`sha256sum 
 | `.tmp/35-stage3-evaluation-relabelled.json` | `de2af4bac6faf08be91bf6e26d77f53aff5e6ac562825ff41b4b8b76e4c1a1f9` |
 | `.tmp/35-curve-report.txt` (stages 1-3, post-`n/a`-repair) | `14665daaec7b0b06dd3a3e2fde38088a5a76928c631dc9be22c12af31ae846cf` |
 | `.tmp/35-curve-report.txt.pre-p14` (superseded: `+Inf` convention + old column label) | `2f1642d66c7350202d501e01e7a724256616fe345d840a0d50ba53b7059bbafa` |
+
+`.tmp/35-stage1-curve.txt` is a pilot artefact, kept as-is and **not** regenerated: it still carries the
+older `band@H` column header and holds no pair verdicts, so neither the `n/a` repair nor the column
+relabelling could change anything it says.
 
 Progressive evidence: `.tmp/35-stage1.progress` (poll log), `.tmp/35-stage23.progress`, per-cell
 hash-chained ledgers and checkpoint bundles under `.tmp/35-stage{1,2-*,3,v2}-runs/`.
@@ -1046,7 +1058,7 @@ four P1 factual overclaims plus several P2s, all repaired in this record, in `CH
   reproduction is untested after stage 1.
 - **P1-4** both-deterministic comparisons now report **`n/a (both deterministic)`** with the raw RMSE
   instead of `SNR = +Inf` (code + tests + report label + every table), and the three verdict lines that
-  depended on the `+Inf` convention are named: `A0 vs P` (stage 3) **flipped** DISINGUISHABLE →
+  depended on the `+Inf` convention are named: `A0 vs P` (stage 3) **flipped** DISTINGUISHABLE →
   NOT distinguishable; `A0 vs A1` and `A1 vs P` kept their verdicts but their driving KPI changed from
   `population` (`+Inf`) to `max_capital` (real ratio). No other verdict changed.
 - **P2s** the stage-2 `none` vs `low` row (`max_capital` **4.83 / 117 h**, not 4.81 / 115 — that is the
