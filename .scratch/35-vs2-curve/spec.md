@@ -685,3 +685,30 @@ not — read those rows as "A0 is deterministic here", not as an infinitely stro
 No arm is called better. What the table establishes is which separations exceed the replicate band and by
 how much; what it does not establish is that any of them is an improvement, because the reference the
 metric measures against is the unvalidated R anchor of point 5.
+
+## Report regeneration (originals kept, both hashed)
+
+The stage-1/2/3 reports were emitted by a binary built before the mode-parameterised label fix
+(`df54d93`). They were regenerated from their own recorded evaluation JSONs by the report-only path
+`.tmp/35-vs2-finish-bin -relabel …` (no cell ran, no spend). What changed in each regenerated file, and
+nothing else: `live: true` (inferred for the legacy JSONs from the recorded applied bounds),
+`status: synthetic/model-conditional → live/real-model`, the label (hermetic "no authorised spend" text →
+the live text naming model, wire, applied effort/output/response bounds, run-only spend authorisation and
+the UNPRICED cost state), and the VS2-EC-9 arm line ("blocked on spend" → "the live-model arm RAN; no
+acceptance is claimed here"). Every measured field, series, count and band decision is byte-identical to
+the original.
+
+| artefact | sha256 |
+|---|---|
+| `.tmp/35-stage1-evaluation.json` (original) | `c75c807f4e13c2183a856bd9eaadcc6358c6868a8b639b46eb22007f7fc0e4b2` |
+| `.tmp/35-stage1-evaluation-relabelled.json` | `6885d29ae8546924f420c0fa09af0944c70f0ea42d2e81234b1458eac2b0fed6` |
+| `.tmp/35-stage2-none-evaluation.json` (original) | `6fb3c2ecc161a6c99ac7b9a579f8d017bf507203339ddf792b92ab6f16f2f14b` |
+| `.tmp/35-stage2-none-evaluation-relabelled.txt` | `09fce4db307fa96de17b0895b00876781f57bf9e32c1c1f6a64852b8e1274c0a` |
+| `.tmp/35-stage2-low-evaluation.json` (original) | `d579aa77b3246ea4ff9240d6161c8f15457e11997429d7943a1006406f5ae8e3` |
+| `.tmp/35-stage2-high-evaluation.json` (original) | `c39d4a61ee1099ca38fed5025a92294d2ac63a1e974b2b240eeb5e91dcc08c37` |
+| `.tmp/35-stage3-evaluation.json` (original) | `808de6230b0a7491171eaa037444e4e34229a83ecdec4368dafdc1a22076b8ed` |
+| `.tmp/35-stage3-evaluation-relabelled.json` | `de2af4bac6faf08be91bf6e26d77f53aff5e6ac562825ff41b4b8b76e4c1a1f9` |
+| `.tmp/35-curve-report.txt` (stages 1-3 curve report) | `2f1642d66c7350202d501e01e7a724256616fe345d840a0d50ba53b7059bbafa` |
+
+Progressive evidence: `.tmp/35-stage1.progress` (poll log), `.tmp/35-stage23.progress`, per-cell
+hash-chained ledgers and checkpoint bundles under `.tmp/35-stage{1,2-*,3,v2}-runs/`.
