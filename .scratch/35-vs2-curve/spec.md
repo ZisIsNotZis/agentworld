@@ -735,3 +735,53 @@ $25 cap. No `high` under v2 is added: it would land on the cap with no margin fo
 
 **HARD STOP after this run**: no further live model calls in this lane, whatever the result. If the
 projected spend would exceed $25, the run is not started and the supervisor is told first.
+
+## Re-grading the held evidence under alternative metric families (zero cost, Q1 input)
+
+Computed from the recorded artefacts only (`.tmp/35-regrade.py` over `.tmp/35-v2-evaluation.json` and the
+`.tmp/35-v2-runs/*/calls.jsonl` ledgers; v2 run, 144 h, f10-s0, 3 replicates). Mean with the replicate SD
+in brackets — the band is next to every number, because a difference inside it is not a difference.
+
+| arm | pop@96 | pop@120 | pop@143 | births | starvation | age deaths | capital Gini | granary Gini | coverage Gini | calls | r-dist |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| A | 11.33 (1.15) | 4.33 (1.15) | 2.00 (0.00) | 2.00 (0.00) | 0.67 (1.15) | 9.67 (1.53) | 0.85 (0.06) | 0.86 (0.00) | 0.17 (0.05) | 256 (0) | 1.576 |
+| A0 | 12.00 (0.00) | 5.00 (0.00) | 2.00 (0.00) | 2.00 (0.00) | 0.00 (0.00) | 11.00 (0.00) | 0.89 (0.00) | 0.86 (0.00) | 0.00 (0.00) | 0 (0) | 1.833 |
+| A1 | 10.00 (0.00) | 3.00 (0.00) | 0.00 (0.00) | 0.00 (0.00) | 0.00 (0.00) | 10.00 (0.00) | 0.00 (0.00) | 0.00 (0.00) | 0.53 (0.05) | 253 (0) | 0.205 |
+| P | 12.00 (0.00) | 5.00 (0.00) | 2.00 (0.00) | 2.00 (0.00) | 0.00 (0.00) | 11.00 (0.00) | 0.89 (0.00) | 0.86 (0.00) | 0.06 (0.00) | 244 (0) | 1.833 |
+| R | 10.00 (1.00) | 3.33 (0.58) | 0.33 (0.58) | 0.33 (0.58) | 0.33 (0.58) | 10.00 (1.00) | 0.00 (0.00) | 0.00 (0.00) | 0.08 (0.04) | 1184 (113) | 0.686 |
+| U | 7.67 (1.53) | 5.00 (1.00) | 2.33 (0.58) | 2.67 (0.58) | 5.00 (1.00) | 5.67 (1.15) | 0.78 (0.11) | 0.83 (0.05) | 0.33 (0.03) | 256 (0) | 1.747 |
+
+Separation statistic per pair, `|mean difference| / pooled replicate SD` (identical curves report `-`;
+`inf` means both sides are deterministic and the means differ):
+
+| pair | pop@96 | pop@120 | pop@143 | births | starvation | age deaths | capital Gini | granary Gini | coverage Gini | calls |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **A vs P** | 0.82 | 0.82 | – | – | 0.82 | 1.23 | 0.82 | – | **3.20** | inf |
+| **A vs A0** | 0.82 | 0.82 | – | – | 0.82 | 1.23 | 0.82 | – | **4.98** | inf |
+| A vs A1 | 1.63 | 1.63 | inf | inf | 0.82 | 0.31 | 18.78 | inf | 6.88 | inf |
+| A vs R | 1.23 | 1.10 | **4.08** | **4.08** | 0.37 | 0.26 | 18.78 | inf | 2.11 | 11.66 |
+| A1 vs R | 0.00 | 0.82 | 0.82 | 0.82 | 0.82 | 0.00 | – | – | 9.58 | 11.69 |
+| R vs A0 | 2.83 | **4.08** | **4.08** | **4.08** | 0.82 | 1.41 | inf | inf | 3.01 | 14.87 |
+| U vs A0 | **4.01** | 0.00 | 0.82 | 1.63 | **7.07** | **6.53** | 1.41 | 0.82 | 15.00 | inf |
+| P vs A0 | – | – | – | – | – | – | – | – | inf | inf |
+
+**Which indicators can even see the differences.** Population, births, starvation deaths and wealth
+dispersion all separate `A1`/`R` from `A0`/`P`/`A` and separate `U` from everything — but **no demographic
+indicator separates `A` from `P` or `A` from `A0`**: every demographic value for that pair sits at or below
+1.23 pooled SDs, i.e. inside the replicate band. The only indicator that moves for that pair is
+**coverage Gini** (3.20 vs P, 4.98 vs A0) and the realised call count — a process measure, not a
+civilization outcome. So the value model changes *how* the budget is spent and, at this fixture and
+horizon, nothing that the demographic KPIs can resolve.
+
+**The indicators rank the arms differently from the R-anchored fidelity**, which is the Q1 evidence: by
+r-distance the order is `A1 (0.205) < R (0.686) < A (1.576) < U (1.747) < A0 = P (1.833)`, i.e. the arm
+closest to the reference is the one that produces **zero births and dies out**, and full cognition R sits
+second. By births and survival the order reverses: `A ≈ A0 = P (2.00 births, 2 alive) > U (2.67/2.33) >
+R (0.33/0.33) > A1 (0/0)`. So the current R-anchored metric rewards convergence on the no-birth,
+dying trajectory, and a reproduction-preserving metric would rank almost the opposite way. Neither is
+declared correct here; this is exactly the unvalidated-anchor problem and the empirical input to Q1.
+
+**Behavioural trace (why A ≠ P despite identical demographics)**: the applied action mix per arm is
+distinct — A `gather` 56 % / `eat-stored` 42 %, P 71 %/27 %, A1 72 %/27 %, R 80 %/18 %, U 38 %/59 %
+(fallbacks ≤ 1 % in every arm). Different decisions, identical demographic outcome for A vs P: the
+fixture's gates, not the allocation, absorb the difference.
