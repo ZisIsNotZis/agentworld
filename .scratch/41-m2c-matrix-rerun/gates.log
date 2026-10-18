@@ -1,0 +1,14 @@
+=== ticket 41 zero-spend gates; cwd=/home/z/vibe/agentworld; revision ae0396f; 2026-10-18T16:53:52Z
+--- go version
+go version go1.24.13 linux/amd64
+--- 1. go build ./...
+exit=0
+--- 2. go vet ./...
+exit=0
+--- 3. gofmt -l on tracked .go
+exit=0
+--- 4. git diff --check ae0396f
+exit=0
+--- 5. runner binary
+exit=0
+11954258 .tmp/41-vs2-bin

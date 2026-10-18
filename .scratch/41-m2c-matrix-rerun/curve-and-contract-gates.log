@@ -1,0 +1,77 @@
+=== curve step gate (ticket 38 §8.4 step 7 shape, exercised pre-launch); 2026-10-18T16:54:18Z
+VS2 curve report (ticket 35; criterion pre-declared before data)
+decision rule: distinguishable iff some KPI has SNR >= 2.0 AND its paired difference exceeds the
+  replicate band for >= 24 consecutive hours in every cell; no condition is called better on a scalar.
+conditions: R@low
+cells: 1 replicates: 1 horizon: 145
+source: .tmp/36-v4-evaluation.json
+
+NOISE FLOOR (band over replicates: mean [95% CI] envelope, and across-replicate CV)
+
+[R@low] f10-s0 (columns are the band AT the final hour H; CV is the across-replicate coefficient of variation averaged over hours, with the worst hour)
+kpi                        mean@H      ci_lo@H      ci_hi@H       envelope@H    meanCV   worstCV
+population                 1.0000       1.0000       1.0000   1.0000..1.0000    0.0000    0.0000
+births_cum                 2.0000       2.0000       2.0000   2.0000..2.0000    0.0000    0.0000
+                       (5 hours excluded from CV: mean 0)
+deaths_starve_cum          1.0000       1.0000       1.0000   1.0000..1.0000    0.0000    0.0000
+                       (23 hours excluded from CV: mean 0)
+deaths_age_cum            10.0000      10.0000      10.0000 10.0000..10.0000    0.0000    0.0000
+                       (100 hours excluded from CV: mean 0)
+wages_cum                  0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+max_capital                2.0000       2.0000       2.0000   2.0000..2.0000    0.0000    0.0000
+                       (2 hours excluded from CV: mean 0)
+capital_hist[0]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+                       (9 hours excluded from CV: mean 0)
+capital_hist[1]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+                       (94 hours excluded from CV: mean 0)
+capital_hist[2]            1.0000       1.0000       1.0000   1.0000..1.0000    0.0000    0.0000
+                       (37 hours excluded from CV: mean 0)
+capital_hist[3]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+                       (114 hours excluded from CV: mean 0)
+capital_hist[4]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[5]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[6]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[7]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[8]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+granary_hist[0]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+                       (19 hours excluded from CV: mean 0)
+granary_hist[1]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+                       (116 hours excluded from CV: mean 0)
+granary_hist[2]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+                       (119 hours excluded from CV: mean 0)
+granary_hist[3]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+                       (123 hours excluded from CV: mean 0)
+granary_hist[4]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+                       (125 hours excluded from CV: mean 0)
+granary_hist[5]            1.0000       1.0000       1.0000   1.0000..1.0000    0.0000    0.0000
+                       (15 hours excluded from CV: mean 0)
+granary_hist[6]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+
+PER-CONDITION ACCOUNTING (call-count budget axis; token totals for equal-token re-analysis)
+condition      cell           reps        calls    in_tokens  out_tok err_rate
+R@low          f10-s0            1         1325       824408   234007   0.0015
+
+STAGE STAGE1 — conditions R@low
+
+WHAT THE DATA DOES AND DOES NOT ESTABLISH
+Measured: 1 conditions over 1 cell(s), 1 replicates each, 145 hours.
+Every compared pair is not distinguishable at this noise floor: no KPI held SNR >= 2 with a >= 24-hour separation in every cell.
+Not established: which condition is better. The study measures the noise floor, the effort ladder's reach and the between-condition separation; the frozen EC-3 instrument and the milestone review own any quality verdict, and the ticket-34 verdict (central claim NOT accepted under EC-3 as written) stands unchanged.
+exit=0
+58 .tmp/41-curve-gate.txt
+--- first 8 lines
+VS2 curve report (ticket 35; criterion pre-declared before data)
+decision rule: distinguishable iff some KPI has SNR >= 2.0 AND its paired difference exceeds the
+  replicate band for >= 24 consecutive hours in every cell; no condition is called better on a scalar.
+conditions: R@low
+cells: 1 replicates: 1 horizon: 145
+source: .tmp/36-v4-evaluation.json
+
+NOISE FLOOR (band over replicates: mean [95% CI] envelope, and across-replicate CV)
+=== contract gate (ticket 38 §7.6 gate 3) — inadmissible count on the recorded v4 run; 2026-10-18T16:54:18Z
+tally per arm (role-a records):
+  R {'applied': 1323, 'rejected': 2, 'inadmissible': 0, 'malformed': 2, 'other': 0}
+proposed action counts: {}
+refusing gate counts: {}
+proposed x gate:
+exit=0

@@ -1,0 +1,16 @@
+=== ticket 41 gateway reachability probe (one call, real spend ~$0.00001); 2026-10-18T16:54:21Z
+--- zero-spend: /health/liveliness
+http=200 time=0.001695s
+--- zero-spend: /v1/models count + declared model present
+models=97 declared_present=True
+--- one real call: POST /v1/responses (wire=responses, effort=low, text.format=json_object)
+
+HTTP=200 total=2.843930s
+--- response body (first 900 bytes)
+{"id":"resp_bGl0ZWxsbTpjdXN0b21fbGxtX3Byb3ZpZGVyOmdpdGh1Yl9jb3BpbG90O21vZGVsX2lkOmI4ZTMzNWNkNzNmZmRjOTM4YTJjZTllYTIzNzY2NmY0ZWUxZThhMGJjZWYwM2JjNTYzMzQwYTUxZGNiMjZjNmE7cmVzcG9uc2VfaWQ6cmVUOHFzYXdFUkVsRjZ1bGtmTXpxUUc0Rm9nRXBPcWdJRWdCRVJ3Q3FMNUxCbjJsc1BlQ1V4dVdEWWtiU1JJSHVoV280N2RCdWV0WmNaU1BkSFpyd2dUNWRjbXgwbnZ2bHJFR3NJMlR5OGFtTmF6ZDMyUlFDa0pMdjliY2dnVTdnZTBGM0wvUytkc0dnOUFoUlJ2cGRkWU1US25QQjdkeTdSR2IxdmpxUk15RkpuK29JUEFpQVo4TlFZZVd4YUZRem5yeTdqcnNma3FCL2lISW52aGE0VzlMU282UURzQTh1NHNrSEs2VVA1cU5VN2xPSTI1R3RnaGZkbEFPRjN4ci9pSGprVzFVOXUvVE5lRFR3QUR2cmtXWDUxdWhtQkZXNkp0RXRQSWptQmxtK0VvcEFEVEhnN2ZHVFVkNmU4UytnSjBpWklBL0F1S3dDNnNuVm0yMkh5a1V3djJHeUNGdU8wdk8ycnAvZlU3a3ZEQzlTcnRNWDZ1cFNDdVR1M0ZTd3NUOGFZdEtMN1hwekdrSUlFbGsyREtuc3NWaGpXa1BMNllhM3k1ZktTQ1J5QnBoR1E9PQ==","created_at":1792342400,"error":null,"incomplete_details":null,"instructions":null,"metadata":null,"model":"github_copilot/gpt-6-l
+--- parsed
+status: completed
+model: github_copilot/gpt-6-luna
+usage: {'input_tokens': 27, 'output_tokens': 12, 'total_tokens': 39}
+output_text: {"action":"wait"}
+parsed json object: True {'action': 'wait'}
