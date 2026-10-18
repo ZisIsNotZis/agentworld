@@ -443,6 +443,11 @@ the pre-registered pairs are the v2 matrix above.
   evaluator and check the implementation against `scores.json` before using it on a live run. That is
   a scope decision recorded here, not an omission: this ticket's acceptance is the measure, the
   anchor and the discrimination, with zero live spend.
+- **The reference-selection defect is not repaired here.** `referenceRun` ignores replicate and
+  `sortRuns` does not order by it, so the diagnostic vector's reference is undeclared. Repairing it
+  inside M2b would change ticket 35's recorded diagnostic rows and the EC-3/EC-4 inputs, which this
+  ticket is not authorised to re-open. M2c should either declare the reference explicitly (a fixed
+  replicate or the replicate band) or drop the diagnostic from live use.
 - **Raw evidence lives in transient `.tmp`.** The evaluation JSONs remain at the paths and sha256s
   above (pre-existing project practice); this ticket commits the derived scoring table, JSON and log
   so every claim here is re-checkable without them. If `.tmp` is cleared, the raw per-hour data is

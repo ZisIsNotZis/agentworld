@@ -8,11 +8,13 @@ Phase references name the active plan's slices (VS1–VS6, [VERTICAL-SLICES.md](
 
 **Question:** Which metric vector distinguishes materially different worlds without imposing one preferred civilization?
 
-**Current hypothesis:** Use multiple normalized metric families plus uncertainty and diversity constraints; avoid a universal scalar score.
+**Current answer (fixture f10-s0, H=144; M2b, ticket 37, 2026-10-18):** a three-component demographic viability distance, `vrd/1` — surviving actor-hours, cumulative births and cumulative starvation deaths — measured as a one-sided distance below the no-AI control's own realised outcome. It distinguishes the recorded arms in the declared direction (an extinct, zero-birth arm scores 1.19 against the control's 0.00; a high-churn arm 0.57-0.88) and it imposes no preferred civilization beyond persist, reproduce and avoid starvation deaths, a floor the world already reaches without cognition. The R-anchored divergence vector is rejected as an objective at this fixture: the reference is extinct (0-1 births, 0 alive at the terminal sample) and scores 0.60-1.35 while spending 1 082-1 305 calls against the control's 0.00 with 0 calls. Metric contract: [VALIDATION.md](VALIDATION.md); evidence and record: [`.scratch/37-fidelity-metric/spec.md`](../.scratch/37-fidelity-metric/spec.md).
 
-**Experiment:** Compare expert judgments, causal interventions, and metric rankings across controlled branches.
+**Still open:** cross-fixture and cross-horizon validity (f12-s0 untested; a fixture whose control is itself not viable needs a declared substitute floor), the identity/diversity of survivors and age-death timing are not represented, and the weights are declared rather than calibrated.
 
-**Decision needed:** Before VS2 beam pruning becomes authoritative.
+**Experiment:** Compare expert judgments, causal interventions, and metric rankings across controlled branches; the first such comparison on recorded branches is ticket 37's, and the next is M2c on the calibrated decision contract.
+
+**Decision needed:** M2c may use `vrd/1` once the evaluator implements it and reproduces the recorded scores; beam pruning additionally needs the cross-fixture part.
 
 ## Q2 — Cognitive intervention value
 

@@ -184,3 +184,24 @@ for anything: current truth lives in the authoritative documents — the active 
   ordered successors that may not start before their predecessor passes); **the central claim and the M2
   milestone remain not accepted**. Spend: 1 370 live calls (45 probe + 1 325 run), ≈$0.21, inside the
   declared 1 600-call / $3 budget. Evidence record: `.scratch/36-harness-vocabulary/spec.md`.
+- **Ticket 37 — fidelity metric and reference anchor (M2b).** Branch `feature/37-fidelity-metric`
+  (pre-declaration `528f0e0`, scoring `e77916b`), zero live calls. The pre-declared criterion rejected
+  the R-anchored fidelity objective: the R reference is extinct at this fixture (0-1 births, 0 alive at
+  the terminal sample), and the frozen eight-indicator vector's equal-weight mean ranks the extinct,
+  zero-birth `A1` arm **closest to R** (0.1520) — ahead of the arm that reproduces exactly like the
+  no-AI control (P, 0.1757) — because a whole-horizon one-actor difference weighs 0.0075 in the scalar
+  against 0.1207 for a one-birth difference, and because its dying capital/granary state resembles R's.
+  Recomputing the seven ledger-free indicators from the projections identifies the recorded rows'
+  undeclared reference as **R replicate 3** (`referenceRun` matches on arm/fixture/seed only, and
+  `sortRuns` ignores replicate); the ordering is robust to that pick, the magnitudes are not. The
+  declared objective is now **`vrd/1`** ([docs/VALIDATION.md](docs/VALIDATION.md)): a one-sided distance
+  below the no-AI control's realised actor-hours, births and starvation deaths, anchored on the world's
+  own no-cognition outcome rather than on R. On the recorded `natural-claim/v2` matrix it ranks A0 and P
+  at 0.0000, A at 0.1084, U at 0.7274, R at 1.0465 and A1 at 1.1925; all three pre-registered
+  worse/better pairs pass in 9/9 replicate pairings (min margin +0.5963) and under three one-at-a-time
+  weight doublings, with loader-identity and synthetic extinct/perfect-arm negative controls. Two
+  materially different alternatives were scored (`fid/1` and endpoint-first `end/1`); `end/1` ranks U
+  first and is rejected as a standalone objective because U buys its endpoint headcount with 4-6
+  starvation deaths and 15-28 % fewer actor-hours. M2b passes as a defensible metric and anchor, not as
+  evidence for the central claim; M2c owns the evaluator implementation of `vrd/1`. Record:
+  `.scratch/37-fidelity-metric/spec.md`.

@@ -32,6 +32,26 @@ Initial metric families should cover:
 
 Metrics form a vector. Scalar aggregation is allowed only when weights and sensitivity are visible. Branch selection also preserves diversity so one optimized score does not collapse the simulated world into a narrow artifact.
 
+## Declared comparison metric: viability-referenced distance (`vrd/1`)
+
+M2b (ticket 37, 2026-10-18) rejects the R-anchored fidelity objective for VS2 and declares the
+objective below. The frozen eight-indicator divergence vector (`internal/experiment/fidelity.go:54`)
+remains a diagnostic; it is no longer the target a run is asked to approach. Record and discrimination
+evidence: [`.scratch/37-fidelity-metric/spec.md`](../.scratch/37-fidelity-metric/spec.md).
+
+- **Identifier:** `vrd/1`.
+- **Source fields:** a run's hourly projection `alive_by_hour`, `births_cum`, `deaths_starve_cum` over the declared horizon `[0,H]` (samples `0..H`).
+- **State vector:** `H_x = Σ alive_x(t)` (actor-hours), `B_x = births_x(H)`, `S_x = starvation deaths_x(H)`, and `N0 = alive_x(0)`.
+- **Anchor:** `T` is the mean `(H,B,S,N0)` of the recorded no-AI control (arm `A0`) at the same fixture, seed and horizon; the viability set is `{H ≥ H_T, B ≥ B_T, S ≤ S_T}`. The anchor is worth approaching because it is the outcome the world already reaches with no cognitive intervention — population survives to the horizon, reproduces at its own rate and suffers no starvation deaths — not because any reference run does it. It is a floor, not an optimum.
+- **Transformation and weights:** `D = 1·max(0,(H_T−H_x)/H_T) + 1·max(0,(B_T−B_x)/max(1,B_T)) + 1·max(0,(S_x−S_T)/N0)`.
+- **Unit and bounds:** dimensionless, `D ≥ 0`; `D = 0` means at or above the floor on all three components. The terms are fractions of the control's actor-hours and births and starvation deaths per founding actor.
+- **Missing-value behavior:** `vrd/1` is undefined — refused, never defaulted to zero — unless `H_T > 0`, `B_T > 0`, `alive_T(H) > 0` and `N0 > 0`. A fixture whose control is not viable must declare a substitute floor in its own ticket and may never substitute R.
+- **Uncertainty:** per-replicate `D` with its min-max; the control is deterministic at the recorded fixtures, so the floor carries no sampling noise. Arms at `D = 0` are tied and reported as tied; the measure does not invent a tiebreak.
+- **Version and calibration:** `vrd/1`, declared 2026-10-18. There is no external calibration dataset: the anchor is the run's own control, so the measure is model-conditional under P14. The recorded sensitivity check doubles each weight in turn; it is not a search for weights that pass.
+- **Failure modes and information loss:** the identity, kin and diversity of survivors, age-death timing, wealth and granary distributions, exchange, action mix and decision-error rate are not represented. An arm that exceeds the floor scores 0 and is indistinguishable from the control, so `vrd/1` cannot prefer growth over persistence; a growth objective needs a declared additional term.
+
+The diagnostic divergence vector's reference replicate is undeclared: `referenceRun` matches on arm, fixture and seed only (`cmd/vs2/report.go:455`) and `sortRuns` does not order by replicate, so a report re-run can select a different R replicate. Ticket 37 found the recorded ticket-35 rows were computed against R replicate 3; the defect is recorded there and is not repaired in M2b, because repairing it would change recorded diagnostic rows and the EC-3/EC-4 inputs.
+
 ## Invariants
 
 Automated checks should cover:
