@@ -518,7 +518,7 @@ Ticket 38 §7.7, unchanged, **plus the verdict's own scope, which must be read w
 | post-run **contract gate** (the `inadmissible` count on this run's ledgers) | `.scratch/41-m2c-matrix-rerun/m2c-contract-gate.log` |
 | post-run **inventory gate** (`15 of 15 … 0 halted, 0 skipped`) | `.scratch/41-m2c-matrix-rerun/m2c-inventory-gate.log` |
 | **scorer** transcript (bands, floor/band decisions, the verdict line, the two sensitivities) | `.scratch/41-m2c-matrix-rerun/m2c-scores.log` |
-| **curve corroboration** (§7.5), report and its transcript | `.scratch/41-m2c-matrix-rerun/m2c-curve.txt`, `m2c-curve-gate.log` |
+| **curve corroboration** (§7.5), report and its transcript | `.scratch/41-m2c-matrix-rerun/m2c-curve.txt`, `m2c-curve-gate.log` — both are the tool's output with trailing whitespace stripped so `git diff --check` stays clean, matching how ticket 39 committed its copy; the byte-original is `.tmp/41-m2c-curve.txt` (85 lines differ, trailing spaces only) |
 | run root (untracked: 12 bundles + 12 `calls.jsonl` ledgers, ≈ 130 MB) | `.tmp/41-m2c-runs/` |
 | launch log (0 B until exit, then the full report) | `.tmp/41-m2c-run.log` |
 
@@ -530,4 +530,3 @@ Ticket 38 §7.7, unchanged, **plus the verdict's own scope, which must be read w
 | b | `vrd2.py --check-inventory .tmp/41-m2c-evaluation.json` | exit 0; `PASS — 15 of 15 declared cells scored, 3 replicates per arm, 0 halted, 0 skipped` |
 | c | `vrd2.py --live … --log …/m2c-scores.log` | exit 0; bands per arm, per-pair band/floor decisions, `M2c verdict (spec section 7.4): SEPARATION (primary separating pairs: 1, secondary: 2)`; `precedence sensitivity: 0 of 36 declared-pair verdicts change`; `terminal-sample sensitivity: 0 of 6` |
 | d | `.tmp/41-vs2-bin -curve-in .tmp/41-m2c-evaluation.json -curve-out .tmp/41-m2c-curve.txt` | exit 0; 467 lines; `A@low vs U@low DISTINGUISHABLE (population)`, `A@low vs P@low NOT distinguishable` — agrees with the tier order on both primary pairs |
-
