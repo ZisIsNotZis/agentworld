@@ -106,8 +106,17 @@ for anything: current truth lives in the authoritative documents — the active 
   zero demographic effect** at this fixture (244 applied decisions reproduce the no-AI world exactly), and the
   **v1 value model is the closest arm to the R reference** while `vs2-value/2` is indistinguishable from A0 —
   because R produces 0-1 births and dies out, so **fidelity-to-R rewards suppressing reproduction and the R
-  anchor is an unvalidated objective** (Q1). The ticket-34 verdict stands unchanged; no arm is called better;
-  the central claim and M2 remain not accepted. Evidence record: `.scratch/35-vs2-curve/spec.md`.
+  anchor is an unvalidated objective** (Q1). Re-grading every held artefact under alternative metric families
+  (births, starvation, age deaths, population at fixed hours, wealth/granary dispersion, coverage, action mix)
+  showed that **no demographic indicator separates `A` from `P` or from `A0`** (all ≤1.23 pooled SDs, inside
+  the replicate band) while the candidate metrics **rank the arms in opposite orders** (by R-distance
+  `A1 < R < A < U < A0=P`; by births/survival `A ≈ A0 = P > U > R > A1`), which is the Q1 evidence. A depth
+  rung was then run at `high` under v2: **`high` is not distinguishable from `low` on any KPI** (population
+  SNR 0.49, births 0.82, starvation 0.05, age deaths 0.23), so the fixture cannot resolve depth at this
+  budget and `max`@v2 was deliberately left unrun (15-17 h for one point). Lane spend $13.17 over 31 191
+  recorded harness calls, ≈$14.4 with probes, inside the $25 cap. The ticket-34 verdict stands unchanged; no
+  arm is called better; the central claim and M2 remain not accepted. Evidence record:
+  `.scratch/35-vs2-curve/spec.md`.
 
 ## 2026-10-17
 

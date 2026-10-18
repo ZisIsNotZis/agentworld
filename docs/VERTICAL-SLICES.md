@@ -119,7 +119,12 @@ hours of the replicate noise, with the first-separation hour, the longest separa
 Wasserstein-1 distance; a condition is distinguishable only if some KPI holds SNR ≥ 2 with a ≥ 24-hour
 separation in every cell, and **no condition is called better on a scalar**.
 
-Findings, live and spend-authorised: the ticket-34 ledger's `max_tokens: 128` provenance lie is fixed
+Under that criterion the lane also found that **depth is not resolvable at this fixture**: full-wake at
+`high` is **not distinguishable** from full-wake at `low` on any KPI (population SNR 0.49, births 0.82,
+starvation 0.05, age deaths 0.23, max capital 1.29 — all below the pre-declared threshold), because the
+fixture saturates (population capped at 12, extinction by h156, zero births under full cognition), so
+`max`@v2 was deliberately unrun rather than spending 15-17 h of wall time to learn the same thing. The
+remaining findings, live and spend-authorised: the ticket-34 ledger's `max_tokens: 128` provenance lie is fixed
 (applied effort, output bound and response-body bound are recorded per call beside the declared
 sampling); the frozen 30 s attempt timeout and the spec's 64 KiB recorded-body bound were both silent
 live decision-loss channels at long-reasoning effort (the body bound rejected ~30 % of max-effort calls
