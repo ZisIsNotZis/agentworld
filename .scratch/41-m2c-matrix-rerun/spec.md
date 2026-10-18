@@ -1,10 +1,12 @@
 # Ticket 41 — M2c part 3: re-run the M2c matrix under the transport reserve, and score it
 
-- Record kind: the run record of the M2c re-run. Written and committed **before the launch**, because the
-  accounting state the re-run is expected to produce must be declared before the numbers exist.
-- Status at commit: pre-live gates PASS (§6), gateway reachable (§6), launch declared in §5.7 and executed
-  immediately after this commit; §7 records the pid and the UTC launch second, §8 stays empty until the
-  artefact exists.
+- Record kind: the run record of the M2c re-run. Its declaration (§1–§8.5 as first written) was committed
+  **before the launch** (`5ffab6b`), because the accounting state the re-run is expected to produce must be
+  declared before the numbers exist; the measured results (§8) and the verdict (§9) were added after it.
+- **Verdict: `A` vs `U` separates (`A` more viable under `vrd/2`); `A` vs `P` ties.** One primary pair
+  separates, one does not — not "adaptive beats periodic". One cell, one contract, one horizon, three
+  replicates, 248 decisions per budgeted arm, and `A1`'s second replicate is voided by the contract gate
+  (§8.2, §9.2). State: **complete 15-cell matrix, 0 halted, 2 948 attempts, `$0.5696`**, inside every cap.
 - Base revision: `ae0396f` (master, ticket 40 merged). Branch: `feature/41-m2c-matrix-rerun`.
 - Author: worker agent (ticket 41), under the advance-phase plan.
 - Inputs, in order: the pre-registered criterion `.scratch/38-m2c-preregistration/spec.md` §7 (arms, cell,
@@ -257,6 +259,11 @@ minus the `role-a` row count in the same ledger.
 | A1 | f10-s0 | 3/3 | 744 (248/248/248) | 248/248/248 | 0/0/0 | none | **1** (`r2`) |
 | **total** | | 15/15 | **2 948 calls, $0.5696** | | **0** | **0** | **1** |
 
+**`A1`'s replicate count is 2 of 3 used.** `A1-f10-s0-r2` is voided by §7.6 gate 3 (§8.2), so A1's mean,
+band and every A1-involving pair are reported as *not reportable over a voided cell* (§9.2), never computed as
+if the arm were complete. The numbers the scorer prints for A1 over all three replicates are kept as
+sensitivity only, in §8.3.
+
 Tokens: 1 853 633 in / 768 547 out = `1 853 633 × $0.10/M + 768 547 × $0.50/M` = **$0.5696** (the report's own
 cost field is `UNPRICED`; the gateway exposes no price). Attempts: **2 948** of the 3 980 remaining on the
 7 000 cumulative operator cap; spend **$0.5696** against the `$1.04` operator stop and the `$1.30` hard cap
@@ -272,7 +279,7 @@ and the declared 3–4 h projection.
 | 2 | `realized_calls = 248` per quota-bound cell, `under_budget`, `budget_shortfall 8` | `U`, `A`, `A1`: 248/248/248 each, `under_budget = true`, `budget_shortfall = 8`; `P` gate-bound at 244/244/228 with shortfall 12/12/28 | **PASS** |
 | 3 | 0 halted cells | `halted = false` in all 15 cell rows | **PASS** |
 | 4 | inventory `ran == 15` | `cell inventory (spec section 8.4): PASS — 15 of 15 declared cells scored, 3 replicates per arm, 0 halted, 0 skipped` (exit 0) | **PASS** |
-| 5 | 0 `inadmissible` per model-bearing arm (§7.6 gate 3) | `A {applied 742, rejected 2, inadmissible 0, malformed 2}`, `P {714, 2, 0, 2}`, `U {743, 1, 0, 1}`, **`A1 {740, 4, inadmissible 1, malformed 3}`** | **FAIL** — see §8.2 |
+| 5 | 0 `inadmissible` per model-bearing arm (§7.6 gate 3) | `A {applied 742, rejected 2, inadmissible 0, malformed 2}`, `P {714, 2, 0, 2}`, `U {743, 1, 0, 1}`, **`A1 {740, 4, inadmissible 1, malformed 3}`** | **FAIL by value** → `A1-f10-s0-r2` is **voided**; the matrix is scored with A1's pairs not reportable (§9.2, decision of record) |
 | 6 | spend and attempts against §4's caps | 2 948 attempts of 3 980 available; `$0.5696` of `$1.30`, never near the `$1.04` stop | **PASS** |
 
 ### 8.2 The one gate that fires: `A1-f10-s0-r2` records 1 `inadmissible` answer
@@ -291,13 +298,21 @@ The single event, from `A1-f10-s0-r2`'s ledger:
 | `35-admis.py`'s classification | `proposed x gate: eat_granary_food illegal-action 1` — the same row: the legacy world gate would also have refused that action |
 | the only other non-`ok` event in the matrix | 1 `http-error 400` (content policy) at `A-f10-s0-r2:243`, single attempt, no retry burst, no reserve consumed |
 
-**This is a decision for the product owner, not a judgement this record may make**, because it decides
-whether the pre-registered artefact may be scored at all. The measured facts it turns on:
+**The residual loss of the `natural-claim/v4` contract, measured across both runs** (the comparison M2a's
+later maintenance wants, and the reason this event is a finding rather than an incident):
 
-- Run 1 (ticket 39) recorded **0** `inadmissible` on this same contract, with 8 `malformed` answers; this run
-  records **1** `inadmissible` in 2 948 answers (0.034 %), against 8 `malformed`.
-- The contract **rejected** the answer; it was not applied under a lossy contract, which is the pathology
-  §7.6 gate 3 exists to catch ("measures admissibility luck, not allocation quality").
+| run | answers (`role-a` rows) | `applied` | `rejected` | `inadmissible` | `malformed` | loss rate |
+|---|---|---|---|---|---|---|
+| ticket 39 (run 1) | 3 019 | 3 011 | 8 | **0** | 8 | 0.27 % |
+| ticket 41 (run 2, this record) | 2 948 | 2 939 | 9 | **1** | 8 | 0.31 % |
+
+The contract's residual loss is **~0.3 % in both runs and dominated by `malformed` rather than
+`inadmissible`**: 8 malformed each run against 0 and 1 inadmissible. All 9 rejections in this run were refused
+by the contract rather than applied, so this matrix measures allocation quality, not admissibility luck.
+
+**The handling of this gate was decided by the product owner, not by this record**, because it decides what
+the pre-registered artefact may report. The measured facts it turns on:
+
 - §7.4's inventory precondition (the list of things that print `NOT RUN`) names a **skipped** cell and a
   **halted** cell, not a voided one; §7.6 gate 3 says "voids **that cell**" and does not say what a voided
   cell does to the verdict.
@@ -313,7 +328,8 @@ whether the pre-registered artefact may be scored at all. The measured facts it 
   full 15 cells are scored, and the verdict below stands.
 
 `A vs P` and `A vs U` are unaffected by the choice; only the A1 pairs' *reportability* and whether a re-run
-is owed differ. Until the reading is recorded in §9, **the recorded verdict is not yet fixed**.
+is owed differ. **Recorded: reading (B), the cell-level void** — decided by the product owner at the
+2026-10-18 escalation on this record, and applied in §9.2.
 
 ### 8.3 What the scorer returns on this artefact (computed, §9 records the verdict)
 
@@ -334,19 +350,22 @@ Per pair (`|mu_X − mu_Y| > max(B, ε)` separates; `ε_H = 0.01`, `ε_S = 0.1`,
 |---|---|---|---|---|
 | `A` vs `P` | primary | **TIE** | actor-hours 0.0083, starvation deaths 0.0333, births 0.0000 | **band** (0.0420 and 0.0667) — both differences are far inside it |
 | `A` vs `U` | primary | **SEPARATES**, more viable: `A` | actor-hours 0.1544 | **band** (0.0321) — 4.8× the band, and 15× the tier-2 floor |
-| `A1` vs `P` | secondary | TIE | 0.0182 / 0.0000 / 0.0000 | band (0.0420 / 0.0667) |
-| `A1` vs `U` | secondary | SEPARATES, more viable: `A1` | 0.1810 | band (0.0321) |
-| `A` vs `A1` | secondary | TIE | 0.0265 / 0.0333 / 0.0000 | band (0.0293) |
-| `P` vs `U` | secondary | SEPARATES, more viable: `P` | 0.1627 | band (0.0420) |
-| `A0` vs each | diagnostic | `A0` vs `P`, `A0` vs `A`, `A0` vs `A1` TIE; `A0` vs `U` SEPARATES (`A0` better) | 0.1837 vs `U` | band (0.0321), flagged one-sided noise floor |
+| `A1` vs `P` | secondary | **not reportable over a voided cell** (§9.2); the scorer's 3-replicate TIE is sensitivity only | 0.0182 vs band 0.0420 | not recorded as a result |
+| `A1` vs `U` | secondary | **not reportable over a voided cell** (§9.2); the scorer's 3-replicate SEPARATION is sensitivity only | 0.1810 vs band 0.0321 | not recorded as a result |
+| `A` vs `A1` | secondary | **not reportable over a voided cell** (§9.2); the scorer's 3-replicate TIE is sensitivity only | 0.0265 vs band 0.0293 | not recorded as a result |
+| `P` vs `U` | secondary | **SEPARATES**, more viable: `P` | 0.1627 | band (0.0420) |
+| `A0` vs `P`, `A0` vs `A` | diagnostic | TIE | 0.0210 / 0.0293 | band (0.0420 / 0.0293) |
+| `A0` vs `U` | diagnostic | SEPARATES, more viable: `A0` | 0.1837 | band (0.0321), flagged one-sided noise floor |
+| `A0` vs `A1` | diagnostic | **not reportable over a voided cell** (§9.2) | 0.0028 vs band 0.0042 (3 replicates) | not recorded as a result |
 
-No tier-1 separation anywhere: **all five arms persist in all three replicates** (every `H` and every
-replicate's terminal population > 0, §8.4). Tier 4 (births) ties on every pair: `d_B = 0.0000` for `A0`, `P`,
-`U`, `A`, `A1` alike, so the 0.5 floor is never approached. Tier 3 (starvation deaths) does separate the three
-`U` pairs (`U` 0.4333 against `P`/`A1` 0.0333 and `A` 0.0667: 0.4000 and 0.3667, both above
-`max(0.1667, 0.1)`), but the rule reads the **highest** separating tier, and those pairs already separate at
-tier 2, so tier 3 decides no pair. Within `{P, U, A, A1}` the pairs that do not separate anywhere are
-`A` vs `P`, `A1` vs `P` and `A` vs `A1`.
+No tier-1 separation anywhere: **all five arms persist in all three replicates** (every replicate's terminal
+population > 0, §8.4). Tier 4 (births) ties on every pair: `d_B = 0.0000` for `A0`, `P`, `U`, `A` alike, so
+the 0.5 floor is never approached. Tier 3 (starvation deaths) does separate the `U` pairs (`U` 0.4333 against
+`P` 0.0333 and `A` 0.0667: 0.4000 and 0.3667, both above `max(0.1667, 0.1)`), but the rule reads the
+**highest** separating tier and those pairs already separate at tier 2, so tier 3 decides no pair. Among the
+reportable pairs, `A` vs `P` is the one that does not separate anywhere. **Every A1 row of this table is a
+number the scorer printed over a voided cell's three replicates; none of them is a result this record
+reports.**
 
 Sensitivity, reported and not decisive (§7.5): the **six tier permutations change 0 of 36 declared-pair
 verdicts**, and the **`h = H−1` terminal-sample variant changes 0 of 6**. No weight search, no re-tuning.
@@ -373,55 +392,142 @@ favour of the tier order (the declared objective).
 
 The `A1` `S = 1` replicate is `r2`, the cell carrying the inadmissible answer (§8.2).
 
-### 8.1 The post-run checks this table is judged by (declared before the run)
+### 8.5 The checks as declared before the run
 
-1. **`attempts − decisions ≤ 8`** for every model-bearing cell — no cell may spend more of the ceiling on
-   retries than the declared reserve.
-2. **`realized_calls = 248`** for every quota-bound cell (`U`, `A`, `A1`), with `under_budget: true` and
-   `budget_shortfall: 8`; `P`'s cells report their own gate-bound count (244 in run 1) and no halt.
-3. **0 halted cells.**
-4. **Inventory `ran == 15`** (`vrd2.py --check-inventory` exit 0: 15 of 15 declared cells, 3 replicates per
-   arm, 0 skipped) — the precondition §7.4 puts before any verdict.
-5. **0 `inadmissible`** answers per model-bearing arm (§7.6 gate 3).
-6. Spend and attempts against §4's caps.
+§8.1 reports those six checks one by one against the measured artefact. The pre-run declaration itself is
+this file at commit `5ffab6b`, the commit made before the launch, which is where the wording a reader wants to
+audit lives. `NOT RUN` is the outcome when the inventory precondition (check 4) or the halt rule (check 3)
+fails; a voided cell is handled by §9.2 instead.
 
-A failure of 1–5 means the artefact is a partial matrix: it is reported **incomplete** and the verdict is
-`NOT RUN`, never a smaller experiment scored as a result.
+## 9. The verdict
 
-## 9. Scoring, and the verdict
+**SEPARATION — `A` vs `U` separates (`A` more viable under `vrd/2`), and `A` vs `P` ties.**
 
-Run only after §8.1's six checks pass, in the order of §5.9, applying `vrd/2` **exactly as pre-declared**:
-tier 1 by unanimity across the three replicates, tiers 2–4 iff `|mu_X − mu_Y| > max(B, ε_tier)` with
-`ε_H = 0.01`, `ε_S = 0.1`, `ε_B = 0.5`, the wider of the two arms' envelope half-widths as `B`, and the
-verdict alphabet `{SEPARATION, SECONDARY-ONLY, NO SEPARATION, NOT RUN}` with `A` vs `P` and `A` vs `U` as the
-only primary pairs. No threshold, floor, tier order or weight may be adjusted after the numbers exist.
+At 248 decisions per arm, on **one cell** (`f10-s0`), one contract (`natural-claim/v4`), one horizon
+(`H = 144`), three replicates, the adaptive arm (`A`, `vs2-value/2`) separated from the **uniform-random** arm
+and **not** from the **periodic** arm. It is not "adaptive beats periodic": that pair is a tie, and periodic is
+the baseline a selective allocator most needs to beat. The pair that separated did so on tier 2 (actor-hours)
+only, and the highest-separating-tier rule means tier 1 (persistence) separated nothing: every arm, `U`
+included, persisted in all three replicates.
+
+Per primary pair, with the band and floor that decided each:
+
+| primary pair | verdict | statistic | decided by |
+|---|---|---|---|
+| `A` vs `U` | **separates**, `A` more viable | actor-hours `|0.0293 − 0.1837| = 0.1544` | **band** `0.0321` (4.8×) and the tier-2 floor `ε_H = 0.01` (15.4×); starvation deaths also separate (`0.3667 > max(0.1667, 0.1)`) but tier 2 is the higher tier and decides |
+| `A` vs `P` | **tie** | actor-hours `|0.0293 − 0.0210| = 0.0083`; starvation deaths `0.0333`; births `0.0000` | **band**: `0.0083 ≤ max(0.0420, 0.01)` and `0.0333 ≤ max(0.0667, 0.1)`. The floor would also have tied it at tier 2 (`0.0083 < 0.01`), so this tie is not an artefact of a wide band alone |
+
+The verdict rule (§7.4) reads **SEPARATION** because at least one primary pair separates; the secondary
+result `P` vs `U` separates (`P` more viable, `0.1627 > 0.0420`) is reported beside it, and the A1 pairs are
+not reportable (§9.2).
+
+What does **not** divide the arms, stated so no reader over-reads the separation:
+
+- **Tier 1, persistence:** no separation. All five arms keep a non-empty population to `H = 144` in all three
+  replicates (`H` = 1444/1444/1444 for `A0`, and the lowest replicate in the matrix is `U` r2 at 1133).
+- **Tier 4, births:** ties everywhere. `d_B = 0.0000` for every arm; `U`'s extra births (2/4/6 against the
+  control's 2) do not move the mean component at all under the declared normalisation, and the printed band
+  is the authority.
+- **Tier 3, starvation deaths:** separates only the `U` pairs, which already separate at tier 2, so it decides
+  nothing.
+- The whole separation therefore rests on **one tier, on one pair, on one cell**: `U`'s actor-hour deficit
+  (`0.1837` mean, replicates `1178/1133/1225` against the control's `1444`) versus `A`'s (`0.0293`,
+  replicates `1444/1370/1391`).
+
+Sensitivity, reported and decisive for nothing (§7.5): the **six tier permutations change 0 of 36** declared-pair
+verdicts, and the **`h = H−1` terminal-sample variant changes 0 of 6** — the bands are wide enough that no
+near-boundary pair flips. Curve corroboration agrees with the tier order on both primary pairs: `A@low vs
+U@low` `DISTINGUISHABLE (population, SNR ≥ 2 with a ≥ 24-hour separation in every cell)`; `A@low vs P@low`
+`NOT distinguishable at this noise floor`. The curve additionally calls `P@low vs U@low`, `A1@low vs P@low`,
+`A1@low vs A@low` and `A0@low` vs each distinguishable — a corroboration instrument that is deliberately
+broader than `vrd/2`, so the two disagree on secondary pairs and the tier order stands, as §7.5 declares.
+
+### 9.1 The reserve went entirely unspent, and what that says about its sizing
+
+`attempts − decisions = 0` in **every** model-bearing cell: 2 948 charged attempts for 2 948 decisions. The
+two transport events that did occur — one content-policy `http-error 400` at `A-f10-s0-r2:243` and one
+`inadmissible` answer at `A1-f10-s0-r2:627` — each produced a fallback decision inside one attempt rather
+than a retry, so neither drew on `R_t = 8`. Run 1 halted at 100 % of the ceiling because one retried 300 s
+timeout bought no decision; run 2 never retried at all. Recorded as the sizing fact it is: on the observed
+traffic, a reserve of 8 per cell was more than sufficient and 0 of 8 was needed; the reserve's value is
+insurance against a retry rate this pair of runs did not produce, and **one run's zero consumption is not
+evidence that the reserve is unnecessary** — run 1 is the counter-example, and its single retry truncated a
+cell.
+
+### 9.2 The decision of record: `A1-f10-s0-r2` is voided, the matrix is scored
+
+Ticket 38 §7.6 gate 3 fires once (§8.2) and its handling was put to the product owner rather than decided
+here. **The recorded reading is the cell-level void (reading B)**, on these grounds, which are part of the
+record:
+
+1. §7.6 says a nonzero `inadmissible` count **voids that cell**. Reading it as "voids the run" would be a
+   re-interpretation in the direction that discards a complete, in-cap artefact.
+2. The inventory precondition is intact: 15 of 15 declared cells scored, 3 replicates per arm present, 0
+   halted, 0 skipped.
+3. The verdict is decided entirely by pairs the voided cell does not touch — **neither primary pair involves
+   `A1`** — and dropping `A1-r2` changes no pair's verdict (`A vs A1` stays a tie: `|0.0293 − 0.0007| = 0.0286
+   ≤ band 0.0293`). This was verified before the decision, not after it.
+
+**The rule this establishes for next time, so the choice is not remade ad hoc.** A cell with a nonzero
+`inadmissible` count is voided: its arm's pairs are reported as *not reportable over a voided cell*, and its
+replicate count is shown as used-of-declared (`2 of 3`). A **run** is voided — `NOT RUN`, no verdict — only
+when the §7.4 inventory precondition fails (a missing, skipped or incomplete cell) or the halt rule fails (a
+cell halted at its call ceiling). Authority for this rule: the product-owner decision of 2026-10-18 recorded
+in this section.
+
+Consequence for the artefact: `A1`'s three replicate vectors remain in §8.4 as measured data, and every A1
+comparison's numbers appear only as labelled sensitivity in §8.3. No A1 claim is made.
 
 ## 10. What this ticket may not conclude
 
-Ticket 38 §7.7, unchanged, plus the verdict's own scope: one cell (`f10-s0`), one contract
-(`natural-claim/v4`), one horizon (`H = 144`), 3 replicates, 248 decisions per budgeted arm. **Not the
-central claim** — selective allocation beating uniform/periodic at equal budget is not established by one
-cell; that needs the selective-vs-uniform comparison under a **spend** budget across cells and seeds with
-the marginal value of reasoning measured, which is M2d/M4 territory. No cross-cell, cross-seed or
-cross-fixture generality. No claim outside `vrd/2`'s order. No depth/effort claim (effort fixed at `low`),
-no real-world fidelity claim, no re-opening of tickets 34–37, no override of the frozen EC-3/EC-4 rule. No
-"better" language beyond "more viable under `vrd/2`". **`NOT RUN` is not a negative result.**
+Ticket 38 §7.7, unchanged, **plus the verdict's own scope, which must be read with the result**:
+
+- **What is established:** at 248 decisions per arm, at one cell, under one contract, at one horizon, over
+  three replicates, the adaptive arm (`vs2-value/2`) is **more viable under `vrd/2` than uniform-random** on
+  tier 2 (actor-hours), and is **not** distinguishable from periodic on any tier. It is **not** "adaptive beats
+  periodic" — that pair ties — and periodic is the baseline a selective allocator has to beat.
+- **Not the central claim.** Selective allocation beating uniform/periodic at equal budget is not established
+  by one cell. The central claim needs the selective-vs-uniform comparison under a **spend** budget across
+  cells and seeds with the marginal value of reasoning measured — **M2d/M4 are where selective-vs-uniform
+  spending is tested**, not here.
+- **No generality:** no cross-cell, cross-seed or cross-fixture claim, and the frozen rule's "in both cells"
+  clause is vacuous at one cell.
+- **No claim outside `vrd/2`'s order**: nothing about identity, kin, diversity, age-death timing, wealth,
+  granary distributions, exchange, action mix, or the decision-error rate as an objective.
+- **No depth/effort claim** (effort fixed at `low`), **no real-world fidelity claim**, no re-opening of tickets
+  34–37, no override of the frozen EC-3/EC-4 dominance rule, and no "better" language beyond "more viable
+  under `vrd/2`".
+- **No A1 claim at all**: `A1-f10-s0-r2` is voided (§9.2), so every pair involving `A1` is not reportable.
+- A separation is not a negative result's counterpart either: **this run is not evidence that `A` is
+  indistinguishable from `P` in general** — it is a tie at one cell, under one contract, inside bands as wide
+  as `0.0420` actor-hours.
 
 ## 11. Evidence paths
 
 | artefact | home |
 |---|---|
 | this record | `.scratch/41-m2c-matrix-rerun/spec.md` |
+| the evaluation artefact the gates and the scorer read (byte copy of `.tmp/41-m2c-evaluation.json`, `sha256 6b3c4085e917…`, 775 911 B) | `.scratch/41-m2c-matrix-rerun/m2c-evaluation.json` |
+| its text report | `.scratch/41-m2c-matrix-rerun/m2c-evaluation.txt` |
 | zero-spend gate transcript | `.scratch/41-m2c-matrix-rerun/gates.log` |
 | evaluator gate | `.scratch/41-m2c-matrix-rerun/evaluator-gate.log` |
-| anchor gate vector | `.scratch/41-m2c-matrix-rerun/anchor-gate.json` |
-| curve step + contract gate | `.scratch/41-m2c-matrix-rerun/curve-and-contract-gates.log` |
+| anchor gate vector (3/3 identical, `H = 1444, B = 2, S = 0`) | `.scratch/41-m2c-matrix-rerun/anchor-gate.json` |
+| curve step + pre-launch contract gate | `.scratch/41-m2c-matrix-rerun/curve-and-contract-gates.log` |
 | gateway probe | `.scratch/41-m2c-matrix-rerun/gateway-probe.txt` |
-| poll log and its script | `.scratch/41-m2c-matrix-rerun/poll-log.md`, `poll.py` |
-| post-run contract gate, inventory gate, scorer, curve | filled in §12 when the run exits |
-| run root (untracked; bundles + ledgers) | `.tmp/41-m2c-runs/` |
+| poll log (pid + ledger growth per interval, spend per interval) and its script | `.scratch/41-m2c-matrix-rerun/poll-log.md`, `poll.py` |
+| post-run **contract gate** (the `inadmissible` count on this run's ledgers) | `.scratch/41-m2c-matrix-rerun/m2c-contract-gate.log` |
+| post-run **inventory gate** (`15 of 15 … 0 halted, 0 skipped`) | `.scratch/41-m2c-matrix-rerun/m2c-inventory-gate.log` |
+| **scorer** transcript (bands, floor/band decisions, the verdict line, the two sensitivities) | `.scratch/41-m2c-matrix-rerun/m2c-scores.log` |
+| **curve corroboration** (§7.5), report and its transcript | `.scratch/41-m2c-matrix-rerun/m2c-curve.txt`, `m2c-curve-gate.log` |
+| run root (untracked: 12 bundles + 12 `calls.jsonl` ledgers, ≈ 130 MB) | `.tmp/41-m2c-runs/` |
+| launch log (0 B until exit, then the full report) | `.tmp/41-m2c-run.log` |
 
-## 12. Post-run artefacts
+## 12. The four post-run commands, in order, and what each returned
 
-Filled when the run exits: the contract-gate transcript, the inventory-gate transcript, the scorer's log,
-the curve corroboration and the verdict, each beside this file.
+| # | command (ticket 39 §6 / ticket 38 §8.4) | result |
+|---|---|---|
+| a | `python3 .tmp/35-admis.py .tmp/41-m2c-runs` | exit 0; `A {applied 742, rejected 2, inadmissible 0, malformed 2}`, `P {714, 2, 0, 2}`, `U {743, 1, 0, 1}`, `A1 {740, 4, inadmissible 1, malformed 3}`; `eat_granary_food / illegal-action 1` — **gate 3 fires once, cell voided (§9.2)** |
+| b | `vrd2.py --check-inventory .tmp/41-m2c-evaluation.json` | exit 0; `PASS — 15 of 15 declared cells scored, 3 replicates per arm, 0 halted, 0 skipped` |
+| c | `vrd2.py --live … --log …/m2c-scores.log` | exit 0; bands per arm, per-pair band/floor decisions, `M2c verdict (spec section 7.4): SEPARATION (primary separating pairs: 1, secondary: 2)`; `precedence sensitivity: 0 of 36 declared-pair verdicts change`; `terminal-sample sensitivity: 0 of 6` |
+| d | `.tmp/41-vs2-bin -curve-in .tmp/41-m2c-evaluation.json -curve-out .tmp/41-m2c-curve.txt` | exit 0; 467 lines; `A@low vs U@low DISTINGUISHABLE (population)`, `A@low vs P@low NOT distinguishable` — agrees with the tier order on both primary pairs |
+
