@@ -109,6 +109,36 @@ actor could not observe. (f) Costs reported per call, per actor-hour, and per ru
 Deepens C7/C8/C11/C13 from "present" to "tested". Adds the value-based priority layer
 (`expected civilizational value / expected cost`), escalation requests, and protected exploration.
 
+**Status (branch `feature/35-vs2-curve`, ticket 35, added on top of the ticket-34 record below).**
+The VS2 question is now asked with a **curve criterion** and the axes of **depth (reasoning effort) and
+redundancy (replicates)** are first-class. The criterion is pre-registered in
+`.scratch/35-vs2-curve/spec.md` and was committed before any live call: the unit of analysis is the
+per-hour KPI curve of a condition replicated 3×; the band is the mean ± 95 % CI plus the replicate
+envelope; between conditions, `SNR` = RMSE over hours of the paired difference divided by RMSE over
+hours of the replicate noise, with the first-separation hour, the longest separating run and a
+Wasserstein-1 distance; a condition is distinguishable only if some KPI holds SNR ≥ 2 with a ≥ 24-hour
+separation in every cell, and **no condition is called better on a scalar**.
+
+Findings, live and spend-authorised: the ticket-34 ledger's `max_tokens: 128` provenance lie is fixed
+(applied effort, output bound and response-body bound are recorded per call beside the declared
+sampling); the frozen 30 s attempt timeout and the spec's 64 KiB recorded-body bound were both silent
+live decision-loss channels at long-reasoning effort (the body bound rejected ~30 % of max-effort calls
+as `oversized` until a live-only 1 MiB bound was declared); **40-53 % of every arm's model answers were
+well-formed JSON proposing an action the world refuses** (882 of 917 were `eat-stored` with no granary
+stock or a meal already taken), which is the standing explanation for the earlier null — and under the
+new `natural-claim/v2` contract, which states the observation-derived admissible action subset, that
+falls to 0 inadmissible in a 30-request probe and 0 across a 6 580-call run. `vs2-value/2` (a
+staleness term plus a per-actor coverage floor) fixes the coverage collapse it was built for (Gini
+0.14-0.23 against `vs2-value/1`'s 0.49-0.59 in the same run, same contract). Two results cut the other
+way and are recorded rather than buried: **periodic sampling has zero demographic effect at this
+fixture** (244 applied model decisions reproduce the no-AI world exactly), and **the v1 value model,
+whose concentrated coverage was called a defect, is the arm closest to the R reference while the
+"fixed" model is indistinguishable from A0** — because R produces 0-1 births and dies out, so
+fidelity-to-R currently rewards suppressing reproduction. **The R anchor is an unvalidated objective**
+(open question Q1: a civilization-level distance measure), so no arm is called better, the ticket-34
+verdict stands unchanged, and **the central claim and the M2 milestone remain not accepted**. Record:
+`.scratch/35-vs2-curve/spec.md`.
+
 **Status (branch `feature/34-vs2-live`, ticket 34).** The mechanism is delivered and verified
 hermetically (lanes L1–L4c and L2b, master `48b4882`; hermetic matrix: VS2-EC-1..9 present, VS2-EC-3
 a clean negative). The real-model arm has now run (ticket 34, spend authorised): on the declared
@@ -173,7 +203,7 @@ reported rather than narrated.
 | Milestone | Slice | Status | Accepted when |
 |---|---|---|---|
 | **M1** | VS1 | **Implementation complete; hermetic evidence PASS on all eleven frozen exit criteria (EC-1..EC-11); the real-model arm blocked on spend authorisation.** | **A mind in the loop.** The project is no longer an LLM-free simulator: a real model drives part of the world's decisions *and* modifies behaviour logic during the run, its interventions are costed and replayed exactly, and the modification is recorded with lineage and applied or rolled back under audit. |
-| **M2** | VS2 | **Mechanism delivered and verified hermetically on master `48b4882` (VS2-EC-1..9 present; VS2-EC-3 a clean negative). The real-model arm ran on branch `feature/34-vs2-live` (ticket 34): on the declared primary live matrix VS2-EC-3 FAILS — a budgeted baseline strictly dominates adaptive at f10-s0 and adaptive dominates no cell — so the declared acceptance rule does not fire and the value model `vs2-value/1` is falsified as instantiated; VS2-EC-2/4/5 live failures and the incomplete sensitivity extension are recorded with their anatomy in ticket 34. The central claim and the M2 milestone are not accepted.** | **First evidence on the central claim.** Selective allocation beats — or decisively fails to beat — uniform and periodic spending at equal budget, across seeds, on the declared multi-indicator fidelity metric. |
+| **M2** | VS2 | **Mechanism delivered and verified hermetically on master `48b4882` (VS2-EC-1..9 present; VS2-EC-3 a clean negative). The real-model arm ran on branch `feature/34-vs2-live` (ticket 34): on the declared primary live matrix VS2-EC-3 FAILS — a budgeted baseline strictly dominates adaptive at f10-s0 and adaptive dominates no cell — so the declared acceptance rule does not fire and the value model `vs2-value/1` is falsified as instantiated; VS2-EC-2/4/5 live failures and the incomplete sensitivity extension are recorded with their anatomy in ticket 34. Ticket 35 added a pre-registered curve criterion with depth (effort ladder) and redundancy (3 replicates) as first-class axes, and found the dominant defect is admissibility, not allocation: 40-53 % of v1 model answers were refused as inadmissible and `natural-claim/v2` removes that (0 in a 6 580-call run); `vs2-value/2` fixes the coverage collapse (Gini 0.14-0.23 vs 0.49-0.59) yet periodic sampling shows zero demographic effect and the v1-value-model arm is the closest to the R reference, whose anchor is itself unvalidated (Q1). No arm is called better; the central claim and the M2 milestone are not accepted.** | **First evidence on the central claim.** Selective allocation beats — or decisively fails to beat — uniform and periodic spending at equal budget, across seeds, on the declared multi-indicator fidelity metric. |
 | **M3** | VS3 | Not started | **Self-improving.** Strategies measurably improve over generations under audited mutation, with provenance and rollback for every patch. |
 | **M4** | VS4 | Not started | **Stakes and scale.** The central-claim result survives heterogeneity and scale; the marginal value of reasoning is measured, not assumed. |
 | **M5** | VS5 | Not started | **Society.** Institutions and organizations arise and persist only through inspectable incentives and enforcement. |

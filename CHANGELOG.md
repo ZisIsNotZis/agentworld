@@ -75,6 +75,40 @@ for anything: current truth lives in the authoritative documents — the active 
 - **Ticket 28 — VS2 lane L4a: extract the shared experiment mechanics into `internal/experiment` and migrate `cmd/vs1`.** Revision `57770d2` (reviewed tip `7526205`; ticket-doc nit `e6d5466`).
 - **Ticket 29 — VS2 lane L4b: recorded-seam replay/restore selector wiring.** Revision `b97ac5b`.
 
+## 2026-10-18
+
+- **Ticket 35 — VS2 curve study: noise floor, effort ladder, depth and redundancy, and the admissibility defect.**
+  Branch `feature/35-vs2-curve` (from `3faa480`). The acceptance criterion was **pre-registered and committed
+  before any live call** (`.scratch/35-vs2-curve/spec.md`, `2c7fbcc`): per-hour KPI curves of a condition
+  replicated 3×, band = mean ± 95 % CI plus replicate envelope, stability = across-replicate CV, and between
+  conditions `SNR` = RMSE over hours of the paired difference / RMSE over hours of the replicate noise, with
+  first-separation hour, longest separating run and Wasserstein-1; distinguishable iff some KPI holds SNR ≥ 2
+  with a ≥ 24-hour separation in every cell; **no condition is called better on a scalar**. Harness changes
+  (all committed, `cmd/vs2` + `internal/cognition`): applied reasoning effort and output bound recorded on
+  every call record beside the unchanged declared sampling (the ticket-34 `max_tokens: 128` provenance lie
+  fixed); `-effort/-max-output/-response-bound/-attempt-timeout/-call-deadline/-reps/-hours/-votes/-claim-contract`
+  declared flags; per-replicate cell directories with their own ledgers and bundles; full hourly KPI export;
+  `cmd/vs2/curves.go` with hand-computed statistical fixtures; a report-only `-relabel` path. Live stage 1
+  (full-wake at `max`, 72 h, f10-s0 + f12-s0, 3 reps, 5 106 calls, all `ok`): the aggregate noise floor is
+  ~1 actor / ≤ 5 % relative, and 72 h was too static to compare conditions, so the horizon was corrected to
+  144 h on f10-s0. Stage 2 (v1, effort ladder): `none` vs `low`/`high` distinguishable on births and max
+  capital, `low` vs `high` not distinguishable. Stage 3 (v1 arms): **40-53 % of every arm's model answers were
+  rejected as INADMISSIBLE** (882 of 917 were `eat-stored` with no granary stock or a meal already taken), so
+  that matrix measured admissibility luck, not allocation quality. Two silent live decision-loss channels were
+  found and repaired: the frozen 30 s per-attempt timeout cut measured 28-155 s max-effort calls, and the
+  spec's 64 KiB recorded-body bound rejected ~30 % of max-effort bodies (long reasoning items) until a
+  live-only 1 MiB bound was declared and the applied bound plus body length recorded per call. `natural-claim/v2`
+  (schema 2) states the observation-derived admissible action subset, using the same ladder and no privileged
+  state: a 30-request probe went 86.7 % inadmissible → 0, and a 6 580-call run recorded 0 inadmissible.
+  `vs2-value/2` added a staleness term and a per-actor coverage floor with a non-degeneracy regression test;
+  in the v2 run its Gini is 0.14-0.23 against `vs2-value/1`'s 0.49-0.59 (same contract, arm `A1`), so the
+  collapse was the value model. Two results cut against the redesign and are recorded: **periodic sampling has
+  zero demographic effect** at this fixture (244 applied decisions reproduce the no-AI world exactly), and the
+  **v1 value model is the closest arm to the R reference** while `vs2-value/2` is indistinguishable from A0 —
+  because R produces 0-1 births and dies out, so **fidelity-to-R rewards suppressing reproduction and the R
+  anchor is an unvalidated objective** (Q1). The ticket-34 verdict stands unchanged; no arm is called better;
+  the central claim and M2 remain not accepted. Evidence record: `.scratch/35-vs2-curve/spec.md`.
+
 ## 2026-10-17
 
 - **Ticket 34 — VS2 live matrix (the central claim, real-model arm).** Branch `feature/34-vs2-live`
