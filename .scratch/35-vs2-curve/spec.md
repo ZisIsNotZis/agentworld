@@ -908,3 +908,34 @@ demographic indicator separates A from P or from A0; and the candidate metric fa
 dies out, so fidelity-to-R rewards extinction). **Open question Q1 (a civilization-level distance measure)
 is not resolved here and is the blocking question for any further VS2 claim.** The ticket-34 verdict
 (central claim NOT accepted under EC-3 as written) stands unchanged, and the M2 milestone is not accepted.
+
+## Depth result: full-wake at `high` under contract v2 (144 h, f10-s0, 3 reps)
+
+Command as declared (`.tmp/35-run-v2high.sh`), exit 0, 3/3 cells, **3 417 call records, all `ok`**
+(`.tmp/35-v2high-evaluation.json` sha256 `fa28644877bec6a40045d64006fa3d4a606776e3d7d36e858e4273569eddaae6`,
+text `9a9dea0ffecd5ba6a760c007954165fa7c501547953251ca8095c2cd6fc2623a`, relabelled JSON
+`8278d3f818919c83d438b41734915524b39ed466a5ea5dbb484b15f4b34601b6`). Cost from recorded tokens:
+1 514 123 input + 1 139 543 output = **$0.721** (well under the ≈$1.8 estimate), taking **total lane
+harness spend to $13.17 over 31 191 calls**, ≈ $14.4 including out-of-harness probes — inside the $25 cap.
+
+Per replicate: population h0/48/96/120/143 = 10,10,10,3,0 (r1), 10,9,9,3,0 (r2), 10,10,10,3,0 (r3);
+**births 0 in all three**, starvation 0/1/0, age deaths 10/9/10; calls 1166/1085/1166; coverage
+100-141, 30-141, 100-141 (Gini 0.056/0.123/0.056); decision errors 20/12/24 of 1166/1085/1166.
+
+**The depth comparison (pre-declared framing): `high` does NOT separate from `low` on any KPI.**
+
+| pair | population | births | starvation | age deaths | max capital | verdict |
+|---|---|---|---|---|---|---|
+| **R@high vs R@low** | 0.487 | 0.817 | 0.054 | 0.225 | 1.291 | **NOT distinguishable** |
+
+Every demographic separation is below SNR 2, and no separation runs 24 consecutive hours. So at this
+fixture and horizon **the depth of thinking is not resolvable**: `low` and `high` produce the same
+demographic trajectory (both die out by h143 with zero births), and `A1@low` is also not distinguishable
+from `R@high` (population 0.817, births 0.000, starvation 0.817, age 0.817). Per the pre-declared reading,
+the limiting factor is the **fixture's resolution** — population capped at 12, extinction by h156, zero
+births under any full-cognition arm — not the depth of thinking. `max` would have been an expensive way to
+learn the same thing, which is why it is deliberately unrun.
+
+Everything else in the same curve report is unchanged from the v2 section above: `A` vs `P`/`A0` still
+separate only through process measures (coverage), `U` separates from everything, and `A1` remains the arm
+closest to `R` — i.e. the unvalidated-anchor problem (Q1) is untouched by the depth result.
