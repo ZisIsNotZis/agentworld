@@ -309,3 +309,4 @@ file and never log content (the report is written only at exit).
 | local time | call records | rate (calls/min since first) | statuses |
 |---|---|---|---|
 | 12:39 | 271 | 17.2 | all `ok` |
+| 12:57 | 603 | 17.9 | all `ok` |
