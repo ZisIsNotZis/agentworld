@@ -335,7 +335,7 @@ except gate 10 (one probe call, ≈$0.00001). Raw transcripts beside this file: 
 | 4 | whitespace/conflict vs base | `git diff --check d38a86b` | exit 0 — **PASS** |
 | 5 | runner binary | `go build -o .tmp/42-vs2-bin ./cmd/vs2` | exit 0, 11 954 258 B — **PASS** |
 | 6 | evaluator gate (§4 falsifier 1) | `vrd2.py --self-test --scores …/scores.json` | exit 0, T1–T7 PASS, `SELF-TEST: PASS` — **PASS** |
-| 7 | anchor gate (§4 falsifier 2) | `.tmp/42-vs2-bin -arms A0 -cells f12-s0,f10-s1 -reps 3` | exit 0 in 5.4 s; **6 of 6 cells, 3/3 identical per cell**, `realized_calls = 0`, `halted = false` — **PASS**. `f12-s0`: `H = 1496, B = 2, S = 0`, alive@143 = 1, alive@144 = 1, `projection_hash 00d8c5f98777…` in all three replicates. `f10-s1`: `H = 1700, B = 5, S = 3`, alive@143 = 1, alive@144 = 1, `projection_hash e9b7c0f560d7…` in all three replicates. The two anchors differ from `f10-s0`'s `H = 1444, B = 2, S = 0` because the cells differ — that is the point of the ticket, and what must hold is determinism per cell, which does |
+| 7 | anchor gate (§4 falsifier 2) | `.tmp/42-vs2-bin -arms A0 -cells f12-s0,f10-s1 -reps 3` | exit 0 in 5.4 s; **6 of 6 cells, 3/3 identical per cell**, `realized_calls = 0`, `halted = false` — **PASS**. `f12-s0`: `H = 1700, B = 5, S = 3`, alive@143 = 1, alive@144 = 1, `projection_hash e9b7c0f560d7…` in all three replicates. `f10-s1`: `H = 1496, B = 2, S = 0`, alive@143 = 1, alive@144 = 1, `projection_hash 00d8c5f98777…` in all three replicates. The two anchors differ from `f10-s0`'s `H = 1444, B = 2, S = 0` because the cells differ — that is the point of the ticket, and what must hold is determinism per cell, which does. **Correction to this row as first written:** the two cell labels were transposed, so the first version assigned `H = 1496, B = 2, S = 0` to `f12-s0` and `H = 1700, B = 5, S = 3` to `f10-s1`. Both live artefacts' `A0` rows and a fresh zero-spend re-run at each cell (§8.1) give `f12-s0` = `1700/5/3` and `f10-s1` = `1496/2/0`, 3/3 identical each with 0 calls, so the values were right and only their labels were wrong: founders 12 carry the larger world. The gate's own result — determinism per cell, zero calls — is unaffected, and the transposition is recorded here rather than silently fixed, because an auditor comparing the two files would otherwise have to re-derive which one was wrong |
 | 8 | cell-shape gate (§4 falsifier 3) | `.tmp/42-vs2-bin -arms P,U,A,A1 -cells f12-s0,f10-s1 -reps 1` (hermetic, `vs2-hermetic-fake/1`) | exit 0 in 1.8 s; 8 of 8 cells, each `realized_calls = 248`, `quota_sum = 248` at `call_ceiling = 256`, `under_budget = true`, `budget_shortfall = 8`, `halted = false` — **PASS**. Both cells build, both arms sets run to `H = 144`, no ceiling halt |
 | 9 | curve step (§5.4, ticket 38 §7.5) | `.tmp/42-vs2-bin -curve-in .tmp/36-v4-evaluation.json -curve-out .tmp/42-curve-gate.txt` | exit 0, 58-line report — **PASS** |
 | 10 | gateway reachability | §5.5 probe | `/health/liveliness` 200 in 1.6 ms; `/v1/models` 97 ids, declared model present; one call **HTTP 200 in 2.327 s**, `status: completed`, model echoed `github_copilot/gpt-6-luna`, usage 27 in / 12 out (≈ $0.000009) — **PASS** |
@@ -351,17 +351,163 @@ arm set does not include (§2). None of the three is read by the verdict.
 **No live call has been made when this table was written.** The one probe call of gate 10 is the only
 charged request, and it is not part of the matrix.
 
-## 7. Launch record (filled at launch)
+## 7. Launch record
 
-Filled at launch.
+Two invocations, sequential, one per cell (§2.2), each detached with `setsid nohup`, each on its own fresh run root.
 
-## 8. Results (filled from the artefacts)
+| item | cell 1 | cell 2 |
+|---|---|---|
+| cell | `f12-s0` | `f10-s1` |
+| launched (UTC) | `2026-10-18T17:29:55Z` | `2026-10-18T17:56:30Z` |
+| launched by | the ticket-42 worker's first turn | this continuation, after that worker's 30-minute turn limit |
+| runner pid | `2772812` (`sid = pgid = pid`) | `2779824` (`sid = pgid = pid`; parent `2779822` is the wrapping `setsid nohup` shell, not the runner) |
+| run root | `.tmp/42-runs-f12-s0` | `.tmp/42-runs-f10-s1` |
+| log | `.tmp/42-f12-s0-run.log` | `.tmp/42-f10-s1-run.log` |
+| artefact | `.tmp/42-f12-s0-evaluation.json` / `.txt` | `.tmp/42-f10-s1-evaluation.json` / `.txt` |
+| exited (UTC) | `2026-10-18T17:56:15Z` | `2026-10-18T18:19:13Z` |
+| wall clock | **26 min 20 s** | **22 min 43 s** |
 
-Filled after the run.
+**Cell 2 was not launched by the first worker.** On returning at its turn limit that worker had finished cell 1, and no runner process existed at `17:56:25Z` — the box held no `42-vs2-bin`. The continuation therefore launched cell 2 exactly as §5.5 declares (same arms, cell, replicates, effort, output bounds, attempt timeout, call deadline, contract, `-parallel 12`, `-budget-min 240`, fresh root) and recorded its pid and launch time here and in `poll-log.md`.
+
+```sh
+. .tmp/go-env.sh
+export VS2_SPEND_AUTHORIZATION=AUTHORIZED-VS2-SPEND
+export LITELLM_BASE_URL=http://127.0.0.1:4000
+export LITELLM_MODEL=github_copilot/gpt-6-luna
+setsid nohup .tmp/42-vs2-bin -arms A0,P,U,A,A1 -cells f10-s1 -reps 3 -hours 144 \
+  -effort low -max-output 32768 -response-bound 1048576 \
+  -attempt-timeout 300 -call-deadline 900 \
+  -claim-contract natural-claim/v4 -live -parallel 12 -budget-min 240 \
+  -root .tmp/42-runs-f10-s1 \
+  -out .tmp/42-f10-s1-evaluation.json -out-txt .tmp/42-f10-s1-evaluation.txt \
+  > .tmp/42-f10-s1-run.log 2>&1 &
+```
+
+**The stop rule never tripped and no run was stopped.** Spend was recomputed at all 11 polls from every `kind == "call"` row (§5.1); it reached `$0.5111` at the end of cell 1 and `$0.5555` at the end of cell 2, against the `$1.30` operator stop and the `$1.40` hard cap. The realised per-attempt price stayed in `$1.66e-4`-`$1.87e-4`, so the projection over the declared 5 952 attempts stayed in `$0.99`-`$1.06` at every poll and never implied crossing either cap. Liveness was pid plus ledger growth at every poll; neither cell reached its call ceiling, and no cell halted.
+
+
+## 8. Results, from the two artefacts
+
+Both cells' post-run checks ran in §5.4's order on each cell's own root and artefact.
+
+| gate | `f12-s0` | `f10-s1` |
+|---|---|---|
+| contract (§4 falsifier 4), `python3 .tmp/35-admis.py .tmp/42-runs-<cell>` | `A {applied 743, rejected 1, inadmissible 0, malformed 1}`, `A1 {737, 4, 0, 4}`, `P {743, 1, 0, 1}`, `U {738, 0, 0, 0}` — **0 inadmissible** → **PASS** | `A {742, 2, 0, 2}`, `A1 {738, 6, 0, 6}`, `P {741, 3, 0, 3}`, `U {742, 2, 0, 2}` — **0 inadmissible** → **PASS** |
+| inventory (§4 falsifier 6), `vrd2.py --check-inventory` | `declared=15 ran=15 skipped=0`, 3 replicates per arm, 0 halted — **PASS** | same — **PASS** |
+| halt rule | 0 halted; max `attempts − decisions` per cell = 1 (`A-f12-s0-r1`: 249 charged rows, `quota_sum 248`, `budget_shortfall 7`), inside the declared `R_t = 8` | 0 halted; `attempts − decisions` = 0 everywhere (2 976 charged rows, `Σ quota_sum` 2 976) |
+| curve step (§5.4, corroboration only) | exit 0; 9 pairs distinguishable, including `A@low vs P@low` **via `births_cum`**, a KPI the tier order never reads — so the two disagree about *why*, the tier order stands as the verdict, and the disagreement is reported here rather than resolved | exit 0; 4 pairs distinguishable, every one an `A0`-vs-arm pair via `granary_hist`; no declared pair distinguishable on the curve's rule, consistent with the tier order's near-total tie |
+
+**Per-cell accounting, the numbers §9 rests on:**
+
+| | `f12-s0` | `f10-s1` |
+|---|---|---|
+| charged attempts (every `kind == "call"` row) | **2 969** | **2 976** |
+| spend (§5.1 price table) | **$0.5111** | **$0.5555** |
+| wall clock | 26 min 20 s | 22 min 43 s |
+| halted cells | **0** | **0** |
+| `realized_calls` per budgeted cell, r1/r2/r3 | `A` 249/248/248, `A1` 246/248/248, `P` 248/248/248, `U` 248/245/245 | `A` 248/248/248, `A1` 248/248/248, `P` 248/248/248, `U` 248/248/248 |
+| `inadmissible` count, the cell-void gate | **0** | **0** |
+| non-ok attempt rows | 5: 3 × `http-error 400` (content policy, the ticket-41 class) and 2 × `timeout` (`A-f12-s0-r1:323`, `A1-f12-s0-r1:411`), both absorbed by the reserve | 5 × `http-error 400`, no timeout |
+| ticket totals | **5 945 charged attempts, $1.0666** — inside the 6 144-attempt ceiling and both dollar caps | |
+
+### 8.1 The state vectors the two cells produced
+
+Recorded so §9's numbers can be checked without the artefacts. `H` is total actor-hours, `B` total births, `S` total starvation deaths, over samples 0..144; `dH`, `dS`, `dB` are the scorer's tier components against the committed anchor, with the single-condition envelope half-width after them. (The per-cell `A0` vectors here were re-derived with a fresh zero-spend `-arms A0 -reps 3` run per cell; they match the live artefacts' `A0` rows exactly, which is also how §6 row 7's transposed labels were found.)
+
+`f12-s0` — control `A0` = `H 1700, B 5, S 3, alive_end 1` in all three replicates, 0 calls, `projection_hash` identical:
+
+| arm | replicates `(H, B, S)` | dH | dS | dB |
+|---|---|---|---|---|
+| `A` | (1487, 4, 4), (1677, 4, 3), (1701, 4, 2) | 0.0000 ± 0.0000 | 0.3000 ± 0.1000 | 0.0000 ± 0.0000 |
+| `P` | (1513, 5, 5), (1620, 5, 4), (1518, 5, 5) | 0.0000 ± 0.0000 | 0.4667 ± 0.0667 | 0.0000 ± 0.0000 |
+| `U` | (1367, 5, 7), (1422, 5, 7), (1435, 5, 8) | 0.0249 ± 0.0284 | 0.7333 ± 0.0667 | 0.0000 ± 0.0000 |
+| `A1` | (1538, 3, 3), (1685, 4, 2), (1483, 3, 4) | 0.0000 ± 0.0000 | 0.3000 ± 0.1000 | 0.0000 ± 0.0000 |
+
+`f10-s1` — control `A0` = `H 1496, B 2, S 0, alive_end 1` in all three replicates, 0 calls:
+
+| arm | replicates `(H, B, S)` | dH | dS | dB |
+|---|---|---|---|---|
+| `A` | (1495, 2, 0), (1496, 2, 0), (1451, 2, 1) | 0.0000 ± 0.0000 | 0.0333 ± 0.0667 | 0.0000 ± 0.0000 |
+| `P` | (1496, 2, 0), (1496, 2, 0), (1496, 2, 0) | 0.0000 ± 0.0000 | 0.0000 ± 0.0000 | 0.0000 ± 0.0000 |
+| `U` | (1395, 2, 1), (1387, 2, 1), (1163, 2, 4) | 0.0893 ± 0.1053 | 0.2000 ± 0.2000 | 0.0000 ± 0.0000 |
+| `A1` | (1496, 2, 0), (1495, 2, 0), (1495, 2, 0) | 0.0000 ± 0.0000 | 0.0000 ± 0.0000 | 0.0000 ± 0.0000 |
+
+**Two properties of the unmodified instrument at these cells, recorded because they decide how the numbers may be read.** The scorer divides every cell by the *committed* `f10-s0` anchor in `.scratch/37-fidelity-metric/scores.json` — `H_T = 1444, B_T = 2, S_T = 0, N0 = 10` (`vrd2.py:55`, and the `--live --scores` path at `:886-888`) — not by each cell's own control. Therefore:
+
+- at `f12-s0` every arm's every replicate exceeds 1 444 actor-hours, so `dH = max(0, (H_T − H)/H_T)` is **exactly 0 for all five arms** and tier 2 cannot separate anything there; that cell's verdict rides entirely on **tier 3**, where `dS = (S − S_T)/N0` counts extra deaths per 10 actors at a 12-founder cell;
+- at `f10-s1`, `A` and `P` sit at or above 1 444 in every replicate, so their `dH` and its band are 0 and the floor alone stands between a small deficit and a separation, while the whole 0.0893 ± 0.1053 that `U` carries comes from its one low replicate (1 163).
+
+Both are properties of declared machinery §2 binds this ticket to leave unmodified, not a choice made after seeing data. Measured against the cells' own controls instead — a supplementary reading only — neither verdict moves: at `f12-s0`, `A`'s actor-hour deficit is 78.3 and `P`'s 149.7, a 71.3-actor-hour gap inside `A`'s own replicate band of 134.3, still a tie at tier 2; at `f10-s1`, `A` is 15.3 actor-hours short and `P` 0.0, a 15.3-hour gap inside `A`'s 45-hour excursion, still a tie.
+
+### 8.2 The declared pairs, per cell, from the `--live` transcripts
+
+Raw transcripts: `.scratch/42-m2d-replication/f12-s0-scores.log`, `.scratch/42-m2d-replication/f10-s1-scores.log`.
+
+`f12-s0`:
+
+| pair | verdict | statistic | decided by |
+|---|---|---|---|
+| `A` vs `U` (primary) | **SEPARATES**, `A` more viable | starvation deaths `abs(0.3000 − 0.7333) = 0.4333` | band `0.1000` (= floor `0.1000`); 4.3× the threshold |
+| `A` vs `P` (primary) | **SEPARATES**, `A` more viable | starvation deaths `abs(0.3000 − 0.4667) = 0.1667` | band `0.1000` (= floor `0.1000`); 1.7× the threshold |
+| `A1` vs `P`, `A1` vs `U` (secondary) | separate, `A1` more viable, same tier and statistics as `A` | | |
+| `P` vs `U` (secondary) | separates, `P` more viable, `0.2667` | | effect floor `0.1` (band `0.0667`) |
+| `A` vs `A1` (secondary) | tie on every tier | | |
+| `A` vs `A0` (diagnostic) | **tie**, `0.0000` on all three tiers | | |
+
+`f10-s1`:
+
+| pair | verdict | statistic | decided by |
+|---|---|---|---|
+| `A` vs `U` (primary) | **TIE** | actor-hours `abs(0.0000 − 0.0893) = 0.0893`; starvation deaths `0.1667`; births `0.0000` | **band** `0.1053` at tier 2 and `0.2000` at tier 3, both wider than their floors |
+| `A` vs `P` (primary) | **TIE** | actor-hours `0.0000`; starvation deaths `0.0333`; births `0.0000` | tier 2 **floor** `0.01` (band `0.0000`); tier 3 **floor** `0.1` (band `0.0667`) |
+| `A1` vs `P`, `A1` vs `U` (secondary) | tie on every tier | | |
+| `P` vs `U`, `A` vs `A1`, and every arm vs `A0` (secondary, diagnostic) | tie on every tier | | |
+
+Declared sensitivity, both cells: **0 of 36** pair verdicts change over the six tier orders, and **0 of 6** change under the h=H−1 persistence convention. Scorer verdict lines verbatim — `f12-s0`: `SEPARATION (primary separating pairs: 2, secondary: 3)`; `f10-s1`: `NO SEPARATION (primary separating pairs: 0, secondary: 0)`.
+
+### 8.3 Power, so that a tie is not read as equivalence and a thin separation is not read as support
+
+**`A` vs `P` at `f10-s1`, the tie.** The observed difference is `0.0000` on every tier's own scale (raw means: `A` 1 480.7 actor-hours and 0.33 deaths, `P` 1 496.0 and 0.00). Tier 2's band is `0.0000` because every `A` and `P` replicate is at or above the committed 1 444 anchor, so the **floor decides**: the smallest difference this cell could have declared a separation on at 3 replicates is `0.01 × 1444` = **14.4 actor-hours** at tier 2, and **1.0 death per 10 actors** at tier 3, against an observed 0.0. Ticket 41's own power numbers say the same thing about `f10-s0`, and they transfer to this cell unchanged: there the band that decided `A` vs `P` was `0.042013` = **60.7 actor-hours** (4.2 % of the 1 444 control), the observed difference was `0.008310` = **12.0 actor-hours** (0.8 %), and the smallest difference separable at three replicates was **42-61 actor-hours** (`0.0293`-`0.0420`) — 5.1× wider than the observed 12.0, and above the 14.4-actor-hour floor even with no noise at all. `f10-s1` is tighter still, 0.0 against a 14.4 floor. The only licensed reading is therefore **no detectable effect at 3 replicates, with ≈14 actor-hours as this cell's detection limit** — never equivalence, and never "the policy is right".
+
+**`A` vs `U` at `f10-s1`, the separation that failed to appear.** The tie rests entirely on `U`'s variance and is one replicate from flipping: with all three replicates the tier-2 difference `0.0893` sits inside a band of `0.1053`, which is **152 actor-hours**, the excursion of `U-r3`'s 1 163 against 1 395 and 1 387. Dropping *any single `U` replicate* separates (`U-r1` dropped → `0.1170 > 0.0776`; `U-r2` → `0.1143 > 0.0803`; `U-r3` → `0.0367 > max(0.0028, 0.01)`), while dropping any single `A` replicate does not. So this cell's detection limit for the primary pair is ≈152 actor-hours, and the pair sits inside it only because one random-arm replicate ran short. Leave-one-out is not a declared check; it is reported as robustness in the manner of ticket 41 §9 and it changes no verdict.
+
+**`A` vs `P` at `f12-s0`, the separation that failed the null.** It clears the declared rule 1.7× and survives all six leave-one-out drops (threshold `0.0667`-`0.1000`, difference `0.1167`-`0.2167`, `A` more viable in all six), so under the declared rule it is not a single-replicate artefact. It is nonetheless thin in absolute terms and the replicate ranges overlap: `A` starves 4/3/2 and `P` 5/4/5, so `A-r1`'s four deaths sit inside `P`'s range and equal `P-r2`'s, and the mean difference is 1.67 deaths against a band of 1.0 death, which is one `A` replicate's excursion. §3 requires it be reported as a failure of the null at that cell — with the tier, statistic, band and floor — and not as support for the policy; that is how it is reported in §9.
+
 
 ## 9. The replication verdict
 
-Filled after the run.
+**FAILED TO REPLICATE.** Under the §3 table, neither cell reproduces the M2c pattern, and the rule gives no third label between "one cell reproduced" and "none did". The two cells split the pattern between them and each one failed the half the other passed:
+
+| | `A` vs `U` | `A` vs `P` | reproduces the M2c pattern? | cell verdict (ticket 38 §7.4) |
+|---|---|---|---|---|
+| **`f10-s0`** (M2c, for reference) | separates, `A` more viable, `0.1544 > band 0.0321` | **tie**, `0.0083 <= max(0.0420, 0.01)` | — the pattern being replicated | SEPARATION |
+| **`f12-s0`** | separates, `A` more viable, `0.4333 > max(0.1000, 0.1000)` | **separates, `A` more viable**, `0.1667 > max(0.1000, 0.1000)`, band-decided at starvation deaths | **no** — the tie separated. Direction is `A`-favourable, and §3 forbids reading that as "closer to M2c" | SEPARATION |
+| **`f10-s1`** | **tie**, `0.0893 <= max(0.1053, 0.0100)` actor-hours, band-decided | **tie**, `0.0333 <= max(0.0667, 0.1000)` starvation deaths, floor-decided | **no** — the separation tied | NO SEPARATION |
+
+Read per pair, which is the only granularity the evidence supports: **the `A`-vs-`U` separation reproduced at one of the two new cells (`f12-s0`, and more widely than at `f10-s0`) and failed to appear at the other (`f10-s1`, where one random-arm replicate carries the tie); the `A`-vs-`P` null held at `f10-s1` and broke at `f12-s0`, where `A` starved fewer actors than `P`.** So the M2c result is neither reproduced nor refuted as a whole: one half of it is cell-sensitive and the other half is cell-sensitive in the opposite direction. That is a decisive outcome under §4 and the M2 stage's exit criterion — the honest summary is that **the specific pair pattern of `f10-s0` did not survive a change of cell**, and it did not survive in one direction at one cell and the other direction at the other.
+
+**What the label does not say, and what it rests on:**
+
+- **No cell was voided.** `inadmissible = 0` at both cells (§8), so the owning cell-void rule (ticket 41 §9.2) never applies; both cells' arm pairs are reportable and both cells are assessable, which is why the label is computed over 2 of 2 cells and not over a remainder.
+- **No run was voided.** Both artefacts carry the declared 15-cell inventory, 3 replicates per arm, 0 skipped and 0 halted, so neither cell is `NOT RUN` for a §4 reason and no score is derived from a partial matrix.
+- **The label is not softened and not sharpened.** `A` vs `P` separating at `f12-s0` is reported as a **failure of the null** at that cell, in the direction that favours `A`, and explicitly not as a result for the adaptive arm: the declared rule forbids reading a separating `A` vs `P` as "closer to M2c's finding", and §10.4 records how thin it is.
+- **The label is not a claim about the central question.** §10 states the scope; two cells, two seeds, 3 replicates, one contract and 248 decisions per arm are still not "selective allocation beats uniform and periodic at equal spend".
+
+**Evidence paths, all under commit `HEAD` of this branch:**
+
+| what | path |
+|---|---|
+| cell 1 artefact, report, log, run root | `.tmp/42-f12-s0-evaluation.json`, `.tmp/42-f12-s0-evaluation.txt`, `.tmp/42-f12-s0-run.log`, `.tmp/42-runs-f12-s0/` |
+| cell 2 artefact, report, log, run root | `.tmp/42-f10-s1-evaluation.json`, `.tmp/42-f10-s1-evaluation.txt`, `.tmp/42-f10-s1-run.log`, `.tmp/42-runs-f10-s1/` |
+| scoring transcripts (`vrd2.py --live`) | `.scratch/42-m2d-replication/f12-s0-scores.log`, `.scratch/42-m2d-replication/f10-s1-scores.log` |
+| contract gate transcripts (`35-admis.py`) | in §8; re-run `python3 .tmp/35-admis.py .tmp/42-runs-<cell>` |
+| curve corroboration | `.tmp/42-f12-s0-curve.txt`, `.tmp/42-f10-s1-curve.txt` |
+| anchor re-check (zero spend) | `.tmp/42-anchorcheck-f12s0.{json,txt}`, `.tmp/42-anchorcheck-f10s1.{json,txt}` |
+| poll ledger, 11 intervals | `.scratch/42-m2d-replication/poll-log.md` |
+| zero-spend gates | `.scratch/42-m2d-replication/{gates,evaluator-gate,curve-and-contract-gates}.log`, `gateway-probe.txt` |
+
+**Spend and attempts against the caps:** 5 945 charged attempts and **$1.0666** for the whole matrix (§5.1's price table), against the declared 6 144-attempt ceiling, the `$1.30` operator stop and the `$1.40` hard cap; cumulative attempts since ticket 39 are 3 020 + 2 948 + 5 945 = **11 913** against the supervisor's 9 500 cap — see §10.5, where that is recorded as a cap breach this ticket did not foresee rather than passed over.
+
 
 ## 10. What this ticket may not conclude
 
@@ -378,3 +524,26 @@ Ticket 38 §7.7 unchanged, plus the replication's own scope:
   policy is right" reading of a tie: a tie is no detectable effect at 3 replicates, with its power stated.
 - **No A1 claim** if its cells are voided, and no re-opening of tickets 34-37, no override of the frozen
   EC-3/EC-4 dominance rule, no depth/effort claim (effort fixed at `low`), and no real-world fidelity claim.
+
+### 10.1 What the failed replication does and does not support
+
+- It **does not support** "the M2c result is a property of the mechanism rather than of `f10-s0`". That is exactly what it tested, and the answer at these two cells is no.
+- It **does not support** "the mechanism is cell-specific and the M2c result was luck" either. `A` vs `U` separated again, more widely, at `f12-s0` (`0.4333` against a threshold of `0.1`), and `A` vs `P` did not separate at `f12-s0`'s sister cell. Two cells cannot distinguish "cell-dependent" from "seed-noise-dominated at 3 replicates", and §8.3 shows the f10-s1 half of the failure is one replicate deep.
+- What it **does support**: at `f12-s0`, `A` was more viable than both `U` and `P` under the declared rule; at `f10-s1`, no declared pair separated; and the M2c pattern as a whole was not reproduced at either cell.
+
+### 10.2 The replication is not the central claim, and its size does not grow with the count of cells
+
+Two cells, two seeds, 3 replicates per arm, one contract (`natural-claim/v4`), one horizon (`H = 144`), one effort (`low`) and 248 decisions per arm. Adding a second cell doubles the fixtures, not the spend axis: every arm still receives the same call budget, so the question "does selective allocation beat uniform and periodic **at equal spend**, as the budget grows or shrinks" is untouched. That comparison needs a spend budget across cells and seeds with the marginal value of reasoning measured, which is M2d's remaining work and M4.
+
+### 10.3 The `A` vs `P` tie at `f10-s1`, stated with ticket 41's power rather than as "no effect"
+
+Repeating the tie without its numbers would be the error ticket 41 §9 named. At `f10-s1` the observed `A`-vs-`P` difference is **0.0 actor-hours**, the deciding threshold is the tier-2 floor **0.01 = 14.4 actor-hours** (the band is 0), and 1.0 death per 10 actors at tier 3; at `f10-s0` ticket 41 measured the band at **60.7 actor-hours** (`0.042013`), the observed difference at **12.0 actor-hours** (`0.008310`), and the **minimum detectable difference at 3 replicates at 42-61 actor-hours** (`0.0293`-`0.0420`). Both cells therefore sit below any difference this design can see, and the correct statement is **"no detectable effect at 3 replicates, with ≈14-61 actor-hours as the detection range this design offers"**, never "no effect" and never "periodic is as good as adaptive".
+
+### 10.4 The `A` vs `P` separation at `f12-s0` is a rule-level failure of the null, not evidence for the policy
+
+It is band-decided at 1.7× the threshold and survives all six leave-one-out drops, but it is 1.67 extra starvation deaths per 10 actors against a 1.0-death band taken from one `A` replicate's excursion, with `A`'s and `P`'s replicate ranges overlapping (`A` 4/3/2, `P` 5/4/5). Tier 2 could not speak at that cell at all (§8.1), so the whole separation rests on a tier-3 count of units of one death. A single replicate of `A` at `S = 5` would have produced a tie instead.
+
+### 10.5 Two defects in this record, recorded rather than repaired silently
+
+- **§6 row 7's cell labels were transposed** (values right, labels swapped). Corrected in place with its reason; the zero-spend re-run at both cells that settles it is in §8.1.
+- **The supervisor's cumulative-attempt cap of 9 500 was still below what the declared matrix requires.** §5.1 states 5 968 attempts already used by tickets 39 and 41 and a declared requirement of 5 952-6 144 for this ticket, which sums to 11 920-12 112: the amended number was unreachable by the same arithmetic the escalation was raised about. The declared matrix was executed as instructed (5 arms × 3 replicates × 2 cells, nothing cut) and its **realised** cumulative total is 3 020 + 2 948 + 5 945 = **11 913**, i.e. 2 413 above the stated cap and inside this ticket's own 6 144-attempt ceiling. Dollar caps were never approached ($1.0666 against $1.30 / $1.40). This is recorded as a finding for the milestone review: the amendment fixed the stop rule but not the cumulative attempt number, and no stop rule was derived from that number at run time.

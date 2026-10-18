@@ -1,0 +1,23 @@
+live artefact: contract=natural-claim/v4 horizon=144 status=live/real-model
+cell inventory (spec section 8.4): PASS — 15 of 15 declared cells scored, 3 replicates per arm, 0 halted, 0 skipped
+declared effect floors (spec section 7.4): actor-hours 0.01 (14.4 actor-hours at H_T = 1444), starvation deaths 0.10, births 0.50; a tier separates only above max(band, floor)
+per-arm bands:
+   A0  persisted=True extinct=False dH=0.0000(+/-0.0000) dS=0.0000(+/-0.0000) dB=0.0000(+/-0.0000)
+   P   persisted=True extinct=False dH=0.0000(+/-0.0000) dS=0.0000(+/-0.0000) dB=0.0000(+/-0.0000)
+   U   persisted=True extinct=False dH=0.0893(+/-0.1053) dS=0.2000(+/-0.2000) dB=0.0000(+/-0.0000)
+   A   persisted=True extinct=False dH=0.0000(+/-0.0000) dS=0.0333(+/-0.0667) dB=0.0000(+/-0.0000)
+   A1  persisted=True extinct=False dH=0.0000(+/-0.0000) dS=0.0000(+/-0.0000) dB=0.0000(+/-0.0000)
+declared pairs:
+   A vs P (primary): TIE — tie: no tier separates — actor-hours |0.0000| <= max(band 0.0000, floor 0.0100); starvation deaths |0.0333| <= max(band 0.0667, floor 0.1000); births |0.0000| <= max(band 0.0000, floor 0.5000)
+   A vs U (primary): TIE — tie: no tier separates — actor-hours |0.0893| <= max(band 0.1053, floor 0.0100); starvation deaths |0.1667| <= max(band 0.2000, floor 0.1000); births |0.0000| <= max(band 0.0000, floor 0.5000)
+   A1 vs P (secondary): TIE — tie: no tier separates — actor-hours |0.0000| <= max(band 0.0000, floor 0.0100); starvation deaths |0.0000| <= max(band 0.0000, floor 0.1000); births |0.0000| <= max(band 0.0000, floor 0.5000)
+   A1 vs U (secondary): TIE — tie: no tier separates — actor-hours |0.0893| <= max(band 0.1053, floor 0.0100); starvation deaths |0.2000| <= max(band 0.2000, floor 0.1000); births |0.0000| <= max(band 0.0000, floor 0.5000)
+   A vs A1 (secondary): TIE — tie: no tier separates — actor-hours |0.0000| <= max(band 0.0000, floor 0.0100); starvation deaths |0.0333| <= max(band 0.0667, floor 0.1000); births |0.0000| <= max(band 0.0000, floor 0.5000)
+   P vs U (secondary): TIE — tie: no tier separates — actor-hours |0.0893| <= max(band 0.1053, floor 0.0100); starvation deaths |0.2000| <= max(band 0.2000, floor 0.1000); births |0.0000| <= max(band 0.0000, floor 0.5000)
+   P vs A0 (diagnostic): TIE — tie: no tier separates — actor-hours |0.0000| <= max(band 0.0000, floor 0.0100); starvation deaths |0.0000| <= max(band 0.0000, floor 0.1000); births |0.0000| <= max(band 0.0000, floor 0.5000)
+   U vs A0 (diagnostic): TIE — tie: no tier separates — actor-hours |0.0893| <= max(band 0.1053, floor 0.0100); starvation deaths |0.2000| <= max(band 0.2000, floor 0.1000); births |0.0000| <= max(band 0.0000, floor 0.5000)
+   A vs A0 (diagnostic): TIE — tie: no tier separates — actor-hours |0.0000| <= max(band 0.0000, floor 0.0100); starvation deaths |0.0333| <= max(band 0.0667, floor 0.1000); births |0.0000| <= max(band 0.0000, floor 0.5000)
+   A1 vs A0 (diagnostic): TIE — tie: no tier separates — actor-hours |0.0000| <= max(band 0.0000, floor 0.0100); starvation deaths |0.0000| <= max(band 0.0000, floor 0.1000); births |0.0000| <= max(band 0.0000, floor 0.5000)
+precedence sensitivity: 0 of 36 declared-pair verdicts change over the six tier orders
+terminal-sample sensitivity (persistence at h=H-1): 0 of 6 verdicts change
+M2c verdict (spec section 7.4): NO SEPARATION (primary separating pairs: 0, secondary: 0)
