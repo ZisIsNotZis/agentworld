@@ -335,3 +335,14 @@ for anything: current truth lives in the authoritative documents — the active 
   `vrd2.py`'s `LIVE_ROW_KEYS` reproduces both scoring transcripts byte for byte, and the `--expect-fail`
   half of the evaluator falsifier, declared in §4.1 and not run before the launch, was run. Record:
   `.scratch/42-m2d-replication/spec.md`.
+- **Documentation sync — the M2 stage closed and the next decision recorded.** Documentation only, no Go
+  file changed, no live call. [docs/VERTICAL-SLICES.md](docs/VERTICAL-SLICES.md) now carries the stage
+  outcome in the VS2 status and in the M2 milestone row: M2a and M2b passed, M2c answered on one cell and
+  M2d failed to replicate it, with the deciding negative measurement stated where a reader will meet it —
+  the adaptive arm ties the no-AI control on all three scored cells, the periodic and uniform arms are no
+  better and on `f12-s0` worse, and no AI arm has beaten doing nothing at 248 decisions per arm.
+  [docs/OPEN-QUESTIONS.md](docs/OPEN-QUESTIONS.md): Q1's "still open" no longer says `f12-s0` is untested
+  and now carries the cross-fixture result and the power limit; Q2 states that the scheduler's value is
+  unmeasured at these cells rather than uncalibrated; and the new **Q13** records the open question that
+  follows, with its three routes, their costs, the recommended route and the fact that **no route has been
+  started** pending the user's choice.

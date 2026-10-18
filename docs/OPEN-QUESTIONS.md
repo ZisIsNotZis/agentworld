@@ -10,7 +10,9 @@ Phase references name the active plan's slices (VS1–VS6, [VERTICAL-SLICES.md](
 
 **Current answer (fixture f10-s0, H=144; M2b ticket 37, repaired by M2c part 1 ticket 38, 2026-10-18):** a three-component demographic viability order, `vrd/2` — surviving actor-hours, cumulative births and cumulative starvation deaths, read below the no-AI control's own realised outcome in the declared priority order (population survived, then deaths avoided, then stability/reproduction). It distinguishes the recorded arms in the declared direction (an extinct, zero-birth arm ranks last with a categorical persistence separation; a high-churn arm ranks above it but below the control) and it imposes no preferred civilization beyond persist, reproduce and avoid starvation deaths, a floor the world already reaches without cognition. The R-anchored divergence vector is rejected as an objective at this fixture: the reference is extinct (0-1 births, 0 alive at the terminal sample), so it rewards losing population. Metric contract: [VALIDATION.md](VALIDATION.md); evidence and records: [`.scratch/37-fidelity-metric/spec.md`](../.scratch/37-fidelity-metric/spec.md) and [`.scratch/38-m2c-preregistration/spec.md`](../.scratch/38-m2c-preregistration/spec.md).
 
-**Still open:** cross-fixture and cross-horizon validity (f12-s0 untested; a fixture whose control is itself not viable needs a declared substitute floor), the identity/diversity of survivors and age-death timing are not represented, and the repair traded away the ability to express any tradeoff between its tiers (a difference on a tier outranks any difference on a lower tier, by construction — so one actor-hour of survival outranks any reproduction difference **and any number of starvation deaths**, i.e. "deaths avoided", the second declared priority, can never compensate a survival deficit, and that tradeoff is declared as a witness world rather than left implicit; the stability tier is a reproduction proxy, not a churn measure). The rankings are declared, not calibrated: `vrd/2` has no weights at all, so its sensitivity check is the six tier permutations plus the terminal-sample convention, not a weight sweep.
+**Cross-fixture state (tickets 41–42):** `vrd/2` now has three scored cells — `f10-s0`, `f12-s0` and `f10-s1` — with the control's outcome as the anchor in each. It separates arms in both directions and ties plausibly, so its cross-fixture behaviour is measured rather than assumed; what it does not do is produce a stable ordering of the *AI* arms, which is a property of those arms and not of the metric (see Q2 and Q13). At `f12-s0` every arm including the control loses population to age deaths (13 of 16 deaths), so the tier-3 statistic there measures damage avoidance against arms that harm the control's own outcome.
+
+**Still open:** cross-horizon validity, a fixture whose control is itself not viable (it needs a declared substitute floor), the power of a 3-replicate design (ticket 41 measured a minimum detectable difference of 42–61 actor-hours at the observed bands, against a between-arm difference of 12), the identity/diversity of survivors and age-death timing are not represented, and the repair traded away the ability to express any tradeoff between its tiers (a difference on a tier outranks any difference on a lower tier, by construction — so one actor-hour of survival outranks any reproduction difference **and any number of starvation deaths**, i.e. "deaths avoided", the second declared priority, can never compensate a survival deficit, and that tradeoff is declared as a witness world rather than left implicit; the stability tier is a reproduction proxy, not a churn measure). The rankings are declared, not calibrated: `vrd/2` has no weights at all, so its sensitivity check is the six tier permutations plus the terminal-sample convention, not a weight sweep.
 
 **Experiment:** Compare expert judgments, causal interventions, and metric rankings across controlled branches; the first such comparison on recorded branches is ticket 37's, and the next is the M2c matrix, whose criterion is pre-declared in ticket 38 §7 and whose live run is ticket 39 (arms `A0/P/U/A/A1`, cell f10-s0, H=144, 3 replicates, contract `natural-claim/v4`).
 
@@ -24,7 +26,9 @@ Phase references name the active plan's slices (VS1–VS6, [VERTICAL-SLICES.md](
 
 **Experiment:** Evaluate competing scheduling policies from identical checkpoints and budgets.
 
-**Decision needed:** A provisional version for VS2; permanent resolution is not expected.
+**Measured state (tickets 41–42, contract `natural-claim/v4`, `vrd/2`, H=144, 3 replicates, 248 decisions per budgeted arm):** on three cells no allocation arm beat the no-AI control `A0` — the adaptive arm `A` ties `A0` on every cell, the periodic arm `P` ties it on two and is worse on `f12-s0`, and the uniform arm `U` is worse on `f12-s0`. The only separations found are between AI arms: `A` beats `U` at `f10-s0` and `f12-s0` and does not at `f10-s1`; `A` versus `P` ties at `f10-s0` and `f10-s1` and separates, thinly, at `f12-s0`. So the scheduler's value is **unmeasured at these cells**, not merely uncalibrated: there is no observed improvement over spending nothing to calibrate against. Records: [`.scratch/41-m2c-matrix-rerun/spec.md`](../.scratch/41-m2c-matrix-rerun/spec.md), [`.scratch/42-m2d-replication/spec.md`](../.scratch/42-m2d-replication/spec.md).
+
+**Decision needed:** Q13 asks whether this world contains a reasoning premium at all; until that is answered, no allocation mechanism can be shown to have value here. A provisional version for VS2 was assumed rather than measured; permanent resolution is not expected.
 
 ## Q3 — Human plausibility
 
@@ -125,3 +129,29 @@ Phase references name the active plan's slices (VS1–VS6, [VERTICAL-SLICES.md](
 **Experiment:** Produce trial reports from controlled branches and audit whether readers can distinguish model-conditional evidence from real-world proof.
 
 **Decision needed:** Before public experimental results.
+
+## Q13 — Reasoning premium in this world
+
+**Question:** Does this world contain any reasoning premium — can a short-sighted policy be measurably worse than a policy that reasons about consequences — or is the decision space shallow enough that any competent policy reaches the control's outcome?
+
+**From:** Q1's cross-fixture result and Q2's measured state; M2c and M2d, tickets 41–42. The observation that raises it is that the adaptive arm ties the no-AI control on all three cells, and the two baselines it does not tie are themselves no better than the control. If no policy in this world can do better than the control, then selective spending of reasoning has nothing to win, and the central claim is untestable here rather than false.
+
+**Author:** agent (inference from the recorded matrices, ticket 42 review).
+
+**Status:** open, awaiting the user's choice of route. No route has been started.
+
+**Evidence:** `vrd/2` scores for `A0`, `P`, `U`, `A`, `A1` on `f10-s0`, `f12-s0` and `f10-s1`, records in `.scratch/41-m2c-matrix-rerun/spec.md` and `.scratch/42-m2d-replication/spec.md` (durable per-cell extracts: `.scratch/42-m2d-replication/{f12-s0,f10-s1}-live-extract.json`).
+
+**Scope:** the current substrate only — 4 admissible actions per actor, one food loop, H=144, `natural-claim/v4` — at 3 replicates per arm. Nothing here bounds a richer substrate.
+
+**Routes, with cost and what each would answer:**
+
+| route | what it is | cost | what it answers |
+|---|---|---|---|
+| **A (recommended)** | compute a scripted policy and a myopic-but-locally-optimal policy offline from the recorded ledgers, and score them under `vrd/2` against `A0`, `P`, `U`, `A` | **$0, 1–2 h** | whether a reasoning premium exists here at all. If a simple script already matches `A0`, no allocation scheme can show value in this world; if the script loses to `A`, reasoning has headroom worth building on |
+| **B** | redesign the world so a short-sighted policy visibly loses: more action dimensions, causal delay between action and consequence, resource competition | **≈$3–5, 1–2 days** | whether the central claim is true in a world that can express it. Invalidates every existing metric baseline and every M2 arm result |
+| **C** | re-scope the claim to "248 model calls do not harm the civilization" | **$0** | nothing new: the three cells already support it, and spending fewer decisions obtains it for free, so the claim is nearly information-free |
+
+**Why A is recommended:** it costs nothing and decides whether B is necessary and C is self-deception. If the script ties the control, the shallow-policy reading is confirmed and further spend on allocation arms buys noise; if the script loses to the adaptive arm, then a premium exists and the next step is strengthening the policy rather than rebuilding the world.
+
+**Decision needed:** the user's choice of route before any further spend.
