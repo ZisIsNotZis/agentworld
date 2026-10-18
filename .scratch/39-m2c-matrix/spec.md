@@ -176,6 +176,15 @@ order, no depth/effort claim, no fidelity claim, no re-opening of tickets 34–3
 language beyond "more viable under `vrd/2`". Phase A adds nothing to that list: **a launched run is not a
 result.**
 
+## 8. Stop and failure routes
+
+- Any gate failure, or an unreachable gateway, means **do not launch**: the failure and its evidence are
+  recorded and returned as a blocker. (All gates of §4 passed and the gateway answered, so the launch was
+  made.)
+- To stop a run, kill the recorded runner pid (`2725555`) only. Never `pkill -f`.
+- A partial matrix (a skipped, missing or `halted` cell) is reported as incomplete and never scored as a
+  smaller experiment (§7.4 inventory precondition; §8.4 step 5b returns `NOT RUN`, exit 3).
+
 ## 9. Launch record (phase A: launched, demonstrably running, checkpointed)
 
 ### 9.1 What was launched
@@ -228,7 +237,7 @@ ledger, so the absence of a ledger for `A0` is the correct state and not a stall
 were independently reproduced by gate 7 (`anchor-gate.json`: `H = 1444`, `B = 2`, `S = 0`, identical
 `projection_hash`), which is the zero-spend proof that the in-matrix `A0` rows will carry the same vector.
 
-### 9.4 Liveness: pid AND ledger growth, four polls
+### 9.4 Liveness: pid AND ledger growth, five polls over 6 minutes
 
 Call counts are `kind == "call"` rows in each cell's `calls.jsonl` (ledger line counts also include
 `allocation` and `role-a` rows, so the raw `wc -l` number is larger than the call count). Spend is
@@ -241,6 +250,7 @@ computed from each call row's `usage.prompt_tokens`/`completion_tokens` at $0.10
 | 15:32:37 (t+2:11) | yes, `Ssl` 02:11 | 8 | 235 | **+112 in 64 s** | 147 302 / 51 085 | $0.0403 |
 | 15:33:45 (t+3:19) | yes, `Ssl` 03:19 | 8 | 351 | **+116 in 68 s** | 220 346 / 78 373 | $0.0612 |
 | 15:34:56 (t+4:30) | yes, `Ssl` 04:30 | 8 | 488 | **+137 in 71 s** | 306 514 / 106 693 | $0.0840 |
+| 15:36:14 (t+5:48) | yes, `Ssl` 05:48 | 8 | 636 | **+91 in 48 s** (mid-interval 545 at 15:35:26) | 399 556 / 137 967 | $0.1089 |
 
 Note on the first row: at 15:31:26 the ledgers already existed with 258 lines; the per-call token tally in
 that first read was taken by a tally that looked for the wrong usage keys, so its token columns are
@@ -332,10 +342,9 @@ python3 .scratch/38-m2c-preregistration/vrd2.py --live .tmp/39-m2c-evaluation.js
    SECONDARY-ONLY / NO SEPARATION / NOT RUN), with the band, the per-tier floors, the six-permutation
    sensitivity and the `h = H−1` variant. Not the central claim (§7.7).
 
+### 9.7 Status at the moment this ticket returns
 
-- Any gate failure, or an unreachable gateway, means **do not launch**: the failure and its evidence are
-  recorded and returned as a blocker. (All gates of §4 passed and the gateway answered, so the launch was
-  made.)
-- To stop a run, kill the recorded runner pid (`2725555`) only. Never `pkill -f`.
-- A partial matrix (a skipped, missing or `halted` cell) is reported as incomplete and never scored as a
-  smaller experiment (§7.4 inventory precondition; §8.4 step 5b returns `NOT RUN`, exit 3).
+Last poll before returning: **`2026-10-18T15:36:14Z`**, pid `2725555` alive (`Ssl`, elapsed `05:48`),
+**636 calls**, **$0.1089** spent, 8 cells growing (+91 calls in 48 s), 11 of 15 cell directories present,
+load average `0.80`. The run was **demonstrably running when this ticket was committed**, which is all
+phase A claims.
