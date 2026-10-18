@@ -433,3 +433,217 @@ not change the anchor, and the anchor costs nothing to re-measure inside the liv
 - A run plan whose cap is not derived from recorded cost data, or whose anchor is assumed rather than
   re-measured.
 - Any live call. **This ticket's budget is 0 calls, $0.00.**
+
+---
+
+# Results (appended after commit 1; the pre-declaration above is unchanged)
+
+Everything below was produced after the pre-declaration commit `6072af3`, with **0 live model calls**.
+Files committed beside this record: `vrd2.py` (the scorer), `self-test.log`, `recorded.log`,
+`negative-control.log`, `live-smoke.log`, and `anchor-check.json`. Inputs: this ticket's own
+`vrd2.py`, ticket 37's committed `.scratch/37-fidelity-metric/scores.json` (the recorded per-cell
+vectors), and two zero-spend `cmd/vs2` runs of the `A0` cell.
+
+## R1 — The anchor is reproducible with zero spend, and the claim contract cannot move it
+
+The `A0` arm is script-only: 0 model calls, no cognition, deterministic. Re-measured at the landing
+revision (`8ea4a79` + this branch, no Go change), two ways:
+
+| run | command | result |
+|---|---|---|
+| contract `natural-claim/v1` | `.tmp/38-vs2-bin -arms A0 -cells f10-s0 -hours 144 -replay=false -root .tmp/38-a0-runs -out .tmp/38-a0-evaluation.json -out-txt .tmp/38-a0-evaluation.txt` | exit 0, `H = 1444`, `B = 2`, `S = 0`, 11 age deaths, alive@143 = 2, alive@H = 1, 145 samples |
+| contract `natural-claim/v4` | the same cell with `-claim-contract natural-claim/v4` | **byte-identical projections** on the eight compared fields (`hours`, `alive_by_hour`, `births_cum`, `deaths_starve_cum`, `deaths_age_cum`, `capital_hist`, `granary_hist`, `wages_cum`) |
+
+Both reproduce ticket 37's committed anchor exactly (`H_T = 1444`, `B_T = 2`, `S_T = 0`, `N0 = 10`,
+alive@143 = 2, alive@H = 1), and `anchor-check.json` records the commands, the vector and the sha256 of
+each ephemeral evaluation JSON. **Therefore: the anchor is reproducible under the same fixture and
+horizon without any live spend, and running the AI arms under `natural-claim/v4` does not change it** —
+the contract shapes the model-facing request bytes at the seam, which a no-cognition arm never builds.
+Ticket 39 re-runs the same cell as a pre-run gate (§8.4 step 3) rather than trusting this.
+
+## R2 — The repair passes every declared ordering test; both alternatives fail one
+
+`python3 .scratch/38-m2c-preregistration/vrd2.py --self-test --scores .scratch/37-fidelity-metric/scores.json`
+— exit 0, transcript `self-test.log`. The transcript's first block, verbatim:
+
+```
+T1 vrd/1 reproduces the declared pathology on W1/W2:
+   W1=1.0000  W2=0.5963  W3=0.6000  W0=0.0000
+   PASS: W1 == 1.0000 and W2 == 0.5963 and W2 < W1
+   vrd/2 key W0 = (e=0, dH=0.0000, dS=0.0000, dB=0.0000)
+   vrd/2 key W1 = (e=0, dH=0.0000, dS=0.0000, dB=1.0000)
+   vrd/2 key W2 = (e=1, dH=0.0963, dS=0.0000, dB=0.5000)
+   vrd/2 key W3 = (e=0, dH=0.0000, dS=0.1000, dB=0.5000)
+T2 PASS: W1 (sterile survivor) outranks W2 (extinct, one birth)
+T3 PASS: W3 (survivor, one starvation death) outranks W2
+T4 PASS: the full order is W0 < W1 < W3 < W2 (declared W0 < W1 < W3 < W2)
+T5 PASS: the recorded A0 control is exactly at the floor
+T6 PASS: a synthetic copy of A0 ties the recorded A0 exactly
+```
+
+`vrd/2` orders the four worlds exactly as the priority sentence does — **survived** (all but `W2`;
+`W2` extinct), then **deaths avoided** (`W0`/`W1` lose nobody to hunger, `W3` loses one), then
+**stability/reproduction** (`W0` at the control's rate, `W1` sterile). The pathology is gone at the
+pair ticket 37 tabulated, and at the second inversion (`W3` vs `W2`) that the same defect produces.
+
+The two rejected candidates, on the same four worlds (same transcript):
+
+```
+   P2 vrd/2f: W0 < W3 < W2 < W1
+   order P2: W0=0.0000  W1=1.0000  W2=0.9626  W3=0.1000
+   P2 T2 FAIL (W1 1.0000 vs W2 0.9626); required weight ratio w_H/w_B > 1/0.09626 = 10.39
+   P3 vrd/2s: W0 < W1 < W2 < W3
+   order P3: W0=0.0000  W1=0.0000  W2=0.0963  W3=0.1000
+   P3 T2 PASS (W1 0.0000 vs W2 0.0963); P3 T3 FAIL (W3 0.1000 vs W2 0.0963)
+```
+
+- **P2 fails T2** at its declared 10:1 weight ratio, and the failure is quantitative rather than
+  incidental: the ratio needed to rescue it is `1/d_H(extinction) = 10.39` at `R` r3 — a number read
+  off the world being judged — and it grows without bound as the extinction moves later. That is §3's
+  argument, measured.
+- **P3 repairs the tabulated pair but fails T3**: dropping the birth term leaves an equal-weight sum in
+  which one starvation death (`0.1`) still outranks a survival shortfall (`0.0963`), so an extinct
+  world still beats a surviving one. It also flattens every ≥1-birth survivor to the floor, which
+  discards the anchor's declared birth component.
+
+**`vrd/2` is therefore the only candidate of the three whose ordering agrees with the declared
+priority on all four worlds, which is what T2–T4 require.**
+
+## R3 — The recorded matrix: the repair changes what the metric means, and no recorded ordering
+
+`python3 .scratch/38-m2c-preregistration/vrd2.py --scores .scratch/37-fidelity-metric/scores.json` —
+exit 0, transcript `recorded.log`. This is **verification, not the M2c comparison**: these are ticket
+35's `natural-claim/v2` arms, which by the M2c row "do not answer" M2c.
+
+- **Loader identity: exact.** Recomputing `vrd/1` from the committed per-cell vectors reproduces every
+  recorded value with max absolute error `0.000e+00` (tolerance `1e-12`). The scorer reads the same
+  state vector ticket 37 read.
+- **Per-replicate vrd/2 keys** (all 18 cells in `recorded.log`); the arm aggregates (tier 1 = persisted
+  in every replicate, `mu` = replicate mean, `±` = the single-condition envelope half-width):
+
+| arm | persisted | `mu d_H` | `mu d_S` | `mu d_B` |
+|---|---|---|---|---|
+| A0 | yes | 0.0000 ± 0.0000 | 0.0000 ± 0.0000 | 0.0000 ± 0.0000 |
+| P | yes | 0.0000 ± 0.0000 | 0.0000 ± 0.0000 | 0.0000 ± 0.0000 |
+| A | yes | 0.0418 ± 0.0829 | 0.0667 ± 0.1333 | 0.0000 ± 0.0000 |
+| U | yes | 0.2274 ± 0.0577 | 0.5000 ± 0.1000 | 0.0000 ± 0.0000 |
+| R | **no (extinct 3/3)** | 0.1798 ± 0.0836 | 0.0333 ± 0.0667 | 0.8333 ± 0.3333 |
+| A1 | **no (extinct 3/3)** | 0.1925 ± 0.0000 | 0.0000 ± 0.0000 | 1.0000 ± 0.0000 |
+
+- **Orders under the four measures, recorded arm means:**
+
+| measure | order (more viable first) |
+|---|---|
+| `vrd/1` (withdrawn) | A0(0.0000) < P(0.0000) < A(0.1084) < U(0.7274) < R(1.0465) < A1(1.1925) |
+| `vrd/2` (declared) | A0 < P < A < U < R < A1 |
+| P2 `vrd/2f` (rejected) | A0(0.0000) < P(0.0000) < A(0.4845) < **R(2.4982) < U(2.7738)** < A1(2.9252) |
+| P3 `vrd/2s` (rejected) | A0(0.0000) < P(0.0000) < A(0.1084) < **A1(0.1925) < R(0.2132) < U(0.7274)** |
+
+- **`vrd/1` → `vrd/2`: 0 of 15 arm pairs change relative order.** The repair changes what the numbers
+  *mean* (a lexicographic key instead of an additive total, and extinction is now categorical) without
+  moving any recorded arm. The two rejected candidates do move arms, which is what makes them
+  materially different rather than cosmetic: P2 inverts `R`/`U`; P3 moves `A1` from last to third,
+  inverting `R`/`A1`, `U`/`A1` and `R`/`U`.
+- **Ticket 37's declared pairs, re-checked under `vrd/2` over every 3×3 replicate pairing:** D1
+  (`A1`→`A`), D2 (`R`→`A0`) and D3 (`R`→`P`) each PASS 9/9, and **all 27 pairings are decided at tier 1**
+  (the worse arm is extinct in every replicate, the better arm persists in every replicate). The
+  margins stop being numbers and become categorical.
+- **Precedence sensitivity (the replacement for AC-37(d)'s weight doublings):** 4 of the 6 tier orders
+  reproduce the recorded order exactly; the two that differ (`S/H/B`, `S/B/H`) put `A1` above `R` —
+  i.e. only the relative order of the two extinct arms is precedence-sensitive, and no surviving arm
+  moves under any permutation.
+- **Terminal-sample sensitivity:** reading persistence at `h = H−1` instead of `h = H` moves `R` above
+  `U` (order `A0 < P < A < R < U < A1`), because `R` r3 is the boundary case — 1 alive at h143, 0 at the
+  terminal sample. The convention is declared at `h = H`, the same sample `vrd/1` used for `H` and `B`;
+  the variant is recorded here so the boundary is visible rather than silent.
+
+## R4 — The criterion's machinery can fail, and one `--live` CLI path works
+
+- **Band-rule fixtures** (`self-test.log`), exercising §7.4 in both directions:
+  `fixture a` (an arm whose replicate spread covers the mean difference) → **NO SEPARATION**;
+  `fixture b` (extinct vs persisting, unanimous) → **SEPARATION** at tier 1;
+  `fixture c` (four starvation deaths beyond the survival band) → **SEPARATION**;
+  `fixture d` (identical arms) → **NO SEPARATION**; `fixture e` (an arm with more actor-hours and more
+  starvation deaths than the other) → **SEPARATION**, with the declared precedence sensitivity **firing
+  on 3 verdicts**, i.e. the sensitivity machinery detects a case where tier order decides the answer. A
+  rule that always separates fails `a`/`d`; a rule that never separates fails `b`/`c`; a sensitivity
+  machine that can only print zero fails `e`.
+- **Negative control** (`python3 … --expect-fail --scores …`, exit 0, transcript
+  `negative-control.log`): the inverted claims `W2 < W1`, `W2 < W3`, `W2 < W0` and `A1 < A` are each
+  required to **hold = False**, and the run prints `NEGATIVE CONTROL PASS` only if all four do.
+- **`--live` CLI smoke** (`live-smoke.log`) against a three-arm synthetic artefact at
+  `/tmp/38-live-smoke.json` (shape and plumbing only, **not** a result about any arm): the band rule
+  reports a deterministic-vs-deterministic difference as a structural separation, a
+  deterministic-identical pair as a tie, an absent arm as `NOT RUN — an arm is absent from the
+  artefact` rather than a pass, and the two declared sensitivity blocks (six tier orders, `h=H−1`
+  persistence) are emitted for every declared pair. Ticket 39's scoring command is therefore a command
+  that runs and produces every quantity §7.5 promises, not only the verdict.
+
+## R5 — Which of ticket 37's recorded conclusions survive
+
+| ticket-37 conclusion | under `vrd/2` | why |
+|---|---|---|
+| `fid/1` is not a valid objective; the R anchor rewards extinction | **survives** | unchanged; `R` is now ranked below every persisting arm categorically (tier 1) |
+| the no-AI control `A0` is the defended anchor, a floor not an optimum | **survives** | anchor, viability set and validity precondition untouched; `A0`'s key is exactly `(0,0,0,0)` |
+| AC-37(c) discrimination: D1/D2/D3 pass in every replicate pairing | **survives, strengthened** | 9/9 each, all decided at tier 1; the margins are categorical instead of numeric |
+| AC-37(d) robustness under three one-at-a-time weight doublings | **void, replaced** | there are no weights; the declared replacement is the six tier permutations (R3), under which no surviving arm's order moves |
+| AC-37(e): the arm the old instrument called closest to R (`A1`) is the least viable | **survives** | `A1` is extinct in 3/3 with 0 births; it ranks last under `vrd/2` |
+| recorded `vrd/1` magnitudes (0.5963, 0.7274, 1.0465, 1.1925, …) | **invalidated as comparable numbers** | they are `vrd/1` values; the `vrd/2` key is not a scalar and no `vrd/1` number may be compared with it. The recorded *order* is invariant (R3) |
+| the pathology itself | **withdrawn as current fact, kept with its reason** | `docs/VALIDATION.md` records `vrd/1` as withdrawn and why; the reason (an additive form cannot express a priority order) is what stops the same defect returning |
+| ties at `D = 0` are reported as ties | **survives, restated** | ties are now identical keys; `A0` and all three `P` replicates share `(0,0,0,0)` and are reported tied |
+
+Nothing in ticket 37's *verdict* is overturned, and this ticket re-opens none of tickets 34–37.
+
+## R6 — Gates, limits, and what this ticket did not do
+
+- **Gates.** No Go file changed on this branch (`git diff --stat 8ea4a79..HEAD -- '*.go' cmd/ internal/
+  Makefile go.mod go.sum` is empty; the branch touches `.scratch/`, `docs/` and `CHANGELOG.md` only), so
+  the full Go suite is **not claimed** — it would re-measure unchanged code. Run and recorded:
+  `go build ./...` (exit 0, needed anyway to build the zero-spend `A0` binary), `go vet ./...`,
+  `gofmt -l` over tracked `.go` files, and `git diff --check 8ea4a79` — see the gate table below.
+- **Live model calls: 0. Spend: $0.00.**
+- **Limits of the repair.** `vrd/2` cannot express a tradeoff between tiers: a survival difference of
+  one actor-hour outranks any reproduction difference, by construction. Its "stability" tier is a
+  reproduction proxy, not a variance/churn measure, and it inherits every information loss ticket 37
+  declared for `vrd/1` (identity, kin and diversity of survivors, age-death timing, wealth and granary
+  distributions, exchange, action mix, decision-error rate). Its persistence predicate is read at the
+  terminal sample, and R3 records the boundary case that convention creates.
+- **Not done, deliberately.** No live call; no arm comparison under `vrd/2` beyond the recorded v1/v2
+  matrix; no Go evaluator change; no claim about any policy; no re-opening of tickets 34/35/36/37; no
+  push.
+
+## Gate table
+
+| # | check | exact command (cwd = branch worktree) | result |
+|---|---|---|---|
+| 1 | build | `. /home/z/vibe/agentworld/.tmp/go-env.sh && go build ./...` | exit 0 — PASS |
+| 2 | vet | `go vet ./...` | exit 0 — PASS |
+| 3 | gofmt on tracked `.go` | `git ls-files -z '*.go' \| xargs -0 gofmt -l` | no output, exit 0 — PASS |
+| 4 | whitespace/conflict | `git diff --check 8ea4a79` | exit 0 — PASS |
+| 5 | scorer self-test + declared tests | `python3 .scratch/38-m2c-preregistration/vrd2.py --self-test --scores .scratch/37-fidelity-metric/scores.json --log …/self-test.log` | exit 0, `SELF-TEST: PASS` |
+| 6 | recorded verification | `… --scores .scratch/37-fidelity-metric/scores.json --log …/recorded.log` | exit 0, loader identity `0.000e+00` |
+| 7 | negative control | `… --expect-fail --scores …` | exit 0, `NEGATIVE CONTROL PASS` |
+| 8 | `--live` CLI smoke | `… --live /tmp/38-live-smoke.json --scores …` | exit 0 |
+| 9 | anchor reproduction, 0 spend | two `cmd/vs2 -arms A0` runs under `natural-claim/v1` and `natural-claim/v4` | exit 0 both; vectors identical and equal to the committed anchor (`anchor-check.json`) |
+| 10 | full Go suite | `go test -timeout 30m ./...` | **not run — no Go file changed on this branch**; recorded rather than claimed |
+| 11 | `make race` | — | **not run** — not in this ticket's gate list |
+
+## Revision and commands
+
+- Base `8ea4a79`; pre-declaration commit `6072af3` on `feature/38-m2c-preregistration`.
+- Scoring commands, verbatim (all exit 0):
+
+```
+python3 .scratch/38-m2c-preregistration/vrd2.py --self-test \
+  --scores .scratch/37-fidelity-metric/scores.json \
+  --log .scratch/38-m2c-preregistration/self-test.log
+python3 .scratch/38-m2c-preregistration/vrd2.py \
+  --scores .scratch/37-fidelity-metric/scores.json \
+  --log .scratch/38-m2c-preregistration/recorded.log
+python3 .scratch/38-m2c-preregistration/vrd2.py --expect-fail \
+  --scores .scratch/37-fidelity-metric/scores.json \
+  --log .scratch/38-m2c-preregistration/negative-control.log
+python3 .scratch/38-m2c-preregistration/vrd2.py --live /tmp/38-live-smoke.json \
+  --scores .scratch/37-fidelity-metric/scores.json \
+  --log .scratch/38-m2c-preregistration/live-smoke.log
+```

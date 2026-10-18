@@ -214,3 +214,39 @@ for anything: current truth lives in the authoritative documents — the active 
   not evidence for the central claim; M2c owns the evaluator implementation of `vrd/1` and must repair
   or normalise the birth term before any arm comparison is read. Record:
   `.scratch/37-fidelity-metric/spec.md`.
+
+## 2026-10-18
+
+- **Ticket 38 — M2c part 1: repair `vrd/1`'s declared pathology and pre-declare the M2c comparison.**
+  Branch `feature/38-m2c-preregistration` (from `8ea4a79`). **Zero live model calls, $0.00 spent.** The
+  M2c row's named prerequisite is discharged as a **repair, not a re-pre-registration**: no weight,
+  component, anchor or validity precondition changed, and the aggregation alone changed from `vrd/1`'s
+  equal-weight sum to a declared **lexicographic precedence** over the same components — persistence
+  (`alive(H) > 0`), then actor-hours, then starvation deaths, then births — declared as **`vrd/2`** in
+  [docs/VALIDATION.md](docs/VALIDATION.md). The argument is structural and was made before scoring: an
+  additive form cannot express a priority order, because keeping a late extinction ahead of a sterile
+  survivor needs `w_H/w_B > 1/d_H(extinction)` (10.39 at the recorded `R` r3, unbounded as extinction
+  moves later). Three candidates were scored on four declared worlds — the two ticket 37 tabulated, the
+  recorded `A0` floor, and a survivor with one starvation death: `vrd/2` orders them exactly as the
+  priority sentence does (`W0 ≺ W1 ≺ W3 ≺ W2`, six declared tests PASS), while a floored-fertility
+  additive variant at 10:1 weights still ranks the extinct world above the sterile survivor and a
+  births-dropped distance still ranks it above a surviving world. On ticket 37's committed recorded
+  vectors the repair changes **0 of 15 arm-pair orders** (`A0 < P < A < U < R < A1`, loader identity
+  exact to 0.000e+00), so ticket 37's anchor verdict and all three pre-registered discrimination pairs
+  survive — the pairs now decided categorically at tier 1 in 9/9 replicate pairings — while its recorded
+  `vrd/1` magnitudes and its three weight-doubling sensitivity variants are invalidated (replaced by the
+  six tier permutations, under which no surviving arm moves). The M2c criterion is **pre-declared before
+  any live call** (`.scratch/38-m2c-preregistration/spec.md` §7): arms `A0/P/U/A/A1`, cell f10-s0, H=144,
+  3 replicates, contract `natural-claim/v4`, effort `low`; tier separation requires the difference to
+  clear the wider single-condition replicate envelope and tier 1 requires unanimity; verdict
+  SEPARATION / SECONDARY-ONLY / NO SEPARATION, with `A` vs `P` and `A` vs `U` as the primary pairs; the
+  falsifier and four pre-run gates (evaluator reproduction, anchor reproduction, zero-inadmissible
+  contract gate, band gate) are declared, and the ticket states what M2c may **not** conclude (not the
+  central claim, not cross-cell generality, not a policy "win"). The anchor was re-measured at zero
+  spend: `A0` is script-only, reproduces `H=1444 B=2 S=0` exactly, and its projections are byte-identical
+  under `natural-claim/v1` and `natural-claim/v4`, so the AI arms' contract cannot move it. Ticket 39's
+  run plan: ≈3 027 calls, ≈$1.28 expected (bounded $0.46–$1.28 from recorded token counts), **hard cap
+  $2.00**, 3-4 h at the measured 16-18 calls/min, `setsid nohup` with liveness from the runner pid plus
+  ledger growth. The harness enforces calls, not dollars (`MaxCostMicros: 1<<60`, cost reported UNPRICED),
+  so the dollar cap is an operator poll-and-stop rule and is recorded as such. No Go file changed; no
+  full Go suite is claimed. Record: `.scratch/38-m2c-preregistration/spec.md`.

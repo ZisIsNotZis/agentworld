@@ -1,0 +1,17 @@
+live artefact: contract=natural-claim/v4 horizon=144 status=smoke-fixture
+per-arm bands:
+   A0  persisted=True extinct=False dH=0.1517(+/-0.0000) dS=0.0000(+/-0.0000) dB=0.0000(+/-0.0000)
+   P   persisted=True extinct=False dH=0.1517(+/-0.0000) dS=0.0000(+/-0.0000) dB=0.0000(+/-0.0000)
+   A   persisted=True extinct=False dH=0.1343(+/-0.0000) dS=0.0667(+/-0.1333) dB=0.0000(+/-0.0000)
+declared pairs:
+   A vs P (primary): SEPARATES, more viable: A — tier actor-hours: |0.1343 - 0.1517| = 0.0173 > band 0.0000 (both deterministic: no replicate noise, a structural difference)
+   A vs U (primary): NOT RUN — an arm is absent from the artefact
+   A1 vs P (secondary): NOT RUN — an arm is absent from the artefact
+   A1 vs U (secondary): NOT RUN — an arm is absent from the artefact
+   A vs A1 (secondary): NOT RUN — an arm is absent from the artefact
+   P vs U (secondary): NOT RUN — an arm is absent from the artefact
+   P vs A0 (diagnostic): TIE — tie: no tier separates
+   A vs A0 (diagnostic): SEPARATES, more viable: A — tier actor-hours: |0.1343 - 0.1517| = 0.0173 > band 0.0000 (both deterministic: no replicate noise, a structural difference)
+precedence sensitivity: 0 of 6 declared-pair verdicts change over the six tier orders
+terminal-sample sensitivity (persistence at h=H-1): 0 of 1 verdicts change
+M2c verdict (spec section 7.4): SEPARATION (primary separating pairs: 1, secondary: 0)

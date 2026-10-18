@@ -1,0 +1,83 @@
+{
+  "binary": {
+    "built_from": "go build -o /tmp/38-vs2-bin ./cmd/vs2",
+    "path": ".tmp/38-vs2-bin"
+  },
+  "command_contract_v1": ".tmp/38-vs2-bin -arms A0 -cells f10-s0 -hours 144 -replay=false -root .tmp/38-a0-runs -out .tmp/38-a0-evaluation.json -out-txt .tmp/38-a0-evaluation.txt",
+  "command_contract_v4": ".tmp/38-vs2-bin -arms A0 -cells f10-s0 -hours 144 -replay=false -claim-contract natural-claim/v4 -root .tmp/38-a0v4-runs -out .tmp/38-a0v4-evaluation.json -out-txt /tmp/38-a0v4-evaluation.txt",
+  "compared_fields": [
+    "hours",
+    "alive_by_hour",
+    "births_cum",
+    "deaths_starve_cum",
+    "deaths_age_cum",
+    "capital_hist",
+    "granary_hist",
+    "wages_cum"
+  ],
+  "date": "2026-10-18T15:09Z",
+  "ephemeral_artifacts": {
+    "contract_v1": {
+      "claim_contract": "natural-claim/v1",
+      "path": ".tmp/38-a0-evaluation.json",
+      "sha256": "c4cfed4fb30efe01fe1738864fe6d41615e3fcffd2c961408abe168e2c1e155e"
+    },
+    "contract_v4": {
+      "claim_contract": "natural-claim/v4",
+      "path": ".tmp/38-a0v4-evaluation.json",
+      "sha256": "79ad75ace01b6f63604262c8ef32dc7840346371f8f6cf8c8eb92e0dbfed50dc"
+    }
+  },
+  "live_calls": 0,
+  "projections_identical_across_contracts": true,
+  "purpose": "zero-spend proof that vrd/2's anchor (A0) is reproducible at the landing revision and is independent of the claim contract",
+  "reproduced": {
+    "B": 2,
+    "H": 1444,
+    "S": 0,
+    "alive_143": 2,
+    "alive_end": 1,
+    "replicates": "1 (one replicate was run)"
+  },
+  "revision": "6072af3201bb5a1a5718f454a7cdaf357e002441",
+  "ticket": "38",
+  "ticket37_committed_anchor": {
+    "B": 2.0,
+    "H": 1444.0,
+    "N0": 10.0,
+    "S": 0.0,
+    "alive_143": 2,
+    "alive_end": 1,
+    "replicates": "3 identical",
+    "source": ".scratch/37-fidelity-metric/scores.json"
+  },
+  "vector_contract_v1": [
+    {
+      "B": 2,
+      "H": 1444,
+      "N0": 10,
+      "S": 0,
+      "age_deaths": 11,
+      "alive_143": 2,
+      "alive_end": 1,
+      "calls": 0,
+      "replicate": 1,
+      "samples": 145
+    }
+  ],
+  "vector_contract_v4": [
+    {
+      "B": 2,
+      "H": 1444,
+      "N0": 10,
+      "S": 0,
+      "age_deaths": 11,
+      "alive_143": 2,
+      "alive_end": 1,
+      "calls": 0,
+      "replicate": 1,
+      "samples": 145
+    }
+  ],
+  "verdict": "PASS \u2014 the A0 anchor is script-only (0 model calls), deterministic, reproduced exactly at the landing revision, and byte-identical under natural-claim/v1 and natural-claim/v4, so running the AI arms under v4 cannot change it."
+}

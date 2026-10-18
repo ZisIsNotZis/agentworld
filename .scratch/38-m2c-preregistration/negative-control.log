@@ -1,0 +1,5 @@
+NEGATIVE-CONTROL T2: declared order holds=True ; inverted claim also holds=False (must be False)
+NEGATIVE-CONTROL T3: declared order holds=True ; inverted claim also holds=False (must be False)
+NEGATIVE-CONTROL T4: declared order holds=True ; inverted claim also holds=False (must be False)
+NEGATIVE-CONTROL recorded A1<A (the extinct arm declared more viable): inverted claim holds=False (must be False)
+NEGATIVE CONTROL PASS: every inverted comparison was detected as a failure
