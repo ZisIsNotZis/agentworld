@@ -880,7 +880,7 @@ spend accounting, max→high substitution.
 
 | artefact | sha256 |
 |---|---|
-| `.scratch/35-vs2-curve/spec.md` (this record) | `03e90758109f146eddaef00ded8088693c59bd08281feb89de6a83f512f2074d` |
+| `.scratch/35-vs2-curve/spec.md` (this record; hash changes with each commit) | `f7bbf118ac1e626d83b1169c6650bbe7f320f7fbf97b0cc91d3f007ea1fa4ed3` |
 | `.tmp/35-stage1-evaluation.json` | `c75c807f4e13c2183a856bd9eaadcc6358c6868a8b639b46eb22007f7fc0e4b2` |
 | `.tmp/35-stage2-none-evaluation.json` | `6fb3c2ecc161a6c99ac7b9a579f8d017bf507203339ddf792b92ab6f16f2f14b` |
 | `.tmp/35-stage2-low-evaluation.json` | `d579aa77b3246ea4ff9240d6161c8f15457e11997429d7943a1006406f5ae8e3` |
@@ -894,6 +894,17 @@ spend accounting, max→high substitution.
 | `.tmp/35-claimv2-results.json` (v1 vs v2 probe) | `059a256143813cab38d4defc254366a7edb9b3fc9dfea447ebdf23375cc60411` |
 | `cmd/vs2/curves.go` | `0404f81534daf569b0483e0e2085cbc9c91d595673ececd6a4c062ed01d5d8d1` |
 | `cmd/vs2/curves_test.go` | `529c568ebba13e1ec0f09f47171cebb2afa92c57ae2d6ba24cb65742e5f83b11` |
+| `.tmp/35-v2high-evaluation.json` (depth run, `high`@v2) | `fa28644877bec6a40045d64006fa3d4a606776e3d7d36e858e4273569eddaae6` |
+| `.tmp/35-v2high-evaluation-relabelled.json` | `8278d3f818919c83d438b41734915524b39ed466a5ea5dbb484b15f4b34601b6` |
+| `.tmp/35-depth-curve.txt` (low vs high and the v2 arms) | `068767ed390bab1e7c96b7897ea4555863f8935950162f3228935b56abf81e51` |
+
+**Gates at the final tree** (`sh .tmp/35-gates2.sh` → `.tmp/35-gates2.out`): `go build ./...` PASS,
+`go vet ./...` PASS, `gofmt -l` (tracked .go) clean, `git diff --check` clean, and
+`go test -timeout 30m ./internal/cognition/... ./cmd/vs2 ./internal/experiment` all ok. The full-package
+gate `go test -timeout 30m ./...` passed earlier at the same code (`internal/world` 1501.272 s, zero FAIL
+lines, `.tmp/35-gates.out`). **Final lane spend: $13.17 over 31 191 recorded harness calls (≈ $14.4 with
+out-of-harness probes), inside the $25 cap. `max`@v2 is deliberately unrun** — the depth rung at `high` did
+not separate from `low`, so a 15-17 h single point would have bought nothing.
 
 **Final statement of what this lane establishes and what it does not.**
 Establishes: the harness now records what it applies (effort, output bound, response bound, body length)
