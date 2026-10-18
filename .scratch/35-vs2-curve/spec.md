@@ -1087,6 +1087,40 @@ checked by the supervisor and are recorded here with the commands:
    `max_capital` differs from A0 in **76/70/74 hours** across the three P replicates, first divergence at
    h19/h13/h13, with `capital_hist[2]` and `[3]` following it; every demographic series is identical.
 
+## Withdrawal carried in by ticket 36 (2026-10-18): "full cognition suppresses reproduction"
+
+This record's R-anchor argument (the v2 run result, point 5, and the `A1 vs R` reading) rests on a claim
+that is **withdrawn**: that full cognition suppresses reproduction. The claim was built on the v1 and v2
+runs, where the full-wake `R` arm produced 0-1 births per replicate (v2 at `low`: 0/0/1; v2 at `high`:
+0/0/0) against the deterministic A0 control's 2, and where R died out by h143 while A0 kept 2 alive.
+
+**What contradicts it.** Ticket 36 ran one full-wake replicate (`R`) at the same cell (f10-s0), the same
+horizon (144 h), the same effort (`low`) and the same bounds, under `natural-claim/v4` — a contract that
+costs 0 of its answers to inadmissibility (1 323 applied, 0 inadmissible, 2 transport/cap fallbacks) and
+whose action names say what the world does. That replicate produced **2 births, the same as the
+deterministic A0 control**, and ended at population 1 against A0's 2. Full cognition, on a contract that
+does not lose its answers, reproduced at the control's rate.
+
+**Why the earlier numbers cannot carry the claim.** The v1 runs lost 40-53 % of answers to inadmissibility,
+and a rejected answer is replaced by the frozen cascade's own choice - so the v1 `R` arm is a *mixture* of
+model policy and frozen policy, and its birth rate is not an attribution to cognition. The v2 runs removed
+that loss by stating the admissible set, but ticket 36's falsifier now shows what that contract asks of the
+model: with the four labels supplied it filters a menu (100 % agreement) and with no list it does not
+reproduce a single one of them (0/5 recall). So v2's birth deficit is one measurement of one contract, not
+an effect of thinking: **the v1/v2 birth deficits are not separable from instrument loss, and the v4
+replicate points the other way.** One replicate at one cell is itself weak evidence — that is why the claim
+is withdrawn rather than inverted.
+
+**What survives, and how the Q1 argument is re-scoped.** The *observation* that the R reference dies out at
+this fixture and horizon stands (v2 `R`: population 0.33 alive at h143; v2 `high`: 0.00; v4 `R`: 1 of A0's
+2). So does the consequence that follows from the observation: **a fidelity metric anchored on R rewards
+approaching a dying trajectory**, because the reference itself goes extinct at this fixture, whatever the
+cause. That is the Q1 problem, and it does not need a suppression effect: it needs a defended anchor
+(M2b). What is retracted is the causal middle term - "fidelity-to-R rewards suppressing reproduction" -
+which asserted that cognition *causes* the birth deficit. The correct current statement is: **fidelity-to-R
+rewards a trajectory that loses population, and under the only contract measured without answer loss a
+full-wake arm was not distinguishable from the no-AI control on births.**
+
 ## Correction carried in by ticket 36 (2026-10-18): the v2 "29/30 gather" was the fixture's action space
 
 A claim this file makes implicitly is withdrawn here, with its reason, rather than left standing. The v2
