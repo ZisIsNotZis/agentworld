@@ -785,3 +785,13 @@ declared correct here; this is exactly the unvalidated-anchor problem and the em
 distinct — A `gather` 56 % / `eat-stored` 42 %, P 71 %/27 %, A1 72 %/27 %, R 80 %/18 %, U 38 %/59 %
 (fallbacks ≤ 1 % in every arm). Different decisions, identical demographic outcome for A vs P: the
 fixture's gates, not the allocation, absorb the difference.
+
+### Launch record for the v2 max run (liveness discipline)
+
+The first v2-max launch (pid file 2094671) was mis-recorded: `.pid` held the wrapper's pid, the log was
+empty, and an earlier `-root` wipe raced the writer, so its ledgers sat at 0 bytes while the process was
+still alive. A second launch ran alongside it and both were stopped by exact pid
+(`kill 2094682 2105743`), the root was wiped, and one launch was made with `setsid nohup … &`. The
+recorded runner pid is the `vs2-bin` process itself; liveness is verified by three independent facts —
+the pid exists, the three `calls.jsonl` ledgers grow materially, and the artefacts appear — never by log
+content, because the report is written only at exit.
