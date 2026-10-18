@@ -1,0 +1,480 @@
+VS2 curve report (ticket 35; criterion pre-declared before data)
+decision rule: distinguishable iff some KPI has SNR >= 2.0 AND its paired difference exceeds the
+  replicate band for >= 24 consecutive hours in every cell; no condition is called better on a scalar.
+conditions: A0@low, A1@low, A@low, P@low, U@low
+cells: 1 replicates: 3 horizon: 144
+source: .tmp/39-m2c-evaluation.json
+truncated: A1@low f10-s0 r3: 145 hours truncated to 144 for pairing
+truncated: A0@low f10-s0 r2: 145 hours truncated to 144 for pairing
+truncated: A0@low f10-s0 r3: 145 hours truncated to 144 for pairing
+truncated: A1@low f10-s0 r2: 145 hours truncated to 144 for pairing
+truncated: A0@low f10-s0 r1: 145 hours truncated to 144 for pairing
+truncated: P@low f10-s0 r3: 145 hours truncated to 144 for pairing
+truncated: P@low f10-s0 r1: 145 hours truncated to 144 for pairing
+truncated: P@low f10-s0 r2: 145 hours truncated to 144 for pairing
+truncated: U@low f10-s0 r3: 145 hours truncated to 144 for pairing
+truncated: U@low f10-s0 r2: 145 hours truncated to 144 for pairing
+truncated: U@low f10-s0 r1: 145 hours truncated to 144 for pairing
+truncated: A@low f10-s0 r1: 145 hours truncated to 144 for pairing
+truncated: A@low f10-s0 r2: 145 hours truncated to 144 for pairing
+truncated: A@low f10-s0 r3: 145 hours truncated to 144 for pairing
+
+NOISE FLOOR (band over replicates: mean [95% CI] envelope, and across-replicate CV)
+
+[A0@low] f10-s0 (columns are the band AT the final hour H; CV is the across-replicate coefficient of variation averaged over hours, with the worst hour)
+kpi                        mean@H      ci_lo@H      ci_hi@H       envelope@H    meanCV   worstCV
+population                 2.0000       2.0000       2.0000   2.0000..2.0000    0.0000    0.0000
+births_cum                 2.0000       2.0000       2.0000   2.0000..2.0000    0.0000    0.0000
+                       (5 hours excluded from CV: mean 0)
+deaths_starve_cum          0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+deaths_age_cum            10.0000      10.0000      10.0000 10.0000..10.0000    0.0000    0.0000
+                       (100 hours excluded from CV: mean 0)
+wages_cum                  0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+max_capital                3.0000       3.0000       3.0000   3.0000..3.0000    0.0000    0.0000
+                       (2 hours excluded from CV: mean 0)
+capital_hist[0]            1.0000       1.0000       1.0000   1.0000..1.0000    0.0000    0.0000
+                       (6 hours excluded from CV: mean 0)
+capital_hist[1]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+                       (121 hours excluded from CV: mean 0)
+capital_hist[2]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+                       (71 hours excluded from CV: mean 0)
+capital_hist[3]            1.0000       1.0000       1.0000   1.0000..1.0000    0.0000    0.0000
+                       (80 hours excluded from CV: mean 0)
+capital_hist[4]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[5]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[6]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[7]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[8]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+granary_hist[0]            1.0000       1.0000       1.0000   1.0000..1.0000    0.0000    0.0000
+                       (17 hours excluded from CV: mean 0)
+granary_hist[1]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+                       (90 hours excluded from CV: mean 0)
+granary_hist[2]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+                       (122 hours excluded from CV: mean 0)
+granary_hist[3]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+                       (117 hours excluded from CV: mean 0)
+granary_hist[4]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+                       (119 hours excluded from CV: mean 0)
+granary_hist[5]            1.0000       1.0000       1.0000   1.0000..1.0000    0.0000    0.0000
+                       (12 hours excluded from CV: mean 0)
+granary_hist[6]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+
+[A1@low] f10-s0 (columns are the band AT the final hour H; CV is the across-replicate coefficient of variation averaged over hours, with the worst hour)
+kpi                        mean@H      ci_lo@H      ci_hi@H       envelope@H    meanCV   worstCV
+population                 2.0000       2.0000       2.0000   2.0000..2.0000    0.0024    0.0509
+births_cum                 2.0000       2.0000       2.0000   2.0000..2.0000    0.0181    0.4330
+                       (5 hours excluded from CV: mean 0)
+deaths_starve_cum          0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+deaths_age_cum            10.0000      10.0000      10.0000 10.0000..10.0000    0.0000    0.0000
+                       (100 hours excluded from CV: mean 0)
+wages_cum                  0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+max_capital                2.0000       2.0000       2.0000   2.0000..2.0000    0.1895    0.5000
+                       (2 hours excluded from CV: mean 0)
+capital_hist[0]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0442    1.7321
+                       (10 hours excluded from CV: mean 0)
+capital_hist[1]            0.0000       0.0000       0.0000   0.0000..0.0000    0.5775    1.7321
+                       (16 hours excluded from CV: mean 0)
+capital_hist[2]            2.0000       2.0000       2.0000   2.0000..2.0000    0.6578    1.7321
+                       (6 hours excluded from CV: mean 0)
+capital_hist[3]            0.0000       0.0000       0.0000   0.0000..0.0000    1.7321    1.7321
+                       (136 hours excluded from CV: mean 0)
+capital_hist[4]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[5]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[6]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[7]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[8]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+granary_hist[0]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0795    1.7321
+                       (18 hours excluded from CV: mean 0)
+granary_hist[1]            0.0000       0.0000       0.0000   0.0000..0.0000    0.4233    1.7321
+                       (89 hours excluded from CV: mean 0)
+granary_hist[2]            0.0000       0.0000       0.0000   0.0000..0.0000    1.3317    1.7321
+                       (92 hours excluded from CV: mean 0)
+granary_hist[3]            0.0000       0.0000       0.0000   0.0000..0.0000    0.9680    1.7321
+                       (79 hours excluded from CV: mean 0)
+granary_hist[4]            0.0000       0.0000       0.0000   0.0000..0.0000    1.2772    1.7321
+                       (58 hours excluded from CV: mean 0)
+granary_hist[5]            2.0000       2.0000       2.0000   2.0000..2.0000    0.3561    1.7321
+                       (11 hours excluded from CV: mean 0)
+granary_hist[6]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+
+[A@low] f10-s0 (columns are the band AT the final hour H; CV is the across-replicate coefficient of variation averaged over hours, with the worst hour)
+kpi                        mean@H      ci_lo@H      ci_hi@H       envelope@H    meanCV   worstCV
+population                 2.0000       2.0000       2.0000   2.0000..2.0000    0.0237    0.1332
+births_cum                 2.0000       2.0000       2.0000   2.0000..2.0000    0.0000    0.0000
+                       (5 hours excluded from CV: mean 0)
+deaths_starve_cum          0.6667      -0.7677       2.1010   0.0000..1.0000    1.1893    1.7321
+                       (69 hours excluded from CV: mean 0)
+deaths_age_cum             9.3333       7.8990      10.7677  9.0000..10.0000    0.0363    0.0787
+                       (100 hours excluded from CV: mean 0)
+wages_cum                  0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+max_capital                2.0000       2.0000       2.0000   2.0000..2.0000    0.0816    0.4330
+                       (2 hours excluded from CV: mean 0)
+capital_hist[0]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0485    0.2474
+                       (11 hours excluded from CV: mean 0)
+capital_hist[1]            0.3333      -1.1010       1.7677   0.0000..1.0000    1.0758    1.7321
+                       (35 hours excluded from CV: mean 0)
+capital_hist[2]            1.6667       0.2323       3.1010   1.0000..2.0000    0.3817    1.7321
+                       (7 hours excluded from CV: mean 0)
+capital_hist[3]            0.0000       0.0000       0.0000   0.0000..0.0000    1.6053    1.7321
+                       (103 hours excluded from CV: mean 0)
+capital_hist[4]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[5]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[6]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[7]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[8]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+granary_hist[0]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0878    0.8660
+                       (18 hours excluded from CV: mean 0)
+granary_hist[1]            0.0000       0.0000       0.0000   0.0000..0.0000    0.5630    1.7321
+                       (98 hours excluded from CV: mean 0)
+granary_hist[2]            0.0000       0.0000       0.0000   0.0000..0.0000    0.9298    1.7321
+                       (119 hours excluded from CV: mean 0)
+granary_hist[3]            0.0000       0.0000       0.0000   0.0000..0.0000    0.6152    1.7321
+                       (112 hours excluded from CV: mean 0)
+granary_hist[4]            0.0000       0.0000       0.0000   0.0000..0.0000    0.4589    1.7321
+                       (121 hours excluded from CV: mean 0)
+granary_hist[5]            2.0000       2.0000       2.0000   2.0000..2.0000    0.0289    0.8660
+                       (12 hours excluded from CV: mean 0)
+granary_hist[6]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+
+[P@low] f10-s0 (columns are the band AT the final hour H; CV is the across-replicate coefficient of variation averaged over hours, with the worst hour)
+kpi                        mean@H      ci_lo@H      ci_hi@H       envelope@H    meanCV   worstCV
+population                 2.0000       2.0000       2.0000   2.0000..2.0000    0.0326    0.0866
+births_cum                 2.0000       2.0000       2.0000   2.0000..2.0000    0.0000    0.0000
+                       (5 hours excluded from CV: mean 0)
+deaths_starve_cum          0.3333      -1.1010       1.7677   0.0000..1.0000    1.7321    1.7321
+                       (24 hours excluded from CV: mean 0)
+deaths_age_cum             9.6667       8.2323      11.1010  9.0000..10.0000    0.0489    0.1019
+                       (100 hours excluded from CV: mean 0)
+wages_cum                  0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+max_capital                1.3333      -1.5353       4.2020   0.0000..2.0000    0.7406    1.0000
+                       (2 hours excluded from CV: mean 0)
+capital_hist[0]            1.0000      -1.4843       3.4843   0.0000..2.0000    0.1395    1.0000
+                       (6 hours excluded from CV: mean 0)
+capital_hist[1]            0.0000       0.0000       0.0000   0.0000..0.0000    1.2478    1.7321
+                       (59 hours excluded from CV: mean 0)
+capital_hist[2]            1.0000      -1.4843       3.4843   0.0000..2.0000    1.1284    1.7321
+                       (14 hours excluded from CV: mean 0)
+capital_hist[3]            0.0000       0.0000       0.0000   0.0000..0.0000    1.4656    1.7321
+                       (92 hours excluded from CV: mean 0)
+capital_hist[4]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[5]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[6]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[7]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[8]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+granary_hist[0]            1.0000      -1.4843       3.4843   0.0000..2.0000    0.1953    1.7321
+                       (13 hours excluded from CV: mean 0)
+granary_hist[1]            0.0000       0.0000       0.0000   0.0000..0.0000    0.6506    1.7321
+                       (97 hours excluded from CV: mean 0)
+granary_hist[2]            0.0000       0.0000       0.0000   0.0000..0.0000    1.1004    1.7321
+                       (118 hours excluded from CV: mean 0)
+granary_hist[3]            0.0000       0.0000       0.0000   0.0000..0.0000    0.6928    1.7321
+                       (116 hours excluded from CV: mean 0)
+granary_hist[4]            0.0000       0.0000       0.0000   0.0000..0.0000    0.9976    1.7321
+                       (107 hours excluded from CV: mean 0)
+granary_hist[5]            1.0000      -1.4843       3.4843   0.0000..2.0000    0.8050    1.0000
+                       (13 hours excluded from CV: mean 0)
+granary_hist[6]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+
+[U@low] f10-s0 (columns are the band AT the final hour H; CV is the across-replicate coefficient of variation averaged over hours, with the worst hour)
+kpi                        mean@H      ci_lo@H      ci_hi@H       envelope@H    meanCV   worstCV
+population                 2.3333       0.8990       3.7677   2.0000..3.0000    0.1396    0.2474
+births_cum                 2.3333       0.8990       3.7677   2.0000..3.0000    0.2025    0.4330
+                       (5 hours excluded from CV: mean 0)
+deaths_starve_cum          4.3333      -1.4040      10.0707   3.0000..7.0000    0.5633    1.7321
+                       (20 hours excluded from CV: mean 0)
+deaths_age_cum             5.6667      -0.0707      11.4040   3.0000..7.0000    0.4689    0.8660
+                       (100 hours excluded from CV: mean 0)
+wages_cum                  0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+max_capital                2.0000       2.0000       2.0000   2.0000..2.0000    0.1043    0.5000
+                       (2 hours excluded from CV: mean 0)
+capital_hist[0]            0.3333      -1.1010       1.7677   0.0000..1.0000    0.4963    1.7321
+                       (5 hours excluded from CV: mean 0)
+capital_hist[1]            0.3333      -1.1010       1.7677   0.0000..1.0000    1.0535    1.7321
+                       (21 hours excluded from CV: mean 0)
+capital_hist[2]            1.6667      -1.2020       4.5353   1.0000..3.0000    0.4630    1.7321
+                       (6 hours excluded from CV: mean 0)
+capital_hist[3]            0.0000       0.0000       0.0000   0.0000..0.0000    1.3886    1.7321
+                       (86 hours excluded from CV: mean 0)
+capital_hist[4]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[5]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[6]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[7]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[8]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+granary_hist[0]            0.3333      -1.1010       1.7677   0.0000..1.0000    0.6042    1.7321
+                       (6 hours excluded from CV: mean 0)
+granary_hist[1]            0.0000       0.0000       0.0000   0.0000..0.0000    1.0056    1.7321
+                       (85 hours excluded from CV: mean 0)
+granary_hist[2]            0.0000       0.0000       0.0000   0.0000..0.0000    1.3091    1.7321
+                       (103 hours excluded from CV: mean 0)
+granary_hist[3]            0.0000       0.0000       0.0000   0.0000..0.0000    1.0343    1.7321
+                       (95 hours excluded from CV: mean 0)
+granary_hist[4]            0.0000       0.0000       0.0000   0.0000..0.0000    0.8377    1.7321
+                       (101 hours excluded from CV: mean 0)
+granary_hist[5]            2.0000      -0.4843       4.4843   1.0000..3.0000    0.3554    1.7321
+                       (12 hours excluded from CV: mean 0)
+granary_hist[6]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+
+PER-CONDITION ACCOUNTING (call-count budget axis; token totals for equal-token re-analysis)
+condition      cell           reps        calls    in_tokens  out_tok err_rate
+A0@low         f10-s0            3            0            0        0   0.0000
+A1@low         f10-s0            3          512       482860   280272   0.0020
+A@low          f10-s0            3          768       482299   167357   0.0013
+P@low          f10-s0            3          716       449498   174746   0.0042
+U@low          f10-s0            3          768       482980   199485   0.0013
+
+STAGE STAGE1 — conditions A0@low, A1@low, A@low, P@low, U@low
+
+pair A0@low vs A1@low: DISTINGUISHABLE (KPI capital_hist[0] holds SNR >= 2.0 with a >= 24-hour separation in every cell)
+  cell       kpi                      rmse_d      noise      snr firstsep  run_len   run_at wasserstein note
+  f10-s0     population               0.0878     0.0900   0.9759       -1        0       -1     0.0185 one-sided noise floor (one condition deterministic)
+  f10-s0     births_cum               0.0878     0.0900   0.9759       -1        0       -1     0.0185 one-sided noise floor (one condition deterministic)
+  f10-s0     deaths_starve_cum        0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     deaths_age_cum           0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     wages_cum                0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     max_capital              0.8402     0.3005   2.7965       17        3       27     0.6088 one-sided noise floor (one condition deterministic)
+  f10-s0     capital_hist[0]          0.9162     0.1832   5.0011        9       34       41     1.4031 one-sided noise floor (one condition deterministic)
+  f10-s0     capital_hist[1]          0.9530     0.4615   2.0651       15        6      110    21.1869 one-sided noise floor (one condition deterministic)
+  f10-s0     capital_hist[2]          0.8207     0.4449   1.8449       28        5      125    13.9380 one-sided noise floor (one condition deterministic)
+  f10-s0     capital_hist[3]          0.6609     0.0962   6.8678       17        1       17    25.7465 one-sided noise floor (one condition deterministic)
+  f10-s0     capital_hist[4]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[5]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[7]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[8]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     granary_hist[0]          0.8103     0.0962   8.4212        9       61       83     2.6610 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[1]          0.8872     0.1954   4.5394       10       24       59     7.9285 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[2]          0.5760     0.2523   2.2830       18       10       47     8.6256 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[3]          0.6048     0.3118   1.9396       10       10       33    10.3271 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[4]          0.5618     0.4539   1.2377       11        3       24    21.1292 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[5]          0.7485     0.3773   1.9837       12       23      121     8.4732 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+
+pair A0@low vs A@low: DISTINGUISHABLE (KPI capital_hist[0] holds SNR >= 2.0 with a >= 24-hour separation in every cell)
+  cell       kpi                      rmse_d      noise      snr firstsep  run_len   run_at wasserstein note
+  f10-s0     population               0.3143     0.2477   1.2689       -1        0       -1     0.1806 one-sided noise floor (one condition deterministic)
+  f10-s0     births_cum               0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     deaths_starve_cum        0.4082     0.2946   1.3856       -1        0       -1     0.2824 one-sided noise floor (one condition deterministic)
+  f10-s0     deaths_age_cum           0.2606     0.1596   1.6330       -1        0       -1     0.1019 one-sided noise floor (one condition deterministic)
+  f10-s0     wages_cum                0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     max_capital              0.6143     0.2282   2.6916       17        1       17     0.3495 one-sided noise floor (one condition deterministic)
+  f10-s0     capital_hist[0]          1.1713     0.2743   4.2704        8      119       25     2.4589 one-sided noise floor (one condition deterministic)
+  f10-s0     capital_hist[1]          0.4883     0.3436   1.4211        8        2        8    11.1016 one-sided noise floor (one condition deterministic)
+  f10-s0     capital_hist[2]          1.1290     0.4153   2.7187       17        5       99     9.3332 one-sided noise floor (one condition deterministic)
+  f10-s0     capital_hist[3]          0.6092     0.2152   2.8314       17        1       17    13.7147 one-sided noise floor (one condition deterministic)
+  f10-s0     capital_hist[4]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[5]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[7]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[8]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     granary_hist[0]          1.2892     0.3281   3.9295        8       61       83     4.2666 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[1]          1.2549     0.2453   5.1153        8       31       52    12.8840 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[2]          0.8375     0.2430   3.4471       10       15       44    21.2324 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[3]          0.7733     0.1894   4.0825       11       15       32    11.4079 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[4]          0.5590     0.1667   3.3541       11        6       25     3.7245 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[5]          0.9550     0.0833  11.4601       12      119       25     6.5988 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+
+pair A0@low vs P@low: DISTINGUISHABLE (KPI granary_hist[0] holds SNR >= 2.0 with a >= 24-hour separation in every cell)
+  cell       kpi                      rmse_d      noise      snr firstsep  run_len   run_at wasserstein note
+  f10-s0     population               0.2650     0.3245   0.8165       -1        0       -1     0.2106 one-sided noise floor (one condition deterministic)
+  f10-s0     births_cum               0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     deaths_starve_cum        0.3043     0.3727   0.8165       -1        0       -1     0.2778 one-sided noise floor (one condition deterministic)
+  f10-s0     deaths_age_cum           0.1496     0.1832   0.8165       -1        0       -1     0.0671 one-sided noise floor (one condition deterministic)
+  f10-s0     wages_cum                0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     max_capital              1.0427     0.8573   1.2163       31        1       31     0.8403 one-sided noise floor (one condition deterministic)
+  f10-s0     capital_hist[0]          0.2819     0.4652   0.6060       -1        0       -1     1.0642 one-sided noise floor (one condition deterministic)
+  f10-s0     capital_hist[1]          0.2437     0.2867   0.8503       -1        0       -1     5.4434 one-sided noise floor (one condition deterministic)
+  f10-s0     capital_hist[2]          0.5336     0.5237   1.0188       72        1       72    23.3701 one-sided noise floor (one condition deterministic)
+  f10-s0     capital_hist[3]          0.5906     0.2406   2.4549       31        1       31    24.7440 one-sided noise floor (one condition deterministic)
+  f10-s0     capital_hist[4]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[5]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[7]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[8]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     granary_hist[0]          1.1232     0.4602   2.4405       46       34       46     2.4196 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[1]          1.2197     0.2332   5.2295       37       26       57    11.3937 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[2]          0.8771     0.1483   5.9146       30       18       41    17.8852 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[3]          0.8945     0.1521   5.8793        7       16       31    10.3945 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[4]          0.5794     0.1768   3.2773        7        8       23     4.2956 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[5]          0.2846     0.6009   0.4737       12        4       12    19.9319 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+
+pair A0@low vs U@low: DISTINGUISHABLE (KPI population holds SNR >= 2.0 with a >= 24-hour separation in every cell)
+  cell       kpi                      rmse_d      noise      snr firstsep  run_len   run_at wasserstein note
+  f10-s0     population               2.7228     0.7765   3.5063       24       84       32     2.2176 one-sided noise floor (one condition deterministic)
+  f10-s0     births_cum               0.2992     0.3616   0.8273       -1        0       -1     0.2639 one-sided noise floor (one condition deterministic)
+  f10-s0     deaths_starve_cum        3.5949     1.3320   2.6988       24      110       34     3.2153 one-sided noise floor (one condition deterministic)
+  f10-s0     deaths_age_cum           1.5573     0.7538   2.0658      114       30      114     0.7431 one-sided noise floor (one condition deterministic)
+  f10-s0     wages_cum                0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     max_capital              0.6149     0.2657   2.3141       27        5       83     0.2639 one-sided noise floor (one condition deterministic)
+  f10-s0     capital_hist[0]          4.3374     1.3154   3.2974       20      116       25     8.6053 one-sided noise floor (one condition deterministic)
+  f10-s0     capital_hist[1]          0.8714     0.5774   1.5092       20        4       20    15.3204 one-sided noise floor (one condition deterministic)
+  f10-s0     capital_hist[2]          1.4933     0.5813   2.5687       27        9       89     8.6018 one-sided noise floor (one condition deterministic)
+  f10-s0     capital_hist[3]          0.6073     0.2591   2.3440       27        5       83     8.1785 one-sided noise floor (one condition deterministic)
+  f10-s0     capital_hist[4]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[5]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[7]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[8]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     granary_hist[0]          3.5163     1.3493   2.6060       20       65       76     7.3082 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[1]          1.2247     0.4787   2.5584       21       26       57    12.7052 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[2]          0.7852     0.3245   2.4194       23       12       45    18.3956 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[3]          0.6098     0.3568   1.7092       29       12       33     5.2189 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[4]          0.4922     0.4111   1.1974       22        3       33     3.7149 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[5]          1.4775     0.5893   2.5073       37       78       37     7.2597 one-sided noise floor (one condition deterministic)
+  f10-s0     granary_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+
+pair A1@low vs A@low: DISTINGUISHABLE (KPI granary_hist[0] holds SNR >= 2.0 with a >= 24-hour separation in every cell)
+  cell       kpi                      rmse_d      noise      snr firstsep  run_len   run_at wasserstein note
+  f10-s0     population               0.3263     0.2635   1.2383       -1        0       -1     0.1620
+  f10-s0     births_cum               0.0878     0.0900   0.9759       -1        0       -1     0.0185 one-sided noise floor (one condition deterministic)
+  f10-s0     deaths_starve_cum        0.4082     0.2946   1.3856       -1        0       -1     0.2824 one-sided noise floor (one condition deterministic)
+  f10-s0     deaths_age_cum           0.2606     0.1596   1.6330       -1        0       -1     0.1019 one-sided noise floor (one condition deterministic)
+  f10-s0     wages_cum                0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     max_capital              0.4176     0.3773   1.1068       21        2       27     0.2593
+  f10-s0     capital_hist[0]          0.4462     0.3298   1.3527       14        3       14     1.1647
+  f10-s0     capital_hist[1]          0.7827     0.5753   1.3604       14        3       21    10.1382
+  f10-s0     capital_hist[2]          0.7044     0.6086   1.1574       18        2       18     5.9130
+  f10-s0     capital_hist[3]          0.2060     0.2357   0.8740       25        1       25    26.3492
+  f10-s0     capital_hist[4]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[5]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[7]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[8]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     granary_hist[0]          0.8771     0.3419   2.5653       43       26       43     1.8289
+  f10-s0     granary_hist[1]          0.7000     0.3137   2.2317       17       19       49     4.9555
+  f10-s0     granary_hist[2]          0.4590     0.3503   1.3103       34        5       41    18.4416
+  f10-s0     granary_hist[3]          0.3568     0.3648   0.9780       10        3       38    10.2542
+  f10-s0     granary_hist[4]          0.3849     0.4835   0.7960       29        1       29    23.9135
+  f10-s0     granary_hist[5]          0.3889     0.3864   1.0064       -1        0       -1     2.9650
+  f10-s0     granary_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+
+pair A1@low vs P@low: DISTINGUISHABLE (KPI granary_hist[0] holds SNR >= 2.0 with a >= 24-hour separation in every cell)
+  cell       kpi                      rmse_d      noise      snr firstsep  run_len   run_at wasserstein note
+  f10-s0     population               0.2792     0.3368   0.8289       -1        0       -1     0.1921
+  f10-s0     births_cum               0.0878     0.0900   0.9759       -1        0       -1     0.0185 one-sided noise floor (one condition deterministic)
+  f10-s0     deaths_starve_cum        0.3043     0.3727   0.8165       -1        0       -1     0.2778 one-sided noise floor (one condition deterministic)
+  f10-s0     deaths_age_cum           0.1496     0.1832   0.8165       -1        0       -1     0.0671 one-sided noise floor (one condition deterministic)
+  f10-s0     wages_cum                0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     max_capital              0.4953     0.9084   0.5453       17        1       17     0.5093
+  f10-s0     capital_hist[0]          0.7098     0.5000   1.4197        9        2       15     1.7528
+  f10-s0     capital_hist[1]          0.8184     0.5433   1.5064       15        4      112    15.7724
+  f10-s0     capital_hist[2]          0.6236     0.6872   0.9075       51        2      116    29.5050
+  f10-s0     capital_hist[3]          0.2833     0.2591   1.0933       17        1       17    45.7574
+  f10-s0     capital_hist[4]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[5]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[7]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[8]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     granary_hist[0]          1.0694     0.4702   2.2744        9       24       46     2.1860
+  f10-s0     granary_hist[1]          0.7222     0.3043   2.3735       37       15       53     3.4841
+  f10-s0     granary_hist[2]          0.5465     0.2927   1.8672       18        7       30    15.0024
+  f10-s0     granary_hist[3]          0.5700     0.3469   1.6428       10        7       10     9.1986
+  f10-s0     granary_hist[4]          0.4082     0.4871   0.8381       11        1       11    20.8916
+  f10-s0     granary_hist[5]          0.6730     0.7096   0.9485       -1        0       -1    21.5039
+  f10-s0     granary_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+
+pair A1@low vs U@low: DISTINGUISHABLE (KPI population holds SNR >= 2.0 with a >= 24-hour separation in every cell)
+  cell       kpi                      rmse_d      noise      snr firstsep  run_len   run_at wasserstein note
+  f10-s0     population               2.7231     0.7817   3.4834       24       84       32     2.1991
+  f10-s0     births_cum               0.3017     0.3727   0.8097       -1        0       -1     0.2731
+  f10-s0     deaths_starve_cum        3.5949     1.3320   2.6988       24      110       34     3.2153 one-sided noise floor (one condition deterministic)
+  f10-s0     deaths_age_cum           1.5573     0.7538   2.0658      114       30      114     0.7431 one-sided noise floor (one condition deterministic)
+  f10-s0     wages_cum                0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     max_capital              0.5038     0.4011   1.2562       21        3       21     0.3449
+  f10-s0     capital_hist[0]          3.5612     1.3281   2.6814        9       83       33     7.5978
+  f10-s0     capital_hist[1]          0.8310     0.7391   1.1243       15        5       20     7.3921
+  f10-s0     capital_hist[2]          1.0769     0.7320   1.4711       22        8       51     9.2880
+  f10-s0     capital_hist[3]          0.3191     0.2764   1.1547       66        1       66    26.6087
+  f10-s0     capital_hist[4]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[5]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[7]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[8]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     granary_hist[0]          3.2708     1.3527   2.4180        9       48       68     5.4507
+  f10-s0     granary_hist[1]          0.7433     0.5171   1.4375       11       15       53     4.7767
+  f10-s0     granary_hist[2]          0.3859     0.4111   0.9388       27        5       41    15.6343
+  f10-s0     granary_hist[3]          0.3600     0.4739   0.7598       10        5       10     7.9213
+  f10-s0     granary_hist[4]          0.3654     0.6124   0.5966       11        1       11    19.6960
+  f10-s0     granary_hist[5]          0.9440     0.6997   1.3492       13       41       74     5.6950
+  f10-s0     granary_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+
+pair A@low vs P@low: NOT distinguishable at this noise floor (no KPI holds the declared SNR and sustained separation in every cell)
+  cell       kpi                      rmse_d      noise      snr firstsep  run_len   run_at wasserstein note
+  f10-s0     population               0.2650     0.4082   0.6491       -1        0       -1     0.1644
+  f10-s0     births_cum               0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     deaths_starve_cum        0.2664     0.4751   0.5608       -1        0       -1     0.0046
+  f10-s0     deaths_age_cum           0.1496     0.2430   0.6157       -1        0       -1     0.0671
+  f10-s0     wages_cum                0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     max_capital              0.6371     0.8872   0.7181       17        1       17     0.5880
+  f10-s0     capital_hist[0]          0.9489     0.5401   1.7571        8       53       69     2.4006
+  f10-s0     capital_hist[1]          0.4006     0.4475   0.8953        8        2        8    11.2091
+  f10-s0     capital_hist[2]          0.9040     0.6684   1.3524       17        3       40    24.8143
+  f10-s0     capital_hist[3]          0.2873     0.3227   0.8903       17        1       17    31.0009
+  f10-s0     capital_hist[4]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[5]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[7]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[8]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     granary_hist[0]          0.8815     0.5652   1.5596        8       53       69     2.9411
+  f10-s0     granary_hist[1]          0.5350     0.3385   1.5806        8        5       41     1.8406
+  f10-s0     granary_hist[2]          0.3557     0.2846   1.2498       31        2       31     5.6322
+  f10-s0     granary_hist[3]          0.4231     0.2430   1.7415        7        7       11     3.5599
+  f10-s0     granary_hist[4]          0.2940     0.2430   1.2100        7        1        7     3.2002
+  f10-s0     granary_hist[5]          0.9005     0.6067   1.4844       16       10       25    19.2247
+  f10-s0     granary_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+
+pair A@low vs U@low: DISTINGUISHABLE (KPI population holds SNR >= 2.0 with a >= 24-hour separation in every cell)
+  cell       kpi                      rmse_d      noise      snr firstsep  run_len   run_at wasserstein note
+  f10-s0     population               2.5203     0.8151   3.0921       24       83       32     2.0370
+  f10-s0     births_cum               0.2992     0.3616   0.8273       -1        0       -1     0.2639 one-sided noise floor (one condition deterministic)
+  f10-s0     deaths_starve_cum        3.2623     1.3642   2.3913       24      110       34     2.9329
+  f10-s0     deaths_age_cum           1.3365     0.7706   1.7345      114        8      114     0.6412
+  f10-s0     wages_cum                0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     max_capital              0.3106     0.3503   0.8867       62        1       62     0.0856
+  f10-s0     capital_hist[0]          3.2973     1.3437   2.4538        8       82       34     6.6279
+  f10-s0     capital_hist[1]          0.6844     0.6719   1.0186        8        2        8     8.7242
+  f10-s0     capital_hist[2]          0.6950     0.7144   0.9728       27        4       43     4.3208
+  f10-s0     capital_hist[3]          0.3005     0.3368   0.8921       84        1       84    16.8987
+  f10-s0     capital_hist[4]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[5]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[7]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[8]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     granary_hist[0]          3.4281     1.3886   2.4687        8       81       35     4.6338
+  f10-s0     granary_hist[1]          0.5659     0.5379   1.0520        8        4       21     1.8133
+  f10-s0     granary_hist[2]          0.3402     0.4054   0.8392       10        5       23     5.6390
+  f10-s0     granary_hist[3]          0.3919     0.4040   0.9700       12        3       39     7.1445
+  f10-s0     granary_hist[4]          0.4488     0.4436   1.0117       13        3       33     6.4145
+  f10-s0     granary_hist[5]          0.6978     0.5951   1.1725       13        1       13     4.2252
+  f10-s0     granary_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+
+pair P@low vs U@low: DISTINGUISHABLE (KPI population holds SNR >= 2.0 with a >= 24-hour separation in every cell)
+  cell       kpi                      rmse_d      noise      snr firstsep  run_len   run_at wasserstein note
+  f10-s0     population               2.4685     0.8416   2.9330       24       82       34     2.0069
+  f10-s0     births_cum               0.2992     0.3616   0.8273       -1        0       -1     0.2639 one-sided noise floor (one condition deterministic)
+  f10-s0     deaths_starve_cum        3.2983     1.3832   2.3846       24      110       34     2.9375
+  f10-s0     deaths_age_cum           1.4104     0.7758   1.8180      114       28      116     0.6759
+  f10-s0     wages_cum                0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     max_capital              0.7217     0.8975   0.8041       66        1       66     0.5764
+  f10-s0     capital_hist[0]          4.0722     1.3953   2.9186       20      109       32     8.5363
+  f10-s0     capital_hist[1]          0.7541     0.6446   1.1699       20        7       20     9.8774
+  f10-s0     capital_hist[2]          1.2895     0.7825   1.6480       27       11       51    25.1317
+  f10-s0     capital_hist[3]          0.3191     0.3536   0.9027       66        1       66    29.1627
+  f10-s0     capital_hist[4]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[5]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[7]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     capital_hist[8]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     granary_hist[0]          4.0184     1.4256   2.8187       20      107       34     6.1013
+  f10-s0     granary_hist[1]          0.6759     0.5325   1.2692       21        7       37     2.0306
+  f10-s0     granary_hist[2]          0.4564     0.3568   1.2792       23        5       23     5.2983
+  f10-s0     granary_hist[3]          0.4401     0.3879   1.1345       30        5       30     5.4369
+  f10-s0     granary_hist[4]          0.4258     0.4475   0.9516       13        1       13     4.4211
+  f10-s0     granary_hist[5]          1.4561     0.8416   1.7302       13       78       37    21.2129
+  f10-s0     granary_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+
+WHAT THE DATA DOES AND DOES NOT ESTABLISH
+Measured: 5 conditions over 1 cell(s), 3 replicates each, 144 hours.
+9 pair(s) are distinguishable under the declared rule: A0@low vs A1@low via capital_hist[0]; A0@low vs A@low via capital_hist[0]; A0@low vs P@low via granary_hist[0]; A0@low vs U@low via population; A1@low vs A@low via granary_hist[0]; A1@low vs P@low via granary_hist[0]; A1@low vs U@low via population; A@low vs U@low via population; P@low vs U@low via population.
+Not established: which condition is better. The study measures the noise floor, the effort ladder's reach and the between-condition separation; the frozen EC-3 instrument and the milestone review own any quality verdict, and the ticket-34 verdict (central claim NOT accepted under EC-3 as written) stands unchanged.

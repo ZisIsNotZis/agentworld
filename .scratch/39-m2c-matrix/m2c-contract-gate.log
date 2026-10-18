@@ -1,0 +1,8 @@
+tally per arm (role-a records):
+  A {'applied': 767, 'rejected': 1, 'inadmissible': 0, 'malformed': 1, 'other': 0}
+  A1 {'applied': 764, 'rejected': 3, 'inadmissible': 0, 'malformed': 3, 'other': 0}
+  P {'applied': 713, 'rejected': 3, 'inadmissible': 0, 'malformed': 3, 'other': 0}
+  U {'applied': 767, 'rejected': 1, 'inadmissible': 0, 'malformed': 1, 'other': 0}
+proposed action counts: {}
+refusing gate counts: {}
+proposed x gate:

@@ -1,0 +1,6 @@
+# the same assertion re-run on the committed byte copy (sha256 56d3b300716e11a05dc81573ae394f018329a26966f036126f7a4a2fc754df26)
+live artefact: contract=natural-claim/v4 horizon=144 status=live/real-model
+cell inventory (spec section 8.4): FAIL
+   1 cell(s) did not complete (halted at the call ceiling or not run): A1/r1
+M2c verdict (spec section 7.4): NOT RUN — the declared inventory is not met; the matrix is reported as incomplete and never scored as a smaller experiment
+# exit=3

@@ -149,24 +149,25 @@ Two observations, recorded rather than dismissed:
   content. The poll script that produced §9.4 is committed verbatim as `poll.py` beside this file
   (`sha256 2a38560f…`, byte-identical to the `.tmp/39-poll.py` the polls actually ran).
 
-## 6. Results (phase A fills only the bookkeeping rows)
+## 6. Results — final state, 2026-10-18T16:14:25Z (phase B filled the completion columns)
 
-Inventory at the last poll (15:34:56Z): 11 of 15 declared cells have a run directory (3 × `A0` complete +
-8 model-bearing running); 4 model-bearing cells are queued behind the `-parallel 8` semaphore. **The run
-was still in flight when this ticket was committed** — phase A records the launch, not the outcome.
+The run finished on its own at **16:14:25Z** (43 min 59 s after launch), 3 020 physical attempts, **$0.6007**.
+§10 owns the completion gate and the verdict; this table is the inventory it is computed from. Per-cell call
+counts are `kind == "call"` ledger rows, i.e. charged attempts, not decisions.
 
-| arm | cell | reps | realized calls at last poll (15:34:56Z) | halted | `inadmissible` (phase B) |
+| arm | cell | reps | charged calls (r1/r2/r3) | `halted` | `inadmissible` |
 |---|---|---|---|---|---|
-| A0 | f10-s0 | 3/3 complete | 0 (0/0/0) | none | — |
-| P | f10-s0 | 3/3 running | 188 (64/63/61) | none observed | — |
-| U | f10-s0 | 2/3 running, r1 queued | 124 (62/62) | none observed | — |
-| A | f10-s0 | 2/3 running, r3 queued | 120 (59/61) | none observed | — |
-| A1 | f10-s0 | 1/3 running, r1/r2 queued | 56 | none observed | — |
-| **total** | | | **488 calls, $0.0840** | | |
+| A0 | f10-s0 | 3/3 | 0 (0/0/0) | none | — (0 calls) |
+| P | f10-s0 | 3/3 | 716 (244/228/244) — under the ceiling by construction (periodic cadence) | none | 0 |
+| U | f10-s0 | 3/3 | 768 (256/256/256) | none | 0 |
+| A | f10-s0 | 3/3 | 768 (256/256/256) | none | 0 |
+| A1 | f10-s0 | 3/3 | 768 (256/256/256) | **r1 halted at the call ceiling, hour 143** | 0 |
+| **total** | | | **3 020 calls, $0.6007** | | |
 
-`vrd/2` keys, band/floor decisions, the verdict, the six-permutation sensitivity, the `h = H−1`
-persistence variant and the curve corroboration are **phase B** outputs and are deliberately absent
-here: this ticket launches the run, it does not score it.
+The verdict is **NOT RUN** (§10.5): `A1-f10-s0-r1` halted at its call ceiling one sample short of the
+horizon, so §7.4's inventory precondition is not met. `vrd/2` keys, band/floor decisions, the six-permutation
+sensitivity and the `h = H−1` variant are therefore **not** reported as a comparison — `vrd2.py --live`
+refuses to print one.
 
 ## 7. What this ticket may not conclude
 
@@ -348,3 +349,181 @@ Last poll before returning: **`2026-10-18T15:36:14Z`**, pid `2725555` alive (`Ss
 **636 calls**, **$0.1089** spent, 8 cells growing (+91 calls in 48 s), 11 of 15 cell directories present,
 load average `0.80`. The run was **demonstrably running when this ticket was committed**, which is all
 phase A claims.
+
+## 10. Phase B — poll, completion gate, verdict (`NOT RUN`)
+
+### 10.1 Poll record
+
+The runner was polled in bounded intervals under the §5 liveness rule (pid **and** ledger growth, never the
+log). All 21 intervals are in `phase-b-poll.log` (committed, one JSON object per interval, produced by
+`phase-b-poll.py`, committed beside it). Call counts are `kind == "call"` rows; spend is
+`prompt_tokens/1e6×$0.10 + completion_tokens/1e6×$0.50` over the whole run root.
+
+| UTC | runner | elapsed | calls (cum) | Δ | per arm A/A1/P/U | spend |
+|---|---|---|---|---|---|---|
+| 15:37:28 | 2725555 | 07:02 | 780 | — | 194/86/303/197 | $0.1331 |
+| 15:39:59 | 2725555 | 09:33 | 1 057 | +277 | 267/119/407/264 | $0.1803 |
+| 15:42:31 | 2725555 | 12:05 | 1 304 | +247 | 335/151/484/334 | $0.2383 |
+| 15:45:03 | 2725555 | 14:37 | 1 591 | +287 | 405/186/598/402 | $0.2862 |
+| 15:47:36 | 2725555 | 17:09 | 1 877 | +286 | 478/249/677/473 | $0.3348 |
+| 15:50:08 | 2725555 | 19:41 | 2 102 | +225 | 551/322/712/517 | $0.3741 |
+| 15:52:43 | 2725555 | 22:17 | 2 233 | +131 | 587/370/716/560 | $0.4301 |
+| 15:55:00 | 2725555 | 24:34 | 2 359 | +126 | 620/430/716/593 | $0.4521 |
+| 15:56:46 | 2725555 | 26:19 | 2 455 | +96 | 645/476/716/618 | $0.4695 |
+| 15:58:31 | 2725555 | 28:04 | 2 538 | +83 | 668/509/716/645 | $0.4838 |
+| 16:00:16 | 2725555 | 29:49 | 2 597 | +59 | 689/524/716/668 | $0.5104 |
+| 16:01:59 | 2725555 | 31:32 | 2 674 | +77 | 712/555/716/691 | $0.5403 |
+| 16:03:39 | 2725555 | 33:13 | 2 768 | +94 | 735/601/716/716 | $0.5567 |
+| 16:05:19 | 2725555 | 34:53 | 2 859 | +91 | 757/646/716/740 | $0.5731 |
+| 16:07:00 | 2725555 | 36:33 | 2 944 | +85 | 768/693/716/767 | $0.5877 |
+| 16:07:26 | 2725555 | 36:59 | 2 958 | +14 | 768/706/716/768 | $0.5901 |
+| 16:09:06 | 2725555 | 38:39 | 2 989 | +31 | 768/737/716/768 | $0.5954 |
+| 16:10:46 | 2725555 | 40:20 | 3 003 | +14 | 768/751/716/768 | $0.5980 |
+| 16:12:07 | 2725555 | 41:41 | 3 003 | +0 | 768/751/716/768 | $0.5980 |
+| 16:13:23 | 2725555 | 42:56 | 3 010 | +7 | 768/758/716/768 | $0.5990 |
+| 16:14:38 | **GONE** | — | 3 020 | +10 | 768/768/716/768 | $0.6007 |
+
+The operator stop (§3, ticket 38 §8.1) was **never crossed**: peak realised spend $0.6007 against the
+$1.60 stop and the $2.00 cap (30 % of the cap); peak attempt count 3 020 against the 4 000 operator cap.
+No signal was sent to the runner: it exited on its own, writing `.tmp/39-m2c-evaluation.json` at
+16:14:25Z with its ledgers flushed. The +0 interval at 16:12:07 is one lagging poll, not a stall (the
+following two intervals grew).
+
+### 10.2 Completion gate (§7.4 inventory precondition + §8 of this ticket)
+
+| condition | measured | result |
+|---|---|---|
+| one runner, one run root, order of §3 step 7 | `setsid` pid `2725555`, `.tmp/39-m2c-runs`, 15 cell directories | PASS |
+| every declared arm has exactly 3 replicates | `A0` 3, `P` 3, `U` 3, `A` 3, `A1` 3 = 15 cell rows | PASS |
+| `ran == 15` | `inventory {declared: 15, ran: 15, skipped: null}` | PASS |
+| no skipped cell | `skipped: null` | PASS |
+| contract gate `inadmissible == 0` | `A 0, A1 0, P 0, U 0` (`m2c-contract-gate.log`) | PASS |
+| each arm's evaluation rows present | one evaluation JSON carries all five arms' cells (§3: the declared scoring path exists only for one invocation) | PASS |
+| **no cell halted at its call ceiling** | **`A1-f10-s0-r1`: `halted: true`, `ceiling_hit: "cognitive-calls"`, 144 samples (0..143) instead of 145** | **FAIL** |
+
+One condition fails, so the matrix is **truncated** and §7.4 applies verbatim: "Anything else prints
+`NOT RUN` and no verdict."
+
+### 10.3 The halted cell — evidence and mechanism
+
+`A1-f10-s0-r1`, from `.tmp/39-m2c-evaluation.json` and its ledger `.tmp/39-m2c-runs/A1-f10-s0-r1/calls.jsonl`:
+
+- `ceiling_rows[0]`: `ceiling cognitive-calls, threshold 256, observed 256, projected_binding_hour 143` —
+the ceiling it hit is the declared budget axis `N = 256`, not a token or cost ceiling (those rows report
+threshold `2^60` and are three orders of magnitude away).
+- `hours` ends at `143`; `alive_by_hour` has **144** samples, so the terminal sample `h = H = 144` — the one
+that carries tier 1's persistence predicate — **does not exist for this cell**. Its `H = 1442` is a sum
+over hours 0..143 against 1437–1444 summed over 0..144 for the other cells: the two are not comparable.
+- The ledger holds **256 charged `call` rows**, spanning actor-hours 0..142, with `attempt: 2` on exactly one
+of them (a single retry) and one `status: timeout` row (seq 606). It needed a 257th attempt for hour 143's
+decision, `AllowCall` refused it, and the typed fail-loud halt ended the cell at hour 143.
+- **The arm has no headroom at this ceiling.** `A1`'s quota schedule demands two decisions in 112–113 of the
+145 hours; `A1-f10-s0-r2` and `-r3` finish the horizon on exactly 256 attempts, i.e. with zero spare. One
+charged retry is enough to truncate the cell. The single `-attempt-timeout 300` expiry (seq 606, retried once,
+`attempt: 2`) is therefore not a cosmetic transport event on this arm: it cost the sample and the run its
+admissibility.
+- This is also why §7.4 names the case: the truncated replicate's own spread is artificially small
+(`A1` envelope half-width 4.0 actor-hours over `1437/1442/1444`), and a band that narrow would make any
+neighbouring pair look separated. The defect is in the run, not in the metric, and the guard exists to stop
+exactly that reading.
+
+### 10.4 The four commands of §6, in order, and what they returned
+
+| # | command (verbatim, cwd `/home/z/vibe/agentworld`) | exit | result |
+|---|---|---|---|
+| a | `python3 .tmp/35-admis.py .tmp/39-m2c-runs` | 0 | `A {'applied': 767, 'rejected': 1, 'inadmissible': 0, …}`, `A1 {…'inadmissible': 0…}`, `P {…0…}`, `U {…0…}` — **contract gate PASS** (`m2c-contract-gate.log`) |
+| b | `python3 .scratch/38-m2c-preregistration/vrd2.py --check-inventory .tmp/39-m2c-evaluation.json` | **3** | `cell inventory (spec section 8.4): FAIL` / `1 cell(s) did not complete (halted at the call ceiling or not run): A1/r1` / `M2c verdict (spec section 7.4): NOT RUN` (`m2c-inventory-gate.log`) |
+| c | `python3 .scratch/38-m2c-preregistration/vrd2.py --live .tmp/39-m2c-evaluation.json --scores .scratch/37-fidelity-metric/scores.json --log .scratch/39-m2c-matrix/m2c-scores.log` | **3** | identical refusal, no per-pair line printed, `m2c-scores.log` is 4 lines (`m2c-live.out`) |
+| d | `.tmp/39-vs2-bin -curve-in .tmp/39-m2c-evaluation.json -curve-out .scratch/39-m2c-matrix/m2c-curve.txt` | 0 | 480-line curve report; 9 of 10 pairs `DISTINGUISHABLE`, `A@low vs P@low` not distinguishable (`m2c-curve.txt`) — **corroboration only, and it pools the truncated `A1` r1 into the `A1` band, so it cannot rescue or contradict a verdict it was declared not to decide** |
+
+The committed `m2c-curve.txt` is the report verbatim with the generator's trailing column padding removed (content unchanged, `git diff --check` clean); every other evidence file is committed byte-for-byte as produced.
+
+No fifth run, no re-scoring, no hand computation substituted for `vrd2.py`. Steps (b) and (c) refused by
+their own declared rule, which is the machinery working as pre-registered.
+
+### 10.5 Verdict
+
+**`NOT RUN`** — the declared inventory is not met (`A1-f10-s0-r1` halted at its call ceiling at hour 143),
+so per ticket 38 §7.4 and §8 of this ticket the matrix is reported as incomplete and is **never scored as a
+smaller experiment**. No primary pair (`A` vs `P`, `A` vs `U`) is reported as separating or not separating;
+no band, no effect floor, no six-permutation sensitivity, no `h = H−1` variant is reported, because each of
+those would be a comparison the declared rule forbids on this artefact. The question M2c asks is therefore
+**still open**, not answered negatively.
+
+### 10.6 Descriptive per-arm state vectors (an inventory, not a verdict)
+
+Reported so the next run can be compared against this one, and explicitly **not** a `vrd/2` comparison —
+no pair below has been tested against a band or a floor, and `A1`'s r1 column is not comparable to any
+other cell's (144 samples vs 145).
+
+| arm | H (r1/r2/r3) | mean H | births B | starvation S | alive@H | charged calls | `halted` |
+|---|---|---|---|---|---|---|---|
+| A0 | 1444/1444/1444 | 1444.0 | 2/2/2 | 0/0/0 | 1/1/1 | 0 | no |
+| P | 1444/1353/1444 | 1413.7 | 2/2/2 | 0/1/0 | 1/1/1 | 244/228/244 | no |
+| U | 1184/1010/1181 | 1125.0 | 2/3/2 | 3/7/3 | 1/2/1 | 256/256/256 | no |
+| A | 1419/1444/1391 | 1418.0 | 2/2/2 | 1/0/1 | 1/1/1 | 256/256/256 | no |
+| A1 | 1442/1444/1437 | 1441.0 (mixes a 144- and two 145-sample sums) | 2/2/2 | 0/0/0 | 2/1/1 | 256/256/256 | **r1 halted** |
+
+Two facts of record that do not depend on the failed cell: the `A0` anchor reproduced exactly in-matrix
+(`H = 1444, B = 2, S = 0, alive@144 = 1` in all three replicates, matching gate 7 of §4), and **no cell of
+any arm went extinct** (`alive@H ≥ 1` everywhere, so tier 1's unanimity rule had nothing to decide even on
+the complete cells).
+
+### 10.7 Spend and inventory
+
+| item | value |
+|---|---|
+| physical attempts | 3 020 of the harness cap 3 072 and the operator cap 4 000 |
+| tokens | 1 897 637 input / 821 860 output |
+| realised spend | **$0.6007** ($0.10/M in, $0.50/M out) against the $1.60 operator stop and the $2.00 hard cap |
+| wall clock | 15:30:26Z → 16:14:25Z = 43 min 59 s (ticket 38 §8.2 declared 3–4 h, deadline 6 h) |
+| per-arm charged calls | `A0` 0; `P` 716; `U` 768; `A` 768; `A1` **768** (the report prints 512 — see 10.8 item 2) |
+
+### 10.8 Defects and anomalies found in the report (recorded, not repaired here)
+
+1. **`A1` is outside the report's own accounting bands.** `budgetedArms = {P, U, A}` (`cmd/vs2/config.go:32`),
+so `VS2-EC-2` prints `budgeted cells=3 … ceiling-halts=0` while a fourth budgeted arm did halt. `VS2-EC-3/4`
+have `fidelity rows=0` (no `R` reference, which §7.1 excludes by design) and are `not-evaluable`; `VS2-EC-5`
+replays 11 priority cells, not 12. **The halt is therefore visible only in the cell rows and in `vrd2.py`'s
+inventory check — the report's own bands do not see it.**
+2. **A halted cell reports `realized_calls: 0` while it charged 256 attempts.** `cmd/vs2/run.go:189` reads the
+calls only `if !cr.halted`, so `A1-f10-s0-r1` reports `realized_calls 0`, `under_budget true`,
+`budget_shortfall 256`, `allocation_records 0`, `escalated_decisions 0` — yet carries `prompt_tokens 160542`
+and `completion_tokens 125597`. The curve report's per-condition table consequently prints `A1@low … calls
+512` with the tokens of three full cells. Anyone reading the accounting table off the report gets `A1`'s call
+count wrong by 256.
+3. **`final_bundle_error: "invalid natural evidence journal"` on all 12 model-bearing cells** (and on the
+recorded ticket-36 `R` cell; the zero-call `A0` cells have none). Pre-existing, model-bearing-cell-specific,
+and unrelated to the halt: it is a post-run resume-bundle export failure, and the projections the verdict
+reads were written. Recorded so it is not read as new.
+4. Three non-`ok` call rows in the whole matrix (2 × `http-error 400` content policy: `A-f10-s0-r1:63`,
+`P-f10-s0-r3:311`; 1 × `timeout`: `A1-f10-s0-r1:606`). All four arms record `inadmissible: 0`; the role-a
+tally is `A {applied 767, rejected 1, malformed 1}`, `A1 {764, 3, 3}`, `P {713, 3, 3}`, `U {767, 1, 1}` — 8
+malformed answers in total, every one of them rejected by the contract rather than applied, i.e. the contract
+held. The single retried attempt is nonetheless what truncated `A1` r1.
+
+### 10.9 What this does not support
+
+Ticket 38 §7.7 unchanged, plus the verdict: this is **not** a negative result. `NOT RUN` says nothing about
+whether a budgeted arm separates from `P` or `U` — it says the artefact cannot answer it. In particular it
+is **not** evidence that the arms are indistinguishable, and the curve report's `DISTINGUISHABLE` lines are
+not a substitute (they are corroboration by declaration, they do not carry the `vrd/2` order, and they pool
+the truncated replicate). One cell, one contract (`natural-claim/v4`), one horizon (`H = 144`), 3 replicates,
+`N = 256`; the central claim, and the selective-vs-uniform **spend** comparison, stay with M2d/M4.
+
+### 10.10 Evidence paths and the next action
+
+| artefact | home |
+|---|---|
+| evaluation JSON the gate read (byte copy, `sha256 56d3b300…4df26`, 774 395 B) | `.scratch/39-m2c-matrix/m2c-evaluation.json` (live original: `.tmp/39-m2c-evaluation.json`) |
+| contract gate transcript | `.scratch/39-m2c-matrix/m2c-contract-gate.log` |
+| inventory gate transcript | `.scratch/39-m2c-matrix/m2c-inventory-gate.log` |
+| scorer transcript / its log | `.scratch/39-m2c-matrix/m2c-live.out`, `.scratch/39-m2c-matrix/m2c-scores.log` |
+| curve corroboration | `.scratch/39-m2c-matrix/m2c-curve.txt` |
+| poll record and its script | `.scratch/39-m2c-matrix/phase-b-poll.log`, `phase-b-poll.py` |
+| run root (126 MB of bundles; not tracked) | `.tmp/39-m2c-runs/` |
+
+**Next action (not done here):** a re-run of `A1` only would still need one invocation over all five arms to
+keep the single-artefact scoring path, and the ceiling must first be raised or the arm's exploration reserve
+brought under it — `A1` finishes the horizon on exactly 256 attempts, so `N = 256` leaves no room for one
+retry. That is a plan-level change (a declared run parameter), so it is proposed, not applied.
