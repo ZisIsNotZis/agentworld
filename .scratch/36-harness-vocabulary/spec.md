@@ -293,3 +293,16 @@ historical sample's persona uses the declared neutral portrait (born hour 0, all
 recorded v1 request does not carry the genome; the persona text is not the variable under test, and the
 fresh sample carries the world's real portraits.
 
+
+### Deliverable D — progress (polled, committed between polls)
+
+Live run declared and launched at 12:23 local: `.tmp/36-run-v4.sh` →
+`.tmp/36-vs2-bin -arms R -cells f10-s0 -reps 1 -hours 144 -effort low -max-output 32768
+-response-bound 1048576 -attempt-timeout 300 -call-deadline 900 -claim-contract natural-claim/v4 -live
+-parallel 8 -budget-min 720 -root .tmp/36-v4-runs`, detached with `setsid`, runner pid **2440039**.
+Liveness is the runner pid **plus** ledger growth (`.tmp/36-v4-runs/R-f10-s0-r1/calls.jsonl`), never a pid
+file and never log content (the report is written only at exit).
+
+| local time | call records | rate (calls/min since first) | statuses |
+|---|---|---|---|
+| 12:39 | 271 | 17.2 | all `ok` |
