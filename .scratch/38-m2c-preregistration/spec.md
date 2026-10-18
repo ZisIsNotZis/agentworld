@@ -64,11 +64,13 @@ An additive form has no way to say "this component is decided first". Three cons
 from the declared formula and the declared priority sentence — none from arm data:
 
 1. **A birth quantum swamps a late-survival deficit.** A world that goes extinct at the last sample
-   scores `d_H = 1/1444 = 0.00069`; a world that never reproduces scores `d_B = 1.0` and one birth
-   short of the control scores `0.5`. Any weighted sum therefore needs `w_H/w_B > 1/0.00069 ≈ 1444`
-   to keep a late extinction ahead of a sterile survivor — and the required ratio grows without bound
-   as extinction moves later. **No declared weight ratio can express the declared priority**, so the
-   repair cannot be a re-weighting.
+   scores `d_H = 1/1444 = 0.00069`; a world that never reproduces scores `d_B = 1.0`, and one birth
+   short of the control scores `0.5`. A weighted sum separates two worlds only when
+   `w_H·Δd_H > w_B·Δd_B`, i.e. `w_H/w_B > Δd_B/Δd_H`. For `R` r3 against the sterile survivor
+   (`Δd_B = 0.5`) that is `5.2`; for a world extinct at the last sample against a survivor reproducing
+   at the control's rate (`Δd_B = 1`) it is `≈1444`, and it grows without bound as extinction moves
+   later. **No declared weight ratio can express the declared priority**, so the repair cannot be a
+   re-weighting.
 2. **One starvation death outranks a small survival deficit.** At equal weights one excess starvation
    death (`1/N0 = 0.1`) outweighs a survival shortfall of `0.096` — the recorded `R` r3 deficit. A
    world that survives the horizon but loses one actor to hunger can rank below one that went extinct.
@@ -217,10 +219,16 @@ Fixed here, before any live call of the M2c matrix.
 | decision contract | `natural-claim/v4` (the M2a-passed contract) |
 | applied effort | `low`; output bound 32 768; response bound 1 048 576; attempt timeout 300 s; call deadline 900 s; `-parallel 8` |
 | budget axis | the declared call ceiling `N = 256` per budgeted arm-run (unchanged) |
-| `R` | **excluded** (declared non-goal, §7.7) |
+| `R` | **excluded** (declared non-goal, below) |
 
 Single cell is declared deliberately: ticket 35's re-plan runs one cell, and the frozen rule's "in both
 cells" clause is therefore met only vacuously. That is stated, not hidden; M2d owns the second cell.
+
+`R` (full wake) is a declared non-goal rather than an omission: it is not an equal-budget arm (1 325
+calls per cell-replicate against `N = 256`), the anchor is `A0` and not `R`, and the M2c question is
+whether a budgeted arm separates from `P`/`U`. Adding `R` would cost ≈$0.14 per replicate — more than
+the whole budgeted set — and answer a depth question this stage does not ask; ticket 36 already holds
+one `natural-claim/v4` `R` replicate at this cell and horizon.
 
 ### 7.2 KPI set
 
@@ -286,8 +294,8 @@ clean negative … is an equally decisive and reportable outcome"), not a failur
    synthetic copy of `A0` exactly, and — in `--expect-fail` mode — detect the inverted comparison
    (`W2` outranking `W1`) as a FAIL. A scorer that cannot fail is not evidence.
 2. **Anchor gate (zero spend, before the live matrix).** The `A0` zero-spend re-run at the landing
-   revision must reproduce `H = 1444, B = 2, S = 0` and three identical replicates. A drifting anchor
-   voids the run before any score is read.
+   revision must reproduce `H = 1444, B = 2, S = 0` in three identical replicates (`-reps 3`). A
+   drifting anchor voids the run before any score is read.
 3. **Contract gate.** Every model-bearing cell must record **0 `inadmissible`** answers. A nonzero
    count voids that cell: ticket 35 showed a matrix under a lossy contract measures admissibility luck,
    not allocation quality.
@@ -337,8 +345,8 @@ Two bounds, both derived from recorded data rather than assumed:
 **Hard cap for ticket 39: $2.00, and 4 000 physical attempts.** Justification: `$1.28` is the
 pessimistic recorded-token estimate and `$2.00` is 1.56× it, so the cap absorbs a retry storm (ticket
 34's EC-2 halt was caused by retries charged per attempt) without reaching the user's money in any
-plausible outcome; the attempt cap of `3 072` (12 × 256) is enforced by the harness itself and 4 000
-leaves room for the three `A0` runs and one re-run of a cell. The project has ≈$30 of headroom under
+plausible outcome; the attempt cap of `3 072` (12 × 256) is enforced by the harness itself, and the
+declared operator cap of 4 000 leaves headroom for a re-run of one cell if a transport failure voids it. The project has ≈$30 of headroom under
 the user's $50 cap and the user said lesser is better, so the cap is stated as a ceiling on one ticket,
 not a budget to spend. **The harness enforces calls, not dollars** (`budgetFor` sets
 `MaxCostMicros: 1<<60` and the report records cost as UNPRICED because the gateway exposes no price
@@ -382,10 +390,10 @@ python3 .scratch/38-m2c-preregistration/vrd2.py --self-test \
 
 # --- 3. anchor gate: zero-spend A0 re-run at the landing revision ---
 go build -o .tmp/39-vs2-bin ./cmd/vs2
-.tmp/39-vs2-bin -arms A0 -cells f10-s0 -hours 144 -replay=false \
+.tmp/39-vs2-bin -arms A0 -cells f10-s0 -reps 3 -hours 144 -replay=false \
   -claim-contract natural-claim/v4 -root .tmp/39-a0-runs \
   -out .tmp/39-a0-evaluation.json -out-txt .tmp/39-a0-evaluation.txt
-# expect H=1444 B=2 S=0 alive@143=2 alive@144=1, three identical replicates, 0 calls
+# expect 3/3 replicates at H=1444 B=2 S=0 alive@143=2 alive@144=1, 0 calls
 
 # --- 4. the live matrix (spend is authorised for this run only) ---
 VS2_SPEND_AUTHORIZATION=AUTHORIZED-VS2-SPEND \
@@ -453,6 +461,7 @@ revision (`8ea4a79` + this branch, no Go change), two ways:
 |---|---|---|
 | contract `natural-claim/v1` | `.tmp/38-vs2-bin -arms A0 -cells f10-s0 -hours 144 -replay=false -root .tmp/38-a0-runs -out .tmp/38-a0-evaluation.json -out-txt .tmp/38-a0-evaluation.txt` | exit 0, `H = 1444`, `B = 2`, `S = 0`, 11 age deaths, alive@143 = 2, alive@H = 1, 145 samples |
 | contract `natural-claim/v4` | the same cell with `-claim-contract natural-claim/v4` | **byte-identical projections** on the eight compared fields (`hours`, `alive_by_hour`, `births_cum`, `deaths_starve_cum`, `deaths_age_cum`, `capital_hist`, `granary_hist`, `wages_cum`) |
+| contract `natural-claim/v4`, `-reps 3` (the exact ticket-39 anchor gate) | `.tmp/38-vs2-bin -arms A0 -cells f10-s0 -reps 3 -hours 144 -replay=false -claim-contract natural-claim/v4 …` | exit 0, **three identical replicates**, each `H = 1444, B = 2, S = 0`, alive@143 = 2, alive@H = 1, 0 calls |
 
 Both reproduce ticket 37's committed anchor exactly (`H_T = 1444`, `B_T = 2`, `S_T = 0`, `N0 = 10`,
 alive@143 = 2, alive@H = 1), and `anchor-check.json` records the commands, the vector and the sha256 of

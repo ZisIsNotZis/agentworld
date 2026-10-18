@@ -5,6 +5,7 @@
   },
   "command_contract_v1": ".tmp/38-vs2-bin -arms A0 -cells f10-s0 -hours 144 -replay=false -root .tmp/38-a0-runs -out .tmp/38-a0-evaluation.json -out-txt .tmp/38-a0-evaluation.txt",
   "command_contract_v4": ".tmp/38-vs2-bin -arms A0 -cells f10-s0 -hours 144 -replay=false -claim-contract natural-claim/v4 -root .tmp/38-a0v4-runs -out .tmp/38-a0v4-evaluation.json -out-txt /tmp/38-a0v4-evaluation.txt",
+  "command_contract_v4_reps3": ".tmp/38-vs2-bin -arms A0 -cells f10-s0 -reps 3 -hours 144 -replay=false -claim-contract natural-claim/v4 -root .tmp/38-a0v4r3-runs -out /tmp/38-a0v4r3.json -out-txt /tmp/38-a0v4r3.txt",
   "compared_fields": [
     "hours",
     "alive_by_hour",
@@ -39,6 +40,8 @@
     "alive_end": 1,
     "replicates": "1 (one replicate was run)"
   },
+  "reps3_identical": true,
+  "reps3_note": "This is the exact command ticket 39's anchor gate runs (spec section 8.4 step 3); it was executed here at zero spend and produced three identical replicates matching the committed ticket-37 anchor.",
   "revision": "6072af3201bb5a1a5718f454a7cdaf357e002441",
   "ticket": "38",
   "ticket37_committed_anchor": {
@@ -76,6 +79,41 @@
       "alive_end": 1,
       "calls": 0,
       "replicate": 1,
+      "samples": 145
+    }
+  ],
+  "vector_contract_v4_reps3": [
+    {
+      "B": 2,
+      "H": 1444,
+      "N0": 10,
+      "S": 0,
+      "alive_143": 2,
+      "alive_end": 1,
+      "calls": 0,
+      "replicate": 1,
+      "samples": 145
+    },
+    {
+      "B": 2,
+      "H": 1444,
+      "N0": 10,
+      "S": 0,
+      "alive_143": 2,
+      "alive_end": 1,
+      "calls": 0,
+      "replicate": 2,
+      "samples": 145
+    },
+    {
+      "B": 2,
+      "H": 1444,
+      "N0": 10,
+      "S": 0,
+      "alive_143": 2,
+      "alive_end": 1,
+      "calls": 0,
+      "replicate": 3,
       "samples": 145
     }
   ],
