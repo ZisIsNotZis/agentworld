@@ -234,56 +234,71 @@ python3 .scratch/37-fidelity-metric/score.py \
   --svg .scratch/37-fidelity-metric/ranking.svg
 ```
 
-- Outputs committed beside this file: `score.py` (sha256 `b738059c…`), `score-run.log` (sha256
-  `ae74c1e7…`, the full transcript with per-pair arithmetic), `scores.json` (sha256 `f78dda6b…`),
-  `ranking.svg` (sha256 `90f6041f…`). Every number below is from that log or `scores.json`.
+- Outputs committed beside this file: `score.py` (sha256 `78c330bd…`), `score-run.log` (sha256
+  `9fb63e64…`, the full transcript with per-pair arithmetic), `scores.json` (sha256 `d709dfa3…`),
+  `ranking.svg` (sha256 `90f6041f…`, byte-identical before and after the review fixes), and
+  `negative-control.log` (sha256 `f81872bc…`, the `--expect-fail` transcript behind gate row 9).
+  Every number below is from one of those logs or `scores.json`.
 - **Live model calls: 0.** All quantities come from the recorded evaluation JSONs.
 
 ## The recorded matrix, scored two ways (primary: `natural-claim/v2`, f10-s0, H=144, 3 reps)
 
 `alive@143` is the hour tickets 35/36 report; `alive@144` is the terminal sample the projections end
 on. `fid/1` is the equal-weight mean of the recorded eight indicator means (inference: the instrument
-declares no weights). `vrd/1` is the declared viability-referenced distance (§C2 above). A0 and R are
-**not scored by the frozen instrument** (`cmd/vs2/config.go:156`), so their `fid/1` cell is
-`not-scored`, not zero.
+declares no weights). `vrd/1` is the declared viability-referenced distance (§C2 above). The frozen
+instrument never scores A0 or R (`cmd/vs2/config.go:156`), so they have no recorded row and their
+`mean8` cell is `not-scored`, not zero.
+AC-37(e) asks for a table of every recorded arm under the old measure, so the `fid/1` 7-ind column
+closes that gap: the same seven ledger-free indicators the loader-identity check recomputes, against
+the reference the recorded rows actually used (R3), computed for all six arms on one basis. The eighth
+indicator, decision-error, needs the call ledger and is in the evaluation artefact for no arm, so this
+column is a seven-of-eight measurement and is not numerically comparable to the eight-indicator
+`mean8` column; for the four budgeted arms, `mean8` remains the recorded value.
 
-| arm | rep | calls | alive@143 | alive@144 | births | starvation | actor-hours | `fid/1` mean8 | `vrd/1` |
-|---|---|---|---|---|---|---|---|---|---|
-| A0 | 1-3 | 0 | 2 | 1 | 2 | 0 | 1444 | not scored | 0.0000 |
-| R | 1 | 1082 | 0 | 0 | 0 | 1 | 1082 | not scored | 1.3507 |
-| R | 2 | 1166 | 0 | 0 | 0 | 0 | 1166 | not scored | 1.1925 |
-| R | 3 | 1305 | 1 | 0 | 1 | 0 | 1305 | not scored | 0.5963 |
-| P | 1 | 244 | 2 | 1 | 2 | 0 | 1444 | 0.1756 | 0.0000 |
-| P | 2 | 244 | 2 | 1 | 2 | 0 | 1444 | 0.1761 | 0.0000 |
-| P | 3 | 244 | 2 | 1 | 2 | 0 | 1444 | 0.1755 | 0.0000 |
-| U | 1 | 256 | 3 | 3 | 3 | 5 | 1114 | 0.8931 | 0.7285 |
-| U | 2 | 256 | 2 | 2 | 3 | 4 | 1199 | 0.8459 | 0.5697 |
-| U | 3 | 256 | 2 | 1 | 2 | 6 | 1034 | 0.9299 | 0.8839 |
-| A | 1 | 256 | 2 | 2 | 2 | 0 | 1443 | 0.2055 | 0.0007 |
-| A | 2 | 256 | 2 | 1 | 2 | 0 | 1444 | 0.2034 | 0.0000 |
-| A | 3 | 256 | 2 | 2 | 2 | 2 | 1264 | 0.4170 | 0.3247 |
-| A1 | 1 | 253 | 0 | 0 | 0 | 0 | 1166 | 0.1519 | 1.1925 |
-| A1 | 2 | 253 | 0 | 0 | 0 | 0 | 1166 | 0.1524 | 1.1925 |
-| A1 | 3 | 253 | 0 | 0 | 0 | 0 | 1166 | 0.1518 | 1.1925 |
+| arm | rep | calls | alive@143 | alive@144 | births | starvation | actor-hours | `fid/1` mean8 | `fid/1` 7-ind vs R3 | `vrd/1` |
+|---|---|---|---|---|---|---|---|---|---|---|
+| A0 | 1-3 | 0 | 2 | 1 | 2 | 0 | 1444 | not scored | 0.2094 | 0.0000 |
+| R | 1 | 1082 | 0 | 0 | 0 | 1 | 1082 | not scored | 0.3068 | 1.3507 |
+| R | 2 | 1166 | 0 | 0 | 0 | 0 | 1166 | not scored | 0.1617 | 1.1925 |
+| R | 3 | 1305 | 1 | 0 | 1 | 0 | 1305 | not scored | 0.0000 | 0.5963 |
+| P | 1 | 244 | 2 | 1 | 2 | 0 | 1444 | 0.1756 | 0.1987 | 0.0000 |
+| P | 2 | 244 | 2 | 1 | 2 | 0 | 1444 | 0.1761 | 0.1986 | 0.0000 |
+| P | 3 | 244 | 2 | 1 | 2 | 0 | 1444 | 0.1755 | 0.1992 | 0.0000 |
+| U | 1 | 256 | 3 | 3 | 3 | 5 | 1114 | 0.8931 | 1.0196 | 0.7285 |
+| U | 2 | 256 | 2 | 2 | 3 | 4 | 1199 | 0.8459 | 0.9624 | 0.5697 |
+| U | 3 | 256 | 2 | 1 | 2 | 6 | 1034 | 0.9299 | 1.0597 | 0.8839 |
+| A | 1 | 256 | 2 | 2 | 2 | 0 | 1443 | 0.2055 | 0.2316 | 0.0007 |
+| A | 2 | 256 | 2 | 1 | 2 | 0 | 1444 | 0.2034 | 0.2305 | 0.0000 |
+| A | 3 | 256 | 2 | 2 | 2 | 2 | 1264 | 0.4170 | 0.4760 | 0.3247 |
+| A1 | 1 | 253 | 0 | 0 | 0 | 0 | 1166 | 0.1519 | 0.1718 | 1.1925 |
+| A1 | 2 | 253 | 0 | 0 | 0 | 0 | 1166 | 0.1524 | 0.1729 | 1.1925 |
+| A1 | 3 | 253 | 0 | 0 | 0 | 0 | 1166 | 0.1518 | 0.1715 | 1.1925 |
 
 Arm means and the two rankings:
 
-| arm | mean calls | mean `fid/1` | rank (lower = closer to R) | mean `vrd/1` | rank (lower = more viable) |
-|---|---|---|---|---|---|
-| A0 | 0 | not scored | — | 0.0000 | 1 (tied) |
-| P | 244 | 0.1757 | 2 | 0.0000 | 1 (tied) |
-| A | 255.7 | 0.2753 | 3 | 0.1084 | 3 |
-| U | 256 | 0.8897 | 4 | 0.7274 | 4 |
-| R | 1184.3 | not scored | — | 1.0465 | 5 |
-| A1 | 253 | **0.1520** | **1 (closest to R)** | **1.1925** | **6 (least viable)** |
+| arm | mean calls | mean `fid/1` | rank (lower = closer to R) | mean `fid/1` 7-ind | mean `vrd/1` | rank (lower = more viable) |
+|---|---|---|---|---|---|---|
+| A0 | 0 | not scored | — | 0.2094 | 0.0000 | 1 (tied) |
+| P | 244 | 0.1757 | 2 | 0.1988 | 0.0000 | 1 (tied) |
+| A | 255.7 | 0.2753 | 3 | 0.3127 | 0.1084 | 3 |
+| U | 256 | 0.8897 | 4 | 1.0139 | 0.7274 | 4 |
+| R | 1184.3 | not scored | — | 0.1562 | 1.0465 | 5 |
+| A1 | 253 | **0.1520** | **1 (closest to R)** | 0.1721 | **1.1925** | **6 (least viable)** |
+
+On the consistent seven-indicator basis every recorded arm is ordered: R 0.1562 (the reference itself;
+its r3 sits at distance 0 by construction), **A1 0.1721**, P 0.1988, A0 0.2094, A 0.3127, U 1.0139.
+Scoring the two arms the instrument omits does not soften the inversion: the extinct, zero-birth A1
+remains the arm closest to R of every arm that is not R, and the no-AI control is farther from R than
+the extinct arm is.
 
 **The inversion is total: the arm the current instrument calls closest to R is the arm the declared
 viability measure calls least viable, and it is extinct in all three replicates.**
 
 Figure: `.scratch/37-fidelity-metric/ranking.svg` (self-contained SVG, two panels, same arm order).
-Left panel: `fid/1`; its lowest bar is A1, hatched red (extinct). Right panel: `vrd/1`; A0 and P sit
-at 0 and A1 is the highest bar. The control and the reference are unscoreable on the left by
-construction.
+Left panel: `fid/1`; its lowest bar is A1, solid red (extinct). Right panel: `vrd/1`; A0 and P sit
+at 0 and A1 is the highest bar. The left panel plots the instrument's recorded rows only, so A0 and R
+are absent from it; their old-measure values are the supplementary seven-indicator column above,
+which exists in the table and the log, not in the figure.
 
 ## What the current metric actually sums (H1 and H2)
 
@@ -391,6 +406,35 @@ h143) and 1 starvation death. The v4 artefact contains no A0 control and is a di
 v2 control. The R extinction under v1/v2 is therefore not intrinsic to full cognition, which is why
 the anchor question is about the reference, not an AI-arm effect.
 
+## Known pathology in `vrd/1`: the birth term outranks the survival term
+
+The anchor is argued in the user's priority order — population survived, deaths avoided, stability —
+and the three terms are written in that order. The weights do not share that order. With `w_H = w_B =
+w_S = 1` and `B_T = 2`, one birth is worth `1/B_T = 0.5`, while losing every founder for the whole
+horizon is worth 1.0: the birth term carries half the survival axis, and the ranking can invert. Two
+worlds, from the declared formula:
+
+| world | `H` | `B` | `S` | terms | `vrd/1` |
+|---|---|---|---|---|---|
+| sterile but fully surviving (synthetic: ten founders alive at every one of the 145 samples, no birth) | 1450 | 0 | 0 | 0 + 1.0 + 0 | **1.0000** |
+| extinct at h144 after one birth (recorded R r3) | 1305 | 1 | 0 | 0.0963 + 0.5 + 0 | **0.5963** |
+
+**A fully-surviving, death-free world that never reproduces scores strictly worse than a world that
+goes extinct with one birth.** This is not a corner of the declared weights: the inversion holds for
+every `w_B` above `≈ 0.19`, so removing it would take a five-fold reduction of a declared weight of
+1.0, and none of the three declared one-at-a-time variants comes near that — doubling `w_B` widens
+the inversion, while doubling `w_H` leaves R r3 at 0.6925 and doubling `w_S` leaves it at 0.5963,
+both still ranked more viable than the sterile world's 1.0000. Re-weighting after seeing the data is
+exactly what AC-37(c) forbids, so no weight is changed here. Instead both worlds are exercised by
+`score.py --self-test` (`score-run.log:79-80`), and the sterile case is *pinned*, so a later change
+to the weights or the normalisation fails the self-test until the change is re-declared.
+
+This is a **declared known pathology of the objective**, not a footnote. It does not overturn AC-37
+as written — D1/D2/D3 test the ordering of recorded arms and no declared pair sits on the inverted
+edge — but it does mean `vrd/1` is not sound without qualification, and it is a named prerequisite
+of the M2c record (`docs/VERTICAL-SLICES.md`, M2c row) that the birth term be repaired or normalised
+there before any arm comparison may be read.
+
 ## Discrimination evidence on recorded runs (AC-37c/d)
 
 Pre-registered pairs, all 3×3 replicate pairings, margin threshold 0.10:
@@ -409,13 +453,26 @@ Sensitivity, each weight doubled in turn (`scores.json`):
 | `w_B × 2` | +1.8679 | +1.0963 | PASS |
 | `w_S × 2` | +0.6679 | +0.5963 | PASS |
 
-**Negative control (`score.py --self-test`, in the same run):** loader identity PASS — all 12 recorded
-rows are reproduced from the projections for the seven ledger-free indicators at 1e-9, so the script
-is reading the same artefact and implementing the same old metric; synthetic perfect arm (the
-control) scores exactly 0.0000; synthetic extinct arm (0 alive after h48, 0 births) scores 1.6676 ≥
-1.0; the declared pair A1→A passes while the inverted pair A→A1 is detected as FAIL. Run with
-`--expect-fail`, the script exits with `NEGATIVE CONTROL PASS`, so the check that would catch a
-measure rewarding extinction was exercised, not assumed.
+**Negative control (`score.py --self-test`, in the same run, `score-run.log:76-81`):** loader identity
+PASS — all 12 recorded rows are reproduced from the projections for the seven ledger-free indicators
+at 1e-9, so the script is reading the same artefact and implementing the same old metric; synthetic
+perfect arm (the control) scores exactly 0.0000; synthetic extinct arm (0 alive after h48, 0 births)
+scores 1.6676 ≥ 1.0; **synthetic over-floor survivor** (all ten founders alive at every one of the
+145 samples, `H = 1450 > H_T = 1444`) scores exactly 0.0000, which exercises the strict `>` in the
+`(H_T − H_x)/H_T` term — the case the ticketed version claimed safe without an artefact; **synthetic
+sterile survivor** (the same survival, zero births) scores 1.0000 against R r3's 0.5963 and is pinned
+as the declared known pathology above; the declared pair A1→A passes while the inverted pair A→A1 is
+detected as FAIL.
+
+**The `--expect-fail` mode is now a real inversion, not a flipped boolean.** It re-runs each declared
+pair with worse and better swapped and requires every swapped pair to FAIL (`score.py:312-337`); the
+transcript is committed as `negative-control.log`, whose three lines read `NEGATIVE-CONTROL:
+INVERSION-DETECTED (A1 vs A) / (A0 vs R) / (P vs R)` and end in `NEGATIVE CONTROL PASS: every swapped
+pair was detected as a failure`. As wired before this review round the mode inverted the *verdict* on
+the unchanged pair list, so `main()` printed `NEGATIVE CONTROL PASS` unconditionally; that is repaired.
+The repaired mode's ability to fail was exercised by a bounded mutation of an isolated copy of the
+script (`/tmp/37mut/score.py`, declared pairs written in their swapped order): it prints `NEGATIVE
+CONTROL FAIL: every swapped pair was detected as a failure` and exits 2.
 
 **Secondary recorded matrix** (`natural-claim/v1`, stage 3, f10-s0, H=144, 3 reps; no R arm, so no
 `fid/1`): `vrd/1` arm means A0 0.0000, P 0.0000, A 0.4024, U 0.7113; A's r3 is extinct (0 alive, 0
@@ -430,6 +487,10 @@ the pre-registered pairs are the v2 matrix above.
 - **Model-conditional.** This is recorded model output at one cell; no real-world claim (P14).
 - **Weights are declared, not calibrated.** The one-at-a-time doubling is a bounded sensitivity
   check, not a search. No weight was changed after scoring.
+- **`vrd/1`'s birth term outranks its survival term.** A sterile but fully surviving world scores
+  1.000 while an extinct world with one birth scores 0.5963 (§Known pathology). This is a declared
+  defect of the objective, not a slip of the arithmetic; M2c must repair or normalise the term
+  before any arm comparison may be read.
 - **Information loss is real and declared:** who survives (identity, kin, diversity), age-death
   timing, wealth/granary distributions, exchange, action mix, decision-error rate. `vrd/1` is a
   demographic viability distance; it is not a total fidelity metric.
@@ -453,7 +514,8 @@ the pre-registered pairs are the v2 matrix above.
   so every claim here is re-checkable without them. If `.tmp` is cleared, the raw per-hour data is
   gone; the numbers in this ticket survive.
 - **Not claimed:** any arm is better than another (EC-3/EC-4 dominance is untouched); the central
-  claim; that selective allocation wins. M2b passing means the metric is defensible.
+  claim; that selective allocation wins. M2b passing means the pre-declared criterion is met at this
+  one fixture, with the birth-term pathology above declared and unrepaired.
 
 ## AC-37 verdict
 
@@ -463,12 +525,21 @@ the pre-registered pairs are the v2 matrix above.
 | (b) defended anchor | PASS | anchor verdict above: R scores 0.5963-1.3507 vs A0 0.0000, at 1 082-1 305 vs 0 calls |
 | (c) discrimination | PASS | D1/D2/D3, min margins +0.8679/+0.5963/+0.5963, 9/9 pairings each |
 | (d) robustness | PASS | three single-weight doublings, all PASS |
-| (e) candidates + slice | PASS | C1/C2/C3 comparison, table above, `ranking.svg` |
+| (e) candidates + slice | PASS | C1/C2/C3 comparison; **every one of the six recorded arms is scored under both measures** — old: the recorded `mean8` for P/A/U/A1 and the seven-indicator recomputation against R3 for A0 (0.2094) and R (0.1562), new: `vrd/1` for all six; `ranking.svg` |
 
-**M2b is answered for this fixture:** the fidelity metric is superseded as an objective by `vrd/1`,
-the anchor is the no-AI viability floor, and the measure discriminates recorded arms in the declared
-direction. The M2 milestone and the central claim remain **not accepted**; M2c (allocation on the
-calibrated instrument) is the next stage and owns the Go implementation of `vrd/1`.
+**What M2b passing establishes, exactly:** (i) the anchor is defined and defended — the no-AI
+control's own realised outcome, deterministic and recorded in the same matrix; (ii) the
+discrimination requirement pre-declared in AC-37(c)/(d) is met at this fixture — D1/D2/D3 pass with a
+minimum margin of +0.5963 and hold under all three one-at-a-time weight doublings; (iii) the measure
+carries a declared known pathology — birth-term dominance, §Known pathology — which survives every
+declared sensitivity variant and which M2c must repair or normalise.
+
+What that does **not** establish: that `vrd/1` is a sound objective without qualification, that it can
+adjudicate the central claim, or that any arm is better than another. The fidelity metric is
+superseded as the *stated* objective, and the M2 milestone and the central claim remain **not
+accepted**. M2c (allocation on the calibrated instrument) is the next stage; it owns the Go
+implementation of `vrd/1`, must reproduce `scores.json`, and must repair or normalise the birth term
+before any arm comparison it produces may be read.
 
 ---
 
@@ -535,8 +606,8 @@ Every row below was personally observed in this recovery run; a command that did
 | 5 | single-test triage, baseline | the same command at `fa3f579` | `ok agentworld/internal/world 0.582s`, exit 0 — PASS (5 executions) |
 | 6 | single-test repeat | the same command with `-count=50` at `f9259fe` | `ok agentworld/internal/world 5.879s`, exit 0 — PASS (50 executions) |
 | 7 | full suite | `go test -timeout 30m ./...` at `f9259fe`, detached, log committed as `gates-full.log` | exit 0, 17 packages `ok` and 1 with no test files, `internal/world 553.949s` — PASS |
-| 8 | scoring reproducibility | `python3 .scratch/37-fidelity-metric/score.py --primary /home/z/vibe/agentworld/.tmp/35-v2-evaluation.json --secondary /home/z/vibe/agentworld/.tmp/35-stage3-evaluation.json --corroboration /home/z/vibe/agentworld/.tmp/36-v4-evaluation.json --self-test --json-out /tmp/37-scores-recheck.json --svg /tmp/37-ranking-recheck.svg` | exit 0; `/tmp/37-scores-recheck.json` and `/tmp/37-ranking-recheck.svg` **byte-identical** to the committed `scores.json` and `ranking.svg` — PASS |
-| 9 | negative control | the same command with `--expect-fail` | exit 0; `NEGATIVE CONTROL PASS: inverted pairs were detected as failures` — PASS |
+| 8 | scoring reproducibility | `python3 .scratch/37-fidelity-metric/score.py --primary /home/z/vibe/agentworld/.tmp/35-v2-evaluation.json --secondary /home/z/vibe/agentworld/.tmp/35-stage3-evaluation.json --corroboration /home/z/vibe/agentworld/.tmp/36-v4-evaluation.json --self-test --json-out /tmp/37-scores-recheck.json --svg /tmp/37-ranking-recheck.svg` | exit 0; `/tmp/37-scores-recheck.json` and `/tmp/37-ranking-recheck.svg` **byte-identical** to the committed `scores.json` and `ranking.svg` — PASS (re-run against the revised `score.py` at 2026-10-18T14:58:50Z, still byte-identical) |
+| 9 | negative control | `python3 .scratch/37-fidelity-metric/score.py --primary … --secondary … --corroboration … --self-test --expect-fail` (each declared pair is checked with worse and better swapped and is required to FAIL) | exit 0; three `NEGATIVE-CONTROL: INVERSION-DETECTED` lines (A1 vs A, A0 vs R, P vs R) and `NEGATIVE CONTROL PASS: every swapped pair was detected as a failure`; full transcript committed as `negative-control.log` — PASS |
 | 10 | whitespace/conflict check | `git diff --check fa3f579` | exit 0 — PASS |
 | 11 | race suite (`make race`) | not run | **not run** — not in this ticket's pre-declared gate list; recorded rather than claimed |
 | 12 | full suite on `fa3f579` | not run | **not run** — the single test was triaged on the baseline; the branch is the revision that would land, and its own suite is the gate |
@@ -585,6 +656,27 @@ The 30-minute limit that killed the earlier worker was its own wall clock, not t
 
 - **AC-37 (a)-(e) are met by the evidence in `e77916b`.** The measure, anchor, discrimination, robustness, candidate comparison and slice are recorded above, and row 8 re-derives their committed artefacts byte-identically from the unchanged input sha256s (4/4 match the table in "Authoritative inputs").
 - **The gates that matter are green or accounted for**: build, vet, gofmt, full suite and `git diff --check` pass (rows 1-3, 7, 10); the race suite and the baseline full suite are declared not run (rows 11-12) rather than assumed green.
-- Therefore **"M2b passed" stands**, and the wording in `CHANGELOG.md` and in the M2b row of `docs/VERTICAL-SLICES.md` is unchanged by this section.
+- Therefore **"M2b passed" stands**, and the wording in `CHANGELOG.md` and in the M2b row of `docs/VERTICAL-SLICES.md` is unchanged by this section. It was narrowed afterwards by the post-review pass recorded below, which is a separate change and not a re-reading of this evidence.
 - One ordering correction is recorded rather than rewritten: the verdict preceded its gate evidence. `f9259fe` asserted the verdict while the evidence did not yet exist and while the interrupted run had shown a red; this section is the evidence arriving afterwards, and it matches. Amending that commit would hide the sequence instead of repairing it.
+- **The full-suite log is bound to `f9259fe`, not to the revision that lands.** Rows 1-3 and 10 were re-run at the post-review revision (below), but `go test -timeout 30m ./...` was not: no `.go` file changed after `f9259fe` (`git diff --stat f9259fe..HEAD -- '*.go' cmd/ internal/ Makefile go.mod go.sum` is empty, and every later commit touches only `.scratch/`, `docs/` and `CHANGELOG.md`), so `gates-full.log` already covers every line of code in the landing revision. It is not a fresh run of the tip, and no fresh green is claimed; re-running a 16-minute suite to re-measure unchanged Go code would buy no information.
 - Bound: these gates are regression evidence for this revision plus a reproduction of the scoring artefacts. They do not re-run the M2b analysis, and they do not make M2b evidence for the central claim, which remains not accepted.
+
+## Post-review pass (2026-10-18T14:58Z)
+
+The independent review returned *merge OK with notes* and three P1 text-level findings: the
+`vrd/1` birth-term pathology, AC-37(e)'s missing A0/R rows, and a negative-control mode that could
+not fail. All three are repaired above, with no re-scoring of the recorded arms, no re-weighting and
+no live call:
+
+- **Birth-term pathology declared and measured** (§Known pathology). The two example worlds are now
+  self-test cases (`score-run.log:79-80`), the sterile case pinned; the over-floor case exercises the
+  strict `>` that no recorded arm reaches.
+- **AC-37(e) closed without a caveat.** `A0` and `R` are scored under the old measure for the first
+  time, from `frozen_indicators()` against the reference the recorded rows actually used (R3), and
+  the eighth indicator is footnoted as unavailable in the evaluation artefact.
+- **Gate row 9 is now executable evidence.** The `--expect-fail` mode performs a real pair inversion
+  and its transcript is committed as `negative-control.log`; that the mode can fail is shown by a
+  bounded mutation of an isolated copy (`/tmp/37mut/score.py`), which exits 2 with `NEGATIVE CONTROL
+  FAIL`.
+- Rows 1-3 (build, vet, gofmt), 8 (scoring reproducibility) and 10 (`git diff --check fa3f579`) were
+  re-executed after these changes; row 7 (the full suite) was not, for the reason recorded above.

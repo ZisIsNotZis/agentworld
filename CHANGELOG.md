@@ -202,6 +202,14 @@ for anything: current truth lives in the authoritative documents — the active 
   weight doublings, with loader-identity and synthetic extinct/perfect-arm negative controls. Two
   materially different alternatives were scored (`fid/1` and endpoint-first `end/1`); `end/1` ranks U
   first and is rejected as a standalone objective because U buys its endpoint headcount with 4-6
-  starvation deaths and 15-28 % fewer actor-hours. M2b passes as a defensible metric and anchor, not as
-  evidence for the central claim; M2c owns the evaluator implementation of `vrd/1`. Record:
+  starvation deaths and 15-28 % fewer actor-hours. M2b's pass is narrow: the anchor is defined, the
+  pre-declared discrimination requirement is met at this one fixture, and `vrd/1` carries a declared
+  known pathology — its birth term outranks its survival term, so a fully-surviving sterile world
+  scores 1.000 against an extinct one-birth world's 0.5963, and no declared sensitivity variant
+  removes the inversion. The review pass closed the remaining gaps without re-scoring or re-weighting:
+  AC-37(e) now scores `A0` and `R` under the old measure (seven of eight indicators, against R3), the
+  `--expect-fail` negative control performs a real pair inversion with a committed transcript, and the
+  self-test exercises a strict above-floor survivor and pins the birth-term pathology. M2b passing is
+  not evidence for the central claim; M2c owns the evaluator implementation of `vrd/1` and must repair
+  or normalise the birth term before any arm comparison is read. Record:
   `.scratch/37-fidelity-metric/spec.md`.

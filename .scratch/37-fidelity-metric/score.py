@@ -215,6 +215,13 @@ def score_matrix(path, label):
               (",".join(users), ", ".join("%s/r%d->R%d(row %d)" % (a, r, rr, idx)
                                           for (a, r), (rr, idx) in sorted(refs.items()))))
 
+    # The old measure for every arm, including the two the instrument never scores: the
+    # same seven ledger-free indicators the loader-identity check recomputes, against the
+    # reference the recorded rows actually used. The eighth indicator (decision-error) is
+    # not in the evaluation artefact for any arm, so this is a seven-of-eight measurement.
+    ref_reps = sorted({rr for (rr, _) in refs.values()})
+    fid7_ref = "R%d" % ref_reps[0] if len(ref_reps) == 1 else None
+
     table = []
     for (arm, rep) in sorted(cells, key=lambda k: (DECLARED_ARMS.index(k[0]) if k[0] in DECLARED_ARMS else 99, k[1])):
         o = outcome(cells[(arm, rep)])
@@ -224,13 +231,18 @@ def score_matrix(path, label):
         old_mean = None
         if match is not None and 0 <= match[1] < len(arm_rows):
             old_mean = sum(arm_rows[match[1]].values()) / len(arm_rows[match[1]])
+        fid7 = None
+        if fid7_ref is not None:
+            fid7 = sum(frozen_indicators(cells[(arm, rep)], cells[("R", ref_reps[0])]).values()) / 7.0
         table.append({"arm": arm, "replicate": rep, "calls": o["calls"], "alive_143": o["alive_143"],
                       "alive_end": o["alive_end"], "births": int(o["B"]), "starvation": int(o["S"]),
-                      "actor_hours": int(o["H"]), "vrd": d, "fid_mean8": old_mean})
-        print("  %-3s r%d calls=%4d alive@143=%d alive@144=%d births=%d starve=%d H=%4d  vrd/1=%s  fid_mean8=%s" %
+                      "actor_hours": int(o["H"]), "vrd": d, "fid_mean8": old_mean,
+                      "fid7": fid7, "fid7_reference": fid7_ref})
+        print("  %-3s r%d calls=%4d alive@143=%d alive@144=%d births=%d starve=%d H=%4d  vrd/1=%s  fid_mean8=%s  fid7(%s)=%s" %
               (arm, rep, o["calls"], o["alive_143"], o["alive_end"], int(o["B"]), int(o["S"]), int(o["H"]),
                "%.4f" % d if d is not None else "unknown",
-               "%.4f" % old_mean if old_mean is not None else "not-scored"))
+               "%.4f" % old_mean if old_mean is not None else "not-scored",
+               fid7_ref or "-", "%.4f" % fid7 if fid7 is not None else "unknown"))
 
     if label == "primary" and rows:
         print("fid/1 per-indicator means and their equal-weight contribution (mean/8) to the arm scalar:")
@@ -262,6 +274,19 @@ def score_matrix(path, label):
     if old_rank:
         print("fid/1 equal-weight mean8 ranking (arm mean; lower = closer to R): " +
               " < ".join("%s(%.4f)" % (a, v) for a, v in old_rank))
+    # Old metric over every recorded arm, including A0 and R (AC-37e), on the consistent
+    # seven-indicator basis. R r3 is the reference itself and sits at 0 by construction.
+    seven = {}
+    for r in table:
+        if r["fid7"] is not None:
+            seven.setdefault(r["arm"], []).append(r["fid7"])
+    if seven:
+        seven_rank = sorted(((a, sum(v) / len(v)) for a, v in seven.items()), key=lambda kv: kv[1])
+        print("fid/1 seven-indicator mean vs %s, every arm (no decision-error term, so not "
+              "comparable to mean8): %s" %
+              (fid7_ref, " < ".join("%s(%.4f)" % (a, v) for a, v in seven_rank)))
+        print("  (%s is the reference itself (replicate %d) and scores 0 by construction; among "
+              "the other arms the extinct A1 remains closest to R)" % (fid7_ref, ref_reps[0]))
     # New-metric arm means.
     if t is not None:
         by_arm = {}
@@ -294,18 +319,21 @@ def discrimination(results, pairs, threshold=0.10, expect_fail=False):
         fail("discrimination requires a defined anchor: " + why)
     verdicts = []
     for (worse, better) in pairs:
-        ok, margins = pair_check(cells, t, (worse, better), threshold)
-        if expect_fail:
-            ok = not ok  # the inverted pair must be detected as a failure
-        verdicts.append({"pair": "%s_vs_%s" % (worse, better), "ok": ok,
+        # The negative control swaps the declared order and then requires the check to FAIL.
+        # Flipping the verdict boolean instead would print PASS unconditionally.
+        checked = (better, worse) if expect_fail else (worse, better)
+        ok, margins = pair_check(cells, t, checked, threshold)
+        detected = (not ok) if expect_fail else ok
+        verdicts.append({"pair": "%s_vs_%s" % checked, "ok": detected,
                          "min_margin": min(m for _, _, _, m in margins)})
         print("%s: %s (%s vs %s) min margin %.4f over %d replicate pairings" %
               ("NEGATIVE-CONTROL" if expect_fail else "PAIR",
-               "PASS" if ok else "FAIL", worse, better,
-               min(m for _, _, _, m in margins), len(margins)))
+               ("INVERSION-DETECTED" if detected else "NOT-DETECTED") if expect_fail
+               else ("PASS" if ok else "FAIL"),
+               checked[0], checked[1], min(m for _, _, _, m in margins), len(margins)))
         for (wa, ba), dw, db, margin in margins:
             print("   %s r%d=%.4f  %s r%d=%.4f  margin=%+.4f" %
-                  (worse, wa, dw, better, ba, db, margin))
+                  (checked[0], wa, dw, checked[1], ba, db, margin))
     return verdicts
 
 
@@ -368,6 +396,37 @@ def self_test(results):
     dext = vrd(outcome(extinct), t)
     print("synthetic extinct arm (0 alive after h48): vrd/1=%.4f (require >= 1.0)" % dext)
     if dext < 1.0:
+        return False
+    # Strict over-floor survivor: all ten founders alive at every one of the 145 samples,
+    # so H = 1450 > H_T = 1444 and the (H_T - H_x) term is exercised with a negative
+    # numerator. The declared claim is that this clips to 0; no recorded arm reaches it.
+    over = {"alive_by_hour": [10] * len(a0["alive_by_hour"]),
+            "births_cum": a0["births_cum"],
+            "deaths_starve_cum": a0["deaths_starve_cum"],
+            "deaths_age_cum": a0["deaths_age_cum"], "hours": a0["hours"],
+            "realized_calls": 0}
+    dover = vrd(outcome(over), t)
+    print("synthetic over-floor survivor (10 alive at every sample, H=1450 > H_T=1444): "
+          "vrd/1=%.4f (require 0)" % dover)
+    if abs(dover) > 1e-12:
+        return False
+    # The declared known pathology, measured rather than asserted in prose: with B_T = 2 the
+    # birth term alone equals the whole survival axis, so a sterile but fully surviving world
+    # scores 1.000, above an extinct world with one birth (R r3, 0.5963). Pinned so a silent
+    # change to the weights or normalisation fails here and forces a re-declaration.
+    sterile = {"alive_by_hour": [10] * len(a0["alive_by_hour"]),
+               "births_cum": [0] * len(a0["births_cum"]),
+               "deaths_starve_cum": [0] * len(a0["deaths_starve_cum"]),
+               "deaths_age_cum": a0["deaths_age_cum"], "hours": a0["hours"],
+               "realized_calls": 0}
+    dsterile = vrd(outcome(sterile), t)
+    ref_reps = sorted({rr for (rr, _) in refs.values()})
+    r_rep = ref_reps[0] if len(ref_reps) == 1 else 3
+    d_r3 = vrd(outcome(cells[("R", r_rep)]), t)
+    print("synthetic sterile survivor (10 alive at every sample, 0 births): vrd/1=%.4f versus "
+          "extinct R r%d %.4f — DECLARED KNOWN PATHOLOGY (birth term dominates; pinned, "
+          "repair or normalise before any arm comparison)" % (dsterile, r_rep, d_r3))
+    if abs(dsterile - 1.0) > 1e-9 or not dsterile > d_r3:
         return False
     # A mutant that rewards extinction must be caught by the declared pair check.
     ok, _ = pair_check(cells, t, ("A1", "A"))
@@ -479,11 +538,11 @@ def main():
     pairs = [("A1", "A"), ("R", "A0"), ("R", "P")]
     verdicts = discrimination(results, pairs, expect_fail=args.expect_fail)
     if args.expect_fail:
-        ok = all(not v["ok"] for v in verdicts)
-        print("NEGATIVE CONTROL %s: inverted pairs were detected as failures" %
+        ok = all(v["ok"] for v in verdicts)
+        print("NEGATIVE CONTROL %s: every swapped pair was detected as a failure" %
               ("PASS" if ok else "FAIL"))
         if not ok:
-            fail("negative control failed: an inverted pair was not detected")
+            fail("negative control failed: a swapped pair was not detected as a failure")
         return
     sens = sensitivity(results, pairs)
     payload = {"results": results, "discrimination": verdicts, "sensitivity": sens}

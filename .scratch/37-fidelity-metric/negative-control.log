@@ -1,0 +1,115 @@
+# run at 2026-10-18T14:58:46Z
+# cwd: /home/z/vibe/worktrees/agentworld/wt-fidelity
+# command: python3 .scratch/37-fidelity-metric/score.py --primary /home/z/vibe/agentworld/.tmp/35-v2-evaluation.json --secondary /home/z/vibe/agentworld/.tmp/35-stage3-evaluation.json --corroboration /home/z/vibe/agentworld/.tmp/36-v4-evaluation.json --self-test --expect-fail
+
+== primary ==
+artefact: /home/z/vibe/agentworld/.tmp/35-v2-evaluation.json
+status=live/real-model contract=natural-claim/v2 horizon=144 replicates=3 arms=A,A0,A1,P,R,U
+viability floor (A0 control, mean over replicates): H_T=1444.0 B_T=2.0 S_T=0.0 N0=10.0
+fid/1 reference identity: recorded rows match reference R3 (recomputed seven indicators, tol 1e-9; mapping A/r1->R3(row 1), A/r2->R3(row 2), A/r3->R3(row 0), A1/r1->R3(row 0), A1/r2->R3(row 2), A1/r3->R3(row 1), P/r1->R3(row 2), P/r2->R3(row 1), P/r3->R3(row 0), U/r1->R3(row 0), U/r2->R3(row 2), U/r3->R3(row 1))
+  A0  r1 calls=   0 alive@143=2 alive@144=1 births=2 starve=0 H=1444  vrd/1=0.0000  fid_mean8=not-scored  fid7(R3)=0.2094
+  A0  r2 calls=   0 alive@143=2 alive@144=1 births=2 starve=0 H=1444  vrd/1=0.0000  fid_mean8=not-scored  fid7(R3)=0.2094
+  A0  r3 calls=   0 alive@143=2 alive@144=1 births=2 starve=0 H=1444  vrd/1=0.0000  fid_mean8=not-scored  fid7(R3)=0.2094
+  R   r1 calls=1082 alive@143=0 alive@144=0 births=0 starve=1 H=1082  vrd/1=1.3507  fid_mean8=not-scored  fid7(R3)=0.3068
+  R   r2 calls=1166 alive@143=0 alive@144=0 births=0 starve=0 H=1166  vrd/1=1.1925  fid_mean8=not-scored  fid7(R3)=0.1617
+  R   r3 calls=1305 alive@143=1 alive@144=0 births=1 starve=0 H=1305  vrd/1=0.5963  fid_mean8=not-scored  fid7(R3)=0.0000
+  P   r1 calls= 244 alive@143=2 alive@144=1 births=2 starve=0 H=1444  vrd/1=0.0000  fid_mean8=0.1756  fid7(R3)=0.1987
+  P   r2 calls= 244 alive@143=2 alive@144=1 births=2 starve=0 H=1444  vrd/1=0.0000  fid_mean8=0.1761  fid7(R3)=0.1986
+  P   r3 calls= 244 alive@143=2 alive@144=1 births=2 starve=0 H=1444  vrd/1=0.0000  fid_mean8=0.1755  fid7(R3)=0.1992
+  U   r1 calls= 256 alive@143=3 alive@144=3 births=3 starve=5 H=1114  vrd/1=0.7285  fid_mean8=0.8931  fid7(R3)=1.0196
+  U   r2 calls= 256 alive@143=2 alive@144=2 births=3 starve=4 H=1199  vrd/1=0.5697  fid_mean8=0.8459  fid7(R3)=0.9624
+  U   r3 calls= 256 alive@143=2 alive@144=1 births=2 starve=6 H=1034  vrd/1=0.8839  fid_mean8=0.9299  fid7(R3)=1.0597
+  A   r1 calls= 256 alive@143=2 alive@144=2 births=2 starve=0 H=1443  vrd/1=0.0007  fid_mean8=0.2055  fid7(R3)=0.2316
+  A   r2 calls= 256 alive@143=2 alive@144=1 births=2 starve=0 H=1444  vrd/1=0.0000  fid_mean8=0.2034  fid7(R3)=0.2305
+  A   r3 calls= 256 alive@143=2 alive@144=2 births=2 starve=2 H=1264  vrd/1=0.3247  fid_mean8=0.4170  fid7(R3)=0.4760
+  A1  r1 calls= 253 alive@143=0 alive@144=0 births=0 starve=0 H=1166  vrd/1=1.1925  fid_mean8=0.1519  fid7(R3)=0.1718
+  A1  r2 calls= 253 alive@143=0 alive@144=0 births=0 starve=0 H=1166  vrd/1=1.1925  fid_mean8=0.1524  fid7(R3)=0.1729
+  A1  r3 calls= 253 alive@143=0 alive@144=0 births=0 starve=0 H=1166  vrd/1=1.1925  fid_mean8=0.1518  fid7(R3)=0.1715
+fid/1 per-indicator means and their equal-weight contribution (mean/8) to the arm scalar:
+  A   mean8=0.2753  population=0.0066(2%), births=0.1198(44%), deaths/starvation=0.0592(22%), deaths/age=0.0083(3%), capital-histogram=0.0376(14%), granary-histogram=0.0420(15%), exchange-volume=0.0000(0%), decision-error-rate=0.0017(1%)
+  A1  mean8=0.1520  population=0.0075(5%), births=0.1207(79%), deaths/starvation=0.0000(0%), deaths/age=0.0009(1%), capital-histogram=0.0098(6%), granary-histogram=0.0118(8%), exchange-volume=0.0000(0%), decision-error-rate=0.0015(1%)
+  P   mean8=0.1757  population=0.0075(4%), births=0.1198(68%), deaths/starvation=0.0000(0%), deaths/age=0.0000(0%), capital-histogram=0.0217(12%), granary-histogram=0.0250(14%), exchange-volume=0.0000(0%), decision-error-rate=0.0018(1%)
+  U   mean8=0.8897  population=0.0143(2%), births=0.1664(19%), deaths/starvation=0.4560(51%), deaths/age=0.1287(14%), capital-histogram=0.0548(6%), granary-histogram=0.0669(8%), exchange-volume=0.0000(0%), decision-error-rate=0.0025(0%)
+fid/1 reference sensitivity: seven-indicator mean of each arm replicate vs each R replicate (the recorded rows used R3; the instrument declares no replicate rule):
+  A   r1  vs R1=0.5185  vs R2=0.3723  vs R3=0.2316
+  A   r2  vs R1=0.5217  vs R2=0.3759  vs R3=0.2305
+  A   r3  vs R1=0.4848  vs R2=0.6085  vs R3=0.4760
+  A1  r1  vs R1=0.1674  vs R2=0.0201  vs R3=0.1718
+  A1  r2  vs R1=0.1673  vs R2=0.0215  vs R3=0.1729
+  A1  r3  vs R1=0.1673  vs R2=0.0199  vs R3=0.1715
+  P   r1  vs R1=0.4928  vs R2=0.3466  vs R3=0.1987
+  P   r2  vs R1=0.4929  vs R2=0.3466  vs R3=0.1986
+  P   r3  vs R1=0.4937  vs R2=0.3474  vs R3=0.1992
+  U   r1  vs R1=0.9984  vs R2=1.1450  vs R3=1.0196
+  U   r2  vs R1=0.9478  vs R2=1.0918  vs R3=0.9624
+  U   r3  vs R1=1.0464  vs R2=1.1907  vs R3=1.0597
+fid/1 equal-weight mean8 ranking (arm mean; lower = closer to R): A1(0.1520) < P(0.1757) < A(0.2753) < U(0.8897)
+fid/1 seven-indicator mean vs R3, every arm (no decision-error term, so not comparable to mean8): R(0.1562) < A1(0.1721) < P(0.1988) < A0(0.2094) < A(0.3127) < U(1.0139)
+  (R3 is the reference itself (replicate 3) and scores 0 by construction; among the other arms the extinct A1 remains closest to R)
+vrd/1 arm means (lower = more viable): A0(0.0000) < P(0.0000) < A(0.1084) < U(0.7274) < R(1.0465) < A1(1.1925)
+end/1 (mean endpoint alive, then mean births, then -mean starvation; best to worst): U > A > A0 > P > R > A1
+
+== secondary ==
+artefact: /home/z/vibe/agentworld/.tmp/35-stage3-evaluation.json
+status=synthetic/model-conditional contract=? horizon=144 replicates=3 arms=A,A0,P,U
+viability floor (A0 control, mean over replicates): H_T=1444.0 B_T=2.0 S_T=0.0 N0=10.0
+fid/1 reference identity: no recorded fid/1 rows or no R replicates
+  A0  r1 calls=   0 alive@143=2 alive@144=1 births=2 starve=0 H=1444  vrd/1=0.0000  fid_mean8=not-scored  fid7(-)=unknown
+  A0  r2 calls=   0 alive@143=2 alive@144=1 births=2 starve=0 H=1444  vrd/1=0.0000  fid_mean8=not-scored  fid7(-)=unknown
+  A0  r3 calls=   0 alive@143=2 alive@144=1 births=2 starve=0 H=1444  vrd/1=0.0000  fid_mean8=not-scored  fid7(-)=unknown
+  P   r1 calls= 244 alive@143=2 alive@144=1 births=2 starve=0 H=1444  vrd/1=0.0000  fid_mean8=not-scored  fid7(-)=unknown
+  P   r2 calls= 244 alive@143=2 alive@144=1 births=2 starve=0 H=1444  vrd/1=0.0000  fid_mean8=not-scored  fid7(-)=unknown
+  P   r3 calls= 244 alive@143=2 alive@144=1 births=2 starve=0 H=1444  vrd/1=0.0000  fid_mean8=not-scored  fid7(-)=unknown
+  U   r1 calls= 256 alive@143=3 alive@144=3 births=3 starve=4 H=1238  vrd/1=0.5427  fid_mean8=not-scored  fid7(-)=unknown
+  U   r2 calls= 256 alive@143=1 alive@144=1 births=1 starve=1 H=1214  vrd/1=0.7593  fid_mean8=not-scored  fid7(-)=unknown
+  U   r3 calls= 256 alive@143=2 alive@144=1 births=3 starve=6 H=1109  vrd/1=0.8320  fid_mean8=not-scored  fid7(-)=unknown
+  A   r1 calls= 256 alive@143=2 alive@144=1 births=2 starve=0 H=1440  vrd/1=0.0028  fid_mean8=not-scored  fid7(-)=unknown
+  A   r2 calls= 256 alive@143=2 alive@144=2 births=2 starve=0 H=1427  vrd/1=0.0118  fid_mean8=not-scored  fid7(-)=unknown
+  A   r3 calls= 253 alive@143=0 alive@144=0 births=0 starve=0 H=1166  vrd/1=1.1925  fid_mean8=not-scored  fid7(-)=unknown
+vrd/1 arm means (lower = more viable): A0(0.0000) < P(0.0000) < A(0.4024) < U(0.7113)
+end/1 (mean endpoint alive, then mean births, then -mean starvation; best to worst): U > A0 > P > A
+
+== corroboration (raw outcomes only; no control in the artefact) ==
+  R r1 contract=natural-claim/v4 calls=1325 alive@H=1 births=2 starve=1 H=1326  vrd/1=unknown (no A0 control → anchor undefined)
+
+== self-test (negative controls) ==
+loader identity: PASS (12 recorded rows recomputed from projections, tol 1e-9)
+synthetic perfect arm (= control): vrd/1=0.0000 (require 0)
+synthetic extinct arm (0 alive after h48): vrd/1=1.6676 (require >= 1.0)
+synthetic over-floor survivor (10 alive at every sample, H=1450 > H_T=1444): vrd/1=0.0000 (require 0)
+synthetic sterile survivor (10 alive at every sample, 0 births): vrd/1=1.0000 versus extinct R r3 0.5963 — DECLARED KNOWN PATHOLOGY (birth term dominates; pinned, repair or normalise before any arm comparison)
+declared pair D1 A1(worse)>A(better): PASS ; inverted pair detected as FAIL: YES
+
+== discrimination (AC-37c/d) ==
+NEGATIVE-CONTROL: INVERSION-DETECTED (A vs A1) min margin -1.1925 over 9 replicate pairings
+   A r1=0.0007  A1 r1=1.1925  margin=-1.1918
+   A r1=0.0007  A1 r2=1.1925  margin=-1.1918
+   A r1=0.0007  A1 r3=1.1925  margin=-1.1918
+   A r2=0.0000  A1 r1=1.1925  margin=-1.1925
+   A r2=0.0000  A1 r2=1.1925  margin=-1.1925
+   A r2=0.0000  A1 r3=1.1925  margin=-1.1925
+   A r3=0.3247  A1 r1=1.1925  margin=-0.8679
+   A r3=0.3247  A1 r2=1.1925  margin=-0.8679
+   A r3=0.3247  A1 r3=1.1925  margin=-0.8679
+NEGATIVE-CONTROL: INVERSION-DETECTED (A0 vs R) min margin -1.3507 over 9 replicate pairings
+   A0 r1=0.0000  R r1=1.3507  margin=-1.3507
+   A0 r1=0.0000  R r2=1.1925  margin=-1.1925
+   A0 r1=0.0000  R r3=0.5963  margin=-0.5963
+   A0 r2=0.0000  R r1=1.3507  margin=-1.3507
+   A0 r2=0.0000  R r2=1.1925  margin=-1.1925
+   A0 r2=0.0000  R r3=0.5963  margin=-0.5963
+   A0 r3=0.0000  R r1=1.3507  margin=-1.3507
+   A0 r3=0.0000  R r2=1.1925  margin=-1.1925
+   A0 r3=0.0000  R r3=0.5963  margin=-0.5963
+NEGATIVE-CONTROL: INVERSION-DETECTED (P vs R) min margin -1.3507 over 9 replicate pairings
+   P r1=0.0000  R r1=1.3507  margin=-1.3507
+   P r1=0.0000  R r2=1.1925  margin=-1.1925
+   P r1=0.0000  R r3=0.5963  margin=-0.5963
+   P r2=0.0000  R r1=1.3507  margin=-1.3507
+   P r2=0.0000  R r2=1.1925  margin=-1.1925
+   P r2=0.0000  R r3=0.5963  margin=-0.5963
+   P r3=0.0000  R r1=1.3507  margin=-1.3507
+   P r3=0.0000  R r2=1.1925  margin=-1.1925
+   P r3=0.0000  R r3=0.5963  margin=-0.5963
+NEGATIVE CONTROL PASS: every swapped pair was detected as a failure
+# exit code: 0
