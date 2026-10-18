@@ -34,6 +34,10 @@ const (
 	// name the second declared request contract (see protocol).
 	ActorSeamSchemaVersionAdmissible     = protocol.ActorSeamSchemaVersionAdmissible
 	NaturalClaimPromptTemplateAdmissible = protocol.NaturalClaimPromptTemplateAdmissible
+	// ActorSeamSchemaVersionVocabulary and NaturalClaimPromptTemplateVocabulary
+	// name the fourth declared request contract (the display vocabulary, v4).
+	ActorSeamSchemaVersionVocabulary     = protocol.ActorSeamSchemaVersionVocabulary
+	NaturalClaimPromptTemplateVocabulary = protocol.NaturalClaimPromptTemplateVocabulary
 
 	// Role A declared metadata (spec section 6.2); part of run identity.
 	roleActorDecision = RoleActorDecision
@@ -167,6 +171,12 @@ const (
 	ClaimContractV1 ClaimContract = ClaimContract("natural-claim/v1")
 	// ClaimContractV2 additionally states the actions the observation admits.
 	ClaimContractV2 ClaimContract = ClaimContract("natural-claim/v2")
+	// ClaimContractV4 is the display-vocabulary contract: the same observation
+	// rendered under names that state the fact the decision depends on, the claim
+	// actions named by their display labels, no strategy parameter values, and a
+	// response that carries a one-sentence reason. The internal action IDs stay the
+	// wire-stable tokens behind the labels (protocol.ClaimActionVocabularyTable).
+	ClaimContractV4 ClaimContract = ClaimContract("natural-claim/v4")
 )
 
 // ParseClaimContract validates a declared contract spelling; the empty string is
@@ -177,6 +187,8 @@ func ParseClaimContract(s string) (ClaimContract, error) {
 		return ClaimContractV1, nil
 	case ClaimContractV2:
 		return ClaimContractV2, nil
+	case ClaimContractV4:
+		return ClaimContractV4, nil
 	default:
 		return "", fmt.Errorf("%w: unknown claim contract %q", ErrInvalidModelRequest, s)
 	}
@@ -185,10 +197,14 @@ func ParseClaimContract(s string) (ClaimContract, error) {
 // ResponseSchemaVersion is the schema version a response to this contract must
 // declare.
 func (c ClaimContract) ResponseSchemaVersion() int {
-	if c == ClaimContractV2 {
+	switch c {
+	case ClaimContractV4:
+		return ActorSeamSchemaVersionVocabulary
+	case ClaimContractV2:
 		return ActorSeamSchemaVersionAdmissible
+	default:
+		return ActorSeamSchemaVersion
 	}
-	return ActorSeamSchemaVersion
 }
 
 // EncodeActorSeamRequestFor is the allow-list encoder for one declared contract.
@@ -196,6 +212,9 @@ func (c ClaimContract) ResponseSchemaVersion() int {
 // hash. A request outside the declared seam or with an undecodable observation is
 // a typed error, never a silently narrowed request.
 func EncodeActorSeamRequestFor(req ActorSeamRequest, contract ClaimContract) ([]byte, error) {
+	if contract == ClaimContractV4 {
+		return encodeActorSeamRequestV4(req)
+	}
 	if req.Seam != SeamNaturalClaim {
 		return nil, fmt.Errorf("%w: unknown seam %q", ErrInvalidModelRequest, req.Seam)
 	}
@@ -327,4 +346,177 @@ func denialLabel(denial strategy.NaturalDenial) string {
 	default:
 		return "none"
 	}
+}
+
+// The natural-claim/v4 canonical request (ticket 36). It carries the same facts
+// as the v1 wire under names that state what the actor can decide about, and it
+// carries no row that no decision reads. Field order is the request order and
+// the encoder writes every field by name, so an added privileged field is still
+// impossible without editing this file and the schema version.
+//
+// What v4 changes against v1, each row checked against the code that reads it
+// (the declared redundancy audit is in .scratch/36-harness-vocabulary/spec.md):
+//
+//   - hunger is gone. NaturalBasalFor decides death from energy alone
+//     (starved := a.Body.Energy == 0), the frozen cascade validates hunger and
+//     then discards it (`_, hungerOK := capacityInteger(...)`), and no claim
+//     ladder reads it. It stays a world row and an allocator feature; it is not a
+//     fact this decision can act on.
+//   - invested_units is gone: a conservation ledger row that neither the frozen
+//     cascade nor the feature set reads.
+//   - home_patch is gone: an actor has exactly one home patch and no action can
+//     address another, so its id decides nothing.
+//   - identity_digest is gone: it is a hash of the run block the same request
+//     already carries, so it is the one field derivable from the others.
+//   - home_slots becomes a count of the units waiting to be picked up. The
+//     per-slot ids are unusable (gather always takes the lowest-numbered stocked
+//     slot and a model can never name one) and the array's sum is that count.
+//   - last_stored_meal_hour becomes the affordance it gates (one granary draw per
+//     hour) and last_build_hour the build fact it gates (one build per hour):
+//     both are timestamps no decision reads, and both gates' outcomes are what
+//     the actor can act on.
+//   - the strategy parameter vector is gone: those seven values are policy
+//     constants of the actor's bound cascade, not state. The recorded head ref
+//     identifies them (frozen base vector plus the generation's deltas), so no
+//     provenance is lost.
+//
+// The claim actions are written as their display labels; the internal IDs remain
+// the wire-stable tokens on every other surface (protocol.ClaimActionVocabularyTable).
+type seamRequestWireV4 struct {
+	SchemaVersion  int               `json:"schema_version"`
+	Role           string            `json:"role"`
+	Seam           string            `json:"seam"`
+	PromptTemplate string            `json:"prompt_template"`
+	Model          string            `json:"model"`
+	Run            runWireV4         `json:"run"`
+	Actor          actorWire         `json:"actor"`
+	Observation    observationWireV4 `json:"observation"`
+	Actions        []string          `json:"actions"`
+	Sampling       Sampling          `json:"sampling"`
+}
+
+// runWireV4 is the run identity block without its own digest: the digest is
+// recomputable from these fields (RunIdentityDigest), so stating both would be
+// two homes for one fact.
+type runWireV4 struct {
+	Fixture fixtureWire `json:"fixture"`
+	Seed    uint64      `json:"seed"`
+	BaseRef refWire     `json:"base_ref"`
+	HeadRef refWire     `json:"head_ref"`
+}
+
+// observationWireV4 is the actor's own state under decision-facing names. Every
+// field below is read by the frozen cascade, by a claim-admission gate, or by the
+// action the actor is choosing; a row no decision reads is not here.
+type observationWireV4 struct {
+	Energy                   int64  `json:"energy"`
+	BagFoodUnits             int64  `json:"bag_food_units"`
+	Capital                  int64  `json:"capital"`
+	BuildPointInProgress     int64  `json:"build_point_in_progress"`
+	BuildDoneThisHour        bool   `json:"build_done_this_hour"`
+	GranaryFoodUnits         int64  `json:"granary_food_units"`
+	GranaryDrawUsedThisHour  bool   `json:"granary_draw_used_this_hour"`
+	FoodUnitsWaitingToPickUp int64  `json:"food_units_waiting_to_pick_up"`
+	LastRefusedAction        string `json:"last_refused_action"`
+}
+
+// encodeActorSeamRequestV4 is the allow-list encoder of the display-vocabulary
+// contract. It reads the same observation as the v1 encoder and writes it under
+// the v4 names; an action ID with no declared display label is a typed error
+// rather than a request the model could not answer.
+func encodeActorSeamRequestV4(req ActorSeamRequest) ([]byte, error) {
+	if req.Seam != SeamNaturalClaim {
+		return nil, fmt.Errorf("%w: unknown seam %q", ErrInvalidModelRequest, req.Seam)
+	}
+	if len(req.Actions) == 0 {
+		return nil, fmt.Errorf("%w: empty legal action set", ErrInvalidModelRequest)
+	}
+	obs, err := encodeObservationV4(req.Observation, req.Hour)
+	if err != nil {
+		return nil, err
+	}
+	actions := make([]string, 0, len(req.Actions))
+	for _, id := range req.Actions {
+		label, ok := protocol.ClaimActionLabel(id)
+		if !ok {
+			return nil, fmt.Errorf("%w: claim action %q has no declared display label", ErrInvalidModelRequest, id)
+		}
+		actions = append(actions, label)
+	}
+	wire := seamRequestWireV4{
+		SchemaVersion:  ActorSeamSchemaVersionVocabulary,
+		Role:           roleActorDecision,
+		Seam:           req.Seam,
+		PromptTemplate: NaturalClaimPromptTemplateVocabulary,
+		Model:          DefaultModelID,
+		Run: runWireV4{
+			Fixture: fixtureWire{
+				Patches: req.Identity.Fixture.Patches, R: req.Identity.Fixture.R,
+				Founders: req.Identity.Fixture.Founders, Mechanism: req.Identity.Fixture.Mechanism,
+				Births: req.Identity.Fixture.Births,
+			},
+			Seed:    req.Identity.Seed,
+			BaseRef: refWire{ID: req.Identity.BaseRef.ID, Version: req.Identity.BaseRef.Version},
+			HeadRef: refWire{ID: req.Identity.HeadRef.ID, Version: req.Identity.HeadRef.Version},
+		},
+		Actor:       actorWire{ID: uint64(req.Actor), Hour: req.Hour},
+		Observation: obs,
+		Actions:     actions,
+		Sampling:    FrozenSampling(),
+	}
+	return canonicalJSON(wire)
+}
+
+// encodeObservationV4 renders the observation under the v4 names, deriving the
+// two gate booleans from the timestamps they gate.
+func encodeObservationV4(obs strategy.NaturalObservation, hour int) (observationWireV4, error) {
+	energy, err := observationInteger(obs.Energy, "energy")
+	if err != nil {
+		return observationWireV4{}, err
+	}
+	bag, err := observationInteger(obs.BagUnits, "bag_food_units")
+	if err != nil {
+		return observationWireV4{}, err
+	}
+	capital, err := observationInteger(obs.Capital, "capital")
+	if err != nil {
+		return observationWireV4{}, err
+	}
+	wip, err := observationInteger(obs.Wip, "build_point_in_progress")
+	if err != nil {
+		return observationWireV4{}, err
+	}
+	lastBuild, err := observationInteger(obs.LastBuildHour, "last_build_hour")
+	if err != nil {
+		return observationWireV4{}, err
+	}
+	granary, err := observationInteger(obs.GranaryStock, "granary_food_units")
+	if err != nil {
+		return observationWireV4{}, err
+	}
+	lastMeal, err := observationInteger(obs.LastStoredMealHour, "last_stored_meal_hour")
+	if err != nil {
+		return observationWireV4{}, err
+	}
+	waiting := int64(0)
+	for _, view := range obs.HomeSlots {
+		stock, err := observationInteger(view.Stock, "home_slot stock")
+		if err != nil {
+			return observationWireV4{}, err
+		}
+		if stock >= 1 {
+			waiting += stock
+		}
+	}
+	return observationWireV4{
+		Energy:                   energy,
+		BagFoodUnits:             bag,
+		Capital:                  capital,
+		BuildPointInProgress:     wip,
+		BuildDoneThisHour:        lastBuild >= int64(hour),
+		GranaryFoodUnits:         granary,
+		GranaryDrawUsedThisHour:  lastMeal >= int64(hour),
+		FoodUnitsWaitingToPickUp: waiting,
+		LastRefusedAction:        protocol.RefusedActionLabel(obs.LastDenial),
+	}, nil
 }

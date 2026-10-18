@@ -85,6 +85,34 @@ A model manager receives isolated cases containing compact state, the reason for
 
 All outputs are schemas, not direct code or world mutations.
 
+### 5.1 The Role A decision seam and its declared action vocabulary
+
+The first implemented manager seam is Role A: the actor's claim-instant action (`natural.claim`,
+`internal/cognition`, `internal/world/natural_cognition.go`). Its request is one canonical JSON object
+built by an allow-list encoder, and it is versioned by contract (`natural-claim/v1`, `/v2`, `/v4`,
+`internal/cognition/observation.go`). `v1` and `v2` carry the world's own field names; `v4` is the
+display-vocabulary contract: it states the fact a decision depends on rather than the raw history
+behind it (a gate's outcome rather than the timestamp that gates it, a count of the food waiting rather
+than eight per-slot rows), it carries no row no decision reads, no policy-constant vector, and its
+system prompt states the situation, a persona card, the goal in the actor's own terms, and the four
+world facts no field name can carry.
+
+**Declared exception to one-name-one-thing: each claim action has two names.** The internal IDs
+(`gather`, `eat-stored`, `provision`, `wait`) are frozen wire and storage tokens: they appear in every
+recorded request, in the world's claim-action set, in the role-a intervention records and in the
+admissibility ladder, and renaming them would invalidate every recorded ledger and every strategy
+fingerprint. The display labels (`take_slot_food_into_bag`, `eat_granary_food`,
+`take_granary_food_into_bag`, `wait_this_hour`) are the canonical domain names: they say what the world
+does, they are what the model is asked for, and they are what a reader should use. The two are bound by
+exactly one table, `protocol.ClaimActionVocabularyTable`, with helpers `ClaimActionLabel` /
+`ClaimActionID` and the test `TestClaimActionVocabularyIsABijection`: every ID has exactly one label,
+every label has exactly one ID, no token repeats on either side. The v4 ladder maps a label back to its
+ID before running the one admissibility ladder, so the world only ever sees a frozen token, and it
+accepts no second spelling: an unmapped label is inadmissible, never an alias. The migration path is a
+future contract version in which the internal IDs are renamed to the labels with a replay-preserving
+alias table, so an old ledger still replays; until that version exists, the duplication is declared
+here, in `.scratch/36-harness-vocabulary/spec.md`, and in the table's own comment.
+
 ## 6. Adjudication and refinement
 
 Separate logical roles evaluate:

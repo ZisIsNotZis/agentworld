@@ -93,6 +93,17 @@ func (o OutputMode) Validate() error {
 // reproducible from the recorded request alone.
 const GatewaySystemPrompt = "You are the agentworld cognition gateway. Reply with exactly one JSON object matching the schema_version declared in the user message; no prose and no code fences."
 
+// appliedSystemPrompt is the system message an attempt carries: the run's
+// declared prompt when it sent one (the natural-claim/v4 contract), otherwise
+// the fixed gateway template. Keeping the default in one place is what makes an
+// unapplied prompt byte-identical to the pre-v4 wire body.
+func appliedSystemPrompt(req ModelRequest) string {
+	if req.SystemPrompt != "" {
+		return req.SystemPrompt
+	}
+	return GatewaySystemPrompt
+}
+
 // wireCodec is one declared gateway wire. It owns the request path, the request
 // body construction (including the JSON output mode), and the response
 // extraction for its protocol.
@@ -197,7 +208,7 @@ func (c chatCompletionsCodec) Encode(req ModelRequest, model string, output Outp
 	body := chatRequestBody{
 		Model: model,
 		Messages: []chatMessage{
-			{Role: "system", Content: GatewaySystemPrompt},
+			{Role: "system", Content: appliedSystemPrompt(req)},
 			{Role: "user", Content: string(req.Request)},
 		},
 		Temperature: req.Sampling.Temperature,
@@ -320,7 +331,7 @@ func (c responsesCodec) Encode(req ModelRequest, model string, output OutputMode
 	body := responsesRequestBody{
 		Model: model,
 		Input: []responsesInputItem{
-			{Role: "system", Content: []responsesTextPart{{Type: "input_text", Text: GatewaySystemPrompt}}},
+			{Role: "system", Content: []responsesTextPart{{Type: "input_text", Text: appliedSystemPrompt(req)}}},
 			{Role: "user", Content: []responsesTextPart{{Type: "input_text", Text: string(req.Request)}}},
 		},
 		MaxOutputTokens: c.appliedMaxOutputTokens(),

@@ -74,11 +74,18 @@ type CallRecord struct {
 	// only the leading prefix the transport buffered for an oversized body, not
 	// the full body, so an auditor knows the digest is recomputable from the
 	// first ResponseLength bytes of the response.
-	ResponseTruncatedPrefix bool   `json:"response_truncated_prefix,omitempty"`
-	StartedAtUnixMicros     int64  `json:"started_at_unix_micros"`
-	LatencyMicros           int64  `json:"latency_micros"`
-	PrevHash                string `json:"prev_hash"`
-	Hash                    string `json:"hash,omitempty"`
+	ResponseTruncatedPrefix bool `json:"response_truncated_prefix,omitempty"`
+	// SystemPrompt is the applied system message of an attempt when the run
+	// declared one (the natural-claim/v4 prompt). It is recorded verbatim rather
+	// than as a digest because it is a function of the actor's identity rows, not
+	// of the request bytes, so the record is the only place a reader can see what
+	// the model was told. It stays empty under the fixed gateway template, so
+	// v1-v3 records and every hermetic record keep their bytes.
+	SystemPrompt        string `json:"system_prompt,omitempty"`
+	StartedAtUnixMicros int64  `json:"started_at_unix_micros"`
+	LatencyMicros       int64  `json:"latency_micros"`
+	PrevHash            string `json:"prev_hash"`
+	Hash                string `json:"hash,omitempty"`
 }
 
 // EncodeCallRecord returns the canonical full-record bytes including the hash.
@@ -199,6 +206,10 @@ type RoleARecord struct {
 	// instant, recorded so the load-bearing check can verify the applied model
 	// action diverged from it (spec EC-2). Empty on an unrecorded/frozen path.
 	FrozenAction string `json:"frozen_action,omitempty"`
+	// Why is the natural-claim/v4 one-sentence reason: recorded comprehension
+	// evidence, kept out of the decision path (the ladder never reads it). It is
+	// empty on v1-v3 records, so their bytes are unchanged.
+	Why string `json:"why,omitempty"`
 	// Votes is the vote distribution of a k-sample decision (k > 1). Empty on
 	// the single-sample seam, so those records keep their bytes.
 	Votes []RoleAVote `json:"votes,omitempty"`

@@ -43,6 +43,9 @@ type RoleAInterventionInput struct {
 	// Distribution is the vote distribution of a k-sample decision, recorded so
 	// a reader can see how nearly the samples tied.
 	Distribution []RoleAVote
+	// Why is the natural-claim/v4 one-sentence reason to record. It is empty for
+	// every other contract, so their intervention bytes are unchanged.
+	Why string
 }
 
 // AppendRoleAIntervention appends the role-a intervention record and returns
@@ -97,6 +100,7 @@ func AppendRoleAIntervention(l *Ledger, in RoleAInterventionInput) (Intervention
 			Confidence:     in.Decision.Confidence,
 			FallbackReason: fallbackReasonOf(in.Decision),
 			FrozenAction:   in.FrozenAction,
+			Why:            in.Why,
 			Votes:          in.Distribution,
 		},
 		Result: InterventionResult{Status: status, Reason: reason, IndicatorDeltas: []IndicatorDelta{}},

@@ -45,7 +45,7 @@ func main() {
 		respBound     = flag.Int("response-bound", 0, "applied recorded-response byte bound (0: the spec's 64 KiB hermetic default); a live max-effort run declares 1 MiB because reasoning items exceed 64 KiB")
 		curveIn       = flag.String("curve-in", "", "comma-separated evaluation JSON paths: do not run cells, emit the curve report over them instead")
 		curveOut      = flag.String("curve-out", "", "curve report text output path (default: <out-txt> with a -curve suffix)")
-		claimContract = flag.String("claim-contract", "natural-claim/v1", "declared Role A request contract: natural-claim/v1 (legal action set only) or natural-claim/v2 (also states the observation's admissible action subset); recorded in run identity")
+		claimContract = flag.String("claim-contract", "natural-claim/v1", "declared Role A request contract: natural-claim/v1 (legal action set only), natural-claim/v2 (also states the observation's admissible action subset) or natural-claim/v4 (display vocabulary, display action labels, a real system prompt and a recorded why); recorded in run identity")
 		relabelIn     = flag.String("relabel", "", "comma-separated evaluation JSON paths: re-emit their reports from the recorded data with the mode-corrected status/label/EC-9 text (no cells run, no spend); writes <name>-relabelled.{json,txt}")
 	)
 	flag.Parse()

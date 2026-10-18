@@ -201,6 +201,10 @@ type ModelRequest struct {
 	Endpoint string
 	Sampling Sampling
 	Request  []byte
+	// SystemPrompt is the system message this attempt carries. Empty means the
+	// gateway's declared fixed template (GatewaySystemPrompt), so every pre-v4
+	// contract and every hermetic transport keeps its exact previous wire body.
+	SystemPrompt string
 }
 
 // ModelResponse is one transport outcome. Body is the full (bounded) response
@@ -230,6 +234,10 @@ type CallRequest struct {
 	CredentialPresent bool
 	Sampling          Sampling
 	Request           []byte
+	// SystemPrompt is the applied system message (the natural-claim/v4 prompt).
+	// Empty keeps the declared fixed gateway template, so a call record stays
+	// byte-identical when no prompt is applied.
+	SystemPrompt string
 }
 
 // CallResult is the used attempt's outcome, reconstructed identically by
@@ -348,6 +356,7 @@ func (r *Recorder) Call(ctx context.Context, req CallRequest) (CallResult, error
 		started := r.now()
 		resp, completeErr := r.complete(ctx, ModelRequest{
 			Model: req.Model, Endpoint: req.Endpoint, Sampling: req.Sampling, Request: req.Request,
+			SystemPrompt: req.SystemPrompt,
 		})
 		latency := r.now().Sub(started)
 		status, httpStatus := classifyCall(resp, completeErr, r.responseByteBound())
@@ -384,6 +393,7 @@ func (r *Recorder) Call(ctx context.Context, req CallRequest) (CallResult, error
 			Role:                    req.Role,
 			RequestHash:             formatHash(requestHash),
 			RequestBytes:            req.Request,
+			SystemPrompt:            req.SystemPrompt,
 			ResponseBody:            body,
 			Content:                 content,
 			ModelID:                 r.recordedModel(req.Model),

@@ -38,6 +38,20 @@ const (
 	// ActorSeamSchemaVersionAdmissible is the request schema version of that
 	// second contract.
 	ActorSeamSchemaVersionAdmissible = 2
+
+	// NaturalClaimPromptTemplateVocabulary is the FOURTH declared Role A request
+	// contract: the display-vocabulary contract (ticket 36). Every name states the
+	// fact the decision depends on instead of the raw history behind it, the four
+	// claim actions are named by their display labels rather than their frozen
+	// internal IDs, the seven strategy parameter values and the rows no decision
+	// reads are gone, and the response states a one-sentence `why`. The internal
+	// IDs are unchanged on the wire, in the world and in every ledger, so replay
+	// and strategy fingerprints are unaffected; see ClaimActionVocabularyTable for
+	// the declared binding and its migration path.
+	NaturalClaimPromptTemplateVocabulary = "natural-claim/v4"
+	// ActorSeamSchemaVersionVocabulary is the request and response schema version
+	// of the display-vocabulary contract.
+	ActorSeamSchemaVersionVocabulary = 4
 )
 
 // Source values recorded on ActorSeamDecision.Source (spec section 4.3).
@@ -99,6 +113,22 @@ type ActorSeamRequest struct {
 	Actions      []string
 	Identity     RunIdentity
 	FrozenAction string
+	// Portrait is the actor's own identity rows the natural-claim/v4 persona card
+	// is rendered from. It is the actor's own state only (birth hour and the three
+	// inherited alleles), it never enters the canonical request bytes of any
+	// contract, and it carries no death hour, no parent ids, no world seed and no
+	// other actor's row, so the card cannot state a privileged fact. Contracts
+	// older than v4 ignore it.
+	Portrait ActorPortrait
+}
+
+// ActorPortrait is the declared persona input of one actor: its birth hour and
+// its three genome alleles. Every field is the actor's own, and the field set is
+// closed: adding an input (a death hour, a parent, a seed) is a visible edit to
+// this type, which is what keeps the persona reproducible and unprivileged.
+type ActorPortrait struct {
+	BirthHour              int
+	LocusM, LocusY, LocusW int64
 }
 
 // ActorSeamDecision is the declared Role A outcome (Appendix A). Source is

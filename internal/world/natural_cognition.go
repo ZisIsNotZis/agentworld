@@ -178,12 +178,12 @@ func naturalCandidateFeatures(predicate protocol.PolicyPredicate, obs strategy.N
 // the caller as a fail-loud halt; a level-1 (malformed/inadmissible) failure
 // returns the declared fallback and leaves the frozen choice in place, mutating
 // nothing.
-func (f *Natural) naturalSeamOverride(ctx context.Context, id sim.EntityID, hour int, version sim.WorldVersion, obs strategy.NaturalObservation, choice *strategy.NaturalChoice) error {
+func (f *Natural) naturalSeamOverride(ctx context.Context, id sim.EntityID, hour int, version sim.WorldVersion, actor NaturalActorState, obs strategy.NaturalObservation, choice *strategy.NaturalChoice) error {
 	// Record the frozen cascade's own action before the override: it is the
 	// comparison baseline for the load-bearing check (EC-2). The seam request
 	// carries it for the intervention record; it is not part of the canonical
 	// request bytes.
-	request := f.naturalActorSeamRequest(id, hour, version, obs)
+	request := f.naturalActorSeamRequest(id, hour, version, actor, obs)
 	request.FrozenAction = naturalChoiceAction(choice.Kind)
 	decision, err := f.cognition.Seam.DecideActorSeam(ctx, request)
 	if err != nil {
@@ -263,7 +263,7 @@ func naturalLowestStockedSlot(obs strategy.NaturalObservation) sim.EntityID {
 // bound actor carries the active generation's vector and ref; an unbound actor
 // carries the frozen base vector and ref. The base ref in the identity block is
 // always the runner's frozen base (a rebind never changes it, spec 5.4).
-func (f *Natural) naturalActorSeamRequest(id sim.EntityID, hour int, version sim.WorldVersion, obs strategy.NaturalObservation) protocol.ActorSeamRequest {
+func (f *Natural) naturalActorSeamRequest(id sim.EntityID, hour int, version sim.WorldVersion, actor NaturalActorState, obs strategy.NaturalObservation) protocol.ActorSeamRequest {
 	ref, params := f.activeClaimParameters(id)
 	return protocol.ActorSeamRequest{
 		Seam:        protocol.SeamNaturalClaim,
@@ -274,6 +274,15 @@ func (f *Natural) naturalActorSeamRequest(id sim.EntityID, hour int, version sim
 		Strategy:    params,
 		Actions:     naturalClaimActions(f.mechanism),
 		Identity:    f.naturalRunIdentity(ref),
+		// The v4 persona card's input: the actor's own birth hour and three
+		// inherited alleles. It never enters the canonical request bytes, and it
+		// deliberately carries no death hour, no parent ids and no world seed.
+		Portrait: protocol.ActorPortrait{
+			BirthHour: int(actor.Genome.BirthHour),
+			LocusM:    actor.Genome.LocusM,
+			LocusY:    actor.Genome.LocusY,
+			LocusW:    actor.Genome.LocusW,
+		},
 	}
 }
 

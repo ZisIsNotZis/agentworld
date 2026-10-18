@@ -145,6 +145,15 @@ func (s *RoleASeam) DecideActorSeamVotes(ctx context.Context, req ActorSeamReque
 	if err != nil {
 		return VotedDecision{}, err
 	}
+	// The display-vocabulary contract sends a real system prompt: the situation,
+	// the actor's persona, the goal in the actor's own terms, and the four facts no
+	// renamed field can carry. Every other contract sends the gateway's fixed
+	// template, so its wire body is unchanged.
+	systemPrompt, why := "", ""
+	if s.contract == ClaimContractV4 {
+		systemPrompt = NaturalClaimSystemPromptV4(PersonaFor(req.Actor, req.Portrait, req.Hour))
+		why = "recorded"
+	}
 	votes := s.votes
 	if votes < 1 {
 		votes = 1
@@ -155,7 +164,7 @@ func (s *RoleASeam) DecideActorSeamVotes(ctx context.Context, req ActorSeamReque
 		call, err := s.recorder.Call(ctx, CallRequest{
 			Role: RoleActorDecision, Hour: req.Hour, Model: DefaultModelID,
 			Endpoint: s.endpoint, CredentialPresent: s.credentialPresent,
-			Sampling: FrozenSampling(), Request: canonical,
+			Sampling: FrozenSampling(), Request: canonical, SystemPrompt: systemPrompt,
 		})
 		if err != nil {
 			return VotedDecision{}, err
@@ -170,11 +179,15 @@ func (s *RoleASeam) DecideActorSeamVotes(ctx context.Context, req ActorSeamReque
 	winner, distribution := majorityDecision(decisions)
 	winner.CallRef = calls[len(calls)-1].Seq
 	out := VotedDecision{Decision: winner, Calls: calls, Votes: distribution}
+	recordedWhy := ""
+	if why != "" {
+		recordedWhy = winner.Rationale
+	}
 	if _, err := AppendRoleAIntervention(s.ledger, RoleAInterventionInput{
 		WakePolicy: s.wakePolicy, Seam: req.Seam, Actor: req.Actor, Hour: req.Hour,
 		SimTimeMicros: roleASimTimeMicros(req.Hour), Ref: req.Identity.HeadRef,
 		FrozenAction: req.FrozenAction, Decision: winner, Call: calls[len(calls)-1],
-		Samples: calls, Distribution: distribution,
+		Samples: calls, Distribution: distribution, Why: recordedWhy,
 	}); err != nil {
 		return VotedDecision{}, err
 	}
@@ -249,6 +262,9 @@ func ValidateActorSeamContent(content []byte, req ActorSeamRequest) (ActorSeamDe
 // contract: the response must declare that contract's schema version, and every
 // other check is unchanged.
 func ValidateActorSeamContentFor(content []byte, req ActorSeamRequest, schemaVersion int) (ActorSeamDecision, error) {
+	if schemaVersion == ActorSeamSchemaVersionVocabulary {
+		return validateActorSeamContentV4(content, req)
+	}
 	dec := json.NewDecoder(bytes.NewReader(content))
 	dec.DisallowUnknownFields()
 	var body actorDecisionContent
@@ -282,6 +298,59 @@ func ValidateActorSeamContentFor(content []byte, req ActorSeamRequest, schemaVer
 
 func fallbackDecision(reason FallbackReason) ActorSeamDecision {
 	return ActorSeamDecision{Source: SourceFallback, Reason: string(reason)}
+}
+
+// actorDecisionWhyLimit bounds the recorded reason, as the v1 rationale was
+// bounded: a reason is one sentence of comprehension evidence, not a place to
+// restate the world.
+const actorDecisionWhyLimit = 512
+
+// actorDecisionContentV4 is the declared natural-claim/v4 response schema: the
+// display action label plus a one-sentence reason. Unknown fields are a schema
+// violation, so a v1-shaped answer ("rationale"/"confidence") to a v4 request is
+// a recorded malformed rather than a silently accepted guess. The reason is
+// optional: a missing reason costs the actor nothing, because the reason is
+// recorded comprehension evidence and never reaches the decision.
+type actorDecisionContentV4 struct {
+	SchemaVersion *int   `json:"schema_version"`
+	Action        string `json:"action"`
+	Why           string `json:"why"`
+}
+
+// validateActorSeamContentV4 is the level-1 ladder of the display-vocabulary
+// contract. It maps the display label back to the internal claim-action ID and
+// then runs the same admissibility ladder as every other contract, so there is
+// exactly one ladder and the world only ever sees a frozen token.
+func validateActorSeamContentV4(content []byte, req ActorSeamRequest) (ActorSeamDecision, error) {
+	dec := json.NewDecoder(bytes.NewReader(content))
+	dec.DisallowUnknownFields()
+	var body actorDecisionContentV4
+	if err := dec.Decode(&body); err != nil {
+		return fallbackDecision(FallbackReasonMalformed), nil
+	}
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
+		return fallbackDecision(FallbackReasonMalformed), nil
+	}
+	if body.SchemaVersion == nil || *body.SchemaVersion != ActorSeamSchemaVersionVocabulary ||
+		body.Action == "" || len(body.Why) > actorDecisionWhyLimit {
+		return fallbackDecision(FallbackReasonMalformed), nil
+	}
+	// A label outside the declared vocabulary is inadmissible, and the internal IDs
+	// are NOT accepted as aliases on this contract: the answer named something the
+	// actor cannot do, and accepting a second spelling here would keep two live
+	// names for one action (the exception this contract is migrating away from).
+	action, ok := protocol.ClaimActionID(body.Action)
+	if !ok {
+		return fallbackDecision(FallbackReasonInadmissible), nil
+	}
+	admissible, err := admissibleAction(action, req)
+	if err != nil {
+		return ActorSeamDecision{}, err
+	}
+	if !admissible {
+		return fallbackDecision(FallbackReasonInadmissible), nil
+	}
+	return ActorSeamDecision{Action: action, Rationale: body.Why, Source: SourceModel}, nil
 }
 
 // admissibleAction checks only what the observation makes impossible. gather

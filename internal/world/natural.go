@@ -3297,7 +3297,7 @@ func (f *Natural) allocate(ctx context.Context, at sim.SimTime) error {
 			return ErrNaturalRunner
 		}
 		if selected[cw.id] {
-			if err := f.naturalSeamOverride(ctx, cw.id, h, view.Version, cw.obs, &choice); err != nil {
+			if err := f.naturalSeamOverride(ctx, cw.id, h, view.Version, cw.actor, cw.obs, &choice); err != nil {
 				return err
 			}
 		}
