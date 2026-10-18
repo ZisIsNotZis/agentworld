@@ -469,3 +469,122 @@ the pre-registered pairs are the v2 matrix above.
 the anchor is the no-AI viability floor, and the measure discriminates recorded arms in the declared
 direction. The M2 milestone and the central claim remain **not accepted**; M2c (allocation on the
 calibrated instrument) is the next stage and owns the Go implementation of `vrd/1`.
+
+---
+
+# Gates (recovery run, appended 2026-10-18)
+
+## Why this section exists
+
+The gate run that should have preceded `f9259fe` never finished: its worker was killed by a 30-minute wall clock, its worktree and its untracked `gates.log` were deleted, and the commit that says "record M2b passed" therefore carried a verdict with no gate evidence behind it in the tree.
+The last state that worker showed was a **FAIL** of `TestNaturalMechanismSeamBidirectionalMismatch` in `agentworld/internal/world` during its full-suite run.
+That output is unrecoverable, so it is re-derived by triage below rather than quoted.
+Recovery scope: gates and wording only — no new analysis, no live model call, no re-tuning of any declared weight, and no edit to the pre-declaration above.
+
+## Triage: the reported `internal/world` failure
+
+**Verdict: not introduced by this branch, and not reproducible at `f9259fe`.**
+
+1. The branch changes no Go file: `git diff --stat fa3f579..f9259fe -- '*.go' internal/ cmd/ Makefile go.mod` is empty, and all nine changed paths are `.scratch/`, `docs/` or `CHANGELOG.md`. A branch that changes neither source nor test cannot change this test's behaviour.
+2. The identical command passes on the branch and on the baseline `fa3f579`, five runs each (rows 4-5), and again fifty times on the branch (row 6): 55 branch executions and 5 baseline executions, no failure.
+3. The full suite on the branch passes, and it includes that test.
+
+"Pre-existing" is deliberately not asserted: the failing log died with its worktree, so what is established is that the failure is not reproducible at `f9259fe` and cannot have been introduced by it.
+The surviving explanation is a nondeterministic or environmental failure in that one run.
+Nothing is repaired under this heading, because nothing here is this ticket's to repair.
+
+Branch output, verbatim (`feature/37-fidelity-metric` at `f9259fe`):
+
+```
+# worktree: /home/z/vibe/worktrees/agentworld/wt-fidelity
+# revision: f9259fed805000e450d8060e1fdda3a53270af33 (feature/37-fidelity-metric)
+# date: 2026-10-18T14:36:57Z
+$ . .tmp/go-env.sh   # GOROOT=/home/z/vibe/agentworld/.tmp/go-toolchain/root/usr/lib/go-1.24, go1.24.13
+$ cd /home/z/vibe/worktrees/agentworld/wt-fidelity && go test -run 'TestNaturalMechanismSeamBidirectionalMismatch' -count=5 ./internal/world
+--- begin output ---
+ok  	agentworld/internal/world	0.591s
+--- end output ---
+exit=0 wall=5s
+```
+
+Baseline output, verbatim (detached worktree at `fa3f579`):
+
+```
+# worktree: /home/z/vibe/worktrees/agentworld/wt-baseline
+# revision: fa3f5798a97c0265659bb6f942ecaacdd476dd20 (HEAD)
+# date: 2026-10-18T14:37:02Z
+$ . .tmp/go-env.sh   # GOROOT=/home/z/vibe/agentworld/.tmp/go-toolchain/root/usr/lib/go-1.24, go1.24.13
+$ cd /home/z/vibe/worktrees/agentworld/wt-baseline && go test -run 'TestNaturalMechanismSeamBidirectionalMismatch' -count=5 ./internal/world
+--- begin output ---
+ok  	agentworld/internal/world	0.582s
+--- end output ---
+exit=0 wall=6s
+```
+
+## Gate table
+
+Every row below was personally observed in this recovery run; a command that did not run is marked not run rather than green.
+`go` is go1.24.13 from `/home/z/vibe/agentworld/.tmp/go-toolchain/root/usr/lib/go-1.24`, sourced with `. .tmp/go-env.sh`, `GOTOOLCHAIN=local`.
+
+| # | Check | Exact command (cwd = branch worktree) | Result |
+|---|---|---|---|
+| 1 | build | `go build ./...` | exit 0 — PASS |
+| 2 | vet | `go vet ./...` | exit 0 — PASS |
+| 3 | gofmt on tracked `.go` | `git ls-files -z '*.go' \| xargs -0 gofmt -l` (288 files) | no output, exit 0 — PASS |
+| 4 | single-test triage, branch | `go test -run 'TestNaturalMechanismSeamBidirectionalMismatch' -count=5 ./internal/world` at `f9259fe` | `ok agentworld/internal/world 0.591s`, exit 0 — PASS (5 executions) |
+| 5 | single-test triage, baseline | the same command at `fa3f579` | `ok agentworld/internal/world 0.582s`, exit 0 — PASS (5 executions) |
+| 6 | single-test repeat | the same command with `-count=50` at `f9259fe` | `ok agentworld/internal/world 5.879s`, exit 0 — PASS (50 executions) |
+| 7 | full suite | `go test -timeout 30m ./...` at `f9259fe`, detached, log committed as `gates-full.log` | exit 0, 17 packages `ok` and 1 with no test files, `internal/world 553.949s` — PASS |
+| 8 | scoring reproducibility | `python3 .scratch/37-fidelity-metric/score.py --primary /home/z/vibe/agentworld/.tmp/35-v2-evaluation.json --secondary /home/z/vibe/agentworld/.tmp/35-stage3-evaluation.json --corroboration /home/z/vibe/agentworld/.tmp/36-v4-evaluation.json --self-test --json-out /tmp/37-scores-recheck.json --svg /tmp/37-ranking-recheck.svg` | exit 0; `/tmp/37-scores-recheck.json` and `/tmp/37-ranking-recheck.svg` **byte-identical** to the committed `scores.json` and `ranking.svg` — PASS |
+| 9 | negative control | the same command with `--expect-fail` | exit 0; `NEGATIVE CONTROL PASS: inverted pairs were detected as failures` — PASS |
+| 10 | whitespace/conflict check | `git diff --check fa3f579` | exit 0 — PASS |
+| 11 | race suite (`make race`) | not run | **not run** — not in this ticket's pre-declared gate list; recorded rather than claimed |
+| 12 | full suite on `fa3f579` | not run | **not run** — the single test was triaged on the baseline; the branch is the revision that would land, and its own suite is the gate |
+
+**Pre-existing / introduced split.** No gate is red, so no gate is attributable to this branch.
+The one reported red — `TestNaturalMechanismSeamBidirectionalMismatch` in the interrupted run — is recorded as **not reproduced, not introduced**, with rows 4-7 as the evidence; it is neither a pre-existing failure this ticket introduces evidence for nor a branch regression, and it is left alone.
+
+## Full-suite log
+
+Committed at `.scratch/37-fidelity-metric/gates-full.log` so it survives the worktree. Verbatim:
+
+```
+# worktree: /home/z/vibe/worktrees/agentworld/wt-fidelity
+# revision: f9259fed805000e450d8060e1fdda3a53270af33 (feature/37-fidelity-metric)
+# date: 2026-10-18T14:38:12Z
+# $ . .tmp/go-env.sh  (go1.24.13, GOROOT=/home/z/vibe/agentworld/.tmp/go-toolchain/root/usr/lib/go-1.24)
+# $ go test -timeout 30m ./...
+--- begin output ---
+ok  	agentworld/cmd/capacity	4.904s
+ok  	agentworld/cmd/foodflow	6.055s
+ok  	agentworld/cmd/natural	20.602s
+ok  	agentworld/cmd/reproduction	6.685s
+ok  	agentworld/cmd/socialfood	7.188s
+?   	agentworld/cmd/survival	[no test files]
+ok  	agentworld/cmd/vs1	74.807s
+ok  	agentworld/cmd/vs2	19.966s
+ok  	agentworld/internal/checkpoint	0.006s
+ok  	agentworld/internal/cognition	0.431s
+ok  	agentworld/internal/cognition/protocol	0.004s
+ok  	agentworld/internal/component	3.235s
+ok  	agentworld/internal/experiment	0.006s
+ok  	agentworld/internal/kernel	0.037s
+ok  	agentworld/internal/scheduler	0.141s
+ok  	agentworld/internal/sim	0.005s
+ok  	agentworld/internal/strategy	0.854s
+ok  	agentworld/internal/world	553.949s
+--- end output ---
+exit=0
+# finished: 2026-10-18T14:49:38Z
+```
+
+`internal/world` took 553.9 s here against the 985.4 s the Makefile records at `c1d7810`: the pre-declared `-timeout 30m` never came near expiry on this machine.
+The 30-minute limit that killed the earlier worker was its own wall clock, not the suite's.
+
+## Reconciliation of the claim
+
+- **AC-37 (a)-(e) are met by the evidence in `e77916b`.** The measure, anchor, discrimination, robustness, candidate comparison and slice are recorded above, and row 8 re-derives their committed artefacts byte-identically from the unchanged input sha256s (4/4 match the table in "Authoritative inputs").
+- **The gates that matter are green or accounted for**: build, vet, gofmt, full suite and `git diff --check` pass (rows 1-3, 7, 10); the race suite and the baseline full suite are declared not run (rows 11-12) rather than assumed green.
+- Therefore **"M2b passed" stands**, and the wording in `CHANGELOG.md` and in the M2b row of `docs/VERTICAL-SLICES.md` is unchanged by this section.
+- One ordering correction is recorded rather than rewritten: the verdict preceded its gate evidence. `f9259fe` asserted the verdict while the evidence did not yet exist and while the interrupted run had shown a red; this section is the evidence arriving afterwards, and it matches. Amending that commit would hide the sequence instead of repairing it.
+- Bound: these gates are regression evidence for this revision plus a reproduction of the scoring artefacts. They do not re-run the M2b analysis, and they do not make M2b evidence for the central claim, which remains not accepted.

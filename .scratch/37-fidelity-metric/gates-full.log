@@ -1,0 +1,27 @@
+# worktree: /home/z/vibe/worktrees/agentworld/wt-fidelity
+# revision: f9259fed805000e450d8060e1fdda3a53270af33 (feature/37-fidelity-metric)
+# date: 2026-10-18T14:38:12Z
+# $ . .tmp/go-env.sh  (go1.24.13, GOROOT=/home/z/vibe/agentworld/.tmp/go-toolchain/root/usr/lib/go-1.24)
+# $ go test -timeout 30m ./...
+--- begin output ---
+ok  	agentworld/cmd/capacity	4.904s
+ok  	agentworld/cmd/foodflow	6.055s
+ok  	agentworld/cmd/natural	20.602s
+ok  	agentworld/cmd/reproduction	6.685s
+ok  	agentworld/cmd/socialfood	7.188s
+?   	agentworld/cmd/survival	[no test files]
+ok  	agentworld/cmd/vs1	74.807s
+ok  	agentworld/cmd/vs2	19.966s
+ok  	agentworld/internal/checkpoint	0.006s
+ok  	agentworld/internal/cognition	0.431s
+ok  	agentworld/internal/cognition/protocol	0.004s
+ok  	agentworld/internal/component	3.235s
+ok  	agentworld/internal/experiment	0.006s
+ok  	agentworld/internal/kernel	0.037s
+ok  	agentworld/internal/scheduler	0.141s
+ok  	agentworld/internal/sim	0.005s
+ok  	agentworld/internal/strategy	0.854s
+ok  	agentworld/internal/world	553.949s
+--- end output ---
+exit=0
+# finished: 2026-10-18T14:49:38Z
