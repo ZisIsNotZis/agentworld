@@ -596,3 +596,92 @@ negative for this value model as instantiated and is reported as such.
 **Cross-contract rule.** No v1 run is compared with any v2 run. Every stage-2 result stands as a
 statement about thinking depth under contract v1, with the declared caveat that ~50 % of v1 answers
 were inadmissible.
+
+## v2 run result (live, 144 h, effort=low, contract `natural-claim/v2`, cell f10-s0, 3 reps)
+
+Command as declared (`.tmp/35-run-v2.sh`), exit 0, 18/18 cells, **6580 call records, all `ok`**
+(`.tmp/35-v2-evaluation.json` sha256 `8efd819533d56b419d74639f6e6ba559fb678f013df7120bf6b8c3102d4bae3d`,
+text `857318f46f5c20516daa9b3a89099ba81a48f7ebedc743c950105f8de6563a3d`, curve report
+`.tmp/35-v2-curve.txt`). Cost from recorded tokens: 2 921 449 input + 992 927 output = **$0.789** at the
+declared prices, taking lane spend to ≈ $19.5 of the $25 cap.
+
+**1. The contract fix works.** Role-a tallies (`.tmp/35-admis.py .tmp/35-v2-runs`): R 3527 applied /
+26 rejected, A 763/5, A1 752/7, P 726/6, U 758/10 — and **zero inadmissible in every arm** (the
+remaining rejections are all `malformed`, 0.6-2.3 %). Against v1's 40-53 % inadmissible this is the
+whole defect removed. The report label is correct too (`status: live/real-model`).
+
+**2. The value-model fix works on the thing it was built for.** Per-actor coverage (per replicate):
+
+| arm | value model | coverage min-max | Gini | applied/rejected | calls | in/out tokens |
+|---|---|---|---|---|---|---|
+| R | — | 100-141, 100-141, 31-141 | 0.061 / 0.056 / 0.123 | 3527/26 | 1082-1305 | 1 574 682 / 515 858 |
+| P | vs2-value/2 | 17-24 (all three) | 0.061 | 726/6 | 244×3 | 324 961 / 107 504 |
+| U | vs2-value/2 | 3-36, 2-37, 3-42 | 0.303 / 0.334 / 0.367 | 758/10 | 256×3 | 342 936 / 130 839 |
+| **A** | **vs2-value/2** | **15-34, 15-33, 4-40** | **0.146 / 0.142 / 0.229** | **763/5** | 256×3 | 341 904 / 124 489 |
+| **A1** | **vs2-value/1** | **2-76, 2-73, 2-83** | **0.502 / 0.490 / 0.589** | **752/7** | 253×3 | 336 966 / 114 237 |
+
+The collapse is gone under `vs2-value/2`, and the `A1` arm — same contract, v1 value model — still
+collapses, so the collapse was the value model, not the contract.
+
+**3. What the demographic curves say (and it cuts against the redesign).**
+
+| arm | population h0/24/48/72/96/120/143 (per replicate) | births | starvation | age deaths |
+|---|---|---|---|---|
+| A0 | 10,12,12,12,12,5,2 (identical ×3) | 2 | 0 | 11 |
+| P | identical to A0 ×3 | 2 | 0 | 11 |
+| A | 12,12,12,12,12,5,2 ×2 and 12,11,10,10,10,3,2 ×1 | 2 | 0/0/2 | 10/11/8 |
+| U | 10,10,7,9,8,6,3 / 10,11,9,9,9,5,2 / 10,10,10,7,6,4,2 | 3/3/2 | 5/4/6 | 5/7/5 |
+| A1 | 10,10,10,10,10,3,0 ×3 | 0 | 0 | 10 |
+| R | 10,10,9,9,9,3,0 / 10,10,10,10,10,3,0 / 10,11,11,11,11,4,1 | 0/0/1 | 1/0/0 | 9/10/11 |
+
+**4. Two conclusions, stated plainly.**
+
+> **(a) Periodically-sampled model reasoning has ZERO demographic effect in this fixture.** P applies 244
+> model decisions per replicate (all three applied 241-243 of 244) and reproduces the no-AI world exactly
+> — every KPI, every replicate, RMSE 0.0000. That can no longer be explained by admissibility loss,
+> because `natural-claim/v2` removed it; it is a real property of the periodic arm's decision points at
+> this cell and horizon.
+
+> **(b) The v1 value model — whose concentrated coverage I had called a defect — is by far the closest to
+> the R reference, while the "fixed" v2 model is indistinguishable from A0.** On the declared fidelity
+> metric the arm labelled buggy was the better one. A1 vs R is the only pair in the whole run that is
+> **not distinguishable** (population SNR 0.346, births 0.817, starvation 0.817, age 0.777, max capital
+> 1.764), while A vs R separates on births (SNR 4.03, 139-hour run) and A0 vs A does not separate on any
+> demographic KPI (population 0.83, births 1.63, starvation 0.82, age 0.91).
+
+**5. The likely reason is the metric's own problem, not an arm ranking.** R (full cognition) produces 0-1
+births against A0's 2 and dies out (0.33-1 alive at h143), so "closer to R" currently means "converges on
+the no-birth dying trajectory". Fidelity anchored on R therefore rewards suppressing reproduction. Any
+claim that A1 "wins" would be a claim that extinction-matched behaviour is desirable, which the spec never
+says. **The R anchor is an unvalidated objective**; the open question of a civilization-level distance
+measure (Q1) is where this belongs and it is not resolved here.
+
+**SNR table (replicate band as denominator; the fully measured table is `.tmp/35-v2-curve.txt`).**
+Dynamic range of this horizon, stated so the numbers are readable: population spans 10-12 (growth cap) to
+0-3 (crash) and saturates at the fixture's cap until h96, so population separates mainly through the crash
+timing; births span 0-3 and starvation deaths 0-6, which is why they are the primary discriminators here.
+Against the deterministic A0 the denominator is one-sided (its replicate SD is 0 everywhere), so any
+structural difference reaches SNR ≥ 2 and `+Inf` appears where A0's curve is flat and the other arm's is
+not — read those rows as "A0 is deterministic here", not as an infinitely strong effect.
+
+| pair | population | births | starvation | age deaths | max capital | verdict |
+|---|---|---|---|---|---|---|
+| A0 vs P | 0.00 | 0.00 | 0.00 | 0.00 | 3.87 | distinguishable via granary_hist[0] only |
+| A0 vs A | 0.83 | 1.63 | 0.82 | 0.91 | 4.36 | distinguishable via capital_hist[0] only |
+| A0 vs A1 | +Inf | +Inf | 0.00 | +Inf (run 1) | 16.57 | distinguishable |
+| A0 vs R | 3.09 | 4.07 | 0.82 | 0.89 | 48.30 | distinguishable |
+| A0 vs U | 3.78 | 1.07 | 7.40 | 5.25 | 2.84 | distinguishable |
+| P vs A | 0.83 | 1.63 | 0.82 | 0.91 | 1.44 | distinguishable via capital_hist[0] only |
+| P vs A1 | +Inf | +Inf | 0.00 | +Inf | 8.38 | distinguishable |
+| P vs R | 3.09 | 4.07 | 0.82 | 0.89 | 10.55 | distinguishable |
+| P vs U | 3.78 | 1.07 | 7.40 | 5.25 | 1.31 | distinguishable |
+| A vs A1 | 2.59 | 40.76 | 0.82 | 0.75 | 8.16 | distinguishable |
+| A vs R | 1.68 | 4.03 | 0.35 | 0.32 | 10.59 | distinguishable via births |
+| A vs U | 2.50 | 1.05 | 4.07 | 4.30 | 0.96 | distinguishable |
+| A1 vs R | 0.35 | 0.82 | 0.82 | 0.78 | 1.76 | **NOT distinguishable** |
+| A1 vs U | 2.19 | 4.79 | 7.40 | 5.21 | 6.68 | distinguishable |
+| R vs U | 1.60 | 3.20 | 5.72 | 4.34 | 7.79 | distinguishable |
+
+No arm is called better. What the table establishes is which separations exceed the replicate band and by
+how much; what it does not establish is that any of them is an improvement, because the reference the
+metric measures against is the unvalidated R anchor of point 5.
