@@ -295,7 +295,7 @@ the extinct arm is.
 viability measure calls least viable, and it is extinct in all three replicates.**
 
 Figure: `.scratch/37-fidelity-metric/ranking.svg` (self-contained SVG, two panels, same arm order).
-Left panel: `fid/1`; its lowest bar is A1, solid red (extinct). Right panel: `vrd/1`; A0 and P sit
+Left panel: `fid/1`; its lowest bar is A1 (extinct, red; the figure's subtitle calls this hatching, which no hatch implements — a caption defect recorded by the review as non-blocking). Right panel: `vrd/1`; A0 and P sit
 at 0 and A1 is the highest bar. The left panel plots the instrument's recorded rows only, so A0 and R
 are absent from it; their old-measure values are the supplementary seven-indicator column above,
 which exists in the table and the log, not in the figure.
