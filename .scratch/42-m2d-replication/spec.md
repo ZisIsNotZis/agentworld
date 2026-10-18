@@ -294,9 +294,35 @@ Liveness is the runner **pid** *and* per-cell **ledger growth**, never a pid fil
 report is written only at exit). Polls are appended to `.scratch/42-m2d-replication/poll-log.md` and
 committed as they are written.
 
-## 6. Zero-spend gates (filled before the launch)
+## 6. Zero-spend gates, recorded verbatim before the launch
 
-Filled in the commit that precedes the launch.
+All at revision `5f3d0a3` (the declaration commit) on branch `feature/42-m2d-replication`, all zero spend
+except gate 10 (one probe call, ≈$0.00001). Raw transcripts beside this file: `gates.log`,
+`evaluator-gate.log`, `curve-and-contract-gates.log`, `gateway-probe.txt`.
+
+| # | gate | command | result |
+|---|---|---|---|
+| 1 | build | `go build ./...` | exit 0 — **PASS** (go1.24.13 linux/amd64) |
+| 2 | vet | `go vet ./...` | exit 0 — **PASS** |
+| 3 | gofmt on tracked `.go` | `git ls-files -z '*.go' \| xargs -0 gofmt -l` | no output, exit 0 — **PASS** |
+| 4 | whitespace/conflict vs base | `git diff --check d38a86b` | exit 0 — **PASS** |
+| 5 | runner binary | `go build -o .tmp/42-vs2-bin ./cmd/vs2` | exit 0, 11 954 258 B — **PASS** |
+| 6 | evaluator gate (§4 falsifier 1) | `vrd2.py --self-test --scores …/scores.json` | exit 0, T1–T7 PASS, `SELF-TEST: PASS` — **PASS** |
+| 7 | anchor gate (§4 falsifier 2) | `.tmp/42-vs2-bin -arms A0 -cells f12-s0,f10-s1 -reps 3` | exit 0 in 5.4 s; **6 of 6 cells, 3/3 identical per cell**, `realized_calls = 0`, `halted = false` — **PASS**. `f12-s0`: `H = 1496, B = 2, S = 0`, alive@143 = 1, alive@144 = 1, `projection_hash 00d8c5f98777…` in all three replicates. `f10-s1`: `H = 1700, B = 5, S = 3`, alive@143 = 1, alive@144 = 1, `projection_hash e9b7c0f560d7…` in all three replicates. The two anchors differ from `f10-s0`'s `H = 1444, B = 2, S = 0` because the cells differ — that is the point of the ticket, and what must hold is determinism per cell, which does |
+| 8 | cell-shape gate (§4 falsifier 3) | `.tmp/42-vs2-bin -arms P,U,A,A1 -cells f12-s0,f10-s1 -reps 1` (hermetic, `vs2-hermetic-fake/1`) | exit 0 in 1.8 s; 8 of 8 cells, each `realized_calls = 248`, `quota_sum = 248` at `call_ceiling = 256`, `under_budget = true`, `budget_shortfall = 8`, `halted = false` — **PASS**. Both cells build, both arms sets run to `H = 144`, no ceiling halt |
+| 9 | curve step (§5.4, ticket 38 §7.5) | `.tmp/42-vs2-bin -curve-in .tmp/36-v4-evaluation.json -curve-out .tmp/42-curve-gate.txt` | exit 0, 58-line report — **PASS** |
+| 10 | gateway reachability | §5.5 probe | `/health/liveliness` 200 in 1.6 ms; `/v1/models` 97 ids, declared model present; one call **HTTP 200 in 2.327 s**, `status: completed`, model echoed `github_copilot/gpt-6-luna`, usage 27 in / 12 out (≈ $0.000009) — **PASS** |
+| 11 | contract gate, pre-launch (§4 falsifier 4) | `python3 .tmp/35-admis.py .tmp/36-v4-runs` | `R {'applied': 1323, 'rejected': 2, 'inadmissible': 0, 'malformed': 2, 'other': 0}` — **PASS**, and the same command is the gate re-run on this ticket's ledgers before any verdict |
+
+Pre-existing report observations, recorded so they are not read as regressions of this ticket, all
+identical in kind to ticket 41 §6: `VS2-EC-1` FAILs on an `A0`-only or partial artefact (it is satisfied
+only by the full 12-cell `A0` matrix and is not a gate of this ticket), `VS2-EC-6` FAILs on an `A0`-only
+anchor because the band's fail condition is `scan.recordedRoleA == 0` and an `A0` cell makes no model
+calls, and `VS2-EC-3`/`VS2-EC-4` print `[not-evaluable]` on any matrix without an `R` cell, which this
+arm set does not include (§2). None of the three is read by the verdict.
+
+**No live call has been made when this table was written.** The one probe call of gate 10 is the only
+charged request, and it is not part of the matrix.
 
 ## 7. Launch record (filled at launch)
 

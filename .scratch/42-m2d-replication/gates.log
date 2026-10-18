@@ -1,0 +1,11 @@
+== go build ./... ==
+exit=0
+== go vet ./... ==
+exit=0
+== gofmt -l on tracked .go ==
+exit=0
+== git diff --check d38a86b ==
+exit=0
+== go build -o .tmp/42-vs2-bin ./cmd/vs2 ==
+exit=0
+-rwxrwxr-x 1 z z 11954258 Oct 19 01:28 .tmp/42-vs2-bin
