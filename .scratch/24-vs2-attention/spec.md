@@ -9,7 +9,12 @@ falsifying outcome; VS2-EC-2/4/5 live failures, their anatomy, and the incomplet
 sensitivity-seed extension are recorded in the ticket-34 evidence record. The §11.3 operator
 decisions were confirmed in ticket 34. The central claim is **not accepted**: the declared
 acceptance rule did not fire, and the live evidence falsifies the value model `vs2-value/1` as
-instantiated at equal budget. This file is the single source of truth for VS2 and is edited in place
+instantiated at equal budget. Ticket 35 (`feature/35-vs2-curve`, record `.scratch/35-vs2-curve/spec.md`)
+keeps that verdict and adds what the ticket-34 evidence could not see: a **pre-registered curve criterion**
+(depth and redundancy as first-class axes) under which the dominant defect is **admissibility**, not
+allocation — 40-53 % of v1 model answers were inadmissible and `natural-claim/v2` removes them — while
+`vs2-value/2` fixes the coverage collapse but leaves the periodic arm with zero demographic effect and the
+R anchor unvalidated (Q1). No arm is called better there either. This file is the single source of truth for VS2 and is edited in place
 when the design changes; it is never a running log. The dated implementation record, the gate table
 and the raw evidence live in `.scratch/33-vs2-l5/spec.md` (hermetic) and
 `.scratch/34-vs2-live-matrix/spec.md` (live).
