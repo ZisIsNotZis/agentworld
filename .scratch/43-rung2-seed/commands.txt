@@ -1,0 +1,35 @@
+# Ticket 43 — exact commands that produced the recorded evidence.
+# Host: linux/amd64, no system Go. All commands run from the repository root.
+
+## 1. User-local Go toolchain (no sudo, nothing under /usr/local)
+curl -fL -o /tmp/go1.24.5.linux-amd64.tar.gz https://go.dev/dl/go1.24.5.linux-amd64.tar.gz
+tar -xzf /tmp/go1.24.5.linux-amd64.tar.gz -C /home/z/.local
+export PATH=/home/z/.local/go/bin:$PATH
+go version
+# -> go version go1.24.5 linux/amd64
+
+## 2. Build and vet (no Go source change)
+go build ./cmd/vs2
+# -> exit 0, 12.1 s user 45.2 s / real 12.1 s
+go vet ./cmd/vs2 ./internal/...
+# -> exit 0, real 7.7 s
+
+## 3. The declared A0 sweep: 16 founders x 8 seeds = 128 cells, H=144, zero spend
+CELLS=$(for f in $(seq 1 16); do for s in 0 1 2 3 4 5 6 7; do printf "f%d-s%d," "$f" "$s"; done; done)
+/tmp/vs2bin -arms A0 -cells "$CELLS" -reps 1 -hours 144 -parallel 8 -replay=false \
+  -budget-min 60 \
+  -out .tmp/43-a0-evaluation.json \
+  -out-txt .tmp/43-a0-evaluation.txt \
+  -root .tmp/43-a0-runs \
+  -recorded .tmp
+# -> inventory declared=128 ran=128 skipped=<none>; all 128 cells ran, 0 halted,
+#    every cell realized_calls=0 prompt_tokens=0 completion_tokens=0 cost_micros=0.
+#    (VS2-EC-1 prints FAIL because it compares against ticket-19 recordings at the
+#    declared cells only and at H=168; it is not the rung-2 verdict.)
+
+## 4. Reduction to durable, small artefacts
+python3 .scratch/43-rung2-seed/reduce-a0-grid.py \
+  .tmp/43-a0-evaluation.json \
+  .scratch/43-rung2-seed/a0-grid.json \
+  .scratch/43-rung2-seed/a0-grid.tsv
+cp .tmp/43-a0-evaluation.txt .scratch/43-rung2-seed/runner-report.txt

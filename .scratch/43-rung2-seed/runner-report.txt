@@ -1,0 +1,184 @@
+VS2 attention experiment evaluation
+status: synthetic/model-conditional
+revision: vs2-hermetic-fake/1; model github_copilot/gpt-6-luna wire responses; effort model-default; output-bound 0; response-bound 0; claim-contract natural-claim/v1; votes 1; replicates 1; attempt-timeout 30s; call-deadline 1m30s; base natural/7; mechanism v6; H=144; N=256; value-model vs2-value/2; feature-set vs2-features/1; no authorised spend
+model: github_copilot/gpt-6-luna wire: responses identity: 66f1270482c7472ac66022c1c4d31ac48620b0e4129b065cb65ae11fde260a62
+model+feature identity: 55f368ad603928e625c6f39d0a30ffa64c199c3b6365371b93b573f89a45919f feature set: vs2-features/1
+label: synthetic/model-conditional; hermetic FakeClient (no network, no authorised spend); cost fields are MODELLED price-table charges over the fake usage, not real spend; the run demonstrates the equal-budget ALLOCATION MECHANISM is load-bearing, never the central claim, which awaits real-model spend authorisation (spec section 1.3/9, VS2-EC-9)
+honest limit: fidelity is measured as divergence from the high-budget R reference, a comparative proxy and never ground truth: a smaller divergence means closer to the model-conditional reference, not more faithful to reality (spec section 6)
+horizon H=144 call ceiling N=256 value model=vs2-value/2
+applied: effort=model-default (field omitted) output-bound=0 response-bound=0 votes=1 replicates=1
+
+CELL INVENTORY
+declared=128 ran=128 skipped=0
+
+PER-CELL RESULTS (realized calls and under-budget, VS2-EC-2)
+arm f   s    ceiling realized under    escal    model    alloc   halt
+A0  1   0          0        0 false        0        0        0  false
+A0  1   1          0        0 false        0        0        0  false
+A0  1   2          0        0 false        0        0        0  false
+A0  1   3          0        0 false        0        0        0  false
+A0  1   4          0        0 false        0        0        0  false
+A0  1   5          0        0 false        0        0        0  false
+A0  1   6          0        0 false        0        0        0  false
+A0  1   7          0        0 false        0        0        0  false
+A0  2   0          0        0 false        0        0        0  false
+A0  2   1          0        0 false        0        0        0  false
+A0  2   2          0        0 false        0        0        0  false
+A0  2   3          0        0 false        0        0        0  false
+A0  2   4          0        0 false        0        0        0  false
+A0  2   5          0        0 false        0        0        0  false
+A0  2   6          0        0 false        0        0        0  false
+A0  2   7          0        0 false        0        0        0  false
+A0  3   0          0        0 false        0        0        0  false
+A0  3   1          0        0 false        0        0        0  false
+A0  3   2          0        0 false        0        0        0  false
+A0  3   3          0        0 false        0        0        0  false
+A0  3   4          0        0 false        0        0        0  false
+A0  3   5          0        0 false        0        0        0  false
+A0  3   6          0        0 false        0        0        0  false
+A0  3   7          0        0 false        0        0        0  false
+A0  4   0          0        0 false        0        0        0  false
+A0  4   1          0        0 false        0        0        0  false
+A0  4   2          0        0 false        0        0        0  false
+A0  4   3          0        0 false        0        0        0  false
+A0  4   4          0        0 false        0        0        0  false
+A0  4   5          0        0 false        0        0        0  false
+A0  4   6          0        0 false        0        0        0  false
+A0  4   7          0        0 false        0        0        0  false
+A0  5   0          0        0 false        0        0        0  false
+A0  5   1          0        0 false        0        0        0  false
+A0  5   2          0        0 false        0        0        0  false
+A0  5   3          0        0 false        0        0        0  false
+A0  5   4          0        0 false        0        0        0  false
+A0  5   5          0        0 false        0        0        0  false
+A0  5   6          0        0 false        0        0        0  false
+A0  5   7          0        0 false        0        0        0  false
+A0  6   0          0        0 false        0        0        0  false
+A0  6   1          0        0 false        0        0        0  false
+A0  6   2          0        0 false        0        0        0  false
+A0  6   3          0        0 false        0        0        0  false
+A0  6   4          0        0 false        0        0        0  false
+A0  6   5          0        0 false        0        0        0  false
+A0  6   6          0        0 false        0        0        0  false
+A0  6   7          0        0 false        0        0        0  false
+A0  7   0          0        0 false        0        0        0  false
+A0  7   1          0        0 false        0        0        0  false
+A0  7   2          0        0 false        0        0        0  false
+A0  7   3          0        0 false        0        0        0  false
+A0  7   4          0        0 false        0        0        0  false
+A0  7   5          0        0 false        0        0        0  false
+A0  7   6          0        0 false        0        0        0  false
+A0  7   7          0        0 false        0        0        0  false
+A0  8   0          0        0 false        0        0        0  false
+A0  8   1          0        0 false        0        0        0  false
+A0  8   2          0        0 false        0        0        0  false
+A0  8   3          0        0 false        0        0        0  false
+A0  8   4          0        0 false        0        0        0  false
+A0  8   5          0        0 false        0        0        0  false
+A0  8   6          0        0 false        0        0        0  false
+A0  8   7          0        0 false        0        0        0  false
+A0  9   0          0        0 false        0        0        0  false
+A0  9   1          0        0 false        0        0        0  false
+A0  9   2          0        0 false        0        0        0  false
+A0  9   3          0        0 false        0        0        0  false
+A0  9   4          0        0 false        0        0        0  false
+A0  9   5          0        0 false        0        0        0  false
+A0  9   6          0        0 false        0        0        0  false
+A0  9   7          0        0 false        0        0        0  false
+A0  10  0          0        0 false        0        0        0  false
+A0  10  1          0        0 false        0        0        0  false
+A0  10  2          0        0 false        0        0        0  false
+A0  10  3          0        0 false        0        0        0  false
+A0  10  4          0        0 false        0        0        0  false
+A0  10  5          0        0 false        0        0        0  false
+A0  10  6          0        0 false        0        0        0  false
+A0  10  7          0        0 false        0        0        0  false
+A0  11  0          0        0 false        0        0        0  false
+A0  11  1          0        0 false        0        0        0  false
+A0  11  2          0        0 false        0        0        0  false
+A0  11  3          0        0 false        0        0        0  false
+A0  11  4          0        0 false        0        0        0  false
+A0  11  5          0        0 false        0        0        0  false
+A0  11  6          0        0 false        0        0        0  false
+A0  11  7          0        0 false        0        0        0  false
+A0  12  0          0        0 false        0        0        0  false
+A0  12  1          0        0 false        0        0        0  false
+A0  12  2          0        0 false        0        0        0  false
+A0  12  3          0        0 false        0        0        0  false
+A0  12  4          0        0 false        0        0        0  false
+A0  12  5          0        0 false        0        0        0  false
+A0  12  6          0        0 false        0        0        0  false
+A0  12  7          0        0 false        0        0        0  false
+A0  13  0          0        0 false        0        0        0  false
+A0  13  1          0        0 false        0        0        0  false
+A0  13  2          0        0 false        0        0        0  false
+A0  13  3          0        0 false        0        0        0  false
+A0  13  4          0        0 false        0        0        0  false
+A0  13  5          0        0 false        0        0        0  false
+A0  13  6          0        0 false        0        0        0  false
+A0  13  7          0        0 false        0        0        0  false
+A0  14  0          0        0 false        0        0        0  false
+A0  14  1          0        0 false        0        0        0  false
+A0  14  2          0        0 false        0        0        0  false
+A0  14  3          0        0 false        0        0        0  false
+A0  14  4          0        0 false        0        0        0  false
+A0  14  5          0        0 false        0        0        0  false
+A0  14  6          0        0 false        0        0        0  false
+A0  14  7          0        0 false        0        0        0  false
+A0  15  0          0        0 false        0        0        0  false
+A0  15  1          0        0 false        0        0        0  false
+A0  15  2          0        0 false        0        0        0  false
+A0  15  3          0        0 false        0        0        0  false
+A0  15  4          0        0 false        0        0        0  false
+A0  15  5          0        0 false        0        0        0  false
+A0  15  6          0        0 false        0        0        0  false
+A0  15  7          0        0 false        0        0        0  false
+A0  16  0          0        0 false        0        0        0  false
+A0  16  1          0        0 false        0        0        0  false
+A0  16  2          0        0 false        0        0        0  false
+A0  16  3          0        0 false        0        0        0  false
+A0  16  4          0        0 false        0        0        0  false
+A0  16  5          0        0 false        0        0        0  false
+A0  16  6          0        0 false        0        0        0  false
+A0  16  7          0        0 false        0        0        0  false
+
+DIVERGENCE VECTOR (budgeted arm vs R reference; raw and normalised first-divergence hour)
+arm f   s  indicator                      max      mean  first   norm
+  none (no complete A/P/U vs R cell)
+
+SHORT PROJECTIONS (budgeted arms refused rather than truncated, spec section 5.3)
+  none
+
+VALUE-MODEL CALIBRATION (VS2-EC-8)
+
+FROZEN EXIT CRITERIA BANDS
+[FAIL] VS2-EC-1
+  criterion: VS2-EC-1 deterministic allocation, no world RNG: the no-AI A0 control through the VS2 harness is byte-identical to the recorded ticket-19 natural/7 x v6 evidence (branch digest, event counts/body bytes, hourly population) at the declared cells; the nil-priority WakePolicy canonical identity bytes are unchanged from VS1.
+  evidence: A0 cells checked=40 missing=0 declared=12; mismatches=f1-s0:recording-missing,f1-s1:recording-missing,f1-s2:recording-missing,f1-s3:recording-missing,f1-s4:recording-missing,f1-s5:recording-missing,f1-s6:recording-missing,f1-s7:recording-missing,f10-s0:alive_by_hour,f10-s0:event_body_bytes,f10-s0:events,f10-s0:history_bytes,f10-s1:alive_by_hour,f10-s1:event_body_bytes,f10-s1:events,f10-s1:history_bytes,f10-s2:alive_by_hour,f10-s2:event_body_bytes,f10-s2:events,f10-s2:history_bytes,f10-s3:alive_by_hour,f10-s3:event_body_bytes,f10-s3:events,f10-s3:history_bytes,f10-s4:alive_by_hour,f10-s4:event_body_bytes,f10-s4:events,f10-s4:history_bytes,f10-s5:alive_by_hour,f10-s5:event_body_bytes,f10-s5:events,f10-s5:history_bytes,f10-s6:alive_by_hour,f10-s6:event_body_bytes,f10-s6:events,f10-s6:history_bytes,f10-s7:alive_by_hour,f10-s7:event_body_bytes,f10-s7:events,f10-s7:history_bytes,f11-s0:alive_by_hour,f11-s0:event_body_bytes,f11-s0:events,f11-s0:history_bytes,f11-s1:alive_by_hour,f11-s1:event_body_bytes,f11-s1:events,f11-s1:history_bytes,f11-s2:alive_by_hour,f11-s2:event_body_bytes,f11-s2:events,f11-s2:history_bytes,f11-s3:alive_by_hour,f11-s3:event_body_bytes,f11-s3:events,f11-s3:history_bytes,f11-s4:alive_by_hour,f11-s4:event_body_bytes,f11-s4:events,f11-s4:history_bytes,f11-s5:alive_by_hour,f11-s5:event_body_bytes,f11-s5:events,f11-s5:history_bytes,f11-s6:alive_by_hour,f11-s6:event_body_bytes,f11-s6:events,f11-s6:history_bytes,f11-s7:alive_by_hour,f11-s7:event_body_bytes,f11-s7:events,f11-s7:history_bytes,f12-s0:alive_by_hour,f12-s0:event_body_bytes,f12-s0:events,f12-s0:history_bytes,f12-s1:alive_by_hour,f12-s1:event_body_bytes,f12-s1:events,f12-s1:history_bytes,f12-s2:alive_by_hour,f12-s2:event_body_bytes,f12-s2:events,f12-s2:history_bytes,f12-s3:alive_by_hour,f12-s3:event_body_bytes,f12-s3:events,f12-s3:history_bytes,f12-s4:alive_by_hour,f12-s4:event_body_bytes,f12-s4:events,f12-s4:history_bytes,f12-s5:alive_by_hour,f12-s5:event_body_bytes,f12-s5:events,f12-s5:history_bytes,f12-s6:alive_by_hour,f12-s6:event_body_bytes,f12-s6:events,f12-s6:history_bytes,f12-s7:alive_by_hour,f12-s7:event_body_bytes,f12-s7:events,f12-s7:history_bytes,f13-s0:alive_by_hour,f13-s0:event_body_bytes,f13-s0:events,f13-s0:history_bytes,f13-s1:alive_by_hour,f13-s1:event_body_bytes,f13-s1:events,f13-s1:history_bytes,f13-s2:alive_by_hour,f13-s2:event_body_bytes,f13-s2:events,f13-s2:history_bytes,f13-s3:alive_by_hour,f13-s3:event_body_bytes,f13-s3:events,f13-s3:history_bytes,f13-s4:alive_by_hour,f13-s4:event_body_bytes,f13-s4:events,f13-s4:history_bytes,f13-s5:alive_by_hour,f13-s5:event_body_bytes,f13-s5:events,f13-s5:history_bytes,f13-s6:alive_by_hour,f13-s6:event_body_bytes,f13-s6:events,f13-s6:history_bytes,f13-s7:alive_by_hour,f13-s7:event_body_bytes,f13-s7:events,f13-s7:history_bytes,f14-s0:recording-missing,f14-s1:recording-missing,f14-s2:recording-missing,f14-s3:recording-missing,f14-s4:recording-missing,f14-s5:recording-missing,f14-s6:recording-missing,f14-s7:recording-missing,f15-s0:recording-missing,f15-s1:recording-missing,f15-s2:recording-missing,f15-s3:recording-missing,f15-s4:recording-missing,f15-s5:recording-missing,f15-s6:recording-missing,f15-s7:recording-missing,f16-s0:alive_by_hour,f16-s0:event_body_bytes,f16-s0:events,f16-s0:history_bytes,f16-s1:alive_by_hour,f16-s1:event_body_bytes,f16-s1:events,f16-s1:history_bytes,f16-s2:alive_by_hour,f16-s2:event_body_bytes,f16-s2:events,f16-s2:history_bytes,f16-s3:alive_by_hour,f16-s3:event_body_bytes,f16-s3:events,f16-s3:history_bytes,f16-s4:alive_by_hour,f16-s4:event_body_bytes,f16-s4:events,f16-s4:history_bytes,f16-s5:alive_by_hour,f16-s5:event_body_bytes,f16-s5:events,f16-s5:history_bytes,f16-s6:alive_by_hour,f16-s6:event_body_bytes,f16-s6:events,f16-s6:history_bytes,f16-s7:alive_by_hour,f16-s7:event_body_bytes,f16-s7:events,f16-s7:history_bytes,f2-s0:recording-missing,f2-s1:recording-missing,f2-s2:recording-missing,f2-s3:recording-missing,f2-s4:recording-missing,f2-s5:recording-missing,f2-s6:recording-missing,f2-s7:recording-missing,f3-s0:recording-missing,f3-s1:recording-missing,f3-s2:recording-missing,f3-s3:recording-missing,f3-s4:recording-missing,f3-s5:recording-missing,f3-s6:recording-missing,f3-s7:recording-missing,f4-s0:recording-missing,f4-s1:recording-missing,f4-s2:recording-missing,f4-s3:recording-missing,f4-s4:recording-missing,f4-s5:recording-missing,f4-s6:recording-missing,f4-s7:recording-missing,f5-s0:recording-missing,f5-s1:recording-missing,f5-s2:recording-missing,f5-s3:recording-missing,f5-s4:recording-missing,f5-s5:recording-missing,f5-s6:recording-missing,f5-s7:recording-missing,f6-s0:recording-missing,f6-s1:recording-missing,f6-s2:recording-missing,f6-s3:recording-missing,f6-s4:recording-missing,f6-s5:recording-missing,f6-s6:recording-missing,f6-s7:recording-missing,f7-s0:recording-missing,f7-s1:recording-missing,f7-s2:recording-missing,f7-s3:recording-missing,f7-s4:recording-missing,f7-s5:recording-missing,f7-s6:recording-missing,f7-s7:recording-missing,f8-s0:recording-missing,f8-s1:recording-missing,f8-s2:recording-missing,f8-s3:recording-missing,f8-s4:recording-missing,f8-s5:recording-missing,f8-s6:recording-missing,f8-s7:recording-missing,f9-s0:recording-missing,f9-s1:recording-missing,f9-s2:recording-missing,f9-s3:recording-missing,f9-s4:recording-missing,f9-s5:recording-missing,f9-s6:recording-missing,f9-s7:recording-missing; nil-priority identity byte test: internal/cognition/protocol/wake_test.go (unit)
+[not-evaluable] VS2-EC-2
+  criterion: VS2-EC-2 equal-budget ceiling enforced fail-loud, realized counts reported: each budgeted arm (P/U/A) selects online over its own realized stream and stops at N; the report records every budgeted arm's realized call count and never assumes realized==N; the four cognitive-ceiling rows are present; an (N+1)-th attempt is the typed fail-loud halt and a Priority!=nil policy paired with Selector==nil is refused at construction.
+  evidence: budgeted cells=0 ceiling N=256 over-ceiling=0 under-budget=0 missing-ceiling-rows=0 ceiling-halts=0 missing=f1-s0/A,f1-s0/P,f1-s0/U,f1-s1/A,f1-s1/P,f1-s1/U,f1-s2/A,f1-s2/P,f1-s2/U,f1-s3/A,f1-s3/P,f1-s3/U,f1-s4/A,f1-s4/P,f1-s4/U,f1-s5/A,f1-s5/P,f1-s5/U,f1-s6/A,f1-s6/P,f1-s6/U,f1-s7/A,f1-s7/P,f1-s7/U,f10-s0/A,f10-s0/P,f10-s0/U,f10-s1/A,f10-s1/P,f10-s1/U,f10-s2/A,f10-s2/P,f10-s2/U,f10-s3/A,f10-s3/P,f10-s3/U,f10-s4/A,f10-s4/P,f10-s4/U,f10-s5/A,f10-s5/P,f10-s5/U,f10-s6/A,f10-s6/P,f10-s6/U,f10-s7/A,f10-s7/P,f10-s7/U,f11-s0/A,f11-s0/P,f11-s0/U,f11-s1/A,f11-s1/P,f11-s1/U,f11-s2/A,f11-s2/P,f11-s2/U,f11-s3/A,f11-s3/P,f11-s3/U,f11-s4/A,f11-s4/P,f11-s4/U,f11-s5/A,f11-s5/P,f11-s5/U,f11-s6/A,f11-s6/P,f11-s6/U,f11-s7/A,f11-s7/P,f11-s7/U,f12-s0/A,f12-s0/P,f12-s0/U,f12-s1/A,f12-s1/P,f12-s1/U,f12-s2/A,f12-s2/P,f12-s2/U,f12-s3/A,f12-s3/P,f12-s3/U,f12-s4/A,f12-s4/P,f12-s4/U,f12-s5/A,f12-s5/P,f12-s5/U,f12-s6/A,f12-s6/P,f12-s6/U,f12-s7/A,f12-s7/P,f12-s7/U,f13-s0/A,f13-s0/P,f13-s0/U,f13-s1/A,f13-s1/P,f13-s1/U,f13-s2/A,f13-s2/P,f13-s2/U,f13-s3/A,f13-s3/P,f13-s3/U,f13-s4/A,f13-s4/P,f13-s4/U,f13-s5/A,f13-s5/P,f13-s5/U,f13-s6/A,f13-s6/P,f13-s6/U,f13-s7/A,f13-s7/P,f13-s7/U,f14-s0/A,f14-s0/P,f14-s0/U,f14-s1/A,f14-s1/P,f14-s1/U,f14-s2/A,f14-s2/P,f14-s2/U,f14-s3/A,f14-s3/P,f14-s3/U,f14-s4/A,f14-s4/P,f14-s4/U,f14-s5/A,f14-s5/P,f14-s5/U,f14-s6/A,f14-s6/P,f14-s6/U,f14-s7/A,f14-s7/P,f14-s7/U,f15-s0/A,f15-s0/P,f15-s0/U,f15-s1/A,f15-s1/P,f15-s1/U,f15-s2/A,f15-s2/P,f15-s2/U,f15-s3/A,f15-s3/P,f15-s3/U,f15-s4/A,f15-s4/P,f15-s4/U,f15-s5/A,f15-s5/P,f15-s5/U,f15-s6/A,f15-s6/P,f15-s6/U,f15-s7/A,f15-s7/P,f15-s7/U,f16-s0/A,f16-s0/P,f16-s0/U,f16-s1/A,f16-s1/P,f16-s1/U,f16-s2/A,f16-s2/P,f16-s2/U,f16-s3/A,f16-s3/P,f16-s3/U,f16-s4/A,f16-s4/P,f16-s4/U,f16-s5/A,f16-s5/P,f16-s5/U,f16-s6/A,f16-s6/P,f16-s6/U,f16-s7/A,f16-s7/P,f16-s7/U,f2-s0/A,f2-s0/P,f2-s0/U,f2-s1/A,f2-s1/P,f2-s1/U,f2-s2/A,f2-s2/P,f2-s2/U,f2-s3/A,f2-s3/P,f2-s3/U,f2-s4/A,f2-s4/P,f2-s4/U,f2-s5/A,f2-s5/P,f2-s5/U,f2-s6/A,f2-s6/P,f2-s6/U,f2-s7/A,f2-s7/P,f2-s7/U,f3-s0/A,f3-s0/P,f3-s0/U,f3-s1/A,f3-s1/P,f3-s1/U,f3-s2/A,f3-s2/P,f3-s2/U,f3-s3/A,f3-s3/P,f3-s3/U,f3-s4/A,f3-s4/P,f3-s4/U,f3-s5/A,f3-s5/P,f3-s5/U,f3-s6/A,f3-s6/P,f3-s6/U,f3-s7/A,f3-s7/P,f3-s7/U,f4-s0/A,f4-s0/P,f4-s0/U,f4-s1/A,f4-s1/P,f4-s1/U,f4-s2/A,f4-s2/P,f4-s2/U,f4-s3/A,f4-s3/P,f4-s3/U,f4-s4/A,f4-s4/P,f4-s4/U,f4-s5/A,f4-s5/P,f4-s5/U,f4-s6/A,f4-s6/P,f4-s6/U,f4-s7/A,f4-s7/P,f4-s7/U,f5-s0/A,f5-s0/P,f5-s0/U,f5-s1/A,f5-s1/P,f5-s1/U,f5-s2/A,f5-s2/P,f5-s2/U,f5-s3/A,f5-s3/P,f5-s3/U,f5-s4/A,f5-s4/P,f5-s4/U,f5-s5/A,f5-s5/P,f5-s5/U,f5-s6/A,f5-s6/P,f5-s6/U,f5-s7/A,f5-s7/P,f5-s7/U,f6-s0/A,f6-s0/P,f6-s0/U,f6-s1/A,f6-s1/P,f6-s1/U,f6-s2/A,f6-s2/P,f6-s2/U,f6-s3/A,f6-s3/P,f6-s3/U,f6-s4/A,f6-s4/P,f6-s4/U,f6-s5/A,f6-s5/P,f6-s5/U,f6-s6/A,f6-s6/P,f6-s6/U,f6-s7/A,f6-s7/P,f6-s7/U,f7-s0/A,f7-s0/P,f7-s0/U,f7-s1/A,f7-s1/P,f7-s1/U,f7-s2/A,f7-s2/P,f7-s2/U,f7-s3/A,f7-s3/P,f7-s3/U,f7-s4/A,f7-s4/P,f7-s4/U,f7-s5/A,f7-s5/P,f7-s5/U,f7-s6/A,f7-s6/P,f7-s6/U,f7-s7/A,f7-s7/P,f7-s7/U,f8-s0/A,f8-s0/P,f8-s0/U,f8-s1/A,f8-s1/P,f8-s1/U,f8-s2/A,f8-s2/P,f8-s2/U,f8-s3/A,f8-s3/P,f8-s3/U,f8-s4/A,f8-s4/P,f8-s4/U,f8-s5/A,f8-s5/P,f8-s5/U,f8-s6/A,f8-s6/P,f8-s6/U,f8-s7/A,f8-s7/P,f8-s7/U,f9-s0/A,f9-s0/P,f9-s0/U,f9-s1/A,f9-s1/P,f9-s1/U,f9-s2/A,f9-s2/P,f9-s2/U,f9-s3/A,f9-s3/P,f9-s3/U,f9-s4/A,f9-s4/P,f9-s4/U,f9-s5/A,f9-s5/P,f9-s5/U,f9-s6/A,f9-s6/P,f9-s6/U,f9-s7/A,f9-s7/P,f9-s7/U; construction refusal of Priority!=nil && Selector==nil and the fail-loud (N+1)-th call are unit-exercised (internal/world/natural_cognition_priority_test.go, internal/cognition/budget_test.go)
+[not-evaluable] VS2-EC-3
+  criterion: VS2-EC-3 adaptive dominates periodic and random across seeds on the vector, or the clean negative is reported verbatim: for each declared cell, adaptive's per-indicator divergence vector weakly dominates both P and U with strict improvement in >=1 indicator, on the declared summaries (Max/Mean lower-is-better, normalised FirstDivergenceHour higher-is-better); it is falsified only when a budgeted baseline strictly dominates adaptive.
+  evidence: complete A/P/U cells=0/12; adaptive-dominates=0; clean-negative(mutually non-dominating)=0; baseline-strictly-dominates-adaptive=0
+[not-evaluable] VS2-EC-4
+  criterion: VS2-EC-4 multi-indicator, no single scalar: the report carries every declared indicator (raw and §6-normalised FirstDivergenceHour); the comparison is vector dominance under each indicator's declared direction; no weighted sum is defined and a scalar win without vector dominance does not count as beating.
+  evidence: fidelity rows=0 each carrying 8 indicators (raw first_divergence_hour + normalised -1->H+1); incomplete=0; the scalar-winner-but-no-vector-dominance and sentinel-inversion fixtures are unit-exercised (cmd/vs2/bands_test.go)
+[not-evaluable] VS2-EC-5
+  criterion: VS2-EC-5 identity and replay valid across strategy updates: a priority-bearing arm (P/U/A) replays byte-exact from genesis with zero model calls -- accepted history, hourly projections, allocation decisions and both ledgers -- and the selector re-derives the identical escalation set; the checkpoint manifest's cognition block binds the full priority-policy fingerprint and a restore under a differing policy is refused.
+  evidence: no priority arm was replayed; the priority checkpoint/restore round trip is exercised in internal/world/natural_priority_replay_test.go and cmd/vs2/e2e_test.go, and the mutated-policy-fingerprint refusal in internal/world/natural_cognition_priority_test.go
+[FAIL] VS2-EC-6
+  criterion: VS2-EC-6 observation-bounded escalation: every Role A request is produced by the allow-list encoder from the frozen NaturalObservation; the import graph proves the request builder does not transitively import internal/world and the world does not import the client; the adversarial sentinel and every recorded request/allocation carry no privileged marker.
+  evidence: import closure: request-builder=22 pkgs (no agentworld/internal/world), protocol=13 pkgs (no net/agentworld/internal/world), world=29 pkgs (no client); violations=0 [none]; Role A requests scanned=3 (recorded=0), declared key set matched by contract [natural-claim/v1=1,natural-claim/v2=1,natural-claim/v4=1] against declared contracts [natural-claim/v1=1,natural-claim/v2=1,natural-claim/v4=1]; privileged markers=0 over 3 requests that passed the key check [none]; allocation records scanned=0, markers=0; key violations=0 [none]
+[not-evaluable] VS2-EC-7
+  criterion: VS2-EC-7 protected exploration present and bounded: with q>0 the selector reserves ceil(q*N) calls computed as (N*frac+scale-1)/scale for uniform online draws inside the per-hour quota q(h); the exploration set is non-empty when the arm's stream and N permit, deterministic from the policy PRNG, and recorded on the allocation record; the q=0 arm isolates pure exploitation.
+  evidence: A cells=0 reserved E=ceil(q*N)=64 recorded exploration sum=0; P/U exploration must be empty; violations=0; q>0/q=0 fixtures are unit-exercised (internal/cognition/priority_test.go, cmd/vs2/accounting_test.go); none
+[not-evaluable] VS2-EC-8
+  criterion: VS2-EC-8 value model declared and calibrated (P6/ADR 0003): the value model is a versioned integer fixed-point projection exposing feature values, uncertainty, selected action, cost and realized downstream value; the calibration error of predicted priority vs realized effect is reported; the model version is part of run identity.
+  evidence: value model version=vs2-value/1 bound in run identity and in the allocation-record policy_fingerprint; budgeted cells=0 with recorded candidate scores=0; the float-free projection and the all-zero-weight uniform reduction are unit-exercised (internal/cognition/protocol/valuemodel_test.go)
+[PASS] VS2-EC-9
+  criterion: VS2-EC-9 honest labels, real-model gate, negative valid: every report is synthetic/model-conditional; the real-model arm is labelled blocked on spend authorisation and no acceptance is claimed without it; a clean negative is reported verbatim and is a valid, decisive outcome.
+  evidence: label="synthetic/model-conditional; hermetic FakeClient (no network, no authorised spend); cost fields are MODELLED price-table charges over the fake usage, not real spend; the run demonstrates the equal-budget ALLOCATION MECHANISM is load-bearing, never the central claim, which awaits real-model spend authorisation (spec section 1.3/9, VS2-EC-9)" labelled=true (matched to the run mode); honest limit="fidelity is measured as divergence from the high-budget R reference, a comparative proxy and never ground truth: a smaller divergence means closer to the model-conditional reference, not more faithful to reality (spec section 6)"; real-model arm: blocked on spend; the hermetic label states no spend was authorised; live gate="the real-model arm is blocked on spend authorisation; live VS2 refuses to start without -live AND VS2_SPEND_AUTHORIZATION=AUTHORIZED-VS2-SPEND; no spend is authorised for this lane" (refuses to start without the operator spend authorisation)
+
+REPLAY SUBSET (priority arms, VS2-EC-5)
+  none
