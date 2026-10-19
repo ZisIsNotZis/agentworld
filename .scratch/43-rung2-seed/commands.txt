@@ -10,13 +10,14 @@ go version
 
 ## 2. Build and vet (no Go source change)
 go build ./cmd/vs2
-# -> exit 0, 12.1 s user 45.2 s / real 12.1 s
+# -> exit 0, real 12.1 s
 go build -o /tmp/vs2bin ./cmd/vs2
 # -> exit 0 (writes the binary the sweep below runs; the bare build above writes ./vs2)
 go vet ./cmd/vs2 ./internal/...
 # -> exit 0, real 7.7 s
 
 ## 3. The declared A0 sweep: 16 founders x 8 seeds = 128 cells, H=144, zero spend
+# -budget-min 60 caps the sweep at 60 min, stricter than the ticket's 90-minute compute bound (spec.md §2)
 CELLS=$(for f in $(seq 1 16); do for s in 0 1 2 3 4 5 6 7; do printf "f%d-s%d," "$f" "$s"; done; done)
 /tmp/vs2bin -arms A0 -cells "$CELLS" -reps 1 -hours 144 -parallel 8 -replay=false \
   -budget-min 60 \

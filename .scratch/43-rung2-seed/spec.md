@@ -116,7 +116,8 @@ git-ignored `.tmp` and are not claimed as durable evidence.
 ### 6.2 The declared sweep ran completely, at zero spend
 
 The command (full text in `commands.txt`) ran `-arms A0` only, no `-live`, `-reps 1`, `-hours 144`,
-`-parallel 8`, over the 128 declared cells. The evaluation artefact records:
+`-parallel 8`, `-budget-min 60` (stricter than the ticket's 90-minute compute bound), over the 128 declared
+cells. The evaluation artefact records:
 
 | check | value |
 |---|---|
@@ -182,9 +183,11 @@ primary-cell age death is at **h138–h144** (`a0-grid.tsv`: `f10-s2` 138, `f10-
 `births` begin at **h5** and recur as late as **h68** in the primary cells (`f11-s1`; h25 at `f11-s0`,
 h23 at `f12-s0`; the f=10 cells are all `[5,6]`, f=11 seeds 0–3 are `[5,7,25]`, `[5,7,68]`, `[5,7,9]`,
 `[5,7,8]`, f=12 is `[5,6,7,8,23]` at s0 and `[5,6,7,8]` at s1–3), and across the whole grid they recur as
-late as **h124** (`f6-s6`; h117 at `f12-s6`). The one or zero survivors at `H` are the latest-born. The
-horizon is about one lifespan: **age deaths run h99–h144 and leave one survivor or none in the primary
-cells**.
+late as **h124** (`f6-s6`; h117 at `f12-s6`). In the `f=10` cells, where there is a survivor it is the
+latest-born (11 age deaths, no starvation deaths); the aggregate artefact records no per-actor identity at
+the starvation cells, so nothing here establishes which actor survives there. The horizon is about one
+lifespan: **age deaths run h99–h144 in the primary cells (h97 grid-wide) and leave one survivor or none
+there**.
 *Counterfactual, from the same measured series:* at `f10-s0` the other two clauses already hold (2 births,
 0 starvation), and the cell's peak population is 12 at h6 with 11 age deaths and `alive_end = 1`; with age
 mortality removed the same trajectory would end with all **12** actors alive (`10 + 2 − 0`) and would
@@ -245,7 +248,9 @@ not on the measurement: the FAIL verdict, 0/128 cells, zero spend and binding an
 it found two P1 record defects (a birth/age-hour sentence contradicted by this ticket's own `a0-grid.json`,
 and a `commands.txt` that runs a binary it never builds). Its report is copied verbatim, with its source
 named, to [`review.md`](review.md); the corrections it asked for are in this commit and the verdict is
-unchanged. Its suggested figures were re-derived from `a0-grid.json` and extended where the artefact
+unchanged. A delta review of the correction commit `44363f4` returned **OK with notes** with no verdict
+change; its report is copied verbatim, with its source named, to [`review-delta.md`](review-delta.md), and
+its four report-only items are landed in the same commit. Its suggested figures were re-derived from `a0-grid.json` and extended where the artefact
 differs: births begin at h5 and the grid's latest birth is h124 (`f6-s6`), not h117. The reviewer had no shell, so it could not run three checks; they were run here and all three
 pass:
 
