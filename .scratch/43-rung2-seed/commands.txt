@@ -11,6 +11,8 @@ go version
 ## 2. Build and vet (no Go source change)
 go build ./cmd/vs2
 # -> exit 0, 12.1 s user 45.2 s / real 12.1 s
+go build -o /tmp/vs2bin ./cmd/vs2
+# -> exit 0 (writes the binary the sweep below runs; the bare build above writes ./vs2)
 go vet ./cmd/vs2 ./internal/...
 # -> exit 0, real 7.7 s
 

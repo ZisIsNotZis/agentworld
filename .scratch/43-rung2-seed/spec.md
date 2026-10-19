@@ -176,12 +176,15 @@ zero starvation, and no cell holds all three. The grid exhausted the world's own
 ### 6.6 Binding-parameter analysis (measured, not asserted)
 
 **(1) Founder aging is the primary binder.** In the declared primary cells the founding cohort and its
-few offspring die of **age**, not hunger: `age_deaths` are 11–14 per cell and account for **81.2 %–100 %**
-of all deaths (`f10-s0` and `f10-s1`: 11 of 11, 100 %). Age deaths begin at **h99–h103** and continue to
-`H` (h140–h144); `births` occur only at **h5–h8** (the primary cells' birth hours are `[5,6]` at f=10,
-`[5,7,25]` or `[5,7,8/9]` at f=11, `[5..8,23]` at f=12), so the offspring born at h5–h8 are themselves
-~136–139 hours old at `H` and most die before it. The one or zero survivors at `H` are the latest-born.
-The horizon is therefore about one lifespan: **every actor that exists dies of age within `H`**.
+few offspring die mostly of **age**, not hunger: `age_deaths` are 11–14 per cell and account for **81.2 %–100 %**
+of all deaths (`f10-s0` and `f10-s1`: 11 of 11, 100 %). Age deaths begin at **h99–h103** and the last
+primary-cell age death is at **h138–h144** (`a0-grid.tsv`: `f10-s2` 138, `f10-s0` and `f11-s0` 144).
+`births` begin at **h5** and recur as late as **h68** in the primary cells (`f11-s1`; h25 at `f11-s0`,
+h23 at `f12-s0`; the f=10 cells are all `[5,6]`, f=11 seeds 0–3 are `[5,7,25]`, `[5,7,68]`, `[5,7,9]`,
+`[5,7,8]`, f=12 is `[5,6,7,8,23]` at s0 and `[5,6,7,8]` at s1–3), and across the whole grid they recur as
+late as **h124** (`f6-s6`; h117 at `f12-s6`). The one or zero survivors at `H` are the latest-born. The
+horizon is about one lifespan: **age deaths run h99–h144 and leave one survivor or none in the primary
+cells**.
 *Counterfactual, from the same measured series:* at `f10-s0` the other two clauses already hold (2 births,
 0 starvation), and the cell's peak population is 12 at h6 with 11 age deaths and `alive_end = 1`; with age
 mortality removed the same trajectory would end with all **12** actors alive (`10 + 2 − 0`) and would
@@ -196,7 +199,7 @@ cohorts therefore do **not** buy a good ending.
 
 **(3) Food supply is a co-binder at larger cohorts, not the primary one.** Starvation deaths occur in
 80/128 cells, 280 of the grid's 1 290 deaths (21.7 %; age deaths 1 010, 78.3 %), and rise with foundering
-(`f≥5` shows 1–9 starvation deaths). But at `f=10` starvation is **0** in all eight seeds and the cells
+(`f≥5` shows 0–9 starvation deaths, the minimum 0 at `f = 8, 9, 10, 16` and 3–5 at `f = 5`). But at `f=10` starvation is **0** in all eight seeds and the cells
 still fail on age and births, so food is not what blocks the declared primary cells.
 
 **(4) Founding cohort size does not bind and does not help.** `alive_end` is non-monotonic and never
@@ -234,3 +237,25 @@ The source evaluation artefact was `.tmp/43-a0-evaluation.json`, sha256
   recordings at the 12 declared cells and at `H = 168`; that is an artefact-of-horizon mismatch, not a
   defect in the sweep, and the rung-2 verdict reads only the per-cell series.
 - This ticket is measurement only: no flag was missing, so no blocker was raised and no code changed.
+
+### 6.9 Independent review and the checks it could not run
+
+A fresh independent reviewer examined the merge at commit `03b0467` and returned **BLOCK** on the record,
+not on the measurement: the FAIL verdict, 0/128 cells, zero spend and binding analysis all reproduced, and
+it found two P1 record defects (a birth/age-hour sentence contradicted by this ticket's own `a0-grid.json`,
+and a `commands.txt` that runs a binary it never builds). Its report is copied verbatim, with its source
+named, to [`review.md`](review.md); the corrections it asked for are in this commit and the verdict is
+unchanged. Its suggested figures were re-derived from `a0-grid.json` and extended where the artefact
+differs: births begin at h5 and the grid's latest birth is h124 (`f6-s6`), not h117. The reviewer had no shell, so it could not run three checks; they were run here and all three
+pass:
+
+| check | command | output |
+|---|---|---|
+| no Go source change | `git show --stat 03b0467 -- cmd internal` | empty output, exit 0 (no file under `cmd/` or `internal/` changed) |
+| only the two rung-2/Q13 status lines changed in `docs/` | `git diff bca7ddc 03b0467 -- docs` | two hunks: the `docs/VERTICAL-SLICES.md` rung-2 status cell and the `docs/OPEN-QUESTIONS.md` Q13 status line; no other docs line |
+| pushed commit equal to the local HEAD at review time | `git ls-remote origin master` | `03b0467d490f3af1f3659d44d8471c81779cc769 refs/heads/master`, equal to `HEAD` |
+
+Pre-declaration evidence: the criterion's pre-declaration is evidenced by commit order — it was committed
+in `bca7ddc`, 37 minutes before the run commit `03b0467` — while the declared grid's pre-declaration rests
+on §2's text; the grid is exhaustive over the founder axis (`1..16` at every declared seed), so no
+post-hoc grid could have hidden a passing cell.
