@@ -7,17 +7,20 @@
 - **Checkpoint:** A versioned state snapshot plus references to immutable history, pending work, rule versions, strategy versions, and random-stream positions.
 - **Cognitive budget:** The bounded compute, language-model tokens, time, or search effort available for expensive reasoning.
 - **Cognitive scheduler:** The component that chooses where expensive reasoning is expected to provide the highest value under budget.
+- **Claim rung:** One of the five ordered steps by which the central claim may be tested — harness, seed, influence, stability, kick-in strategy — where a later rung may not be read before every earlier rung holds ([VERTICAL-SLICES.md](VERTICAL-SLICES.md)).
 - **Civilization-level fidelity:** Accuracy of causal effects relevant to population, resources, power, institutions, technology, culture, conflict, and other declared macro outcomes.
 - **Event:** An authorized, timestamped record of an attempted or committed change with causal provenance.
 - **Institution macro:** A versioned efficient representation of a stable social mechanism that remains auditable against its underlying actor interactions.
 - **Intention:** A requested action submitted by an actor; it is not a guaranteed outcome or direct state mutation.
 - **Manager:** A language-model role that inspects one or more isolated actor cases and proposes intentions, strategy patches, evidence requests, or refinement proposals.
 - **Metric projection:** A versioned transformation from structured or semantic state into numerical features with declared uncertainty and information loss.
+- **No-AI control (`A0`):** The same world and seed with every decision made by the frozen deterministic policy and zero model calls; it is the anchor the declared metric scores against and it is what "doing nothing" means in every arm comparison.
 - **Model refinement:** A more explicit or accurate representation of behavior already assumed to exist in the world, not the creation of a new natural law.
 - **Primitive:** A small typed operation or concept exposed by the world or strategy runtime.
 - **Run:** One execution lineage identified by its seed, versions, configuration, history, and branch ancestry.
 - **Strategy:** A versioned executable data program that maps actor-visible state into private updates, escalation requests, or intentions.
 - **Trajectory:** The inspectable history of perceptions, relevant private-state changes, strategy decisions, intentions, outcomes, and causal events for an actor or system component.
 - **Wake:** Activation of a dormant actor fiber or invocation of expensive cognition because a declared condition occurred.
+- **`vrd/2`:** The declared comparison metric, a four-component priority order — terminal persistence, actor-hours, starvation deaths, births — each read as a deficit below the no-AI control's own outcome; lower is more viable, there is no weight and no scalar ([VALIDATION.md](VALIDATION.md)).
 - **World distance:** A versioned metric vector comparing two world states or histories; it is not assumed to reduce safely to one scalar.
 - **World kernel:** The authoritative engine for validation, scheduling, conflict resolution, state transition, perception, and event commitment.

@@ -109,69 +109,21 @@ actor could not observe. (f) Costs reported per call, per actor-hour, and per ru
 Deepens C7/C8/C11/C13 from "present" to "tested". Adds the value-based priority layer
 (`expected civilizational value / expected cost`), escalation requests, and protected exploration.
 
-**Status (master, tickets 37-42).** The slice's mechanism questions are settled and the claim's own test is not: `natural-claim/v4` makes the actor's answers admissible (0/40 and 0/1 325 refused) and `vrd/2` replaces the R-anchored distance with a viability order against the no-AI control, but the arm comparison at 248 decisions per arm returned no advantage over doing nothing at any of the three scored cells. `A` ties `A0` on every cell, `P` ties it on two cells and is worse on `f12-s0`, `U` is worse on `f12-s0`, and the only separations found are between AI arms, which is why the M2c pattern did not replicate (ticket 42). **The central claim is untested rather than supported**: before another allocation arm is run, the open question is whether this world contains a reasoning premium at all — Q13 in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md), awaiting the user's choice of route. Records: `.scratch/41-m2c-matrix-rerun/spec.md`, `.scratch/42-m2d-replication/spec.md`.
+**Status.** The M2 row of the milestone table is the one home for what the mechanism and the runs established. This section carries the question, the declared order in which the claim may be tested, and the metric's bounds.
 
-**Status (branch `feature/35-vs2-curve`, ticket 35, added on top of the ticket-34 record below).**
-The VS2 question is now asked with a **curve criterion** and the axes of **depth (reasoning effort) and
-redundancy (replicates)** are first-class. The criterion is pre-registered in
-`.scratch/35-vs2-curve/spec.md` and was committed before any live call: the unit of analysis is the
-per-hour KPI curve of a condition replicated 3×; the band is the mean ± 95 % CI plus the replicate
-envelope; between conditions, `SNR` = RMSE over hours of the paired difference divided by RMSE over
-hours of the replicate noise, with the first-separation hour, the longest separating run and a
-Wasserstein-1 distance; a condition is distinguishable only if some KPI holds SNR ≥ 2 with a ≥ 24-hour
-separation in every cell, and **no condition is called better on a scalar**.
+**Claim-establishment rungs (declared order; a later rung may not be read before every earlier rung holds).** The order is the operator's (2026-10-19), restated here because the recorded programme departed from it: a harness that does not state the decision tests nothing, a world with no good ending has nothing for cognition to protect, a reasoning effect that has not been measured cannot be shown to be stable, and an allocation policy is only meaningful on top of a measured, stable premium. The rule is the stage rule below — a successor may not start before its predecessor passes — with two rungs the stage programme never ran placed before the two it ran first.
 
-Under that criterion the lane also found that **depth is not resolvable at this fixture**: full-wake at
-`high` is **not distinguishable** from full-wake at `low` on any KPI (population SNR 0.49, births 0.82,
-starvation 0.05, age deaths 0.23, max capital 1.29 — all below the pre-declared threshold), because the
-fixture saturates (population capped at 12, extinction by h156, zero births under full cognition), so
-`max`@v2 was deliberately unrun rather than spending 15-17 h of wall time to learn the same thing. Every
-verdict after stage 1 is single-cell (f10-s0), so the criterion's "both cells" clause is met vacuously
-rather than substantively: reproduction at f12-s0 is untested. The
-remaining findings, live and spend-authorised: the ticket-34 ledger's `max_tokens: 128` provenance lie is fixed
-(applied effort, output bound and response-body bound are recorded per call beside the declared
-sampling); the frozen 30 s attempt timeout and the spec's 64 KiB recorded-body bound were both silent
-live decision-loss channels at long-reasoning effort (the body bound rejected ~30 % of max-effort calls
-as `oversized` until a live-only 1 MiB bound was declared); **40-53 % of every arm's model answers were
-well-formed JSON proposing an action the world refuses** (882 of 917 were `eat-stored` with no granary
-stock or a meal already taken), which is the standing explanation for the earlier null — and under the
-new `natural-claim/v2` contract, which states the observation-derived admissible action subset, that
-falls to 0 inadmissible in a 30-request probe and 0 across a 6 580-call run. `vs2-value/2` (a
-staleness term plus a per-actor coverage floor) fixes the coverage collapse it was built for (Gini
-0.14-0.23 against `vs2-value/1`'s 0.49-0.59 in the same run, same contract). Two results cut the other
-way and are recorded rather than buried: **periodic sampling has zero DEMOGRAPHIC effect at this
-fixture** (244 applied model decisions leave population, births, starvation deaths, age deaths and
-exchange identical to the no-AI world at every hour and in every replicate, while wealth and granary state
-still differ), and **the v1 value model, whose concentrated coverage was called a defect, is the arm
-closest to the R reference while the "fixed" model is indistinguishable from A0 *on the demographic
-KPIs*** (the frozen instrument still separates them on capital and granary histograms). R produces 0-1
-births and dies out in those runs, so **fidelity-to-R rewards a trajectory that loses population — the R
-anchor is an unvalidated objective** (open question Q1: a civilization-level distance measure). The earlier
-reading that *cognition suppresses reproduction* is **withdrawn** (ticket 36): under `natural-claim/v4`, a
-contract that loses no answer to inadmissibility, one full-wake replicate at the same cell, horizon, effort
-and bounds produced 2 births — the same as the deterministic no-AI control — so the v1/v2 birth deficits are
-not separable from instrument loss, and Q1 rests on the reference's own extinction, not on an AI-arm effect.
-No arm is called better, the ticket-34 verdict stands unchanged, and **the central claim and the M2
-milestone remain not accepted**. Record: `.scratch/35-vs2-curve/spec.md`,
-`.scratch/36-harness-vocabulary/spec.md`.
+| rung | question | done when | status | spend |
+|---|---|---|---|---|
+| **1 · harness** | Does the request state the decision the actor actually faces, and do the answers fall inside what the world admits? | zero inadmissible answers in a declared probe with a falsifier: the model's own account of its options must agree with the code's admissibility ladder | **HOLDS** (M2a, ticket 36): 0/40 inadmissible under `natural-claim/v4`, 20/20 cells and 5/5 exact action sets agree | 40 probe calls |
+| **2 · seed** | Does the world reach an ending worth protecting with **no** cognition at all? | a declared fixture and seed whose no-AI control is no worse at the horizon than at founding — alive at `H` at least the founding cohort, zero starvation deaths, at least one birth — measured at zero spend. The criterion is declared here, which is the operator's "a good ending even with zero kick-in" made falsifiable | **FAILED: no such fixture exists.** The control `A0` ends at **1 alive** in all three scored cells: `f10-s0` 1 444 actor-hours, 2 births, 0 starvation deaths, `alive_end` 1 of 10; `f12-s0` 1 700/5/3, 1 of 12; `f10-s1` 1 496/2/0, 1 of 10. The control is a die-off under founder aging, so the `vrd/2` anchor is a floor set on a collapsing trajectory, not on a viable world. Rung 2 therefore needs either a fixture outside this world or a relaxed criterion, and a world change collides with the product decision that the ecology arc is closed — both are the operator's call | $0 (compute only) |
+| **3 · influence** | How much does reasoning change the outcome? An effort ladder on the reference model first, then a different model at matched effort. | two conditions are distinguishable under `curve/1` ([VALIDATION.md](VALIDATION.md)) on a rung-2 fixture | **PARTIAL, and void without rung 2.** `high` versus `low` ran at one cell (`f10-s0`, ticket 35) and no KPI reached SNR 2 (population 0.49, births 0.82, starvation 0.05, age deaths 0.23, max capital 1.29) in a world whose population was capped at 12 and extinct by h156; `max` effort and every other model, including the `deepseek/deepseek-flash` candidate, are **unrun** | ≤ $1.10 per matrix |
+| **4 · stability** | Does a measured difference reproduce across cells, seeds and replicates? | the pre-declared replication rule fires in the declared direction at a second cell and a second seed | **RAN** (M2d, ticket 42), uninterpretable without rungs 2–3: neither cell reproduced the M2c pattern — `f12-s0` separated both pairs in `A`'s favour, `f10-s1` tied both — and no AI arm separated from `A0` at any cell | ≤ $1.10 per matrix |
+| **5 · kick-in strategy** | On a measured and stable premium, does selective allocation beat periodic and uniform spending at equal budget? | a rung-4-stable separation from `P` and `U` on a rung-2 fixture | **RAN BEFORE ITS PREDECESSORS, NULL** (M2c, ticket 41): `A` tied `P`, and the one separation it found over `U` did not reproduce; no arm has ever separated from doing nothing | ≤ $1.10 per matrix |
 
-**Status (branch `feature/34-vs2-live`, ticket 34).** The mechanism is delivered and verified
-hermetically (lanes L1–L4c and L2b, master `48b4882`; hermetic matrix: VS2-EC-1..9 present, VS2-EC-3
-a clean negative). The real-model arm has now run (ticket 34, spend authorised): on the declared
-primary matrix (12 cells × arms `A0,R,P,U/A`, model `github_copilot/gpt-6-luna`, wire `responses`),
-VS2-EC-1/6/7/8/9 PASS, and **VS2-EC-3 FAILS: a budgeted baseline strictly dominates adaptive at
-f10-s0 and adaptive dominates no cell** (9/10 complete cells mutually non-dominating) — the §8.4
-declared falsifying outcome for the value model `vs2-value/1` as instantiated. VS2-EC-2 fails on one
-fail-loud ceiling halt caused by live transport retries charged per physical attempt (declared
-instrument working; anatomy in ticket 34); VS2-EC-4/5 failures and their anatomy are recorded in
-ticket 34. The §8.2 sensitivity-seed extension is incomplete (upstream gateway throttling; two
-declared attempts stopped by the no-progress rule). **Neither the central claim nor the M2 milestone
-is accepted:** the declared acceptance rule did not fire — the live evidence falsifies the value
-model as instantiated rather than supporting selective allocation. Two gateway wire constraints were
-discovered and repaired under supervisor authorisation (ticket 34): the application model rejects
-`temperature`/`top_p` on the responses wire, and its reasoning output consumed the declared 128-token
-output bound, so the responses codec omits the two parameters and applies `max_output_tokens: 512`
-while the declared `FrozenSampling()` stays unchanged and recorded.
+The caps are the operator's "limited budget" made numeric from measurement: $1.10 is what the largest matrix actually run cost (ticket 42: 5 945 attempts, $1.0666), so a rung needing more than one matrix returns to the discussion before spending. A rung's spend is authorised only after its criterion is pre-registered, as M2c and M2d did.
+
+**Why the M2c and M2d nulls are not negative evidence.** With rung 2 failing, the only tier any arm moved was starvation deaths relative to arms that damage a die-off, and every arm including the control ends at one survivor; with rung 3 unmeasured, no arm had a premium to allocate. The nulls are equally consistent with three worlds — this world has no reasoning premium, the premium is invisible because there is nothing left to preserve, or the premium exists below what three replicates can resolve (ticket 41's detection limit: 42–61 actor-hours against a 12-actor-hour difference) — and the records do not distinguish them. That is what `curve/1`'s power number and Q13's routes exist to settle.
 
 **Deliverable.** Equal-budget arms over the same world and seeds: full reference (model on every
 decision), periodic, uniform-random, and adaptive-priority.
@@ -182,11 +134,9 @@ and replay remain valid across strategy updates. A clean negative — no allocat
 differentiates — is an equally decisive and reportable outcome, because it would show the decision
 space does not yet reward reasoning.
 
-**Metric definition (frozen).** Fidelity is measured as *divergence of the budgeted run's
-civilization-level trajectory from the high-budget reference run* (population, births/deaths, wealth
-distribution, exchange volume, and the recorded decision-error rate), not as a single scalar.
+**Declared metric.** `vrd/2` ([VALIDATION.md](VALIDATION.md)) — the priority-ordered viability order below the no-AI control's own outcome. The originally frozen definition, divergence from the high-budget reference run, is withdrawn as an objective; the eight-indicator vector survives as a diagnostic only.
 
-**Metric supersession and repair (M2b ticket 37, repaired by M2c part 1 ticket 38, 2026-10-18).** The divergence vector above is retained as a diagnostic, but it is not the objective: at this fixture the reference itself is extinct, so approaching it rewards losing population. The declared objective is `vrd/2`, the priority-ordered viability order below the no-AI control's own realised outcome ([VALIDATION.md](VALIDATION.md); records `.scratch/37-fidelity-metric/spec.md` and `.scratch/38-m2c-preregistration/spec.md`). The frozen EC-3/EC-4 vector dominance rule is unchanged: `vrd/2` scores trajectories against a viability floor, and does not by itself declare one arm better than another. Ticket 37's declared pathology — its birth term outranked its survival term, so a fully-surviving sterile world scored 1.000 against an extinct one-birth world's 0.5963 — is repaired: `vrd/1` is withdrawn, `vrd/2` compares the same three components in the declared priority order (survival, then deaths avoided, then reproduction) instead of summing them, and no weight was changed. M2c may now rank arms by `vrd/2`, but only under the criterion pre-declared in ticket 38 and only after the M2c matrix runs (ticket 39).
+**Metric supersession and repair (M2b ticket 37, repaired by M2c part 1 ticket 38, 2026-10-18).** The eight-indicator vector is retained as a diagnostic, but it is not the objective: at this fixture the reference itself is extinct, so approaching it rewards losing population. The declared objective is `vrd/2`, the priority-ordered viability order below the no-AI control's own realised outcome ([VALIDATION.md](VALIDATION.md); records `.scratch/37-fidelity-metric/spec.md` and `.scratch/38-m2c-preregistration/spec.md`). The frozen EC-3/EC-4 vector dominance rule is unchanged: `vrd/2` scores trajectories against a viability floor, and does not by itself declare one arm better than another. Ticket 37's declared pathology — its birth term outranked its survival term, so a fully-surviving sterile world scored 1.000 against an extinct one-birth world's 0.5963 — is repaired: `vrd/1` is withdrawn, `vrd/2` compares the same three components in the declared priority order (survival, then deaths avoided, then reproduction) instead of summing them, and no weight was changed. Arms are ranked by `vrd/2` only under a criterion pre-declared before the run (ticket 38 §7).
 
 **Limitation.** The high-budget reference is a comparative proxy, never ground truth: it is itself a
 model-conditional run, so a smaller divergence means "closer to the reference run", not "more
@@ -221,7 +171,7 @@ reported rather than narrated.
 | Milestone | Slice | Status | Accepted when |
 |---|---|---|---|
 | **M1** | VS1 | **Implementation complete; hermetic evidence PASS on all eleven frozen exit criteria (EC-1..EC-11); the real-model arm blocked on spend authorisation.** | **A mind in the loop.** The project is no longer an LLM-free simulator: a real model drives part of the world's decisions *and* modifies behaviour logic during the run, its interventions are costed and replayed exactly, and the modification is recorded with lineage and applied or rolled back under audit. |
-| **M2** | VS2 | **Mechanism delivered and verified hermetically on master `48b4882` (VS2-EC-1..9 present; VS2-EC-3 a clean negative). The real-model arm ran on branch `feature/34-vs2-live` (ticket 34): on the declared primary live matrix VS2-EC-3 FAILS — a budgeted baseline strictly dominates adaptive at f10-s0 and adaptive dominates no cell — so the declared acceptance rule does not fire and the value model `vs2-value/1` is falsified as instantiated; VS2-EC-2/4/5 live failures and the incomplete sensitivity extension are recorded with their anatomy in ticket 34. Ticket 35 added a pre-registered curve criterion with depth (effort ladder) and redundancy (3 replicates) as first-class axes, and found the dominant defect is admissibility, not allocation: 40-53 % of v1 model answers were refused as inadmissible and `natural-claim/v2` removes that (0 in a 6 580-call run); `vs2-value/2` fixes the coverage collapse (Gini 0.14-0.23 vs 0.49-0.59) yet periodic sampling shows zero demographic effect and the v1-value-model arm is the closest to the R reference, whose anchor is itself unvalidated (Q1). No arm is called better; the central claim and the M2 milestone are not accepted. Tickets 37-42 then ran the stage programme: M2a passed (contract `natural-claim/v4`, 0/40 and 0/1 325 inadmissible answers), M2b passed (fidelity-to-R rejected as an objective; `vrd/2` adopted with a declared birth-dominance pathology and its repair), M2c answered on one cell (`A` separated from `U` at 0.1544 against a 0.0321 band; `A` tied `P` at 0.0083 inside a 0.0420 band, i.e. no detectable effect at 3 replicates rather than no effect), and M2d failed to replicate it (ticket 42: at `f12-s0` both pairs separate in `A`'s favour, at `f10-s1` both tie, and one `inadmissible` answer voided a single cell). The decisive measurement across all three cells is negative: `A` ties the no-AI control `A0` everywhere, `P` ties it on two cells and is worse on the third, `U` is worse on `f12-s0`, and no AI arm beats doing nothing at 248 decisions per arm. The M2c pattern is therefore cell-dependent in both halves, no single-cell result in this stage can carry the claim, and what the stage actually established is the instrument (contract, metric, budgeted matrix at ~$0.57 and 17 minutes per 15 cells) plus the elimination of its own first hypotheses.** | **First evidence on the central claim.** Selective allocation beats — or decisively fails to beat — uniform and periodic spending at equal budget, across seeds, on the declared multi-indicator fidelity metric. |
+| **M2** | VS2 | **Mechanism delivered and verified hermetically on master `48b4882` (VS2-EC-1..9 present; VS2-EC-3 a clean negative). The real-model arm ran on branch `feature/34-vs2-live` (ticket 34): on the declared primary live matrix VS2-EC-3 FAILS — a budgeted baseline strictly dominates adaptive at f10-s0 and adaptive dominates no cell — so the declared acceptance rule does not fire and the value model `vs2-value/1` is falsified as instantiated; VS2-EC-2/4/5 live failures and the incomplete sensitivity extension are recorded with their anatomy in ticket 34. Ticket 35 added a pre-registered curve criterion with depth (effort ladder) and redundancy (3 replicates) as first-class axes, and found the dominant defect is admissibility, not allocation: 40-53 % of v1 model answers were refused as inadmissible and `natural-claim/v2` removes that (0 in a 6 580-call run); `vs2-value/2` fixes the coverage collapse (Gini 0.14-0.23 vs 0.49-0.59) yet periodic sampling shows zero demographic effect and the v1-value-model arm is the closest to the R reference, whose anchor is itself unvalidated (Q1). No arm is called better; the central claim and the M2 milestone are not accepted. Tickets 37-42 then ran the stage programme: M2a passed (contract `natural-claim/v4`, 0/40 and 0/1 325 inadmissible answers), M2b passed (fidelity-to-R rejected as an objective; `vrd/2` adopted with a declared birth-dominance pathology and its repair), M2c answered on one cell (`A` separated from `U` at 0.1544 against a 0.0321 band; `A` tied `P` at 0.0083 inside a 0.0420 band, i.e. no detectable effect at 3 replicates rather than no effect), and M2d failed to replicate it (ticket 42: at `f12-s0` both pairs separate in `A`'s favour, at `f10-s1` both tie, and one `inadmissible` answer voided a single cell). The decisive measurement across all three cells is negative: `A` ties the no-AI control `A0` everywhere, `P` ties it on two cells and is worse on the third, `U` is worse on `f12-s0`, and no AI arm beats doing nothing at 248 decisions per arm. The M2c pattern is therefore cell-dependent in both halves, no single-cell result in this stage can carry the claim, and **Rung 2 of the claim ladder (VS2) does not hold, which is why these nulls cannot be read as negative evidence:** the no-AI control ends at one alive in all three scored cells (`f10-s0` 1 of 10, `f12-s0` 1 of 12, `f10-s1` 1 of 10), so the anchor is a die-off and every separation found was damage avoidance inside it. What the stage actually established is the instrument (contract, metric, budgeted matrix at ~$0.57 and 17 minutes per 15 cells) plus the elimination of its own first hypotheses.** | **First evidence on the central claim.** Selective allocation beats — or decisively fails to beat — uniform and periodic spending at equal budget, across seeds, on the declared multi-indicator fidelity metric. |
 | **M3** | VS3 | Not started | **Self-improving.** Strategies measurably improve over generations under audited mutation, with provenance and rollback for every patch. |
 | **M4** | VS4 | Not started | **Stakes and scale.** The central-claim result survives heterogeneity and scale; the marginal value of reasoning is measured, not assumed. |
 | **M5** | VS5 | Not started | **Society.** Institutions and organizations arise and persist only through inspectable incentives and enforcement. |
@@ -235,7 +185,9 @@ instrument and the metric were being asked to answer a question neither could ca
 was run on a decision contract that cost 40-53 % of its answers to inadmissibility, and judged against a
 reference anchor that rewards extinction. Each stage's acceptance criterion is fixed by its own ticket
 **before** it runs; this table declares only the order and the rule that a stage may not begin before its
-predecessor has passed.
+predecessor has passed. Mapped onto the VS2 rungs: M2a is rung 1, M2b is the instrument every rung needs
+rather than a rung of its own, M2c is rung 5 and M2d is rung 4 — so as recorded this programme ran rungs
+1, 5 and 4 and never ran rungs 2 and 3, which is the departure the rung order names.
 
 | Stage | Question it settles | Status |
 |---|---|---|
@@ -280,7 +232,8 @@ choice; no route has been started.
 - M1 scope is **VS1**; milestones equal slices (M*n* = VS*n*), six of each. VS2 follows VS1.
 - VS1 carries **both** AI roles: Role A (an actor's mind at a declared decision seam) and Role B
   (in-run behaviour-logic modification); Role B must kick in *during* the run.
-- The fidelity metric is the frozen definition given in VS2.
+- The declared comparison metric is `vrd/2` ([VALIDATION.md](VALIDATION.md)); the earlier divergence-from-the-reference definition is withdrawn as an objective and survives as a diagnostic only.
+- The central claim is tested in a declared rung order — harness, seed, influence, stability, kick-in strategy — where a later rung may not be read before every earlier rung holds, and live spend is capped at one measured matrix per rung (≤ $1.10 at the recorded cost) until the operator says otherwise. The rungs themselves are in VS2.
 - Application model: **`github_copilot/gpt-6-luna`** (operator decision; this gateway-exposed underscore id is the single declared application-model identity and supersedes the earlier `zai/glm-5.3-flash` choice); orchestration subagents: **`deepseek/deepseek-flash`**.
 - The ecology arc is closed: no new ecology work follows it. The substrate it produced is the
   instrument VS1/VS2 build on.

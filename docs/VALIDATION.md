@@ -32,6 +32,25 @@ Initial metric families should cover:
 
 Metrics form a vector. Scalar aggregation is allowed only when weights and sensitivity are visible. Branch selection also preserves diversity so one optimized score does not collapse the simulated world into a narrow artifact.
 
+## Condition-distinguishability rule (`curve/1`)
+
+Declared in ticket 35 (`.scratch/35-vs2-curve/spec.md`) before any live call and unchanged since; it is the
+rule any "condition A differs from condition B" claim must satisfy, and it forbids calling one condition
+better on a scalar.
+
+- **Unit of analysis:** the per-hour KPI curve of a condition replicated 3×, paired against the same curve
+  of the comparison condition at the same hours.
+- **Band:** the mean ± 95 % CI plus the replicate envelope.
+- **Between conditions:** `SNR` = RMSE over hours of the paired difference divided by RMSE over hours of
+  the replicate noise, reported with the first-separation hour, the longest separating run, and a
+  Wasserstein-1 distance.
+- **Decision:** two conditions are distinguishable only if some KPI holds `SNR ≥ 2` **with a ≥ 24-hour
+  separation in every cell** of the declared matrix; otherwise the reading is "no detectable effect at
+  this design", never equivalence.
+- **Power is part of the result:** the smallest difference a 3-replicate design can separate must be
+  reported beside every observed difference (ticket 41 measured 42–61 actor-hours at the `f10-s0` bands
+  against a 12-actor-hour difference), and a difference below that limit is not evidence of anything.
+
 ## Declared comparison metric: viability-referenced viability order (`vrd/2`)
 
 M2b (ticket 37, 2026-10-18) rejects the R-anchored fidelity objective for VS2; M2c part 1 (ticket 38,
@@ -45,6 +64,8 @@ it is no longer the target a run is asked to approach. Evidence: [`.scratch/38-m
 - **Source fields:** a run's hourly projection `alive_by_hour`, `births_cum`, `deaths_starve_cum` over the declared horizon `[0,H]` (samples `0..H`).
 - **State vector:** `H_x = Σ alive_x(t)` (actor-hours), `B_x = births_x(H)`, `S_x = starvation deaths_x(H)`, `N0 = alive_x(0)`, and the persistence predicate `e_x = 1` iff `alive_x(H) = 0` (extinct at the terminal sample), else `0`.
 - **Anchor:** `T` is the mean `(H,B,S,N0)` of the recorded no-AI control (arm `A0`) at the same fixture, seed and horizon; the viability set is `{H ≥ H_T, B ≥ B_T, S ≤ S_T}`. The anchor is worth approaching because it is the outcome the world already reaches with no cognitive intervention — population survives to the horizon, reproduces at its own rate and suffers no starvation deaths — not because any reference run does it. It is a floor, not an optimum, and it is deterministic, so it costs no live spend to re-measure.
+- **Cross-fixture caveat (tickets 41–42):** the scorer applies the **committed `f10-s0` anchor** — `H_T = 1444`, `B_T = 2`, `S_T = 0`, `N0 = 10` — to every cell, so a cell's `dH`, `dS`, `dB` are not referenced to that cell's own control (`vrd2.py:55` and the `--live --scores` path). Each cell's own control is recorded separately and reading against it is supplementary only: at both M2d cells it moved no verdict. Because `N0` stays 10, `dS` at a 12-founder cell counts extra deaths per 10 actors — the tier stays comparable, the unit label does not. A cell whose control differs materially from the committed anchor is not comparable to the recorded cells without a declared re-anchor.
+- **Anchor viability is a separate question from determinism:** the committed anchor is deterministic and reproduced 3/3 at each cell, and at all three scored cells the control itself ends at **one** alive (a die-off under founder aging), so `vrd/2`'s floor is a collapsing trajectory. Whether a fixture whose control reaches a good ending exists at all is rung 2 of the claim ladder ([VERTICAL-SLICES.md](VERTICAL-SLICES.md)).
 - **Transformation and order:** the four components `d_H = max(0,(H_T−H_x)/H_T)`, `d_S = max(0,(S_x−S_T)/N0)`, `d_B = max(0,(B_T−B_x)/B_T)` and `e_x` form the key `(e, d_H, d_S, d_B)`, compared **lexicographically** in that order, which is the declared priority: population survived, then deaths avoided, then stability (proxied by reproduction at the control's rate). Lower is more viable in every tier; a run is at or above the floor iff its key is `(0,0,0,0)`.
 - **Unit and bounds:** each component is dimensionless in `[0,1]`; the measure is a four-tuple, not a scalar, so no total is reported and no weight exists to declare or tune. The components are fractions of the control's actor-hours and births and starvation deaths per founding actor.
 - **Missing-value behavior:** `vrd/2` is undefined — refused, never defaulted to zero — unless `H_T > 0`, `B_T > 0`, `alive_T(H) > 0` and `N0 > 0`. A fixture whose control is not viable must declare a substitute floor in its own ticket and may never substitute R.
