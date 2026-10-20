@@ -1,0 +1,51 @@
+{
+ "accepted_birth_replies": 13,
+ "age": 5,
+ "alive_end": 1,
+ "birth_reply_outcomes": {},
+ "birth_requests": 106,
+ "births": 2,
+ "build_refusals": {
+  "no-wild-slot": 6
+ },
+ "eligible_pair_hours": 1462,
+ "f": 6,
+ "hours": 144,
+ "hours_with_2plus_all3": 2,
+ "hours_with_2plus_g3_k1_e3": 10,
+ "hours_with_2plus_g3_k1_e4": 3,
+ "hours_with_2plus_g3_k2_e4": 0,
+ "hours_with_2plus_granary_ge3": 35,
+ "hours_with_eligible_pair": 116,
+ "hours_with_household_pair": 89,
+ "household_gate_pair_hours": 284,
+ "journal_kinds": {
+  "birth-reply": 13,
+  "birth-request": 106,
+  "build": 127,
+  "build-denied-eat": 6,
+  "eat": 487,
+  "eat-stored": 14,
+  "fallback-eatstored": 56,
+  "gather": 648,
+  "paired-meal": 78,
+  "provision": 29,
+  "rest": 7,
+  "wait": 11
+ },
+ "max_actors_all3": 2,
+ "max_actors_g3_k1_e3": 3,
+ "max_actors_g3_k1_e4": 3,
+ "max_actors_g3_k2_e4": 1,
+ "max_actors_granary_ge3": 5,
+ "max_capital": 3,
+ "max_eligible_pairs_in_an_hour": 24,
+ "max_energy": 11,
+ "max_granary": 34,
+ "peak_alive": 8,
+ "refusals": {
+  "consent-own": 11
+ },
+ "seed": 0,
+ "starve": 2
+}
