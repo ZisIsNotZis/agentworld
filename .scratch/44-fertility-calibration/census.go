@@ -1,6 +1,13 @@
 // Ticket 44 census: why do births stop? Read-only measurement over a no-AI
 // (A0) run of the vs2 world. Prints per-cell gate reachability, eligible
 // pair-hours and the typed birth-refusal histogram. Mutates nothing.
+//
+// Reproduce the recorded artefacts (Go 1.24, repo root):
+//   go run ./.scratch/44-fertility-calibration/census.go -f 10 -seed 0 -hours 144 > census-f10-s0.json
+//   go run ./.scratch/44-fertility-calibration/census.go -f 12 -seed 0 -hours 144 > census-f12-s0.json
+//   go run ./.scratch/44-fertility-calibration/census.go -f 6  -seed 0 -hours 144 > census-f6-s0.json
+// Policy-family sweep (section 3b): add -policy natural/5|6|7|7b|9 . The census JSONs
+// were produced with -policy natural/7 (the vs2 base policy) unless a row says otherwise.
 package main
 
 import (
@@ -23,12 +30,29 @@ func main() {
 	hours := flag.Int("hours", 144, "horizon")
 	patches := flag.Int("patches", 2, "patches")
 	r := flag.Int64("r", 8, "regeneration budget per patch-hour")
+	policyName := flag.String("policy", "natural/7", "policy ref: natural/5|6|7|7b|9")
 	flag.Parse()
 
+	var pol strategy.NaturalPolicy
+	var mech world.NaturalMechanism
+	switch *policyName {
+	case "natural/5":
+		pol, mech = strategy.FrozenNaturalPolicy(), world.NaturalMechanismV5
+	case "natural/6":
+		pol, mech = strategy.FrozenNaturalPolicyV6(), world.NaturalMechanismV6
+	case "natural/7":
+		pol, mech = strategy.FrozenNaturalPolicy7(), world.NaturalMechanismV6
+	case "natural/7b":
+		pol, mech = strategy.FrozenNaturalPolicy7b(), world.NaturalMechanismV6
+	case "natural/9":
+		pol, mech = strategy.FrozenNaturalPolicy9(), world.NaturalMechanismV7
+	default:
+		check(fmt.Errorf("unknown policy %q", *policyName))
+	}
 	ctx := context.Background()
 	base := world.NaturalOptions{
 		Patches: *patches, R: *r, Seed: *seed, Workers: 1, Births: false,
-		PolicyRef: strategy.FrozenNaturalPolicy7().Ref, Mechanism: world.NaturalMechanismV6,
+		PolicyRef: pol.Ref, Mechanism: mech,
 		Founders: *founders,
 	}
 	root, err := world.NewNatural(base)
@@ -45,7 +69,7 @@ func main() {
 	}
 	restore := world.NaturalRestoreOptions{
 		Patches: *patches, R: *r, Seed: *seed, Workers: 1, Births: true,
-		PolicyRef: strategy.FrozenNaturalPolicy7().Ref, Mechanism: world.NaturalMechanismV6,
+		PolicyRef: pol.Ref, Mechanism: mech,
 		Founders: *founders,
 	}
 	expected := restore
@@ -255,7 +279,7 @@ func main() {
 		ref[name] = v
 	}
 	out := map[string]any{
-		"f": *founders, "seed": *seed, "hours": *hours,
+		"f": *founders, "seed": *seed, "hours": *hours, "policy": *policyName,
 		"alive_end": last.Metrics.Alive, "peak_alive": peakAlive,
 		"births": last.Metrics.Births, "birth_requests": last.Metrics.BirthRequests,
 		"starve": last.Metrics.DeathsStarvation, "age": last.Metrics.DeathsAge,
