@@ -44,6 +44,31 @@ and the economy holds that jointly for **1–4 hours out of 144** while individu
 
 This is the mechanism behind ticket 43's extinction and it explains the earlier records: v4's "final 0 everywhere" and v5/v8's "extinction h141/h143" are the same arithmetic. It is not a code regression. The pre-v4 world looked alive because no actor could die of age at all; from v4 onward the world has a fixed 96–143 h death clock and a fertility gate that almost never opens.
 
+
+## 3b. Falsification of the first reading: the gate is ample under other frozen policies
+
+Before acting on §3, the same census was run over the frozen policy ref set on the same fixtures (`-policy natural/5|6|7|7b|9`, mechanism matched, H = 144, zero model calls). Result at `f10-s0`:
+
+| policy | birth requests | births | hours with >=2 actors at `k>=2, granary>=3, energy>=3` | hours with >=2 at `k>=2, granary>=3, energy>=4` | refusals |
+|---|---|---|---|---|---|
+| natural/5 | 260 | 3 | **107** | **107** | `consent-own` 135 |
+| natural/6 | 138 | 2 | 1 | 1 | `consent-own` 135 |
+| natural/7 | 138 | 2 | 1 | 1 | `consent-own` 135 |
+| natural/7b | 138 | 2 | 1 | 1 | `consent-own` 135 |
+| natural/9 | 3 | 1 | 125 | 106 | `consent-own` 1 (6 starvation deaths, 4 age) |
+
+So the joint gate is **not** intrinsically rare: under `natural/5` two actors hold it for **107 of 144 hours** and even at `energy >= 4` for 107 hours, and `natural/9` reaches 125 hours. The rarity in `natural/7` is caused by its own provisioning rule (rule 515: 144 provisions at `f10-s0`, each converting a granary unit into a bag unit for building), which is exactly the granary drain the first reading mistook for an economic law.
+
+This narrows the cause but does not yet name it: under `natural/5` the state is ample and the script still refuses **135** times with `consent-own` and produces 3 births. Either (i) the consent instant (`h+40m+6µs`) differs from the hourly boundary this census samples — eating, gathering and provisioning all happen at `h+40m`, so the boundary state can flatter the actor — or (ii) the script's consent rule is stricter than the state it observes. The census cannot distinguish them, and the difference decides whether the fix is a **policy floor** (no world change) or a **world rule**.
+
+## 3c. Therefore the next measurement, not the next design
+
+Instrument the decision instances themselves: at every `birth-request` and `birth-reply` attempt, record the proposer's and consenter's `(energy, granary, capital, patch, kin)` as seen by the rule that decided, and the typed refusal. That is a read-only instrumentation of the existing evidence path (the journal already carries `BirthEvidence` with reported and true capital/granary), costs nothing, and settles (i) vs (ii). The household-gate design in §5 stays declared but is **not** the recommended first move until that measurement lands: if (i) holds, no world change is needed and the fix is a policy version whose floors match the state it is given; if (ii) holds, the world rule is the lever.
+
+## 3d. What this changes about §5
+
+§5's household gate remains a candidate, with its measured counterfactual (37-284 household pair-hours against 1-4 under `natural/7`). It is no longer the first move, and its justification cannot rest on "the conjunction is unreachable": under `natural/5` it is reachable for 107 hours. The dependency chain is now: decision-instant census -> policy-floor change (likely, cheap) -> re-run the 128 cells -> only if fertility is still short, the household gate.
+
 ## 4. Why not simply move one threshold
 
 Loosening one component does not help: the joint count is 1–4 hours, and even `capital ≥ 1` instead of `≥ 2` raises it only to 2–7 hours (`hours_with_2plus_g3_k1_e3` = 2, 7, 10). The conjunction, not any single threshold, is the defect. Fertility needs a gate whose satisfaction is *reachable as a state*, not a lottery over four components.
