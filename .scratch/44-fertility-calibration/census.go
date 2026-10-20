@@ -3,9 +3,11 @@
 // pair-hours and the typed birth-refusal histogram. Mutates nothing.
 //
 // Reproduce the recorded artefacts (Go 1.24, repo root):
-//   go run ./.scratch/44-fertility-calibration/census.go -f 10 -seed 0 -hours 144 > census-f10-s0.json
-//   go run ./.scratch/44-fertility-calibration/census.go -f 12 -seed 0 -hours 144 > census-f12-s0.json
-//   go run ./.scratch/44-fertility-calibration/census.go -f 6  -seed 0 -hours 144 > census-f6-s0.json
+//
+//	go run ./.scratch/44-fertility-calibration/census.go -f 10 -seed 0 -hours 144 > census-f10-s0.json
+//	go run ./.scratch/44-fertility-calibration/census.go -f 12 -seed 0 -hours 144 > census-f12-s0.json
+//	go run ./.scratch/44-fertility-calibration/census.go -f 6  -seed 0 -hours 144 > census-f6-s0.json
+//
 // Policy-family sweep (section 3b): add -policy natural/5|6|7|7b|9 . The census JSONs
 // were produced with -policy natural/7 (the vs2 base policy) unless a row says otherwise.
 package main
@@ -95,14 +97,17 @@ func main() {
 		}
 	}
 
-	type live struct{ id, source, pa, pb int; e, g, k int64 }
+	type live struct {
+		id, source, pa, pb int
+		e, g, k            int64
+	}
 	var (
-		maxEnergy, maxGranary, maxCapital     int64
-		maxG3, maxAll3, maxAll4, maxK1, maxK1e4 int
+		maxEnergy, maxGranary, maxCapital                           int64
+		maxG3, maxAll3, maxAll4, maxK1, maxK1e4                     int
 		hoursG3x2, hoursAll3x2, hoursAll4x2, hoursK1x2, hoursK1e4x2 int
-		hoursWithPair, pairHours, maxPairHour int
-		householdPairHours, hoursHousehold, ahAll int
-		peakAlive                             int
+		hoursWithPair, pairHours, maxPairHour                       int
+		householdPairHours, hoursHousehold, ahAll                   int
+		peakAlive                                                   int
 	)
 	checks := run.Checkpoints()
 	for _, cp := range checks {
@@ -291,7 +296,7 @@ func main() {
 		"hours_with_2plus_g3_k1_e4": hoursK1e4x2, "max_actors_g3_k1_e4": maxK1e4,
 		"hours_with_eligible_pair": hoursWithPair, "eligible_pair_hours": pairHours,
 		"max_eligible_pairs_in_an_hour": maxPairHour,
-		"household_gate_pair_hours": householdPairHours, "hours_with_household_pair": hoursHousehold,
+		"household_gate_pair_hours":     householdPairHours, "hours_with_household_pair": hoursHousehold,
 		"refusals": ref, "journal_kinds": kinds, "birth_reply_outcomes": birthReasons, "build_refusals": buildRefusals, "accepted_birth_replies": acceptedBirths,
 	}
 	b, _ := json.MarshalIndent(out, "", " ")
