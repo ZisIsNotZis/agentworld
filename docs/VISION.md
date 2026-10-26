@@ -1,5 +1,30 @@
 # Vision
 
+## Operator's statement of the measurement goal
+
+**EXPLICIT** (operator, restated 2026-10-26 after the recorded programme drifted from it). In this
+order:
+
+1. **the world runs fine** — a founding population that does not die out at the horizon, with or
+   without cognition;
+2. **`luna:max` always-on is the reference** — every candidate decision answered by
+   `github_copilot/gpt-6-luna` at reasoning effort `max`, no budget ceiling, is the run everything
+   else is compared against;
+3. **then research the effect of model, thinking, kick-in timing and stability** — which model, how
+   much reasoning effort, when to intervene, and whether the effect reproduces;
+4. **compare per-hour KPI curves, fuzzy-matched against the reference curve** — not the terminal
+   outcome alone.
+
+**Consequence (INFERRED, and this supersedes earlier readings).** The yardstick is the shape of the
+per-hour KPI trajectory relative to the `luna:max` always-on reference. The no-AI (`A0`) endpoint
+viability order `vrd/2` and the claim-rung ladder in [VERTICAL-SLICES.md](VERTICAL-SLICES.md) are
+*prerequisites and diagnostics*, not the objective: item 1 is what the rung-2 failure measured, and
+it is a bug to fix, not the thing to be judged by. `R` in the runner is already item 2's arm
+(`FullWakePolicy`, no ceiling), so the reference exists; what the recorded programme withdrew — the
+divergence-from-reference objective, on the ground that the reference was itself extinct — must be
+restored once item 1 holds, because that ground was a property of the broken world, not of the
+metric.
+
 ## Objective
 
 Build a long-running civilization simulator that allocates finite computation to the decisions most likely to change civilization-scale outcomes.
