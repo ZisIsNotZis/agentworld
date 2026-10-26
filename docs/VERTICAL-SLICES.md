@@ -121,7 +121,12 @@ measurements are what W1 and W2 consume.
 ### `W1_world_runs` — a founding population that does not die out
 
 - **Goal.** The declared no-cognition default world keeps its founding cohort at the horizon (alive at
-  `H` ≥ founders, zero starvation deaths, at least one birth) on the declared fixture grid.
+  `H` ≥ founders, zero starvation deaths, at least one birth) **and is expressive**: a model that kicks
+  in has somewhere to act, rather than a world already in desperate death. The operator's words
+  (2026-10-26): "we never try to make a perfect seed, we just wanna prove this seed can work, can be
+  expressive, so our model which kick-in at least have moderate expressibility rather than desperate
+  death". So the verdict is taken on the **declared default cell** (`f10-s0`, `H = 144`), never on a
+  seed picked because it passed; the 128-cell grid is re-run as a regression, not as a search.
 - **Why.** Ticket 43 measured 0/128 cells; a world that dies of its own aging clock cannot host any
   comparison, so everything downstream is unreadable until this holds. Measured binding order: founder
   aging, then birth economics (fertility 0.20–0.42 against the ≈1.0–1.5 replacement need), then food.
@@ -129,9 +134,16 @@ measurements are what W1 and W2 consume.
   change the census names (a policy-floor version, or a world rule if the policy is not the cause), then
   re-sweep the 128 cells at `$0`.
 - **Non-do.** No new ecology mechanisms; no metric work; no reference cost probe; no live model call.
-- **AC.** All 128 declared cells run at `-arms A0`, and at least one declared primary cell passes the
-  three clauses; every other cell's failure names its binding cause. Falsifier: the sweep still shows
-  `alive_end < N0` everywhere with age as the majority cause.
+- **AC.** On `f10-s0` with `-arms A0`, `H = 144`: (a) `alive_end ≥ founders`, zero starvation deaths,
+  at least one birth; (b) **expressivity floor** — under the *default* policy two actors hold the joint
+  birth gate (`granary ≥ 3 ∧ capital ≥ 2 ∧ energy ≥ 3`) for at least 24 of 144 hours, against the 1
+  hour measured under `natural/7` in ticket 44; (c) the full 128-cell grid re-runs as a regression and
+  every failing cell names its binding cause. Falsifier: the fix passes `f10-s0` only by spending the
+  world's reserves, i.e. (b) holds while (a) fails, or `alive_end < N0` with age as the majority cause
+  still.
+- **Non-goal of record.** A search over seeds, founder counts or horizons for a cell that passes. If
+  `f10-s0` cannot be made viable without changing the *world's* rules, that is `W1` failing and a
+  decision for the operator — not a licence to pick another seed.
 - **Status.** Open. `0/128` as of ticket 43; cause narrowed to the decision instant by ticket 44.
 
 ### `W2_reference_luna_max` — `luna:max` always-on as the benchmark

@@ -6,7 +6,8 @@
 order:
 
 1. **the world runs fine** — a founding population that does not die out at the horizon, with or
-   without cognition;
+   without cognition, and is expressive enough that a kicking-in model has room to matter rather than
+   inheriting a desperate death; this is proven on the declared cell, never by hunting for a lucky seed;
 2. **`luna:max` always-on is the reference** — every candidate decision answered by
    `github_copilot/gpt-6-luna` at reasoning effort `max`, no budget ceiling, is the run everything
    else is compared against;
