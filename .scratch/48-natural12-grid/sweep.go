@@ -1,0 +1,123 @@
+// Ticket 48 sweep: one declared no-AI cell, one TSV line of outcome metrics.
+// Read-only, zero model calls. Same construction as the ticket-45/46/47 census
+// (neutral h0 pulse, births-enable branch, restore, step to H), reduced to the
+// numbers the W1 criterion reads.
+//
+//	go run ./.scratch/48-natural12-grid/sweep.go -f 10 -seed 0 -hours 144 -policy natural/12
+package main
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"os"
+
+	"agentworld/internal/strategy"
+	"agentworld/internal/world"
+)
+
+func main() {
+	founders := flag.Int("f", 10, "founders")
+	seed := flag.Uint64("seed", 0, "seed")
+	hours := flag.Int("hours", 144, "horizon")
+	patches := flag.Int("patches", 2, "patches")
+	r := flag.Int64("r", 8, "regeneration budget per patch-hour")
+	policyName := flag.String("policy", "natural/12", "policy ref: natural/7|11|12")
+	flag.Parse()
+
+	var pol strategy.NaturalPolicy
+	var mech world.NaturalMechanism
+	switch *policyName {
+	case "natural/7":
+		pol, mech = strategy.FrozenNaturalPolicy7(), world.NaturalMechanismV6
+	case "natural/11":
+		pol, mech = strategy.FrozenNaturalPolicy11(), world.NaturalMechanismV6
+	case "natural/12":
+		pol, mech = strategy.FrozenNaturalPolicy12(), world.NaturalMechanismV6
+	default:
+		fail(fmt.Errorf("unknown policy %q", *policyName))
+	}
+	ctx := context.Background()
+	base := world.NaturalOptions{Patches: *patches, R: *r, Seed: *seed, Workers: 1, Births: false,
+		PolicyRef: pol.Ref, Mechanism: mech, Founders: *founders}
+	root, err := world.NewNatural(base)
+	check(err)
+	if ok, err := root.Step(ctx); err != nil || !ok {
+		check(fmt.Errorf("neutral h0 pulse: %t %v", ok, err))
+	}
+	dir, err := os.MkdirTemp("", "sweep48")
+	check(err)
+	defer os.RemoveAll(dir)
+	rootPath := dir + "/root.bundle"
+	if _, err = root.SaveCheckpoint(rootPath); err != nil {
+		check(err)
+	}
+	restore := world.NaturalRestoreOptions{Patches: *patches, R: *r, Seed: *seed, Workers: 1, Births: true,
+		PolicyRef: pol.Ref, Mechanism: mech, Founders: *founders}
+	expected := restore
+	expected.Births = false
+	branchPath := dir + "/branch.bundle"
+	if _, err = world.BranchNaturalCheckpoint(rootPath, expected, true, branchPath); err != nil {
+		check(err)
+	}
+	run, _, err := world.RestoreNaturalCheckpoint(branchPath, restore)
+	check(err)
+	for {
+		checks := run.Checkpoints()
+		if len(checks) > 0 && checks[len(checks)-1].Hour >= *hours {
+			break
+		}
+		ok, err := run.Step(ctx)
+		check(err)
+		if !ok {
+			break
+		}
+	}
+	checks := run.Checkpoints()
+	last := checks[len(checks)-1]
+	// Gate hours: under both floors, at the hourly boundary.
+	worldGate, policyGate := 0, 0
+	for _, cp := range checks {
+		n, np := 0, 0
+		add := func(a world.NaturalActorState) {
+			if a.Genome.DiedHour != world.NaturalNeverHour && a.Genome.DiedHour >= 0 {
+				return
+			}
+			if a.Body.Energy <= 0 {
+				return
+			}
+			if a.Granary.Stock >= world.NaturalConsentMinGranary && a.Worksite.Capital >= world.NaturalConsentMinCapital && a.Body.Energy >= world.NaturalConsentMinEnergy {
+				n++
+			}
+			if a.Granary.Stock >= world.NaturalConsentMinGranary && a.Worksite.Capital >= world.NaturalConsentMinCapital && a.Body.Energy >= 4 {
+				np++
+			}
+		}
+		for _, a := range cp.Founders {
+			add(a)
+		}
+		for _, nb := range cp.Newborns {
+			add(nb.State)
+		}
+		if n >= 2 {
+			worldGate++
+		}
+		if np >= 2 {
+			policyGate++
+		}
+	}
+	fmt.Printf("%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", *policyName, *founders, *seed, *founders,
+		last.Metrics.Alive, last.Metrics.Births, last.Metrics.DeathsStarvation, last.Metrics.DeathsAge,
+		worldGate, policyGate)
+}
+
+func check(err error) {
+	if err != nil {
+		fail(err)
+	}
+}
+
+func fail(err error) {
+	fmt.Fprintln(os.Stderr, "sweep:", err)
+	os.Exit(1)
+}

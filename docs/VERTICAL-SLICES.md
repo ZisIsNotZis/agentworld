@@ -144,15 +144,19 @@ measurements are what W1 and W2 consume.
 - **Non-goal of record.** A search over seeds, founder counts or horizons for a cell that passes. If
   `f10-s0` cannot be made viable without changing the *world's* rules, that is `W1` failing and a
   decision for the operator — not a licence to pick another seed.
-- **Status.** Open. `0/128` as of ticket 43; ticket 44 narrowed the cause to the decision instant and
-  ticket 45 measured it there: **the births are lost to addressee choice, not to the gate.** On
-  `f10-s0` under the default policy, 133 of 135 `consent-own` refusals are hours in which exactly one
-  *other* co-located, non-kin, unrelated actor held the full gate, while the script asked an
-  impoverished mate (`granary 0, energy 2`); the three accepted replies are the hours with no
-  alternative. `natural/5` reproduces it (132/135 with a gate-holding alternative, the same two
-  consenters asked for 135 hours). So the next change is a **new policy version with the addressee rule
-  fixed** (`natural/10`, rotation or gate-aware choice; no world change, old refs byte-frozen), then the
-  128-cell re-sweep at `$0`. Record: [`.scratch/45-decision-instant-census/spec.md`](../.scratch/45-decision-instant-census/spec.md).
+- **Status.** Open, and **blocked on a world rule** after three policy versions and two grids at `$0`.
+  Ticket 45: 133 of 135 `consent-own` refusals had a gate-holding alternative mate. Ticket 46
+  (`natural/11`, rotation): 4 accepts, but 50 new `kin` refusals — the proposer cannot see kinship.
+  Ticket 47 (`natural/12`, rotation over the public kin walk the reply side already receives): 0
+  refusals, 4 filings total, 4 accepts — the non-kin pool empties. Ticket 48 (128 cells × both
+  policies): **0 passes**, the survivor maximum falls from 6 to 3, and the direct pool measurement at
+  `f10-s0` shows why: of 370 same-patch mate slots seen by proposer-eligible actors, **368 are kin**,
+  and under the blind rule the 136 non-kin slots contain only **2** that hold the consenter gate. A
+  patch holds five founders, so after one generation its co-located pool is one lineage.
+- **Decision it needs.** Every remaining lever is a world rule: the kin rule at this patch size (or
+  migration between patches), the two-parent wealth conjunction at the decision instant, and the early
+  food economy. No policy-level lever remains. Record:
+  [`.scratch/48-natural12-grid/spec.md`](../.scratch/48-natural12-grid/spec.md).
 
 ### `W2_reference_luna_max` — `luna:max` always-on as the benchmark
 
