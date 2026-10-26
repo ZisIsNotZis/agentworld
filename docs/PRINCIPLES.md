@@ -95,3 +95,14 @@ The only legitimate hard limits are the simulator's own finite compute and stora
 - resolved case by case, with the outcome reported verbatim: hitting a compute ceiling means either the run outgrew the harness — a successful result to be recorded and scaled — or the design is at fault — a defect to be diagnosed and fixed. It is never grounds for quietly lowering the mechanism.
 
 A frozen experimental gate may still bound an *experiment* (a horizon, a fixture size, a sampling schedule), and a versioned fixture may still declare its own bounds for reproducibility; but such bounds are experiment parameters, and no mechanism may depend on them to appear viable. When a bound in a fixture is doing modeling work, it is a P15 violation and must be replaced by a modeled constraint.
+
+## P16 — A bulk text edit checks its own anchors and its own output size
+
+2026-10-26: a documentation sync parsed a file into `start := index(A)`, `end := index(B)` and replaced
+`text[start:end]` without checking the order. `B` occurred *before* `A`, the slice was empty, and
+`strings.Replace(text, "", new, -1)` inserted the replacement between every character of a 46 KB file,
+producing a 55 MB commit that reached the remote. The rule that prevents the whole class: a scripted
+edit asserts `end > start`, asserts the matched block's length is plausible, and asserts the result's
+size changed by less than 2× before it writes; a slice whose end precedes its start is a defect signal,
+never an empty replacement. History was rewritten (`--force-with-lease`) to remove the blob, which is a
+cost the assertion would have avoided.
