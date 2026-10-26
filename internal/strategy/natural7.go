@@ -193,7 +193,7 @@ func (b *NaturalBound) EvaluateBirthRequest7b(obs NaturalRequestObservation) (Na
 // natural7BirthRequest is the shared v6-verbatim birth-request cascade for
 // both 7 identities (structure of EvaluateBirthRequestV6, same margins).
 func natural7BirthRequest(b *NaturalBound, obs NaturalRequestObservation) (NaturalRequestChoice, error) {
-	return naturalBirthRequestCascade(naturalClaimIdentity{Actor: b.actor, Patches: b.patches, Ref: b.policy.Ref, Budget: b.policy.Budget}, obs, naturalPolicyTFileV6)
+	return naturalBirthRequestCascade(naturalClaimIdentity{Actor: b.actor, Patches: b.patches, Ref: b.policy.Ref, Budget: b.policy.Budget}, obs, naturalPolicyTFileV6, naturalAddresseeSuccessor)
 }
 
 // EvaluateBirthReply7 is the frozen natural/7 consenter decision at

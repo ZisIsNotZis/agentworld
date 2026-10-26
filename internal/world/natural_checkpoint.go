@@ -70,7 +70,8 @@ var ErrNaturalCheckpoint = errors.New("invalid or incompatible natural v5 checkp
 // block written by encodeNaturalManifest. It is one of the parameterized
 // slots of the frozen manifest layout (ticket 16 D1 seam): its value is run
 // identity — naturalPolicyFormats, i.e. 5 for a natural/5 bundle, 6 for a
-// natural/6 bundle, 7 for natural/7 and 8 for natural/7b — and every other
+// natural/6 bundle, 7 for natural/7, 8 for natural/7b, 9 for natural/9, and
+// 11 for natural/11 — and every other
 // constant stays byte-pinned, so the manifest width and field order are
 // unchanged.
 const naturalManifestPolicyFormatSlot = 6
@@ -93,13 +94,14 @@ var naturalManifestMechanismSlots = []int{1, 3, 4, 5}
 func naturalPolicyFormats() map[uint32]bool {
 	return map[uint32]bool{strategy.NaturalPolicyFormatV5: true, strategy.NaturalPolicyFormatV6: true,
 		strategy.NaturalPolicyFormatV7: true, strategy.NaturalPolicyFormatV7b: true,
-		strategy.NaturalPolicyFormatV9: true}
+		strategy.NaturalPolicyFormatV9: true, strategy.NaturalPolicyFormatV11: true}
 }
 
 // naturalManifestPolicyRef resolves the manifest's declared policy identity
 // from its policy-format slot: 5 is natural/5, 6 is natural/6, 7 is
-// natural/7, 8 is natural/7b, 9 is natural/9 (ticket 20), anything else
-// fails closed (decode already rejects foreign slots).
+// natural/7, 8 is natural/7b, 9 is natural/9 (ticket 20), 11 is natural/11
+// (ticket 46), anything else fails closed (decode already rejects foreign
+// slots).
 func (m naturalManifest) naturalManifestPolicyRef() (strategy.NaturalRef, error) {
 	switch m.policyFormat {
 	case strategy.NaturalPolicyFormatV5:
@@ -112,6 +114,8 @@ func (m naturalManifest) naturalManifestPolicyRef() (strategy.NaturalRef, error)
 		return strategy.FrozenNaturalPolicy7b().Ref, nil
 	case strategy.NaturalPolicyFormatV9:
 		return strategy.FrozenNaturalPolicy9().Ref, nil
+	case strategy.NaturalPolicyFormatV11:
+		return strategy.FrozenNaturalPolicy11().Ref, nil
 	}
 	return strategy.NaturalRef{}, ErrNaturalCheckpoint
 }
@@ -229,13 +233,13 @@ func (o NaturalRestoreOptions) validate() error {
 		return fmt.Errorf("%w: founder-tenure fixture at founders 1 is not a declared scenario (the pre-history seats founders 1 and 2)", ErrNaturalCheckpoint)
 	}
 	if _, err := strategy.FrozenNaturalPolicyForRef(o.policyRef()); err != nil {
-		return fmt.Errorf("%w: policy ref %+v is not in the frozen natural ref set {natural/5, natural/6, natural/7, natural/7b, natural/9}: %v", ErrNaturalCheckpoint, o.PolicyRef, err)
+		return fmt.Errorf("%w: policy ref %+v is not in the frozen natural ref set {natural/5, natural/6, natural/7, natural/7b, natural/9, natural/11}: %v", ErrNaturalCheckpoint, o.PolicyRef, err)
 	}
 	if !NaturalMechanismValid(o.mechanism()) {
 		return fmt.Errorf("%w: mechanism %d is not an admitted mechanism version", ErrNaturalCheckpoint, uint16(o.Mechanism))
 	}
 	if !naturalRefLegalUnderMechanism(o.mechanism(), o.policyRef()) {
-		return fmt.Errorf("%w: policy ref %+v is not legal under mechanism %d (natural/7 and natural/7b require mechanism >= v6; natural/9 requires mechanism v7)", ErrNaturalCheckpoint, o.policyRef(), uint16(o.mechanism()))
+		return fmt.Errorf("%w: policy ref %+v is not legal under mechanism %d (natural/7, natural/7b, and natural/11 require mechanism >= v6; natural/9 requires mechanism v7)", ErrNaturalCheckpoint, o.policyRef(), uint16(o.mechanism()))
 	}
 	return nil
 }

@@ -486,10 +486,10 @@ type NaturalOptions struct {
 
 	// PolicyRef is the declared policy identity (ticket 16 D1 seam): the
 	// single binding site resolves it through the frozen natural ref set
-	// {natural/5, natural/6, natural/7, natural/7b, natural/9} and binds every roster
-	// entity by it. The zero value is exactly natural/5, so every recorded
-	// v5 scenario keeps its bytes; the ref is run identity end to end
-	// (journal config, checkpoint manifest, bidirectional mismatch
+	// {natural/5, natural/6, natural/7, natural/7b, natural/9, natural/11} and
+	// binds every roster entity by it. The zero value is exactly natural/5, so
+	// every recorded v5 scenario keeps its bytes; the ref is run identity end
+	// to end (journal config, checkpoint manifest, bidirectional mismatch
 	// rejection).
 	PolicyRef strategy.NaturalRef
 
@@ -502,9 +502,9 @@ type NaturalOptions struct {
 	// config, bidirectional {5,6} mismatch rejection) and is resolved and
 	// validated at construction together with the ref/mechanism consistency
 	// rule: natural/5 and natural/6 are legal under either mechanism, while
-	// natural/7 and natural/7b require mechanism v6 and are refused under
-	// the v5 zero value (fail closed) — the provision affordance does not
-	// exist there.
+	// natural/7, natural/7b, and natural/11 require mechanism >= v6 and are
+	// refused under the v5 zero value (fail closed) — the provision affordance
+	// does not exist there.
 	Mechanism NaturalMechanism
 
 	// Founders is the declared founding-band fixture axis (ticket 18 v8
@@ -612,11 +612,12 @@ func (f *Natural) declaredFounders() int {
 // the frozen v9 design (ticket 20; the explicit rungs recorded by the L2
 // lane, replacing ticket 17's v6 blanket): natural/5 and natural/6 are the
 // base policies legal under ANY admitted mechanism (including mechanism v7,
-// so the zero-use control can construct); natural/7 and natural/7b select
-// the rule-515 affordance and are legal only under mechanism >= v6 (refused
-// under the v5 zero value, fail closed); natural/9 selects the wage-contract
-// rules 516-519 and the wage ledgers that only mechanism v7 registers and is
-// legal ONLY under mechanism v7. An unknown ref fails for every mechanism.
+// so the zero-use control can construct); natural/7, natural/7b, and
+// natural/11 select the rule-515 affordance and are legal only under
+// mechanism >= v6 (refused under the v5 zero value, fail closed); natural/9
+// selects the wage-contract rules 516-519 and the wage ledgers that only
+// mechanism v7 registers and is legal ONLY under mechanism v7. An unknown ref
+// fails for every mechanism.
 func naturalRefLegalUnderMechanism(m NaturalMechanism, ref strategy.NaturalRef) bool {
 	if !NaturalMechanismValid(m) {
 		return false
@@ -628,7 +629,7 @@ func naturalRefLegalUnderMechanism(m NaturalMechanism, ref strategy.NaturalRef) 
 	switch policy.Ref {
 	case strategy.FrozenNaturalPolicy().Ref, strategy.FrozenNaturalPolicyV6().Ref:
 		return true
-	case strategy.FrozenNaturalPolicy7().Ref, strategy.FrozenNaturalPolicy7b().Ref:
+	case strategy.FrozenNaturalPolicy7().Ref, strategy.FrozenNaturalPolicy7b().Ref, strategy.FrozenNaturalPolicy11().Ref:
 		return m == NaturalMechanismV6 || m == NaturalMechanismV7
 	case strategy.FrozenNaturalPolicy9().Ref:
 		return m == NaturalMechanismV7
@@ -641,13 +642,13 @@ func (o NaturalOptions) validate() error {
 		return fmt.Errorf("%w: patches %d outside the derived ID-space precondition", ErrNaturalRunner, o.Patches)
 	}
 	if _, err := strategy.FrozenNaturalPolicyForRef(o.policyRef()); err != nil {
-		return fmt.Errorf("%w: policy ref %+v is not in the frozen natural ref set {natural/5, natural/6, natural/7, natural/7b, natural/9}: %v", ErrNaturalRunner, o.PolicyRef, err)
+		return fmt.Errorf("%w: policy ref %+v is not in the frozen natural ref set {natural/5, natural/6, natural/7, natural/7b, natural/9, natural/11}: %v", ErrNaturalRunner, o.PolicyRef, err)
 	}
 	if !NaturalMechanismValid(o.mechanism()) {
 		return fmt.Errorf("%w: mechanism %d is not an admitted mechanism version", ErrNaturalRunner, uint16(o.Mechanism))
 	}
 	if !naturalRefLegalUnderMechanism(o.mechanism(), o.policyRef()) {
-		return fmt.Errorf("%w: policy ref %+v is not legal under mechanism %d (natural/7 and natural/7b require mechanism >= v6; natural/9 requires mechanism v7)", ErrNaturalRunner, o.policyRef(), uint16(o.mechanism()))
+		return fmt.Errorf("%w: policy ref %+v is not legal under mechanism %d (natural/7, natural/7b, and natural/11 require mechanism >= v6; natural/9 requires mechanism v7)", ErrNaturalRunner, o.policyRef(), uint16(o.mechanism()))
 	}
 	if !NaturalFoundersValid(o.Patches, o.Founders) {
 		return fmt.Errorf("%w: founders %d outside the derived founding-band bound [1,%d] (zero = default 8P)", ErrNaturalRunner, o.Founders, NaturalSlotsPerPatch*o.Patches)
@@ -1064,8 +1065,9 @@ func NewNatural(o NaturalOptions) (*Natural, error) {
 // cascade for the runner's bound ref: the frozen v5 Evaluate for
 // {natural,5}, EvaluateV6 for {natural,6}, — ticket 17 — Evaluate7 for
 // {natural,7} and Evaluate7b for {natural,8} (the v6/v7 cascades' own
-// bound-identity guards fail closed under any other bound content), and —
-// ticket 20 — Evaluate9 for {natural,9}. Every dispatch site still re-pins
+// bound-identity guards fail closed under any other bound content) —
+// ticket 20 — Evaluate9 for {natural,9}, and — ticket 46 — Evaluate11 for
+// {natural,11}. Every dispatch site still re-pins
 // choice.Ref == f.ref.
 func (f *Natural) naturalEvaluate(id sim.EntityID, obs strategy.NaturalObservation, ownOffer strategy.NaturalLabourOfferGuard) (strategy.NaturalChoice, error) {
 	if f.cognitiveStrategy != nil {
@@ -1082,6 +1084,8 @@ func (f *Natural) naturalEvaluate(id sim.EntityID, obs strategy.NaturalObservati
 		return f.bound[id].Evaluate7b(obs)
 	case strategy.FrozenNaturalPolicy9().Ref:
 		return f.bound[id].Evaluate9(strategy.NaturalLabourObservation{NaturalObservation: obs, OwnOffer: ownOffer})
+	case strategy.FrozenNaturalPolicy11().Ref:
+		return f.bound[id].Evaluate11(obs)
 	}
 	return f.bound[id].Evaluate(obs)
 }
@@ -1094,7 +1098,7 @@ func naturalLabourOfferGuard(a NaturalActorState) strategy.NaturalLabourOfferGua
 
 // naturalEvaluateBirthRequest dispatches the frozen proposer decision at
 // h+40m+5µs for the bound ref (EvaluateBirthRequestV6 and its natural/7,
-// natural/7b and natural/9 twins file only at own energy ≥ 4).
+// natural/7b, natural/9, and natural/11 twins file only at own energy ≥ 4).
 func (f *Natural) naturalEvaluateBirthRequest(id sim.EntityID, obs strategy.NaturalRequestObservation) (strategy.NaturalRequestChoice, error) {
 	if f.cognitiveStrategy != nil {
 		if choice, handled, err := f.cognitiveStrategy.evaluateBirthRequest(f.patches, id, obs); handled || err != nil {
@@ -1110,13 +1114,15 @@ func (f *Natural) naturalEvaluateBirthRequest(id sim.EntityID, obs strategy.Natu
 		return f.bound[id].EvaluateBirthRequest7b(obs)
 	case strategy.FrozenNaturalPolicy9().Ref:
 		return f.bound[id].EvaluateBirthRequest9(obs)
+	case strategy.FrozenNaturalPolicy11().Ref:
+		return f.bound[id].EvaluateBirthRequest11(obs)
 	}
 	return f.bound[id].EvaluateBirthRequest(obs)
 }
 
 // naturalEvaluateBirthReply dispatches the frozen consenter decision at
 // h+40m+6µs for the bound ref (EvaluateBirthReplyV6 and its natural/7,
-// natural/7b and natural/9 twins accept only at own energy ≥ 4).
+// natural/7b, natural/9, and natural/11 twins accept only at own energy ≥ 4).
 func (f *Natural) naturalEvaluateBirthReply(id sim.EntityID, obs strategy.NaturalReplyObservation) (strategy.NaturalReplyChoice, error) {
 	switch f.ref {
 	case strategy.FrozenNaturalPolicyV6().Ref:
@@ -1127,6 +1133,8 @@ func (f *Natural) naturalEvaluateBirthReply(id sim.EntityID, obs strategy.Natura
 		return f.bound[id].EvaluateBirthReply7b(obs)
 	case strategy.FrozenNaturalPolicy9().Ref:
 		return f.bound[id].EvaluateBirthReply9(obs)
+	case strategy.FrozenNaturalPolicy11().Ref:
+		return f.bound[id].EvaluateBirthReply11(obs)
 	}
 	return f.bound[id].EvaluateBirthReply(obs)
 }

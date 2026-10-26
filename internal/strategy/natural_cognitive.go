@@ -11,7 +11,7 @@ import (
 // substituted at its declared decision points. It is data, never code, and it
 // lives in a DISTINCT id/format space (NaturalCognitiveRefID /
 // NaturalCognitiveFormatVersion) so no patched ref can ever collide with the
-// frozen natural/5..9 refs or their formats. The all-parent-values vector
+// frozen natural/5..11 refs or their formats. The all-parent-values vector
 // reproduces the parent's decisions exactly (pinned by the reduction test).
 //
 // This file also hosts the parameterized claim and birth-request cascades
@@ -24,7 +24,7 @@ import (
 const NaturalCognitiveRefID = "natural-cog"
 
 // NaturalCognitiveFormatVersion is the distinct strategy format of a
-// cognitive generation, outside the frozen format set {5,6,7,8,9}.
+// cognitive generation, outside the frozen format set {5,6,7,8,9,11}.
 const NaturalCognitiveFormatVersion uint32 = 100
 
 // CognitiveParamID names one declared, patchable strategy-side parameter
@@ -291,7 +291,7 @@ func (g NaturalCognitiveGeneration) EvaluateBirthRequest(patches int, actor sim.
 		return NaturalRequestChoice{}, err
 	}
 	id := naturalClaimIdentity{Actor: actor, Patches: patches, Ref: g.BaseRef, Budget: FrozenNaturalPolicy7().Budget}
-	return naturalBirthRequestCascade(id, obs, g.Params.BirthFilingEnergyFloor)
+	return naturalBirthRequestCascade(id, obs, g.Params.BirthFilingEnergyFloor, naturalAddresseeSuccessor)
 }
 
 // naturalClaimIdentity is the bound identity the claim/birth cascades validate
@@ -435,11 +435,43 @@ func naturalClaimCascade(id naturalClaimIdentity, obs NaturalObservation, provis
 	return choice, nil
 }
 
+// naturalAddresseeRule declares how the proposer picks the same-patch mate it
+// files the birth request to. The rule is fixed by the bound ref's cascade
+// entry point — never by observation content — so each frozen ref has exactly
+// one deterministic addressee sequence.
+type naturalAddresseeRule int
+
+const (
+	// naturalAddresseeSuccessor is the frozen v5/v6/v7/v7b/v9 rule: the
+	// lowest same-patch mate ID greater than the actor, else mates[0].
+	naturalAddresseeSuccessor naturalAddresseeRule = iota
+	// naturalAddresseeRotate is the natural/11 rule: mates[hour % len(mates)]
+	// over the already-ascending-sorted same-patch roster.
+	naturalAddresseeRotate
+)
+
+// naturalAddressee applies one declared addressee rule to the ascending-sorted
+// non-empty mate roster.
+func naturalAddressee(rule naturalAddresseeRule, mates []sim.EntityID, actor sim.EntityID, hour int) sim.EntityID {
+	if rule == naturalAddresseeRotate {
+		return mates[hour%len(mates)]
+	}
+	addressee := mates[0] // wraparound successor of the highest same-patch ID
+	for _, mate := range mates {
+		if mate > actor {
+			addressee = mate
+			break
+		}
+	}
+	return addressee
+}
+
 // naturalBirthRequestCascade is the one home of the proposer filing cascade:
 // the frozen v6 EvaluateBirthRequestV6 structure with the own-energy filing
-// floor supplied by the caller. natural7BirthRequest delegates here with the
-// frozen floor, so the frozen refs' behaviour is byte-identical.
-func naturalBirthRequestCascade(id naturalClaimIdentity, obs NaturalRequestObservation, filingFloor int64) (NaturalRequestChoice, error) {
+// floor and the addressee rule supplied by the caller. natural7BirthRequest
+// delegates here with the frozen floor and successor rule, so the frozen refs'
+// behaviour is byte-identical; natural11BirthRequest supplies the rotation.
+func naturalBirthRequestCascade(id naturalClaimIdentity, obs NaturalRequestObservation, filingFloor int64, rule naturalAddresseeRule) (NaturalRequestChoice, error) {
 	if obs.Actor != id.Actor || obs.Ref != id.Ref ||
 		obs.Hour < 0 || obs.Hour >= naturalHorizonHours ||
 		obs.OwnRequest.Status > NaturalRequestExpired ||
@@ -499,13 +531,7 @@ func naturalBirthRequestCascade(id naturalClaimIdentity, obs NaturalRequestObser
 	if len(mates) == 0 {
 		return choice, nil
 	}
-	addressee := mates[0] // wraparound successor of the highest same-patch ID
-	for _, mate := range mates {
-		if mate > obs.Actor {
-			addressee = mate
-			break
-		}
-	}
+	addressee := naturalAddressee(rule, mates, obs.Actor, obs.Hour)
 	claims := NaturalClaimOverride{Capital: capital, Granary: granary} // honest self-report
 	if obs.TestClaims != nil {
 		claims = *obs.TestClaims

@@ -79,8 +79,8 @@ type NaturalJournalConfig struct {
 	// CultivationDisabled declares the cultivation-ablation intervention
 	// (matrix cell D); it is run identity like the births flags. Policy is
 	// the declared ref from the frozen natural ref set {natural/5,
-	// natural/6, natural/7, natural/7b, natural/9} (ticket 16 D1 seam,
-	// extended in ticket 20) and
+	// natural/6, natural/7, natural/7b, natural/9, natural/11} (ticket 16 D1
+	// seam, extended in ticket 20 and ticket 46) and
 	// PolicyFingerprint its exact frozen content fingerprint; a
 	// ref/fingerprint disagreement fails closed. Mechanism is the declared
 	// mechanism axis (ticket 17, the world version the journal was produced
