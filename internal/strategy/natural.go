@@ -534,10 +534,23 @@ type NaturalRequestGuard struct {
 // divergence stays constructible and auditable.
 type NaturalClaimOverride struct{ Capital, Granary int64 }
 
+// NaturalMateView is one same-patch mate as the proposer may see it: the
+// mate's public identity and the PUBLIC derived kin walk the reply side
+// already receives (NaturalPendingView). It intentionally carries nothing
+// else — no energy, granary, capital, bag, loci, birth/death hour, debt, or
+// history — so the proposer's observation exposes only what births already
+// make public (ticket 47).
+type NaturalMateView struct {
+	ID          sim.EntityID
+	KinRelated  bool // related within the runner's ≤10-reference walk
+	KinDistance int  // public derived kin walk distance; 0 while unrelated
+}
+
 // NaturalRequestObservation is the actor-visible birth-request view at the
 // frozen h+40m+5µs phase. It carries the actor's own private margins
 // (energy, capital, granary stock), its own request guard, the public home
-// patch, and the public same-patch roster — no other actor's state, no death
+// patch, the public same-patch roster, and — ticket 47 — per same-patch mate
+// the public kin walk in PatchMates order — no other actor's state, no death
 // hours, no debts, no spoilage counters, no allocator state, no streams, and
 // no claim-vs-truth divergence data.
 type NaturalRequestObservation struct {
@@ -550,7 +563,8 @@ type NaturalRequestObservation struct {
 	Capital      sim.Value
 	GranaryStock sim.Value
 	OwnRequest   NaturalRequestGuard
-	PatchMates   []sim.EntityID // same-patch roster excluding self; runner-supplied public data
+	PatchMates   []sim.EntityID    // same-patch roster excluding self; runner-supplied public data
+	MateViews    []NaturalMateView // ticket 47: one entry per PatchMates entry, same ascending order
 	TestClaims   *NaturalClaimOverride
 }
 

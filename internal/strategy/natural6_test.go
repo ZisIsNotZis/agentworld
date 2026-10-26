@@ -644,8 +644,12 @@ func TestNaturalV6PrivacyFieldSetsParityWithV5(t *testing.T) {
 		reflect.TypeOf(strategy.NaturalObservation{}): {"Actor", "Ref", "Hour", "WorldVersion", "Energy", "Hunger", "BagUnits",
 			"BagSource", "Capital", "Wip", "GranaryStock", "InvestedUnits", "LastBuildHour", "LastStoredMealHour", "LastDenial", "HomeSlots"},
 		reflect.TypeOf(strategy.NaturalSlotView{}): {"ID", "Stock"},
+		// Ticket 47 adds the PUBLIC kin walk to the proposer's observation
+		// (NaturalMateView, one entry per PatchMates entry): the pin is
+		// extended deliberately, never deleted.
 		reflect.TypeOf(strategy.NaturalRequestObservation{}): {"Actor", "Ref", "Hour", "WorldVersion", "HomePatch", "Energy", "Capital",
-			"GranaryStock", "OwnRequest", "PatchMates", "TestClaims"},
+			"GranaryStock", "OwnRequest", "PatchMates", "MateViews", "TestClaims"},
+		reflect.TypeOf(strategy.NaturalMateView{}):      {"ID", "KinRelated", "KinDistance"},
 		reflect.TypeOf(strategy.NaturalRequestGuard{}):  {"Status", "LastRequestHour"},
 		reflect.TypeOf(strategy.NaturalClaimOverride{}): {"Capital", "Granary"},
 		reflect.TypeOf(strategy.NaturalReplyObservation{}): {"Actor", "Ref", "Hour", "WorldVersion", "Energy", "Capital", "GranaryStock",

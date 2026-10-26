@@ -2500,6 +2500,14 @@ func (f *Natural) birthRequestDecision(view scheduler.SnapshotView, hour int, at
 		return kernel.Proposal{}, false, ErrNaturalRunner
 	}
 	mates := make([]sim.EntityID, 0, len(f.roster))
+	lookup := NaturalParentLookup(func(id sim.EntityID) (sim.EntityID, sim.EntityID, bool) {
+		actor, ok := w.actors[id]
+		if !ok {
+			return 0, 0, false
+		}
+		return actor.Genome.ParentA, actor.Genome.ParentB, true
+	})
+	views := make([]strategy.NaturalMateView, 0, len(f.roster))
 	for _, mateID := range f.roster {
 		if mateID == proposer {
 			continue
@@ -2510,6 +2518,11 @@ func (f *Natural) birthRequestDecision(view scheduler.SnapshotView, hour int, at
 		}
 		if mate.Bag.Source == a.Bag.Source {
 			mates = append(mates, mateID)
+			// The proposer's view of the PUBLIC kin walk (ticket 47): the same
+			// walk the reply side runs, in the same ascending order as the
+			// roster it annotates.
+			distance, related := NaturalKinDistance(lookup, proposer, mateID)
+			views = append(views, strategy.NaturalMateView{ID: mateID, KinRelated: related, KinDistance: distance})
 		}
 	}
 	obs := strategy.NaturalRequestObservation{
@@ -2520,6 +2533,7 @@ func (f *Natural) birthRequestDecision(view scheduler.SnapshotView, hour int, at
 		GranaryStock: naturalIntegerObservation(a.Granary.Stock),
 		OwnRequest:   strategy.NaturalRequestGuard{Status: strategy.NaturalRequestStatus(a.Request.Status), LastRequestHour: a.Request.LastRequestHour},
 		PatchMates:   mates,
+		MateViews:    views,
 	}
 	choice, err := f.naturalEvaluateBirthRequest(proposer, obs)
 	if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
