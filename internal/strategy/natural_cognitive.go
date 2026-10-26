@@ -448,13 +448,33 @@ const (
 	// naturalAddresseeRotate is the natural/11 rule: mates[hour % len(mates)]
 	// over the already-ascending-sorted same-patch roster.
 	naturalAddresseeRotate
+	// naturalAddresseeNonKin is the natural/12 rule (ticket 47):
+	// nonKin[hour % len(nonKin)] over the MateViews whose public walk reports
+	// the mate unrelated; with no non-kin mate the rule has no addressee and
+	// the proposer waits.
+	naturalAddresseeNonKin
 )
 
 // naturalAddressee applies one declared addressee rule to the ascending-sorted
-// non-empty mate roster.
-func naturalAddressee(rule naturalAddresseeRule, mates []sim.EntityID, actor sim.EntityID, hour int) sim.EntityID {
-	if rule == naturalAddresseeRotate {
-		return mates[hour%len(mates)]
+// non-empty mate roster. ok is false when the rule has no legal addressee at
+// this hour — only the non-kin rule can reach that state (every same-patch mate
+// is kin), and the caller then waits instead of filing a request the world must
+// refuse.
+func naturalAddressee(rule naturalAddresseeRule, mates []sim.EntityID, views []NaturalMateView, actor sim.EntityID, hour int) (sim.EntityID, bool) {
+	switch rule {
+	case naturalAddresseeRotate:
+		return mates[hour%len(mates)], true
+	case naturalAddresseeNonKin:
+		nonKin := make([]sim.EntityID, 0, len(views))
+		for _, view := range views {
+			if !view.KinRelated {
+				nonKin = append(nonKin, view.ID)
+			}
+		}
+		if len(nonKin) == 0 {
+			return 0, false
+		}
+		return nonKin[hour%len(nonKin)], true
 	}
 	addressee := mates[0] // wraparound successor of the highest same-patch ID
 	for _, mate := range mates {
@@ -463,7 +483,7 @@ func naturalAddressee(rule naturalAddresseeRule, mates []sim.EntityID, actor sim
 			break
 		}
 	}
-	return addressee
+	return addressee, true
 }
 
 // naturalBirthRequestCascade is the one home of the proposer filing cascade:
@@ -509,6 +529,21 @@ func naturalBirthRequestCascade(id naturalClaimIdentity, obs NaturalRequestObser
 			return NaturalRequestChoice{}, ErrInvalidNaturalObservation
 		}
 	}
+	if rule == naturalAddresseeNonKin {
+		// natural/12 (ticket 47) fails closed unless the proposer's public kin
+		// view matches the roster entry for entry: same length, the same IDs in
+		// the same ascending order, and the walk's own declared range.
+		if len(obs.MateViews) != len(mates) {
+			return NaturalRequestChoice{}, ErrInvalidNaturalObservation
+		}
+		for i, view := range obs.MateViews {
+			if view.ID != mates[i] ||
+				(view.KinRelated && (view.KinDistance < 1 || view.KinDistance > naturalKinWalkLimit)) ||
+				(!view.KinRelated && view.KinDistance != 0) {
+				return NaturalRequestChoice{}, ErrInvalidNaturalObservation
+			}
+		}
+	}
 	if energy == 0 {
 		return choice, nil // a dead actor never acts
 	}
@@ -531,7 +566,10 @@ func naturalBirthRequestCascade(id naturalClaimIdentity, obs NaturalRequestObser
 	if len(mates) == 0 {
 		return choice, nil
 	}
-	addressee := naturalAddressee(rule, mates, obs.Actor, obs.Hour)
+	addressee, ok := naturalAddressee(rule, mates, obs.MateViews, obs.Actor, obs.Hour)
+	if !ok {
+		return choice, nil // no non-kin mate: wait rather than file an impossible request
+	}
 	claims := NaturalClaimOverride{Capital: capital, Granary: granary} // honest self-report
 	if obs.TestClaims != nil {
 		claims = *obs.TestClaims
