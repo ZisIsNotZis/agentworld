@@ -159,4 +159,4 @@ Phase references name the active plan's slices (VS1–VS6, [VERTICAL-SLICES.md](
 
 **Why 0 then A:** route 0 is free and decides whether B is necessary; route A is free in its offline half and decides whether C is self-deception. Both are read on a fixture whose control is a good ending, which is the condition the recorded programme lacked.
 
-**Decision needed:** the user's choice of route. Route 0 is zero-spend and reversible and may start on the product owner's initiative; route A's live half, B and C need the user's word.
+**Superseded framing (2026-10-26).** The operator replaced the route choice with an ordered work plan: fix the world first (`W1_world_runs`), then make `luna:max` always-on the reference (`W2_reference_luna_max`), then measure model/effort/timing/stability (`W3_axes`), then judge by per-hour KPI curves against the reference (`W4_curve_match`). Q13's question is answered by W3, not by picking a route; routes B and C remain available only if W1 shows the frozen world cannot run at all, and neither starts without the operator's word.

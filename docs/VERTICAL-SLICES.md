@@ -111,6 +111,79 @@ Deepens C7/C8/C11/C13 from "present" to "tested". Adds the value-based priority 
 
 **Status.** The M2 row of the milestone table is the one home for what the mechanism and the runs established. This section carries the question, the declared order in which the claim may be tested, and the metric's bounds.
 
+## Worksets (the work order)
+
+The operator restated the order on 2026-10-26 ([VISION.md](VISION.md), `EXPLICIT`). One workset runs at a
+time: a successor does not start until its predecessor's exit is measured and recorded. The rung table
+below is a **diagnostic of the world and of the instrument**, not the work order; it is kept because its
+measurements are what W1 and W2 consume.
+
+### `W1_world_runs` — a founding population that does not die out
+
+- **Goal.** The declared no-cognition default world keeps its founding cohort at the horizon (alive at
+  `H` ≥ founders, zero starvation deaths, at least one birth) on the declared fixture grid.
+- **Why.** Ticket 43 measured 0/128 cells; a world that dies of its own aging clock cannot host any
+  comparison, so everything downstream is unreadable until this holds. Measured binding order: founder
+  aging, then birth economics (fertility 0.20–0.42 against the ≈1.0–1.5 replacement need), then food.
+- **Do.** Finish the cause: the decision-instant fertility census (ticket 45, $0), then the smallest
+  change the census names (a policy-floor version, or a world rule if the policy is not the cause), then
+  re-sweep the 128 cells at `$0`.
+- **Non-do.** No new ecology mechanisms; no metric work; no reference cost probe; no live model call.
+- **AC.** All 128 declared cells run at `-arms A0`, and at least one declared primary cell passes the
+  three clauses; every other cell's failure names its binding cause. Falsifier: the sweep still shows
+  `alive_end < N0` everywhere with age as the majority cause.
+- **Status.** Open. `0/128` as of ticket 43; cause narrowed to the decision instant by ticket 44.
+
+### `W2_reference_luna_max` — `luna:max` always-on as the benchmark
+
+- **Goal.** A recorded `R@max` run (`github_copilot/gpt-6-luna`, effort `max`, every candidate every
+  hour, no call ceiling) whose per-hour KPI curves are the benchmark every other condition is matched
+  against, with its measured cost per cell.
+- **Why.** It is the operator's reference and the only condition that can define "close enough". The
+  recorded programme demoted `R` to a diagnostic and made the no-AI endpoint the anchor; that is the
+  deviation this workset reverses. `R` already exists in the runner (`ArmR`, `FullWakePolicy`, ceiling
+  4 096) and the effort ladder already accepts `max`, so no code is missing, only the role and a cost
+  measurement.
+- **Do.** One-cell cost probe at `-arms R -effort max` (cost reported before any grid), then the
+  reference curves on the W1 fixture, recorded durably.
+- **Non-do.** No budgeted arms in this workset; no metric change; no grid.
+- **AC.** A recorded `R@max` cell produces the full per-hour KPI series at the W1 fixture, its price is
+  reported to the operator before scaling, and the run's identity names model, effort and wire.
+  Falsifier: `R@max` cannot complete a cell inside the declared wall clock or exceeds the reported cap.
+- **Status.** Blocked by `W1_world_runs` (a reference on a die-off measures a die-off). A cost probe is
+  independent of the world and may run inside W1 at `$0`-risk to the plan.
+
+### `W3_axes` — model, thinking, kick-in timing, stability
+
+- **Goal.** The four facts the operator asked for, each against the W2 reference: which model, which
+  reasoning effort, when to kick in, and whether the effect reproduces.
+- **Why.** This is the requested research; the recorded programme measured only timing (rungs 4 and 5) and
+  two efforts, and never the model axis at all.
+- **Do.** Add the model as a declared axis (`-model`, recorded in run identity — today it is hard-wired to
+  `DefaultModelID`, so "a different model" is not runnable); run the effort ladder
+  (`none…max`) and the timing arms (`P`, `U`, `A`) at equal budget; replicate across cells, seeds and reps.
+- **Non-do.** No new world mechanism; no unrecorded arm; no spend before its criterion is pre-registered.
+- **AC.** Each axis has a pre-registered comparison rule and a recorded verdict, with the reference curve
+  as the baseline; the stability verdict names the cells and seeds it ran on.
+- **Status.** Blocked by `W1_world_runs` for its measurements; the model axis is an independent code gap.
+
+### `W4_curve_match` — the judgement is the curve, not the endpoint
+
+- **Goal.** The comparison criterion is the fuzzy distance between per-hour KPI trajectories and the W2
+  reference curves, per KPI and aggregated under a declared order.
+- **Why.** The operator asked for curve matching "instead of only looking at the result".
+- **Do.** Restore the divergence-from-reference objective (withdrawn by M2b only because the reference was
+  itself extinct) on top of the existing curve machinery (`cmd/vs2/curves.go`: per-hour KPI series,
+  3-replicate bands, Wasserstein-1, sustained separation), declare the aggregation, and declare its power.
+- **Non-do.** No scalar-only "one arm is better" verdict; `vrd/2` stays as a diagnostic.
+- **AC.** A declared matcher that scores any run against the reference curves, reproduces on recorded
+  cells, and states its detection limit.
+- **Status.** The instrument is W3's prerequisite and is built inside W3; its judgement rules are declared
+  before the W3 grid runs, because a grid without a declared judgement is exactly the defect that produced
+  the unreadable M2c/M2d nulls.
+
+### Superseded ordering: claim-establishment rungs (diagnostics)
+
 **Claim-establishment rungs (declared order; a later rung may not be read before every earlier rung holds).** The order is the operator's (2026-10-19), restated here because the recorded programme departed from it: a harness that does not state the decision tests nothing, a world with no good ending has nothing for cognition to protect, a reasoning effect that has not been measured cannot be shown to be stable, and an allocation policy is only meaningful on top of a measured, stable premium. The rule is the stage rule below — a successor may not start before its predecessor passes — with two rungs the stage programme never ran placed before the two it ran first.
 
 | rung | question | done when | status | spend |
@@ -232,8 +305,13 @@ choice; no route has been started.
 - M1 scope is **VS1**; milestones equal slices (M*n* = VS*n*), six of each. VS2 follows VS1.
 - VS1 carries **both** AI roles: Role A (an actor's mind at a declared decision seam) and Role B
   (in-run behaviour-logic modification); Role B must kick in *during* the run.
-- The declared comparison metric is `vrd/2` ([VALIDATION.md](VALIDATION.md)); the earlier divergence-from-the-reference definition is withdrawn as an objective and survives as a diagnostic only.
-- The central claim is tested in a declared rung order — harness, seed, influence, stability, kick-in strategy — where a later rung may not be read before every earlier rung holds, and live spend is capped at one measured matrix per rung (≤ $1.10 at the recorded cost) until the operator says otherwise. The rungs themselves are in VS2.
+- The work order is the four worksets above (`W1_world_runs` → `W2_reference_luna_max` → `W3_axes` →
+  `W4_curve_match`), and a successor does not start before its predecessor's exit is measured.
+- The declared comparison criterion is the per-hour KPI curve distance to the `luna:max` always-on
+  reference, with the aggregation declared before the grid runs (`W4_curve_match`); `vrd/2`
+  ([VALIDATION.md](VALIDATION.md)) survives as a diagnostic, not as the objective.
+- Live spend is capped at one measured matrix per workset (≤ $1.10 at the recorded cost) until the
+  operator says otherwise, and `R@max`'s price is reported before it is scaled.
 - Application model: **`github_copilot/gpt-6-luna`** (operator decision; this gateway-exposed underscore id is the single declared application-model identity and supersedes the earlier `zai/glm-5.3-flash` choice); orchestration subagents: **`deepseek/deepseek-flash`**.
 - The ecology arc is closed: no new ecology work follows it. The substrate it produced is the
   instrument VS1/VS2 build on.

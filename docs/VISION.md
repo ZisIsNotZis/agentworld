@@ -1,6 +1,6 @@
 # Vision
 
-## Operator's statement of the measurement goal
+## Operator's statement of the work order
 
 **EXPLICIT** (operator, restated 2026-10-26 after the recorded programme drifted from it). In this
 order:
@@ -19,7 +19,10 @@ order:
 per-hour KPI trajectory relative to the `luna:max` always-on reference. The no-AI (`A0`) endpoint
 viability order `vrd/2` and the claim-rung ladder in [VERTICAL-SLICES.md](VERTICAL-SLICES.md) are
 *prerequisites and diagnostics*, not the objective: item 1 is what the rung-2 failure measured, and
-it is a bug to fix, not the thing to be judged by. `R` in the runner is already item 2's arm
+it is a bug to fix, not the thing to be judged by. The work order is declared as four worksets,
+`W1_world_runs` → `W2_reference_luna_max` → `W3_axes` → `W4_curve_match`, in
+[VERTICAL-SLICES.md](VERTICAL-SLICES.md); a successor never starts before its predecessor's exit is
+measured. `R` in the runner is already item 2's arm
 (`FullWakePolicy`, no ceiling), so the reference exists; what the recorded programme withdrew — the
 divergence-from-reference objective, on the ground that the reference was itself extinct — must be
 restored once item 1 holds, because that ground was a property of the broken world, not of the
