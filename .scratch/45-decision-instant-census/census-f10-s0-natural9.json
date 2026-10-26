@@ -1,0 +1,110 @@
+{
+  "cell": "f10-s0",
+  "policy": "natural/9",
+  "founders": 10,
+  "seed": 0,
+  "hours": 144,
+  "alive_at_h": 1,
+  "gate_hours": {
+    "two_plus_world_gate": 125,
+    "two_plus_policy_gate": 2
+  },
+  "replies": {
+    "accept": 2,
+    "refuse_consent_own": 1,
+    "refuse_other": 0
+  },
+  "classes": {
+    "accepted": 2,
+    "explained-end": 1
+  },
+  "rows": [
+    {
+      "hour": 5,
+      "consenter": 9,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 6,
+        "granary": 6,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 0,
+        "parent_b": 0,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 5,
+        "granary": 8,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 0,
+        "parent_b": 0,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 7,
+      "consenter": 9,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 0,
+      "decision": "accept",
+      "reason": "",
+      "at_h_start": {
+        "energy": 4,
+        "granary": 9,
+        "capital": 2,
+        "source": 1002,
+        "parent_a": 0,
+        "parent_b": 0,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 1,
+        "granary": 10,
+        "capital": 2,
+        "source": 1002,
+        "parent_a": 0,
+        "parent_b": 0,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "accepted"
+    },
+    {
+      "hour": 7,
+      "consenter": 10,
+      "alternative_mates_world_gate_at_end": 0,
+      "alternative_mates_policy_gate_at_end": 0,
+      "decision": "accept",
+      "reason": "",
+      "at_h_start": {
+        "energy": 5,
+        "granary": 8,
+        "capital": 2,
+        "source": 1002,
+        "parent_a": 0,
+        "parent_b": 0,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 3,
+        "granary": 8,
+        "capital": 2,
+        "source": 1002,
+        "parent_a": 0,
+        "parent_b": 0,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "accepted"
+    }
+  ]
+}

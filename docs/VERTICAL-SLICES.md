@@ -144,7 +144,15 @@ measurements are what W1 and W2 consume.
 - **Non-goal of record.** A search over seeds, founder counts or horizons for a cell that passes. If
   `f10-s0` cannot be made viable without changing the *world's* rules, that is `W1` failing and a
   decision for the operator — not a licence to pick another seed.
-- **Status.** Open. `0/128` as of ticket 43; cause narrowed to the decision instant by ticket 44.
+- **Status.** Open. `0/128` as of ticket 43; ticket 44 narrowed the cause to the decision instant and
+  ticket 45 measured it there: **the births are lost to addressee choice, not to the gate.** On
+  `f10-s0` under the default policy, 133 of 135 `consent-own` refusals are hours in which exactly one
+  *other* co-located, non-kin, unrelated actor held the full gate, while the script asked an
+  impoverished mate (`granary 0, energy 2`); the three accepted replies are the hours with no
+  alternative. `natural/5` reproduces it (132/135 with a gate-holding alternative, the same two
+  consenters asked for 135 hours). So the next change is a **new policy version with the addressee rule
+  fixed** (`natural/10`, rotation or gate-aware choice; no world change, old refs byte-frozen), then the
+  128-cell re-sweep at `$0`. Record: [`.scratch/45-decision-instant-census/spec.md`](../.scratch/45-decision-instant-census/spec.md).
 
 ### `W2_reference_luna_max` — `luna:max` always-on as the benchmark
 

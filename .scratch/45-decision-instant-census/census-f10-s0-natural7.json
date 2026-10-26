@@ -1,0 +1,4025 @@
+{
+  "cell": "f10-s0",
+  "policy": "natural/7",
+  "founders": 10,
+  "seed": 0,
+  "hours": 144,
+  "alive_at_h": 1,
+  "gate_hours": {
+    "two_plus_world_gate": 1,
+    "two_plus_policy_gate": 1
+  },
+  "replies": {
+    "accept": 3,
+    "refuse_consent_own": 135,
+    "refuse_other": 0
+  },
+  "classes": {
+    "accepted": 3,
+    "explained-end": 135
+  },
+  "rows": [
+    {
+      "hour": 4,
+      "consenter": 9,
+      "alternative_mates_world_gate_at_end": 0,
+      "alternative_mates_policy_gate_at_end": 0,
+      "decision": "accept",
+      "reason": "",
+      "at_h_start": {
+        "energy": 7,
+        "granary": 4,
+        "capital": 2,
+        "source": 1002,
+        "parent_a": 0,
+        "parent_b": 0,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 4,
+        "granary": 4,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 0,
+        "parent_b": 0,
+        "alive": true
+      },
+      "consenter_built_this_hour": true,
+      "consenter_paired_meal_this_hour": false,
+      "class": "accepted"
+    },
+    {
+      "hour": 4,
+      "consenter": 10,
+      "alternative_mates_world_gate_at_end": 0,
+      "alternative_mates_policy_gate_at_end": 0,
+      "decision": "accept",
+      "reason": "",
+      "at_h_start": {
+        "energy": 7,
+        "granary": 4,
+        "capital": 2,
+        "source": 1002,
+        "parent_a": 0,
+        "parent_b": 0,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 4,
+        "granary": 4,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 0,
+        "parent_b": 0,
+        "alive": true
+      },
+      "consenter_built_this_hour": true,
+      "consenter_paired_meal_this_hour": false,
+      "class": "accepted"
+    },
+    {
+      "hour": 5,
+      "consenter": 10,
+      "alternative_mates_world_gate_at_end": 0,
+      "alternative_mates_policy_gate_at_end": 0,
+      "decision": "accept",
+      "reason": "",
+      "at_h_start": {
+        "energy": 4,
+        "granary": 4,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 0,
+        "parent_b": 0,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 3,
+        "capital": 2,
+        "source": 1002,
+        "parent_a": 0,
+        "parent_b": 0,
+        "alive": true
+      },
+      "consenter_built_this_hour": true,
+      "consenter_paired_meal_this_hour": true,
+      "class": "accepted"
+    },
+    {
+      "hour": 5,
+      "consenter": 2017,
+      "alternative_mates_world_gate_at_end": 0,
+      "alternative_mates_policy_gate_at_end": 0,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 7,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 10,
+        "parent_b": 9,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 6,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 10,
+        "parent_b": 9,
+        "alive": true
+      },
+      "consenter_built_this_hour": true,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 10,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 3,
+        "granary": 1,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 3,
+        "granary": 1,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 11,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 3,
+        "granary": 1,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 3,
+        "granary": 1,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 12,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 3,
+        "granary": 1,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 3,
+        "granary": 1,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 13,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 3,
+        "granary": 1,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 3,
+        "granary": 1,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 14,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 3,
+        "granary": 1,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 3,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 15,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 3,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 3,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": true,
+      "consenter_paired_meal_this_hour": true,
+      "class": "explained-end"
+    },
+    {
+      "hour": 16,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 3,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": true,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 17,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 18,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 3,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 19,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 3,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 4,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 20,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 4,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 5,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 21,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 5,
+        "capital": 1,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 5,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 22,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 5,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 5,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 23,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 5,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 5,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 24,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 5,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 5,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 25,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 5,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 5,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 26,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 5,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 4,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 27,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 4,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 4,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 28,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 4,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 4,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 29,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 4,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 4,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 30,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 4,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 4,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 31,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 4,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 3,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 32,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 3,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 3,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 33,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 3,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 3,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 34,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 3,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 3,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 35,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 3,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 3,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 36,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 3,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 3,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 37,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 3,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 3,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 38,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 3,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 3,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 39,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 3,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 40,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 41,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 42,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 43,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 44,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 45,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 46,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 47,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 48,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 49,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 50,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 51,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 2,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 52,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 53,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 54,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 55,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 56,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 57,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 58,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 59,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 60,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 61,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 62,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 63,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 64,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 65,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 66,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 67,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 68,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 69,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 70,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 71,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 72,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 73,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 74,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 75,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 1,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 76,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 77,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 78,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 79,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 80,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 81,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 82,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 83,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 84,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 85,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 86,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 87,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 88,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 89,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 90,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 91,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 92,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 93,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 94,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 95,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 96,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 97,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 98,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 99,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 100,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 101,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 102,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 103,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 104,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 105,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 106,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 107,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 108,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 109,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 110,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 111,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 112,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 113,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 114,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 115,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 116,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 117,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 118,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 119,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 120,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 121,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 122,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 123,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 124,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 125,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 126,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 127,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 128,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 129,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 130,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 131,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 132,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 133,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 134,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 135,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 136,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 137,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 138,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 139,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 140,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 141,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 142,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 1,
+      "alternative_mates_policy_gate_at_end": 1,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    },
+    {
+      "hour": 143,
+      "consenter": 2018,
+      "alternative_mates_world_gate_at_end": 0,
+      "alternative_mates_policy_gate_at_end": 0,
+      "decision": "refuse",
+      "reason": "consent-own",
+      "at_h_start": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "at_hp1": {
+        "energy": 2,
+        "granary": 0,
+        "capital": 0,
+        "source": 1002,
+        "parent_a": 9,
+        "parent_b": 10,
+        "alive": true
+      },
+      "consenter_built_this_hour": false,
+      "consenter_paired_meal_this_hour": false,
+      "class": "explained-end"
+    }
+  ]
+}
