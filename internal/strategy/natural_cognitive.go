@@ -302,6 +302,10 @@ type naturalClaimIdentity struct {
 	Patches int
 	Ref     NaturalRef
 	Budget  NaturalBudget
+	// Placement is the founder geometry the observation validator checks;
+	// the zero value is the frozen ID-block placement every ref below
+	// natural/14 assumes.
+	Placement naturalPlacement
 }
 
 // naturalClaimThresholds are the parameterized decision points of the claim and
@@ -357,7 +361,7 @@ func naturalClaimCascade(id naturalClaimIdentity, obs NaturalObservation, provis
 		choice.Fallback = NaturalInvalidSelf
 		return choice, nil
 	}
-	if expected, ok := naturalFounderHomePatch(id.Patches, obs.Actor); ok && expected != home {
+	if expected, ok := naturalFounderHomePatchFor(id.Placement, id.Patches, obs.Actor); ok && expected != home {
 		choice.Fallback = NaturalInvalidSelf
 		return choice, nil
 	}
@@ -515,7 +519,7 @@ func naturalBirthRequestCascade(id naturalClaimIdentity, obs NaturalRequestObser
 		choice.Fallback = NaturalInvalidSelf
 		return choice, nil
 	}
-	founderHome, isFounder := naturalFounderHomePatch(id.Patches, obs.Actor)
+	founderHome, isFounder := naturalFounderHomePatchFor(id.Placement, id.Patches, obs.Actor)
 	if isFounder && founderHome != obs.HomePatch {
 		return NaturalRequestChoice{}, ErrInvalidNaturalObservation
 	}

@@ -631,7 +631,7 @@ func (f *Natural) declaredFounders() int {
 // exist there, so every recorded journal and manifest keeps its bytes), the
 // resolved value under v9.
 func (f *Natural) declaredYield() int64 {
-	if f.mechanism != NaturalMechanismV9 {
+	if !naturalHasYieldAxis(f.mechanism) {
 		return 0
 	}
 	return f.yield
@@ -645,7 +645,7 @@ func validateNaturalYield(m NaturalMechanism, yield int64) error {
 	if yield < 0 || yield > NaturalYieldMax {
 		return fmt.Errorf("%w: yield %d outside [0,%d]", ErrNaturalRunner, yield, NaturalYieldMax)
 	}
-	if m != NaturalMechanismV9 && yield != 0 {
+	if !naturalHasYieldAxis(m) && yield != 0 {
 		return fmt.Errorf("%w: yield %d is not a declared parameter of mechanism %d (only mechanism v9 declares it; every earlier mechanism keeps the frozen flat grant)", ErrNaturalRunner, yield, uint16(m))
 	}
 	return nil
@@ -677,6 +677,8 @@ func naturalRefLegalUnderMechanism(m NaturalMechanism, ref strategy.NaturalRef) 
 		return m == NaturalMechanismV6 || m == NaturalMechanismV7
 	case strategy.FrozenNaturalPolicy13().Ref:
 		return m == NaturalMechanismV8 || m == NaturalMechanismV9
+	case strategy.FrozenNaturalPolicy14().Ref:
+		return naturalRoundRobinFounders(m)
 	case strategy.FrozenNaturalPolicy9().Ref:
 		return m == NaturalMechanismV7
 	}
@@ -917,7 +919,7 @@ func naturalGenesisSeeds(mechanism NaturalMechanism, patches int, r int64, seed 
 	actors := make([]NaturalActorState, founders)
 	for i := range actors {
 		lifetime := NaturalLifetimeBase + int64(lifetimes.Uint64()%NaturalLifetimeSpan)
-		actor, err := NaturalFounderState(patches, sim.EntityID(i+1), lifetime)
+		actor, err := NaturalFounderStateFor(mechanism, patches, sim.EntityID(i+1), lifetime)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1140,6 +1142,8 @@ func (f *Natural) naturalEvaluate(id sim.EntityID, obs strategy.NaturalObservati
 		return f.bound[id].Evaluate12(obs)
 	case strategy.FrozenNaturalPolicy13().Ref:
 		return f.bound[id].Evaluate13(obs)
+	case strategy.FrozenNaturalPolicy14().Ref:
+		return f.bound[id].Evaluate14(obs)
 	}
 	return f.bound[id].Evaluate(obs)
 }
@@ -1175,6 +1179,8 @@ func (f *Natural) naturalEvaluateBirthRequest(id sim.EntityID, obs strategy.Natu
 		return f.bound[id].EvaluateBirthRequest12(obs)
 	case strategy.FrozenNaturalPolicy13().Ref:
 		return f.bound[id].EvaluateBirthRequest13(obs)
+	case strategy.FrozenNaturalPolicy14().Ref:
+		return f.bound[id].EvaluateBirthRequest14(obs)
 	}
 	return f.bound[id].EvaluateBirthRequest(obs)
 }
@@ -1199,6 +1205,8 @@ func (f *Natural) naturalEvaluateBirthReply(id sim.EntityID, obs strategy.Natura
 		return f.bound[id].EvaluateBirthReply12(obs)
 	case strategy.FrozenNaturalPolicy13().Ref:
 		return f.bound[id].EvaluateBirthReply13(obs)
+	case strategy.FrozenNaturalPolicy14().Ref:
+		return f.bound[id].EvaluateBirthReply14(obs)
 	}
 	return f.bound[id].EvaluateBirthReply(obs)
 }

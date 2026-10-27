@@ -163,6 +163,7 @@ const (
 	mechanismV7Name        = "v7"
 	mechanismV8Name        = "v8"
 	mechanismV9Name        = "v9"
+	mechanismV10Name       = "v10"
 	// The frozen v9 verdict labels plus the corner label the ticket-20 record
 	// DECLARED BEFORE THE MATRIX RAN (spec comment: "the corner is declared as
 	// its own outcome label, TRADE-INERT - trade occurred and was correctly
@@ -349,8 +350,10 @@ func naturalMechanismName(mechanism string) (string, world.NaturalMechanism, err
 		return mechanismV8Name, world.NaturalMechanismV8, nil
 	case mechanismV9Name:
 		return mechanismV9Name, world.NaturalMechanismV9, nil
+	case mechanismV10Name:
+		return mechanismV10Name, world.NaturalMechanismV10, nil
 	default:
-		return "", world.NaturalMechanismV5, fmt.Errorf("invalid -mechanism value %q: the declared mechanism axis is {%s, %s, %s, %s, %s}", mechanism, mechanismV5Name, mechanismV6Name, mechanismV7Name, mechanismV8Name, mechanismV9Name)
+		return "", world.NaturalMechanismV5, fmt.Errorf("invalid -mechanism value %q: the declared mechanism axis is {%s, %s, %s, %s, %s, %s}", mechanism, mechanismV5Name, mechanismV6Name, mechanismV7Name, mechanismV8Name, mechanismV9Name, mechanismV10Name)
 	}
 }
 
@@ -4694,6 +4697,8 @@ func run(ctx context.Context, o options) (report, error) {
 		revision = fmt.Sprintf("natural mechanism-v8/format-v8/schema-v8/rule-v8/projection-v8/policy %s", policyName)
 	case world.NaturalMechanismV9:
 		revision = fmt.Sprintf("natural mechanism-v9/format-v9/schema-v9/rule-v9/projection-v9/policy %s", policyName)
+	case world.NaturalMechanismV10:
+		revision = fmt.Sprintf("natural mechanism-v10/format-v10/schema-v10/rule-v10/projection-v10/policy %s", policyName)
 	}
 	r := report{
 		Status:   "synthetic/model-conditional; frozen natural-limits v5 fixture; no historical calibration, takeoff, or P0 scale claim",

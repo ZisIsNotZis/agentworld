@@ -415,14 +415,20 @@ const (
 	// 1..NaturalSlotsPerPatch). Everything else, including rule 515 and the
 	// provisioned ledger, is v8 verbatim.
 	NaturalMechanismV9 NaturalMechanism = 9
+	// NaturalMechanismV10 (world axis version 10, ticket 50) is the v9 rule
+	// table plus exactly one placement change: the founding band is seated
+	// round-robin across the declared patches instead of in ID blocks of
+	// eight, so a band smaller than the land is spread over every patch.
+	// Everything else, the declared yield included, is v9 verbatim.
+	NaturalMechanismV10 NaturalMechanism = 10
 )
 
 // NaturalMechanismValid reports the admitted axis values: the zero value
-// (≡ v5), 6, 7, 8 and 9. Literal 5 is not a second spelling of v5 — the zero
-// value is the one v5 spelling — and everything else fails closed.
+// (≡ v5), 6, 7, 8, 9 and 10. Literal 5 is not a second spelling of v5 — the
+// zero value is the one v5 spelling — and everything else fails closed.
 func NaturalMechanismValid(m NaturalMechanism) bool {
 	return m == NaturalMechanismV5 || m == NaturalMechanismV6 || m == NaturalMechanismV7 ||
-		m == NaturalMechanismV8 || m == NaturalMechanismV9
+		m == NaturalMechanismV8 || m == NaturalMechanismV9 || m == NaturalMechanismV10
 }
 
 // worldVersion is the world axis version number of the mechanism: 5 for the
@@ -439,6 +445,8 @@ func (m NaturalMechanism) worldVersion() uint32 {
 		return 8
 	case NaturalMechanismV9:
 		return 9
+	case NaturalMechanismV10:
+		return 10
 	}
 	return 5
 }
@@ -497,11 +505,25 @@ func NaturalSlotID(patches, patchIndex, slotIndex int) (sim.EntityID, error) {
 // NaturalFounderPatchID maps only the ID-placed founders; a newborn's home
 // patch is carried by its bag source-patch row, not derived from its ID.
 func NaturalFounderPatchID(patches int, actor sim.EntityID) (sim.EntityID, error) {
+	return NaturalFounderPatchIDFor(NaturalMechanismV5, patches, actor)
+}
+
+// NaturalFounderPatchIDFor is the mechanism-versioned founder placement.
+// Every mechanism below v10 seats the founders in ID blocks of
+// NaturalSlotsPerPatch (founder i on patch (i-1)/8), so their bytes are
+// unchanged; mechanism v10 seats the band round-robin across the declared
+// patch count (founder i on patch (i-1) mod P), so a band smaller than the
+// land leaves free ground on every patch instead of crowding one.
+func NaturalFounderPatchIDFor(m NaturalMechanism, patches int, actor sim.EntityID) (sim.EntityID, error) {
 	founders, err := NaturalFounderCount(patches)
 	if err != nil || actor < 1 || actor > sim.EntityID(founders) {
 		return 0, ErrNaturalContract
 	}
-	return NaturalPatchID(patches, (int(actor)-1)/NaturalSlotsPerPatch)
+	index := (int(actor) - 1) / NaturalSlotsPerPatch
+	if naturalRoundRobinFounders(m) {
+		index = (int(actor) - 1) % patches
+	}
+	return NaturalPatchID(patches, index)
 }
 
 // NaturalHighestFixedEntityID is the highest fixed entity ID (2000+8P): the
@@ -638,7 +660,19 @@ func naturalRuleFor(m NaturalMechanism, id sim.RuleID, name string) component.Tr
 // rule-515 provisioned ledger and admits the provision contract: v6, v8 and
 // v9 (v7 carries it alongside the wage ledgers).
 func naturalHasProvisionLedger(m NaturalMechanism) bool {
-	return m == NaturalMechanismV6 || m == NaturalMechanismV8 || m == NaturalMechanismV9
+	return m == NaturalMechanismV6 || m == NaturalMechanismV8 || naturalHasYieldAxis(m)
+}
+
+// naturalHasYieldAxis reports the mechanisms that declare the granary Yield
+// parameter: v9 and every later mechanism (v10 is v9 plus founder placement).
+func naturalHasYieldAxis(m NaturalMechanism) bool {
+	return m == NaturalMechanismV9 || m == NaturalMechanismV10
+}
+
+// naturalRoundRobinFounders reports the mechanisms whose founding band is
+// seated round-robin across the patches: v10 only.
+func naturalRoundRobinFounders(m NaturalMechanism) bool {
+	return m == NaturalMechanismV10
 }
 
 // naturalGranaryBoundsFor is the declared granary ledger envelope of a
@@ -646,7 +680,7 @@ func naturalHasProvisionLedger(m NaturalMechanism) bool {
 // cultivated-total and spoiled ledgers carry the yield-widened envelope; every
 // frozen mechanism keeps exactly NaturalGranaryStockMax/NaturalSpoiledMax.
 func naturalGranaryBoundsFor(m NaturalMechanism) (stock, spoiled int64) {
-	if m == NaturalMechanismV9 {
+	if naturalHasYieldAxis(m) {
 		return naturalYieldGranaryMax, naturalYieldGranaryMax
 	}
 	return NaturalGranaryStockMax, NaturalSpoiledMax
@@ -679,7 +713,7 @@ func naturalDescriptor(id sim.ComponentTypeID, name string, fields []component.F
 
 func NaturalPatchDescriptorFor(m NaturalMechanism) component.ComponentDescriptor {
 	grantedMax := NaturalGranaryStockMax
-	if m == NaturalMechanismV9 {
+	if naturalHasYieldAxis(m) {
 		grantedMax = naturalYieldGranaryMax
 	}
 	return naturalDescriptorFor(m, NaturalPatchTypeID, "natural-patch-"+naturalNameSuffix(m), []component.FieldDescriptor{

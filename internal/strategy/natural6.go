@@ -94,7 +94,7 @@ func ValidFrozenNaturalPolicy(p NaturalPolicy) bool {
 	return p == FrozenNaturalPolicy() || p == FrozenNaturalPolicyV6() ||
 		p == FrozenNaturalPolicy7() || p == FrozenNaturalPolicy7b() ||
 		p == FrozenNaturalPolicy9() || p == FrozenNaturalPolicy11() ||
-		p == FrozenNaturalPolicy12() || p == FrozenNaturalPolicy13()
+		p == FrozenNaturalPolicy12() || p == FrozenNaturalPolicy13() || p == FrozenNaturalPolicy14()
 }
 
 // FrozenNaturalPolicyForRef resolves a reference of the frozen natural ref
@@ -130,6 +130,9 @@ func FrozenNaturalPolicyForRef(ref NaturalRef) (NaturalPolicy, error) {
 	if ref == FrozenNaturalPolicy13().Ref {
 		return FrozenNaturalPolicy13(), nil
 	}
+	if ref == FrozenNaturalPolicy14().Ref {
+		return FrozenNaturalPolicy14(), nil
+	}
 	return NaturalPolicy{}, ErrUnknownNaturalPolicy
 }
 
@@ -144,7 +147,7 @@ func FrozenNaturalPolicyForRef(ref NaturalRef) (NaturalPolicy, error) {
 func (r *NaturalRegistry) RegisterFrozenNatural(policy NaturalPolicy) error {
 	if r == nil || !(validNaturalPolicy(policy) || validNaturalPolicyV6(policy) ||
 		validNaturalPolicy7(policy) || validNaturalPolicy7b(policy) || validNaturalPolicy9(policy) ||
-		validNaturalPolicy11(policy) || validNaturalPolicy12(policy) || validNaturalPolicy13(policy)) {
+		validNaturalPolicy11(policy) || validNaturalPolicy12(policy) || validNaturalPolicy13(policy) || validNaturalPolicy14(policy)) {
 		return ErrInvalidNaturalPolicy
 	}
 	r.mu.Lock()
@@ -485,7 +488,7 @@ func appendNaturalPolicyWire(p NaturalPolicy) []byte {
 func EncodeFrozenNaturalPolicy(p NaturalPolicy) ([]byte, error) {
 	if !validNaturalPolicy(p) && !validNaturalPolicyV6(p) &&
 		!validNaturalPolicy7(p) && !validNaturalPolicy7b(p) && !validNaturalPolicy9(p) &&
-		!validNaturalPolicy11(p) && !validNaturalPolicy12(p) && !validNaturalPolicy13(p) {
+		!validNaturalPolicy11(p) && !validNaturalPolicy12(p) && !validNaturalPolicy13(p) && !validNaturalPolicy14(p) {
 		return nil, ErrInvalidNaturalPolicy
 	}
 	return appendNaturalPolicyWire(p), nil

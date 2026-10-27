@@ -161,7 +161,7 @@ func validNaturalJournalConfig(config NaturalJournalConfig) bool {
 	if config.CultivationDisabled && config.FounderTenure {
 		return false
 	}
-	if config.Yield < 0 || config.Yield > NaturalYieldMax || (config.Yield != 0 && config.Mechanism != NaturalMechanismV9) {
+	if config.Yield < 0 || config.Yield > NaturalYieldMax || (config.Yield != 0 && !naturalHasYieldAxis(config.Mechanism)) {
 		return false
 	}
 	if !NaturalFoundersValid(config.Patches, config.Founders) || (config.FounderTenure && config.Founders == 1) {

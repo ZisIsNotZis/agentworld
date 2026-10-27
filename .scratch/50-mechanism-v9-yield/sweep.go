@@ -45,6 +45,8 @@ func main() {
 		if *yield > 0 {
 			mech = world.NaturalMechanismV9
 		}
+	case "natural/14":
+		pol, mech = strategy.FrozenNaturalPolicy14(), world.NaturalMechanismV10
 	default:
 		fail(fmt.Errorf("unknown policy %q", *policyName))
 	}

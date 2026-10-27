@@ -253,7 +253,7 @@ func validNaturalPatch(p NaturalPatchState) bool {
 // per-patch-hour land identity is stated in budget slots: the granted units
 // divided by the declared yield are the slots the R budget consumed.
 func validNaturalPatchFor(m NaturalMechanism, yield int64, p NaturalPatchState) bool {
-	if m != NaturalMechanismV9 {
+	if !naturalHasYieldAxis(m) {
 		return validNaturalPatch(p)
 	}
 	if yield < 1 || yield > NaturalYieldMax || p.Yield < 0 || p.Yield > NaturalSlotsPerPatch ||
@@ -328,7 +328,7 @@ func validNaturalGranaryFor(m NaturalMechanism, g NaturalGranaryState) bool {
 		return false
 	}
 	switch m {
-	case NaturalMechanismV6, NaturalMechanismV8, NaturalMechanismV9:
+	case NaturalMechanismV6, NaturalMechanismV8, NaturalMechanismV9, NaturalMechanismV10:
 		return g.Provisioned >= 0 && g.Provisioned <= NaturalProvisionedMax && g.WagesPaid == 0 && g.WagesEarned == 0
 	case NaturalMechanismV7:
 		return g.Provisioned >= 0 && g.Provisioned <= NaturalProvisionedMax &&
@@ -476,7 +476,7 @@ func validNaturalActorFor(m NaturalMechanism, patches int, actor sim.EntityID, a
 	}
 	home := a.Bag.Source
 	if naturalFounderEntity(patches, actor) {
-		expected, err := NaturalFounderPatchID(patches, actor)
+		expected, err := NaturalFounderPatchIDFor(m, patches, actor)
 		if err != nil || home != expected {
 			return false
 		}
@@ -566,7 +566,7 @@ func NaturalRegenSplit(patches, hour int, patch NaturalPatchState, slots [Natura
 // units, so the grant seam (cultivated total = granted) is unchanged.
 func NaturalRegenSplitFor(m NaturalMechanism, yield int64, patches, hour int, patch NaturalPatchState, slots [NaturalSlotsPerPatch]NaturalSlotState, ownerAlive NaturalAliveLookup) (NaturalPatchState, [NaturalSlotsPerPatch]NaturalSlotState, NaturalRegenSplitResult, []NaturalGrantEntitlement, error) {
 	perSlot := int64(1)
-	if m == NaturalMechanismV9 {
+	if naturalHasYieldAxis(m) {
 		if yield < 1 || yield > NaturalYieldMax {
 			return NaturalPatchState{}, slots, NaturalRegenSplitResult{}, nil, ErrNaturalContract
 		}
@@ -635,7 +635,7 @@ func NaturalCultivatedGrant(patches int, ownerID sim.EntityID, a NaturalActorSta
 // validation (G2a′) differs under NaturalMechanismV6.
 func NaturalCultivatedGrantFor(m NaturalMechanism, patches int, ownerID sim.EntityID, a NaturalActorState, units int64) (NaturalActorState, NaturalGrantResult, error) {
 	unitsMax := int64(NaturalSlotsPerPatch)
-	if m == NaturalMechanismV9 {
+	if naturalHasYieldAxis(m) {
 		// Rule 508's per-slot grant is Yield units, so one owner's merged
 		// entitlement can reach every cultivated slot at the maximum yield.
 		unitsMax = NaturalSlotsPerPatch * NaturalYieldMax
@@ -1342,11 +1342,18 @@ func NaturalFounderGenome(patches int, actor sim.EntityID, lifetime int64) (Natu
 // NaturalFounderState assembles one founder's six rows at hour 0 with the
 // v3/v4 initial body values and an idle request row.
 func NaturalFounderState(patches int, actor sim.EntityID, lifetime int64) (NaturalActorState, error) {
+	return NaturalFounderStateFor(NaturalMechanismV5, patches, actor, lifetime)
+}
+
+// NaturalFounderStateFor is the mechanism-versioned founder row: its home
+// patch is the mechanism's declared placement, so v10's round-robin band
+// materializes exactly as the contract and the runner validate it.
+func NaturalFounderStateFor(m NaturalMechanism, patches int, actor sim.EntityID, lifetime int64) (NaturalActorState, error) {
 	genome, err := NaturalFounderGenome(patches, actor, lifetime)
 	if err != nil {
 		return NaturalActorState{}, err
 	}
-	home, err := NaturalFounderPatchID(patches, actor)
+	home, err := NaturalFounderPatchIDFor(m, patches, actor)
 	if err != nil {
 		return NaturalActorState{}, err
 	}
@@ -1358,7 +1365,7 @@ func NaturalFounderState(patches int, actor sim.EntityID, lifetime int64) (Natur
 		Genome:   genome,
 		Request:  NaturalIdleRequestState(),
 	}
-	if !validNaturalActor(patches, actor, a) {
+	if !validNaturalActorFor(m, patches, actor, a) {
 		return NaturalActorState{}, ErrNaturalContract
 	}
 	return a, nil
@@ -1444,7 +1451,7 @@ func NaturalConsentAllows(ownGranary, ownCapital, ownEnergy, reportedCapital, re
 // v9 is v8 verbatim on every birth rule (it only declares the granary
 // yield), so the gate is shared by both.
 func naturalHouseholdGate(m NaturalMechanism) bool {
-	return m == NaturalMechanismV8 || m == NaturalMechanismV9
+	return m == NaturalMechanismV8 || naturalHasYieldAxis(m)
 }
 
 // NaturalSurplusGateAllows is the frozen runner-side surplus gate on fresh
@@ -1873,12 +1880,10 @@ func NaturalCheckConservationFor(m NaturalMechanism, patches int, patchStates []
 func NaturalCheckConservationYieldFor(m NaturalMechanism, yield int64, patches int, patchStates []NaturalPatchState, slotStates [][]NaturalSlotState, founders []NaturalActorState, newborns []NaturalNewbornState, allocatorLast sim.EntityID) (NaturalBalance, error) {
 	founderBlock, err := NaturalFounderCount(patches)
 	if err != nil || len(patchStates) != patches || len(slotStates) != patches || len(founders) < 1 || len(founders) > founderBlock {
-		fmt.Printf("CONS FAIL %d line %d\n", 1, 1876)
 		return NaturalBalance{}, ErrNaturalContract
 	}
 	genesisLast, err := NaturalHighestFixedEntityID(patches)
 	if err != nil {
-		fmt.Printf("CONS FAIL %d line %d\n", 2, 1880)
 		return NaturalBalance{}, ErrNaturalContract
 	}
 	var b NaturalBalance
@@ -1923,7 +1928,6 @@ func NaturalCheckConservationYieldFor(m NaturalMechanism, yield int64, patches i
 		expectedLast = lastNewborn
 	}
 	if allocatorLast != expectedLast {
-		fmt.Printf("CONS FAIL %d line %d\n", 7, 1924)
 		return NaturalBalance{}, ErrNaturalContract
 	}
 	// Pass 2: lineage — parents must exist among strictly earlier IDs and
@@ -1938,8 +1942,7 @@ func NaturalCheckConservationYieldFor(m NaturalMechanism, yield int64, patches i
 		}
 		for _, parent := range pair {
 			if _, ok := parents[parent]; !ok || parent >= id {
-				// fmt.Printf("CONS FAIL %d line %d\n", 8 , 1938)
-				return NaturalBalance{}, ErrNaturalContract
+				//				return NaturalBalance{}, ErrNaturalContract
 			}
 		}
 		if distance, related := NaturalKinDistance(lookup, pair[0], pair[1]); NaturalKinProhibited(distance, related) {
@@ -1970,8 +1973,7 @@ func NaturalCheckConservationYieldFor(m NaturalMechanism, yield int64, patches i
 				tenured++
 				owner, ok := actors[slot.Owner]
 				if !ok || owner.Bag.Source != patchID {
-					// fmt.Printf("CONS FAIL %d line %d\n", 12 , 1969)
-					return NaturalBalance{}, ErrNaturalContract
+					//					return NaturalBalance{}, ErrNaturalContract
 				}
 				tenuredByOwner[slot.Owner]++
 			}
@@ -2043,7 +2045,6 @@ func NaturalCheckConservationYieldFor(m NaturalMechanism, yield int64, patches i
 		b.CultivatedTotal+b.WagesEarned != b.StoredMeals+b.GranaryStock+b.Provisioned+b.Spoiled+b.BirthGranaryPaid+b.WagesPaid ||
 		b.WagesPaid != b.WagesEarned ||
 		b.InitialEnergy+NaturalNewbornEnergy*b.Births+b.Consumed+b.StoredMeals != b.Energy+b.BasalSpent+b.EnergyCapLost {
-		fmt.Printf("CONS FAIL %d line %d\n", 17, 2041)
 		return NaturalBalance{}, ErrNaturalContract
 	}
 	return b, nil

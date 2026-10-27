@@ -206,15 +206,35 @@ func naturalSlotEntity(patches int, id sim.EntityID) bool {
 	return id >= 2001 && id < sim.EntityID(2001+naturalSlotsPerPatch*patches)
 }
 
+// naturalPlacement is the declared founder placement geometry a policy
+// validates observations against. The zero value is the frozen ID-block
+// placement every ref below natural/14 assumes; natural/14 (mechanism v10)
+// validates the round-robin placement instead.
+type naturalPlacement int
+
+const (
+	naturalPlacementIDBlock    naturalPlacement = iota // founder i on patch (i-1)/8
+	naturalPlacementRoundRobin                         // founder i on patch (i-1) mod P
+)
+
 // naturalFounderHomePatch is the fixed founder geometry
 // (world.NaturalFounderPatchID): founders are ID-placed, 8 per patch.
 // Newborns are not ID-placed — their home patch is the proposer's, carried by
 // the bag source row.
 func naturalFounderHomePatch(patches int, actor sim.EntityID) (sim.EntityID, bool) {
+	return naturalFounderHomePatchFor(naturalPlacementIDBlock, patches, actor)
+}
+
+// naturalFounderHomePatchFor is the geometry under one declared placement.
+func naturalFounderHomePatchFor(placement naturalPlacement, patches int, actor sim.EntityID) (sim.EntityID, bool) {
 	if !naturalFounderEntity(patches, actor) {
 		return 0, false
 	}
-	return sim.EntityID(1001 + (int(actor)-1)/naturalSlotsPerPatch), true
+	index := (int(actor) - 1) / naturalSlotsPerPatch
+	if placement == naturalPlacementRoundRobin {
+		index = (int(actor) - 1) % patches
+	}
+	return sim.EntityID(1001 + index), true
 }
 
 // naturalFirstSlot is the lowest slot ID of a home patch
