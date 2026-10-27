@@ -42,18 +42,26 @@ func OpenReplay(path string) (*Replay, error) {
 
 func newReplay(records []CallRecord, sentinel ModelClient) *Replay {
 	r := &Replay{transport: sentinel, calls: make(map[[32]byte]CallResult, len(records))}
+	// attempts holds every record sequence seen for a request hash, in ledger
+	// order. A call's retried attempts share the request hash, so the run through
+	// the first non-retryable record is exactly that call's physical attempts,
+	// even when another call's records interleave.
+	attempts := make(map[[32]byte][]uint64, len(records))
 	for _, rec := range records {
 		hash, err := parseHashField(rec.RequestHash)
 		if err != nil {
 			continue
 		}
+		attempts[hash] = append(attempts[hash], rec.Seq)
 		if _, seen := r.calls[hash]; seen {
 			continue
 		}
 		if rec.Status.retryable(rec.HTTPStatus) {
 			continue
 		}
-		r.calls[hash] = callResultFrom(rec)
+		result := callResultFrom(rec)
+		result.AttemptSeqs = append([]uint64(nil), attempts[hash]...)
+		r.calls[hash] = result
 	}
 	return r
 }

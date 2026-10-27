@@ -597,8 +597,8 @@ func curvePairsOf(report curveReport, conditions []string) []curvePair {
 				sustained := map[string]bool{}
 				for _, kpi := range curveKPINames(aCells[0]) {
 					cmp := compareKPIs(cell, kpi, seriesOf(aCells, kpi), seriesOf(bCells, kpi))
-					if family, bucket, ok := histogramKPI(kpi); ok {
-						cmp.Wasserstein = wassersteinHistograms(histRows(aCells, family, bucket), histRows(bCells, family, bucket))
+					if family, _, ok := histogramKPI(kpi); ok {
+						cmp.Wasserstein = wassersteinHistograms(histHourRows(aCells, family), histHourRows(bCells, family))
 					} else {
 						cmp.Wasserstein = wasserstein1(poolSamples(aCells, kpi), poolSamples(bCells, kpi))
 					}
@@ -658,18 +658,42 @@ func seriesOf(cells []curveCell, kpi string) [][]float64 {
 	return out
 }
 
-// histRows is the replicate-major bucket-index view of a histogram family.
-func histRows(cells []curveCell, family string, bucket int) [][]float64 {
-	out := make([][]float64, 0, len(cells))
+// histHourRows is the per-hour bucket-distribution view of a histogram family
+// for one condition: hour h's row is the mean bucket count over the condition's
+// replicates. That mean row is the distribution the declared Wasserstein-1
+// integrates over bucket indices; the W1 is then averaged over hours.
+func histHourRows(cells []curveCell, family string) [][]float64 {
+	if len(cells) == 0 {
+		return nil
+	}
+	hours := len(cells[0].Hist[family])
+	width := 0
+	if rows := cells[0].Hist[family]; len(rows) > 0 {
+		width = len(rows[0])
+	}
 	for _, c := range cells {
 		rows := c.Hist[family]
-		series := make([]float64, len(rows))
-		for h, row := range rows {
-			if bucket < len(row) {
-				series[h] = row[bucket]
+		if len(rows) < hours {
+			hours = len(rows)
+		}
+		for _, row := range rows {
+			if len(row) < width {
+				width = len(row)
 			}
 		}
-		out = append(out, series)
+	}
+	out := make([][]float64, hours)
+	for h := 0; h < hours; h++ {
+		row := make([]float64, width)
+		for _, c := range cells {
+			for b := 0; b < width; b++ {
+				row[b] += c.Hist[family][h][b]
+			}
+		}
+		for b := range row {
+			row[b] /= float64(len(cells))
+		}
+		out[h] = row
 	}
 	return out
 }

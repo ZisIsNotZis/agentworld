@@ -243,8 +243,13 @@ type CallRequest struct {
 // CallResult is the used attempt's outcome, reconstructed identically by
 // replay.
 type CallResult struct {
-	Seq                 uint64
-	Attempt             int
+	Seq     uint64
+	Attempt int
+	// AttemptSeqs are the ledger sequence numbers of every physical attempt of
+	// this call, in attempt order. Under call concurrency another call's record
+	// can interleave between retries, so the attempts are not a contiguous range;
+	// this list, not Seq/Attempt alone, is what names exactly this call's records.
+	AttemptSeqs         []uint64
 	RequestHash         [32]byte
 	Content             []byte
 	ResponseBody        []byte
@@ -349,6 +354,7 @@ func (r *Recorder) Call(ctx context.Context, req CallRequest) (CallResult, error
 	requestHash := sha256.Sum256(req.Request)
 	ctx, cancel := context.WithTimeout(ctx, r.callDeadline)
 	defer cancel()
+	attemptSeqs := make([]uint64, 0, r.maxAttempts)
 	for attempt := 1; attempt <= r.maxAttempts; attempt++ {
 		if err := r.budget.AllowCall(req.Hour); err != nil {
 			return CallResult{}, err
@@ -423,8 +429,11 @@ func (r *Recorder) Call(ctx context.Context, req CallRequest) (CallResult, error
 		if err := r.budget.Charge(req.Hour, resp.Usage, cost.Micros); err != nil {
 			return CallResult{}, err
 		}
+		attemptSeqs = append(attemptSeqs, rec.Seq)
 		if !status.retryable(httpStatus) {
-			return callResultFrom(rec), nil
+			result := callResultFrom(rec)
+			result.AttemptSeqs = attemptSeqs
+			return result, nil
 		}
 		if attempt == r.maxAttempts {
 			break

@@ -2,7 +2,11 @@ package cognition_test
 
 import (
 	"context"
+	"errors"
+	"reflect"
+	"sync"
 	"testing"
+	"time"
 
 	"agentworld/internal/cognition"
 	"agentworld/internal/strategy"
@@ -114,5 +118,134 @@ func TestRoleAInterventionsReferenceEveryCall(t *testing.T) {
 		if referenced[call.Seq] != 1 {
 			t.Fatalf("call %d referenced %d times (orphan or double)", call.Seq, referenced[call.Seq])
 		}
+	}
+}
+
+// TestRoleAInterventionRefsExactUnderConcurrency reproduces the Stage-E defect:
+// two calls run concurrently and the first call's retry record lands after the
+// second call's used attempt. The intervention must reference exactly its own
+// attempts, never a contiguous range that includes the other call's record, and
+// replay must rebuild the same exact list.
+func TestRoleAInterventionRefsExactUnderConcurrency(t *testing.T) {
+	l, path := newTestLedger(t)
+	acct := newAccount(t, generousBudget())
+
+	var mu sync.Mutex
+	attempts := map[string]int{}
+	fake := &cognition.FakeClient{Respond: func(req cognition.ModelRequest) (cognition.ModelResponse, error) {
+		mu.Lock()
+		attempts[string(req.Request)]++
+		n := attempts[string(req.Request)]
+		mu.Unlock()
+		if n == 1 {
+			return cognition.ModelResponse{}, errors.New("transport down")
+		}
+		return cognition.DefaultFakeResponse(), nil
+	}}
+
+	aSleeping := make(chan struct{})
+	releaseA := make(chan struct{})
+	var sleepOnce sync.Once
+	cfg := fixedRecorderConfig(l, fake, acct)
+	cfg.Sleep = func(context.Context, time.Duration) error {
+		first := false
+		sleepOnce.Do(func() { first = true })
+		if first {
+			close(aSleeping)
+			<-releaseA
+		}
+		return nil
+	}
+	rec, err := cognition.NewRecorder(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type outcome struct {
+		result cognition.CallResult
+		err    error
+	}
+	reqA := sampleRequest(cognition.RoleActorDecision, `{"call":"A"}`, 6)
+	reqB := sampleRequest(cognition.RoleActorDecision, `{"call":"B"}`, 7)
+	aDone := make(chan outcome, 1)
+	go func() {
+		result, err := rec.Call(context.Background(), reqA)
+		aDone <- outcome{result, err}
+	}()
+
+	// A's first attempt (seq 0) is recorded and it is now sleeping before retry.
+	<-aSleeping
+	// B runs to completion while A waits: B1 (seq 1) and B2 (seq 2).
+	bResult, err := rec.Call(context.Background(), reqB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A retries: its used attempt is seq 3, not the contiguous seq 2 the old
+	// range [2,3] would have named.
+	close(releaseA)
+	a := <-aDone
+	if a.err != nil {
+		t.Fatal(a.err)
+	}
+	if a.result.Seq != 3 || a.result.Attempt != 2 || bResult.Seq != 2 || bResult.Attempt != 2 {
+		t.Fatalf("ledger order: A seq=%d attempt=%d, B seq=%d attempt=%d", a.result.Seq, a.result.Attempt, bResult.Seq, bResult.Attempt)
+	}
+	if !reflect.DeepEqual(a.result.AttemptSeqs, []uint64{0, 3}) || !reflect.DeepEqual(bResult.AttemptSeqs, []uint64{1, 2}) {
+		t.Fatalf("attempt seqs: A=%v B=%v want A=[0 3] B=[1 2]", a.result.AttemptSeqs, bResult.AttemptSeqs)
+	}
+
+	decision := cognition.ActorSeamDecision{Action: "gather", Source: cognition.SourceModel, Confidence: 0.5}
+	inA := roleAInterventionInput(decision)
+	inA.Hour, inA.Call = 6, a.result
+	inB := roleAInterventionInput(decision)
+	inB.Hour, inB.Call = 7, bResult
+	if _, err := cognition.AppendRoleAIntervention(l, inA); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cognition.AppendRoleAIntervention(l, inB); err != nil {
+		t.Fatal(err)
+	}
+
+	interventions, err := cognition.ReadInterventionRecords(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(interventions) != 2 {
+		t.Fatalf("interventions=%d want 2", len(interventions))
+	}
+	if !reflect.DeepEqual(interventions[0].CallRefs, []uint64{0, 3}) {
+		t.Fatalf("intervention A refs=%v want the call's exact attempts [0 3]", interventions[0].CallRefs)
+	}
+	if !reflect.DeepEqual(interventions[1].CallRefs, []uint64{1, 2}) {
+		t.Fatalf("intervention B refs=%v want [1 2]", interventions[1].CallRefs)
+	}
+	calls, err := cognition.ReadCallRecords(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	referenced := map[uint64]int{}
+	for _, record := range interventions {
+		for _, seq := range record.CallRefs {
+			referenced[seq]++
+		}
+	}
+	for _, call := range calls {
+		if referenced[call.Seq] != 1 {
+			t.Fatalf("call %d referenced %d times (want exactly once)", call.Seq, referenced[call.Seq])
+		}
+	}
+
+	// Replay rebuilds the exact attempt list from the ledger, so a replayed
+	// intervention records the same refs as the live one.
+	replay, err := cognition.OpenReplay(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayedA, err := replay.Resolve(reqA.Request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(replayedA.AttemptSeqs, []uint64{0, 3}) {
+		t.Fatalf("replayed A attempt seqs=%v want [0 3]", replayedA.AttemptSeqs)
 	}
 }

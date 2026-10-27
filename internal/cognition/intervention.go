@@ -109,14 +109,25 @@ func AppendRoleAIntervention(l *Ledger, in RoleAInterventionInput) (Intervention
 }
 
 // callRefRange references every physical attempt record of one recorded call.
-// The Recorder appends one contiguous run of records per Call and returns the
-// used attempt's sequence and index, so the run is exactly
-// [seq-(attempt-1), seq].
+// CallResult carries the exact attempt sequences, so a retry whose records are
+// interleaved with another call's records still references only its own.
 func callRefRange(call CallResult) []uint64 {
-	return callRefRefs(call.Seq, call.Attempt)
+	return callAttemptRefs(call.Seq, call.Attempt, call.AttemptSeqs)
 }
 
-// callRefRefs is the shared attempt-range expansion.
+// callAttemptRefs is the recorded attempt list when the caller has one. The
+// contiguous fallback exists only for a hand-built CallResult that predates the
+// recorded list (a bare Seq/Attempt fixture); the recorder and replay always
+// populate the exact list.
+func callAttemptRefs(seq uint64, attempt int, seqs []uint64) []uint64 {
+	if len(seqs) > 0 {
+		return append([]uint64(nil), seqs...)
+	}
+	return callRefRefs(seq, attempt)
+}
+
+// callRefRefs is the contiguous attempt-range expansion used only as the
+// fallback above.
 func callRefRefs(seq uint64, attempt int) []uint64 {
 	if attempt <= 1 {
 		return []uint64{seq}

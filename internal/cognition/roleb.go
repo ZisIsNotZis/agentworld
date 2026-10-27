@@ -226,7 +226,7 @@ func (c *RoleBController) Audit(ctx context.Context, hour int, evidence protocol
 	proposeRecord, err := c.appendIntervention(InterventionRecord{
 		Kind:     InterventionPatchPropose,
 		Cause:    InterventionCause{WakePolicy: "role-b", Hour: hour, Trigger: predicate, EvidenceDigest: formatHash(evidenceDigest)},
-		CallRefs: callRefRefs(proposal.CallRef, proposal.CallAttempt),
+		CallRefs: callAttemptRefs(proposal.CallRef, proposal.CallAttempt, proposal.CallAttemptSeqs),
 		Cost:     InterventionCost{Calls: 1},
 		Patch: &PatchRecord{
 			ParentRef: NaturalRefRecordOf(c.head.Ref), ChildRef: NaturalRefRecordOf(proposal.ParentRef),
@@ -616,6 +616,7 @@ func (p *RoleBProposer) ProposeStrategyPatch(ctx context.Context, req protocol.P
 		return protocol.PatchProposal{}, err
 	}
 	proposal.CallAttempt = call.Attempt
+	proposal.CallAttemptSeqs = call.AttemptSeqs
 	return proposal, nil
 }
 

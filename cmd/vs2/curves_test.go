@@ -152,6 +152,49 @@ func TestWassersteinHistogramsHandComputed(t *testing.T) {
 	}
 }
 
+// TestWassersteinHistogramsPerHourMeanRowsHandComputed pins the declared shape:
+// each hour's row is the mean bucket count over the condition's replicates, the
+// W1 is in bucket units at that hour, and the reported value is its mean over
+// hours. Feeding replicate-major bucket series here would measure the hour axis
+// instead and cannot produce these numbers.
+func TestWassersteinHistogramsPerHourMeanRowsHandComputed(t *testing.T) {
+	a := []curveCell{{Hist: map[string][][]float64{"capital_hist": {
+		{0, 0, 2}, // two bucket units from b at hour 0
+		{0, 1, 1}, // one bucket unit from b at hour 1
+	}}}, {Hist: map[string][][]float64{"capital_hist": {
+		{0, 0, 2},
+		{0, 1, 1},
+	}}}}
+	b := []curveCell{{Hist: map[string][][]float64{"capital_hist": {
+		{2, 0, 0},
+		{1, 1, 0},
+	}}}, {Hist: map[string][][]float64{"capital_hist": {
+		{2, 0, 0},
+		{1, 1, 0},
+	}}}}
+	// Hour 0: mass at index 2 vs index 0 -> W1 = 2.
+	// Hour 1: {0, 1, 1} vs {1, 1, 0} -> W1 = 0.5 + 0.5 = 1.
+	// Mean over hours: (2 + 1) / 2 = 1.5.
+	if got := wassersteinHistograms(histHourRows(a, "capital_hist"), histHourRows(b, "capital_hist")); !closeEnough(got, 1.5) {
+		t.Fatalf("histogram W1 by hour: got %v want 1.5", got)
+	}
+}
+
+func TestWassersteinHistogramsWithinBucketRange(t *testing.T) {
+	// Unit mass at opposite ends of a 7-bucket family: the distance is 6 bucket
+	// units, the largest a W1 over bucket indices can be, never an hour index.
+	const width = 7
+	a := []curveCell{{Hist: map[string][][]float64{"granary_hist": {{1, 0, 0, 0, 0, 0, 0}}}}}
+	b := []curveCell{{Hist: map[string][][]float64{"granary_hist": {{0, 0, 0, 0, 0, 0, 1}}}}}
+	got := wassersteinHistograms(histHourRows(a, "granary_hist"), histHourRows(b, "granary_hist"))
+	if !closeEnough(got, width-1) {
+		t.Fatalf("histogram W1: got %v want %d", got, width-1)
+	}
+	if got > width-1 {
+		t.Fatalf("histogram W1 %v exceeds the bucket range 0..%d", got, width-1)
+	}
+}
+
 // curveFixtureEvaluation builds a two-condition, two-cell, three-replicate
 // evaluation whose population curves are controlled: condition A is mu, B is
 // mu+delta, and the replicate spread is `spread` at every hour.
