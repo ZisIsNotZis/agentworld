@@ -41,13 +41,15 @@ func testRoster(n, hour int) []protocol.EscalationCandidate {
 func simID(i int) sim.EntityID { return sim.EntityID(i) }
 
 // matrixHorizon is H at which the declared M2c matrix runs (ticket 38 §7.1, launched
-// with -hours 144); DeclaredHorizonHours is the fixture family's horizon.
+// with -hours 144); DeclaredHorizonHours is the fixture family's horizon (the W1
+// declared H = 144 since ticket 55). The second case keeps the pre-W2 frozen
+// horizon 168 as an invariant-in-H regression of the schedule shape.
 const matrixHorizon = 144
 
 // TestQuotaScheduleSumAndShape pins q(h) = floor((N-R)/H) + (1 if h < (N-R) mod H) at
 // both declared horizons: sum_{h<H} q(h) = N - R is invariant in H, and the second
 // decision of an hour falls in the first (N-R) mod H hours -- h < 104 at the matrix
-// horizon H = 144 (ticket 40 §3.2), h < 80 at H = DeclaredHorizonHours. The shape is
+// horizon H = 144 (ticket 40 §3.2), h < 80 at the frozen H = 168. The shape is
 // asserted hour by hour, so the schedule the matrix actually spends is pinned and not
 // only its horizon-invariant sum.
 func TestQuotaScheduleSumAndShape(t *testing.T) {
@@ -56,7 +58,7 @@ func TestQuotaScheduleSumAndShape(t *testing.T) {
 		extra   int // (N-R) mod H: the hours that select two decisions
 	}{
 		{horizon: matrixHorizon, extra: 104},
-		{horizon: DeclaredHorizonHours, extra: 80},
+		{horizon: 168, extra: 80},
 	}
 	for _, c := range cases {
 		q := quotaSchedule(DeclaredCallCeiling, c.horizon)

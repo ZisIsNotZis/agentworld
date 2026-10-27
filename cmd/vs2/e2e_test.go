@@ -26,7 +26,9 @@ import (
 const testHorizon = 8
 
 func testFixture(f int, seed uint64) fixture {
-	return fixture{Patches: 2, R: 8, Founders: f, Seed: seed, Hours: testHorizon, Workers: 1}
+	fp := declaredWorld(f, seed)
+	fp.Hours = testHorizon
+	return fp
 }
 
 // runTestMatrix runs the five declared arms over one bounded cell.
@@ -73,6 +75,47 @@ func TestHermeticEndToEndReport(t *testing.T) {
 	wantFeatureIdentity := cognition.ModelFeatureIdentityDigest(cognition.DefaultModelID, cognition.WireResponses, cognition.FrozenSampling(), protocol.FeatureSetVersion)
 	if hex.EncodeToString(wantFeatureIdentity[:]) != ev.ModelFeatureIdentity {
 		t.Fatalf("model+feature identity = %q, want %x", ev.ModelFeatureIdentity, wantFeatureIdentity)
+	}
+	// The evaluation names the whole declared W1 world, not just its mechanism:
+	// base policy, mechanism, yield and birth price are recorded, so a reader never
+	// has to infer the axes from the mechanism version.
+	if ev.BasePolicy != declaredBasePolicy().ID || ev.Mechanism != int(declaredMechanism()) ||
+		ev.Yield != DeclaredYield || ev.BirthCost != DeclaredBirthCost {
+		t.Fatalf("evaluation world identity = policy %q mechanism %d yield %d birth-cost %d, want natural/14, v14, 1, 2",
+			ev.BasePolicy, ev.Mechanism, ev.Yield, ev.BirthCost)
+	}
+	if ev.HorizonHours != testHorizon {
+		t.Fatalf("evaluation horizon = %d, want %d", ev.HorizonHours, testHorizon)
+	}
+	// Every recorded Role A request carries the same declared fixture identity: the
+	// v14 mechanism and the natural/14 base ref the world was built from.
+	for _, cr := range runs {
+		for _, call := range cr.calls {
+			if call.Role != cognition.RoleActorDecision {
+				continue
+			}
+			var wire struct {
+				Run struct {
+					Fixture struct {
+						Mechanism uint32 `json:"mechanism"`
+					} `json:"fixture"`
+					BaseRef struct {
+						ID      string `json:"id"`
+						Version uint32 `json:"version"`
+					} `json:"base_ref"`
+				} `json:"run"`
+			}
+			if err := json.Unmarshal(call.RequestBytes, &wire); err != nil {
+				t.Fatalf("%s#%d request: %v", cr.spec, call.Seq, err)
+			}
+			want := declaredWorld(10, 0)
+			if wire.Run.Fixture.Mechanism != uint32(want.Mechanism) ||
+				wire.Run.BaseRef.ID != want.PolicyRef.ID || wire.Run.BaseRef.Version != want.PolicyRef.Version {
+				t.Fatalf("%s#%d fixture identity = mechanism %d base %s/%d, want mechanism %d base %s/%d",
+					cr.spec, call.Seq, wire.Run.Fixture.Mechanism, wire.Run.BaseRef.ID, wire.Run.BaseRef.Version,
+					want.Mechanism, want.PolicyRef.ID, want.PolicyRef.Version)
+			}
+		}
 	}
 	if len(ev.Cells) != len(declaredArms) {
 		t.Fatalf("cells = %d, want %d", len(ev.Cells), len(declaredArms))
@@ -251,12 +294,12 @@ func TestPriorityCheckpointReplayRoundTrip(t *testing.T) {
 		t.Fatalf("SaveResumeCheckpointWithReplaySelector: %v", err)
 	}
 	restore := &testRecordingFactory{t: t, policy: policy, horizon: testHorizon}
-	restored, _, err := world.RestoreNaturalCheckpoint(bundle, world.NaturalRestoreOptions{
-		Patches: 2, R: 8, Seed: 0, Workers: 1, Births: true,
-		PolicyRef: basePolicy(), Mechanism: mechanism(), Founders: 10,
-		CognitiveReplaySeam: seam, CognitiveReplayWake: policy,
-		CognitiveReplaySelector: restore.new, CognitiveLedgerPath: cr.ledgerPath,
-	})
+	restoreOpts := restoreOptions(fp, true)
+	restoreOpts.CognitiveReplaySeam = seam
+	restoreOpts.CognitiveReplayWake = policy
+	restoreOpts.CognitiveReplaySelector = restore.new
+	restoreOpts.CognitiveLedgerPath = cr.ledgerPath
+	restored, _, err := world.RestoreNaturalCheckpoint(bundle, restoreOpts)
 	if err != nil {
 		t.Fatalf("priority restore: %v", err)
 	}
@@ -394,4 +437,32 @@ func itoa(i int) string {
 		return string(rune('0' + i))
 	}
 	return string(rune('0'+i/10)) + string(rune('0'+i%10))
+}
+
+// TestDeclaredWorldA0ReproducesTicket55 pins the W1 declared cell through the
+// runner's own machinery: the A0 arm on the declared world (mechanism v14,
+// natural/14, Yield 1, BirthCost 2, H=144, f10-s0) must reproduce the committed
+// ticket-55 calibration exactly. It fails loud if the runner's genesis (neutral
+// h0 pulse + births-enable branch), its step loop, or its world construction
+// drifts from the world the W1 verdict was measured on; the world is never tuned
+// to fit the runner.
+func TestDeclaredWorldA0ReproducesTicket55(t *testing.T) {
+	ctx := context.Background()
+	fp := declaredWorld(10, 0)
+	cr, err := runCell(ctx, cellSpec{Arm: ArmA0, F: 10, Seed: 0}, fp, t.TempDir(), nil)
+	if err != nil {
+		t.Fatalf("A0: %v", err)
+	}
+	if cr.runErr != nil {
+		t.Fatalf("A0 run: %v", cr.runErr)
+	}
+	last := cr.checks[len(cr.checks)-1]
+	got := last.Metrics
+	if got.Alive != 11 || got.Births != 12 || got.DeathsStarvation != 1 || got.DeathsAge != 10 {
+		t.Fatalf("declared cell %s: alive=%d births=%d starvation=%d age=%d, want the ticket-55 cell 11/12/1/10",
+			cellSpec{Arm: ArmA0, F: 10, Seed: 0}, got.Alive, got.Births, got.DeathsStarvation, got.DeathsAge)
+	}
+	if bal := last.Balance; bal.Energy != 184 || bal.Produced != 1145 {
+		t.Fatalf("declared cell balance drifted: energy=%d produced=%d", bal.Energy, bal.Produced)
+	}
 }

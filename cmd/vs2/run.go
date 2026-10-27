@@ -135,7 +135,7 @@ func executeCell(ctx context.Context, f *world.Natural, spec cellSpec, fp fixtur
 		if err != nil {
 			cr.runErr = err
 		} else {
-			accepted, err := extractAccepted(handoff)
+			accepted, err := extractAccepted(handoff, cr.fp.Mechanism)
 			if err != nil {
 				cr.runErr = err
 			} else {

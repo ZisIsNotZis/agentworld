@@ -230,6 +230,12 @@ type evaluation struct {
 	FeatureSet           string `json:"feature_set"`
 	BasePolicy           string `json:"base_policy"`
 	Mechanism            int    `json:"mechanism"`
+	// Yield and BirthCost are the declared world axes of the W1 world (ticket
+	// 55): recorded beside the mechanism and base policy so the evaluation names
+	// the whole declared world and no reader has to infer them from the
+	// mechanism version.
+	Yield     int64 `json:"yield"`
+	BirthCost int64 `json:"birth_cost"`
 	// Live records whether the report came from a live gateway run (real calls)
 	// or the hermetic fake, so a recorded evaluation can be re-labelled honestly
 	// without the process that produced it.

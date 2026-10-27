@@ -34,19 +34,23 @@ func prepareRunDir(root string, spec cellSpec) (string, error) {
 	return dir, nil
 }
 
-// naturalOptions is the declared construction shape of a cell's genesis.
+// naturalOptions is the declared construction shape of a cell's genesis: the
+// fixture carries every world axis, including the declared yield, birth price,
+// mechanism and base policy.
 func naturalOptions(fp fixture) world.NaturalOptions {
 	return world.NaturalOptions{
-		Patches: fp.Patches, R: fp.R, Seed: fp.Seed, Workers: fp.effectiveWorkers(), Births: false,
-		PolicyRef: basePolicy(), Mechanism: mechanism(), Founders: fp.Founders,
+		Patches: fp.Patches, R: fp.R, Yield: fp.Yield, BirthCost: fp.BirthCost,
+		Seed: fp.Seed, Workers: fp.effectiveWorkers(), Births: false,
+		PolicyRef: fp.PolicyRef, Mechanism: fp.Mechanism, Founders: fp.Founders,
 	}
 }
 
 // restoreOptions is the declared restore shape of a cell.
 func restoreOptions(fp fixture, births bool) world.NaturalRestoreOptions {
 	return world.NaturalRestoreOptions{
-		Patches: fp.Patches, R: fp.R, Seed: fp.Seed, Workers: fp.effectiveWorkers(), Births: births,
-		PolicyRef: basePolicy(), Mechanism: mechanism(), Founders: fp.Founders,
+		Patches: fp.Patches, R: fp.R, Yield: fp.Yield, BirthCost: fp.BirthCost,
+		Seed: fp.Seed, Workers: fp.effectiveWorkers(), Births: births,
+		PolicyRef: fp.PolicyRef, Mechanism: fp.Mechanism, Founders: fp.Founders,
 	}
 }
 

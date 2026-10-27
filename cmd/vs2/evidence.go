@@ -47,10 +47,11 @@ type acceptedEvidence struct {
 	EventBodyBytes int
 }
 
-// extractAccepted replays the accepted history into its event inventory. It
-// refuses (fail loud) an unknown rule or a head mismatch.
-func extractAccepted(handoff world.NaturalHandoff) (acceptedEvidence, error) {
-	reg, err := world.NaturalRegistryFor(world.NaturalMechanismV6)
+// extractAccepted replays the accepted history into its event inventory under
+// the cell's own declared mechanism (a v14 history cannot replay under the v6
+// registry). It refuses (fail loud) an unknown rule or a head mismatch.
+func extractAccepted(handoff world.NaturalHandoff, mech world.NaturalMechanism) (acceptedEvidence, error) {
+	reg, err := world.NaturalRegistryFor(mech)
 	if err != nil {
 		return acceptedEvidence{}, err
 	}

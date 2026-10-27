@@ -220,12 +220,24 @@ func hermeticEndpoint(mode cognition.WireMode) string {
 	return "hermetic.local/v1/chat/completions"
 }
 
-// The declared fixture family (spec section 8.2): mechanism v6, base policy
-// natural/7, -r 8, births enabled, horizon H=168, workers 1.
+// The declared fixture family (spec section 8.2) is the W1 declared world
+// (ticket 55, docs/VERTICAL-SLICES.md W2): mechanism v14, base policy natural/14,
+// Yield 1, BirthCost 2, -r 8, patches 2, births enabled, horizon H=144,
+// workers 1, founders from the declared cell. The one constructor is
+// declaredWorld; no run-level flag can move the world identity.
 //
 // DeclaredHorizonHours is H, the single declared horizon every arm's divergence
 // vector is computed over (spec section 5.3).
-const DeclaredHorizonHours = 168
+const DeclaredHorizonHours = 144
+
+// The declared world axes of the W1 world (ticket 55 §3). Yield is the
+// mechanism-v14 cultivated/wild grant per patch-hour; BirthCost is the price one
+// paying parent hands over for a birth. Both are recorded in the evaluation and
+// the revision string, and both reach the runner's journal/checkpoint identity.
+const (
+	DeclaredYield     int64 = 1
+	DeclaredBirthCost int64 = 2
+)
 
 // The declared call-liveness bounds of a live run (ticket 35). The frozen
 // harness defaults (30 s per attempt, 90 s per call) were sized for the hermetic
@@ -296,14 +308,21 @@ func (c cellSpec) String() string {
 	return fmt.Sprintf("%s-f%d-s%d", c.Arm, c.F, c.Seed)
 }
 
-// fixture is the declared world shape of a VS2 cell.
+// fixture is the declared world shape of a VS2 cell: the substrate axes plus
+// the two declared world rules (mechanism and base policy) and the declared
+// yield/birth price. One value names everything a cell's world is built from, so
+// no part of the world identity can drift from the rest.
 type fixture struct {
-	Patches  int
-	R        int64
-	Founders int
-	Seed     uint64
-	Hours    int
-	Workers  int
+	Patches   int
+	R         int64
+	Founders  int
+	Seed      uint64
+	Hours     int
+	Workers   int
+	Yield     int64
+	BirthCost int64
+	Mechanism world.NaturalMechanism
+	PolicyRef strategy.NaturalRef
 }
 
 // effectiveWorkers is the declared worker count, defaulting to the matrix's 1.
@@ -314,16 +333,26 @@ func (f fixture) effectiveWorkers() int {
 	return f.Workers
 }
 
-// declaredFixture is the declared (f, seed) world shape at the declared H.
-func declaredFixture(f int, seed uint64) fixture {
-	return fixture{Patches: 2, R: 8, Founders: f, Seed: seed, Hours: declaredHorizonHours, Workers: 1}
+// declaredWorld is the one home of the declared W1 world shape at (f, seed) and
+// the declared H. Every matrix cell, the model-call fixture identity (built by
+// the world's naturalRunIdentity from these axes) and the evaluation's world
+// record come from this constructor.
+func declaredWorld(f int, seed uint64) fixture {
+	return fixture{
+		Patches: 2, R: 8, Founders: f, Seed: seed, Hours: declaredHorizonHours, Workers: 1,
+		Yield: DeclaredYield, BirthCost: DeclaredBirthCost,
+		Mechanism: declaredMechanism(), PolicyRef: declaredBasePolicy(),
+	}
 }
 
-// basePolicy is the declared base policy natural/7 (spec section 8.2).
-func basePolicy() strategy.NaturalRef { return strategy.FrozenNaturalPolicy7().Ref }
+// declaredBasePolicy is the declared base policy natural/14 (ticket 55 §3):
+// natural/13 verbatim except the round-robin founder-placement validation the v14
+// mechanism declares.
+func declaredBasePolicy() strategy.NaturalRef { return strategy.FrozenNaturalPolicy14().Ref }
 
-// mechanism is the declared world mechanism v6.
-func mechanism() world.NaturalMechanism { return world.NaturalMechanismV6 }
+// declaredMechanism is the declared world mechanism v14: the commons floor that
+// keeps at least half of every patch wild.
+func declaredMechanism() world.NaturalMechanism { return world.NaturalMechanismV14 }
 
 // quotaSchedule is the declared fixed per-hour quota schedule
 // q(h) = floor((N-R)/H) + (1 if h < (N-R) mod H else 0), so sum_{h<H} q(h) =

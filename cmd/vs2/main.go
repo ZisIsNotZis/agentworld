@@ -213,7 +213,7 @@ func main() {
 				mu.Unlock()
 				return
 			}
-			cr, err := runCell(ctx, spec, declaredFixture(spec.F, spec.Seed), *root, nil)
+			cr, err := runCell(ctx, spec, declaredWorld(spec.F, spec.Seed), *root, nil)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
@@ -270,8 +270,10 @@ func buildEvaluation(runs []*cellRun, recordedDir string, skipped, declared []st
 		ModelIdentity:        hex.EncodeToString(identity[:]),
 		ModelFeatureIdentity: hex.EncodeToString(featureIdentity[:]),
 		FeatureSet:           protocol.FeatureSetVersion,
-		BasePolicy:           basePolicy().ID,
-		Mechanism:            int(mechanism()),
+		BasePolicy:           declaredBasePolicy().ID,
+		Mechanism:            int(declaredMechanism()),
+		Yield:                DeclaredYield,
+		BirthCost:            DeclaredBirthCost,
 		Live:                 activeLive != nil,
 		HorizonHours:         horizonHours,
 		CallCeiling:          DeclaredCallCeiling,
@@ -303,9 +305,10 @@ func revisionString() string {
 	if effort == "" {
 		effort = "model-default"
 	}
-	return fmt.Sprintf("vs2-hermetic-fake/1; model %s wire %s; effort %s; output-bound %d; response-bound %d; claim-contract %s; votes %d; replicates %d; attempt-timeout %s; call-deadline %s; base natural/7; mechanism v6; H=%d; N=%d; value-model %s; feature-set %s; %s",
+	return fmt.Sprintf("vs2-hermetic-fake/1; model %s wire %s; effort %s; output-bound %d; response-bound %d; claim-contract %s; votes %d; replicates %d; attempt-timeout %s; call-deadline %s; base %s/%d; mechanism v%d; yield %d; birth-cost %d; H=%d; N=%d; value-model %s; feature-set %s; %s",
 		cognition.DefaultModelID, declaredGatewayWire, effort, appliedOutputBound(), appliedResponseBound(), declaredClaimContract, declaredVotes, declaredReplicates,
 		declaredAttemptTimeout, declaredCallDeadline,
+		declaredBasePolicy().ID, declaredBasePolicy().Version, declaredMechanism(), DeclaredYield, DeclaredBirthCost,
 		declaredHorizonHours, DeclaredCallCeiling, declaredValueModel().Version, protocol.FeatureSetVersion, spend)
 }
 
