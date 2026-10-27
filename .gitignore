@@ -3,3 +3,10 @@
 # Python byte-code caches: a tool by-product regenerated from the tracked source, never evidence.
 __pycache__/
 *.pyc
+# Go build products: test binaries and a locally built binary are by-products, never evidence.
+*.test
+/agentworld
+# Editor and OS droppings.
+.DS_Store
+*.swp
+*~
