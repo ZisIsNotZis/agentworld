@@ -54,6 +54,17 @@ func TestNaturalV13Mechanism(t *testing.T) {
 			t.Fatalf("mechanism %d widened the birth-granary-paid envelope", m)
 		}
 	}
+	// The paying parent's wealth floor carries the declared price plus the
+	// frozen one-unit surplus, and stays exactly the frozen gate below v13.
+	for _, m := range []NaturalMechanism{NaturalMechanismV5, NaturalMechanismV6, NaturalMechanismV7,
+		NaturalMechanismV8, NaturalMechanismV9, NaturalMechanismV10, NaturalMechanismV11, NaturalMechanismV12} {
+		if granary, energy := naturalBirthPaymentFloorsFor(m, 8); granary != NaturalConsentMinGranary || energy != NaturalConsentMinEnergy {
+			t.Fatalf("mechanism %d widened the paying-parent floors to %d/%d", m, granary, energy)
+		}
+	}
+	if granary, energy := naturalBirthPaymentFloorsFor(NaturalMechanismV13, 8); granary != 9 || energy != 9 {
+		t.Fatalf("v13 paying-parent floors %d/%d", granary, energy)
+	}
 	// The v13 envelope is derived from the declared maximum price: two paying
 	// parents, each at NaturalBirthCostMax, for the whole horizon.
 	if naturalBirthGranaryPaidMaxFor(NaturalMechanismV13) != 2*NaturalHorizonHours*NaturalBirthCostMax {
@@ -68,13 +79,15 @@ func TestNaturalV13Mechanism(t *testing.T) {
 	}
 }
 
-// v13ParentEnergy is the fixture energy/granary level of a v13 parent: high
-// enough for the declared price and for the proposer's frozen wealth gate.
+// v13ParentEnergy is the fixture energy/granary level of a v13 parent: the
+// declared price plus the frozen one-unit surplus the wealth gate demands of
+// a paying parent (the frozen 3 for the frozen 2).
 func v13ParentEnergy(price int64) int64 {
-	if price < NaturalConsentMinGranary {
-		return NaturalConsentMinGranary + 2
+	surplus := price + 1
+	if surplus < NaturalConsentMinGranary {
+		return NaturalConsentMinGranary
 	}
-	return price
+	return surplus
 }
 
 // naturalBirthPriceParent builds a valid paying parent under one mechanism:
@@ -174,8 +187,8 @@ func TestNaturalV13BirthPrice(t *testing.T) {
 	if err != nil || result12.Decision != NaturalReplyAccept {
 		t.Fatalf("v12 reply: %+v %v", result12, err)
 	}
-	if result12.Proposer.Granary.Stock != 3 || result12.Proposer.Genome.BirthGranaryPaid != 2 ||
-		result12.Proposer.Body.Energy != 3 || result12.Proposer.Body.BasalSpent != 8 {
+	if result12.Proposer.Granary.Stock != 1 || result12.Proposer.Genome.BirthGranaryPaid != 2 ||
+		result12.Proposer.Body.Energy != 1 || result12.Proposer.Body.BasalSpent != 10 {
 		t.Fatalf("v12 paid more than the frozen two units: %+v", result12.Proposer)
 	}
 }

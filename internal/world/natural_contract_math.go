@@ -1530,7 +1530,29 @@ func naturalHouseholdGate(m NaturalMechanism) bool {
 // patch. There is no birth-count term: births are bounded only by ecology
 // (P15).
 func NaturalSurplusGateAllows(proposer, consenter NaturalActorState, kinAllowed bool) bool {
-	return naturalSurplusGateAllowsFor(NaturalMechanismV5, proposer, consenter, kinAllowed)
+	return naturalSurplusGateAllowsFor(NaturalMechanismV5, 0, proposer, consenter, kinAllowed)
+}
+
+// naturalBirthPaymentFloorsFor is the wealth floor of one paying parent: the
+// frozen consent thresholds widened to the declared birth price plus the
+// frozen one-unit surplus, because the gate is the affordability
+// precondition of the price — a parent that passes the gate must be able to
+// pay it AND stay alive, or the reply could leave a paying row at zero
+// energy with no died-hour (the state the alive invariant refuses), or fail
+// closed. The frozen thresholds already spell that margin (granary 3 and
+// energy 3 for the two-unit price), so at the frozen price of 2 the floors
+// are exactly NaturalConsentMinGranary and NaturalConsentMinEnergy and every
+// mechanism below v13 keeps the v5 gate term for term.
+func naturalBirthPaymentFloorsFor(m NaturalMechanism, birthCost int64) (granary, energy int64) {
+	granary, energy = NaturalConsentMinGranary, NaturalConsentMinEnergy
+	surplus := naturalBirthCostFor(m, birthCost) + 1
+	if surplus > granary {
+		granary = surplus
+	}
+	if surplus > energy {
+		energy = surplus
+	}
+	return granary, energy
 }
 
 // naturalSurplusGateAllowsFor is the mechanism-parameterized surplus gate.
@@ -1538,20 +1560,22 @@ func NaturalSurplusGateAllows(proposer, consenter NaturalActorState, kinAllowed 
 // declared yield) the proposer keeps the full wealth gate while the
 // consenter only has to be fed (energy ≥ 2), and the co-location requirement
 // disappears (the band-wide mate pool); every frozen mechanism keeps the v5
-// conjunction exactly.
-func naturalSurplusGateAllowsFor(m NaturalMechanism, proposer, consenter NaturalActorState, kinAllowed bool) bool {
+// conjunction exactly. The paying parents' wealth floors carry the declared
+// birth price (naturalBirthPaymentFloorsFor).
+func naturalSurplusGateAllowsFor(m NaturalMechanism, birthCost int64, proposer, consenter NaturalActorState, kinAllowed bool) bool {
+	granaryFloor, energyFloor := naturalBirthPaymentFloorsFor(m, birthCost)
 	if naturalHouseholdGate(m) {
 		return naturalAlive(proposer) && naturalAlive(consenter) &&
 			proposer.Worksite.Capital >= NaturalConsentMinCapital &&
-			proposer.Granary.Stock >= NaturalConsentMinGranary &&
-			proposer.Body.Energy >= NaturalConsentMinEnergy &&
+			proposer.Granary.Stock >= granaryFloor &&
+			proposer.Body.Energy >= energyFloor &&
 			consenter.Body.Energy >= NaturalHouseholdMinEnergy &&
 			kinAllowed
 	}
 	return naturalAlive(proposer) && naturalAlive(consenter) &&
 		proposer.Worksite.Capital >= NaturalConsentMinCapital && consenter.Worksite.Capital >= NaturalConsentMinCapital &&
-		proposer.Granary.Stock >= NaturalConsentMinGranary && consenter.Granary.Stock >= NaturalConsentMinGranary &&
-		proposer.Body.Energy >= NaturalConsentMinEnergy && consenter.Body.Energy >= NaturalConsentMinEnergy &&
+		proposer.Granary.Stock >= granaryFloor && consenter.Granary.Stock >= granaryFloor &&
+		proposer.Body.Energy >= energyFloor && consenter.Body.Energy >= energyFloor &&
 		kinAllowed &&
 		proposer.Bag.Source == consenter.Bag.Source
 }
@@ -1774,7 +1798,7 @@ func NaturalBirthReplyForCost(m NaturalMechanism, birthCost int64, patches, hour
 		return refuse(NaturalReplyRefuse, NaturalRefusalKin)
 	}
 	// The runner surplus gate on fresh truth, both parents.
-	if !naturalSurplusGateAllowsFor(m, proposer, consenter, kinAllowed) {
+	if !naturalSurplusGateAllowsFor(m, birthCost, proposer, consenter, kinAllowed) {
 		if proposer.Bag.Source != consenter.Bag.Source {
 			return refuse(NaturalReplyRefuse, NaturalRefusalCrossPatch)
 		}
@@ -1840,7 +1864,7 @@ func NaturalBirthForCost(m NaturalMechanism, birthCost int64, patches, hour int,
 		child.ParentA != proposerID || child.ParentB != consenterID || child.BirthHour != int64(hour) {
 		return NaturalBirthResult{}, ErrNaturalContract
 	}
-	if !naturalSurplusGateAllowsFor(m, proposer, consenter, kinAllowed) {
+	if !naturalSurplusGateAllowsFor(m, birthCost, proposer, consenter, kinAllowed) {
 		return NaturalBirthResult{}, ErrNaturalContract
 	}
 	// The household gate (mechanism v8) makes the proposer the paying
