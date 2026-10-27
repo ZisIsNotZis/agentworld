@@ -901,8 +901,10 @@ func (f *Natural) naturalProposal(kind string, at sim.SimTime, actor sim.EntityI
 // provisioned ledger (field 7, complete-row seeds at genesis), seeded 0;
 // mechanism v7 (ticket 20) additionally requires the wage ledgers (fields 8
 // and 9, the nine-field granary) and the two idle wage-contract rows
-// (0x80000058/59) every v7 actor carries, so the V7 validators' genesis gate
-// passes and the (v7, natural/7b) zero-use control constructs unchanged.
+// (0x80000058/59) every v7 actor carries — both seated by the founder
+// constructor (NaturalFounderStateFor), the one home of the genesis rows — so
+// the V7 validators' genesis gate passes and the (v7, natural/7b) zero-use
+// control constructs unchanged.
 func naturalGenesisSeeds(mechanism NaturalMechanism, patches int, r int64, seed uint64, founders int) ([]component.ComponentSeed, []NaturalActorState, error) {
 	var seeds []component.ComponentSeed
 	if !NaturalFoundersValid(patches, founders) {
@@ -922,13 +924,6 @@ func naturalGenesisSeeds(mechanism NaturalMechanism, patches int, r int64, seed 
 		actor, err := NaturalFounderStateFor(mechanism, patches, sim.EntityID(i+1), lifetime)
 		if err != nil {
 			return nil, nil, err
-		}
-		// Mechanism v7: the founder's wage-contract rows start at their
-		// canonical idle shapes (the frozen constructor's zero rows are the
-		// v5/v6 spelling and invalid under the V7 validators).
-		if mechanism == NaturalMechanismV7 {
-			actor.Offer = NaturalIdleLabourOfferState()
-			actor.Book = NaturalIdleLabourBookState()
 		}
 		actors[i] = actor
 	}

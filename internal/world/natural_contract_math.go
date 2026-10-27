@@ -45,6 +45,12 @@ import (
 //	G3  energy:         11·f + 8·births + Σconsumed + ΣstoredMeals =
 //	                    Σenergy + ΣbasalSpent + ΣcapLoss, and per newborn
 //	                    cohort 8 + consumed + stored = energy + basal + cap
+//	                    (the consumed term carries the declared meal price
+//	                    naturalMealEnergyFor — the frozen 1 in every
+//	                    mechanism below v12, 2 under mechanism v12, where
+//	                    one eaten bag unit is a two-hour meal — while a
+//	                    stored meal keeps its frozen one energy in every
+//	                    mechanism)
 type NaturalPatchState struct{ Yield, Pulses, Produced, Granted, Unrealized int64 }
 
 // NaturalTenureMode is the slot tenure mode: wild (open-access standing
@@ -312,9 +318,9 @@ func validNaturalSlotFor(m NaturalMechanism, s NaturalSlotState) bool {
 	return s.Owner == 0
 }
 
-func validNaturalBody(b NaturalBodyState) bool {
+func validNaturalBodyFor(m NaturalMechanism, b NaturalBodyState) bool {
 	return b.Energy >= 0 && b.Energy <= NaturalEnergyCapacity && b.Hunger >= 0 && b.Hunger <= NaturalHungerCapacity &&
-		b.BasalSpent >= 0 && b.BasalSpent <= NaturalBasalSpentMax && b.CapLost >= 0 && b.CapLost <= NaturalHorizonHours &&
+		b.BasalSpent >= 0 && b.BasalSpent <= NaturalBasalSpentMax && b.CapLost >= 0 && b.CapLost <= naturalCapLostMaxFor(m) &&
 		b.Consumed >= 0 && b.Consumed <= NaturalHorizonHours &&
 		b.LastGatherHour >= NaturalNeverHour && b.LastGatherHour < NaturalHorizonHours &&
 		b.BasalDebt >= 0 && b.BasalDebt <= NaturalBasalDebtMax
@@ -355,7 +361,7 @@ func validNaturalGranaryFor(m NaturalMechanism, g NaturalGranaryState) bool {
 		return false
 	}
 	switch m {
-	case NaturalMechanismV6, NaturalMechanismV8, NaturalMechanismV9, NaturalMechanismV10, NaturalMechanismV11:
+	case NaturalMechanismV6, NaturalMechanismV8, NaturalMechanismV9, NaturalMechanismV10, NaturalMechanismV11, NaturalMechanismV12:
 		return g.Provisioned >= 0 && g.Provisioned <= NaturalProvisionedMax && g.WagesPaid == 0 && g.WagesEarned == 0
 	case NaturalMechanismV7:
 		return g.Provisioned >= 0 && g.Provisioned <= NaturalProvisionedMax &&
@@ -494,7 +500,7 @@ func naturalAlive(a NaturalActorState) bool {
 // creation base (11 founder, 8 newborn), and the alive invariant
 // died-hour=-1 ⇒ energy>0.
 func validNaturalActorFor(m NaturalMechanism, patches int, actor sim.EntityID, a NaturalActorState) bool {
-	if !naturalActorEntity(patches, actor) || !validNaturalBody(a.Body) || !validNaturalWorksite(a.Worksite) ||
+	if !naturalActorEntity(patches, actor) || !validNaturalBodyFor(m, a.Body) || !validNaturalWorksite(a.Worksite) ||
 		!validNaturalGranaryFor(m, a.Granary) || !validNaturalGenome(patches, actor, a.Genome) || !validNaturalBirthRequestFor(m, patches, actor, a.Request) {
 		return false
 	}
@@ -534,8 +540,10 @@ func validNaturalActorFor(m NaturalMechanism, patches int, actor sim.EntityID, a
 	if a.Granary.CultivatedTotal+a.Granary.WagesEarned != a.Granary.Stock+a.Granary.StoredMeals+a.Granary.Provisioned+a.Granary.Spoiled+a.Genome.BirthGranaryPaid+a.Granary.WagesPaid {
 		return false
 	}
-	// G3 per actor.
-	return base+a.Body.Consumed+a.Granary.StoredMeals == a.Body.Energy+a.Body.BasalSpent+a.Body.CapLost
+	// G3 per actor. The consumed term carries the declared meal price: the
+	// frozen one energy below v12, the declared two under v12, so a
+	// two-energy meal and its one counted unit still balance exactly.
+	return base+naturalMealEnergyFor(m)*a.Body.Consumed+a.Granary.StoredMeals == a.Body.Energy+a.Body.BasalSpent+a.Body.CapLost
 }
 
 // validNaturalActor is the frozen v5 validator (the mechanism zero value).
@@ -893,27 +901,32 @@ func NaturalGatherFor(m NaturalMechanism, patches int, patchID, slotID, actorID 
 }
 
 // NaturalConsume eats the held wild unit at the bag decision with v1-v4
-// meal semantics: +1 energy, counted spill at the cap-12 ceiling, -1
+// meal semantics: the declared meal energy (naturalMealEnergyFor — +1 below
+// mechanism v12, +2 under it), counted spill at the cap-12 ceiling, −1
 // hunger.
 func NaturalConsume(patches int, actorID sim.EntityID, a NaturalActorState) (NaturalActorState, NaturalMeal, error) {
 	return NaturalConsumeFor(NaturalMechanismV5, patches, actorID, a)
 }
 
 // NaturalConsumeFor is the mechanism-parameterized consume; the zero value
-// reproduces NaturalConsume exactly.
+// reproduces NaturalConsume exactly. The unit is always consumed; whatever of
+// the declared meal energy does not fit under the frozen
+// NaturalEnergyCapacity ceiling is counted spill in CapLost, exactly as the
+// frozen one-unit meal does at the cap.
 func NaturalConsumeFor(m NaturalMechanism, patches int, actorID sim.EntityID, a NaturalActorState) (NaturalActorState, NaturalMeal, error) {
 	if !naturalActorEntity(patches, actorID) || !validNaturalActorFor(m, patches, actorID, a) || !naturalAlive(a) || a.Bag.Units != 1 || a.Body.Consumed >= NaturalHorizonHours {
 		return NaturalActorState{}, NaturalMeal{}, ErrNaturalContract
 	}
+	meal := naturalMealEnergyFor(m)
 	a.Bag.Units = 0
 	a.Body.Consumed++
-	result := NaturalMeal{EnergyGained: 1}
-	if a.Body.Energy == NaturalEnergyCapacity {
-		a.Body.CapLost++
-		result.EnergyGained, result.EnergyCapLost = 0, 1
-	} else {
-		a.Body.Energy++
+	gain := meal
+	if room := NaturalEnergyCapacity - a.Body.Energy; gain > room {
+		gain = room
 	}
+	result := NaturalMeal{EnergyGained: gain, EnergyCapLost: meal - gain}
+	a.Body.Energy += gain
+	a.Body.CapLost += meal - gain
 	if a.Body.Hunger > 0 {
 		a.Body.Hunger--
 	}
@@ -1404,6 +1417,15 @@ func NaturalFounderStateFor(m NaturalMechanism, patches int, actor sim.EntityID,
 		Genome:   genome,
 		Request:  NaturalIdleRequestState(),
 	}
+	// Mechanism v7: every actor carries the two wage-contract rows
+	// (0x80000058/59) from genesis, in their canonical idle shapes — the
+	// zero rows are the v5/v6 spelling and invalid under the V7 validators.
+	// The founder constructor is the one home of the genesis rows, so the
+	// seed builder and the projection builder need no second copy.
+	if m == NaturalMechanismV7 {
+		a.Offer = NaturalIdleLabourOfferState()
+		a.Book = NaturalIdleLabourBookState()
+	}
 	if !validNaturalActorFor(m, patches, actor, a) {
 		return NaturalActorState{}, ErrNaturalContract
 	}
@@ -1880,7 +1902,10 @@ func NaturalAgeDeath(patches, hour int, actorID sim.EntityID, genome NaturalGeno
 //		    capital; the all-tenure-holders form is the exact invariant.)
 //		G3  11·f + 8·births + Σconsumed + ΣstoredMeals = Σenergy + Σbasal +
 //		    ΣcapLoss, with the per-newborn cohort identity 8 + consumed +
-//		    storedMeals = energy + basalSpent + capLoss.
+//		    storedMeals = energy + basalSpent + capLoss. The consumed term is
+//		    weighted by the declared meal price (naturalMealEnergyFor: the
+//		    frozen 1 below mechanism v12, 2 under it), while a stored meal
+//		    keeps its frozen one energy in every mechanism.
 //
 // It also verifies the derived reproduction graph (every newborn's parents
 // exist among strictly earlier IDs, no parent pair shares an ancestor at
@@ -1955,9 +1980,9 @@ func NaturalCheckConservationYieldFor(m NaturalMechanism, yield int64, patches i
 		parents[newborn.ID] = [2]sim.EntityID{newborn.State.Genome.ParentA, newborn.State.Genome.ParentB}
 		ids = append(ids, newborn.ID)
 		actors[newborn.ID] = newborn.State
-		// Per-newborn cohort identity: 8 + consumed + stored = energy +
-		// basal + capLoss.
-		if NaturalNewbornEnergy+newborn.State.Body.Consumed+newborn.State.Granary.StoredMeals != newborn.State.Body.Energy+newborn.State.Body.BasalSpent+newborn.State.Body.CapLost {
+		// Per-newborn cohort identity: 8 + meal·consumed + stored = energy +
+		// basal + capLoss, the consumed term carrying the declared meal price.
+		if NaturalNewbornEnergy+naturalMealEnergyFor(m)*newborn.State.Body.Consumed+newborn.State.Granary.StoredMeals != newborn.State.Body.Energy+newborn.State.Body.BasalSpent+newborn.State.Body.CapLost {
 			return NaturalBalance{}, ErrNaturalContract
 		}
 	}
@@ -2083,7 +2108,7 @@ func NaturalCheckConservationYieldFor(m NaturalMechanism, yield int64, patches i
 		b.Invested != NaturalPointCostWip*b.PointsCreated+b.Wip || b.PointsCreated-b.PointsDecayed != b.Capital ||
 		b.CultivatedTotal+b.WagesEarned != b.StoredMeals+b.GranaryStock+b.Provisioned+b.Spoiled+b.BirthGranaryPaid+b.WagesPaid ||
 		b.WagesPaid != b.WagesEarned ||
-		b.InitialEnergy+NaturalNewbornEnergy*b.Births+b.Consumed+b.StoredMeals != b.Energy+b.BasalSpent+b.EnergyCapLost {
+		b.InitialEnergy+NaturalNewbornEnergy*b.Births+naturalMealEnergyFor(m)*b.Consumed+b.StoredMeals != b.Energy+b.BasalSpent+b.EnergyCapLost {
 		return NaturalBalance{}, ErrNaturalContract
 	}
 	return b, nil

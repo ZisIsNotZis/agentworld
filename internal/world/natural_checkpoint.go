@@ -2169,10 +2169,6 @@ func naturalGenesisProjection(patches int, r int64, seed uint64, tenure bool, fo
 			return nil, nil, nil, err
 		}
 		founderRows[i] = a
-		if mechanism == NaturalMechanismV7 {
-			founderRows[i].Offer = NaturalIdleLabourOfferState()
-			founderRows[i].Book = NaturalIdleLabourBookState()
-		}
 	}
 	if tenure {
 		// The fixture lift preserves every field the delta does not name

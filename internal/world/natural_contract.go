@@ -429,14 +429,53 @@ const (
 	// built on it. Everything else, the round-robin founding band included,
 	// is v10 verbatim, and Yield = 1 is v10 exactly.
 	NaturalMechanismV11 NaturalMechanism = 11
+	// NaturalMechanismV12 (world axis version 12, ticket 52) is the v11 rule
+	// table plus exactly one declared price: eating one bag unit restores 2
+	// energy instead of 1 (naturalMealEnergyV12), so one gather-hour funds
+	// two hours of life. Every other rule — the yield axis, the wild fill,
+	// the founding band, basal drain, bag capacity, births, kin, consent,
+	// spoilage — is v11 verbatim.
+	NaturalMechanismV12 NaturalMechanism = 12
 )
 
+// naturalMealEnergyV12 is the one declared price change of mechanism v12: a
+// bag unit eaten at the bag decision is a meal of two hours of life instead
+// of one. It is the only arithmetic difference from mechanism v11;
+// naturalMealEnergyFor is its one reader, and every G3 energy identity below
+// carries the same factor, so the ledger balances term for term in both
+// worlds (below v12 the factor is the frozen 1).
+const naturalMealEnergyV12 int64 = 2
+
 // NaturalMechanismValid reports the admitted axis values: the zero value
-// (≡ v5), 6, 7, 8, 9, 10 and 11. Literal 5 is not a second spelling of v5 —
-// the zero value is the one v5 spelling — and everything else fails closed.
+// (≡ v5), 6, 7, 8, 9, 10, 11 and 12. Literal 5 is not a second spelling of
+// v5 — the zero value is the one v5 spelling — and everything else fails
+// closed.
 func NaturalMechanismValid(m NaturalMechanism) bool {
 	return m == NaturalMechanismV5 || m == NaturalMechanismV6 || m == NaturalMechanismV7 ||
-		m == NaturalMechanismV8 || m == NaturalMechanismV9 || m == NaturalMechanismV10 || m == NaturalMechanismV11
+		m == NaturalMechanismV8 || m == NaturalMechanismV9 || m == NaturalMechanismV10 ||
+		m == NaturalMechanismV11 || m == NaturalMechanismV12
+}
+
+// naturalMealEnergyFor is the declared energy one bag unit grants when eaten:
+// exactly the frozen one unit in every mechanism below v12, the declared
+// naturalMealEnergyV12 under mechanism v12. It is the single home of the meal
+// price — NaturalConsumeFor grants it and the G3 identities book it — so no
+// second copy of the arithmetic can drift from the contract.
+func naturalMealEnergyFor(m NaturalMechanism) int64 {
+	if m == NaturalMechanismV12 {
+		return naturalMealEnergyV12
+	}
+	return 1
+}
+
+// naturalCapLostMaxFor is the declared cap-spill envelope of one actor: at
+// most one meal per hour, each spilling at most its declared meal energy over
+// the frozen NaturalEnergyCapacity ceiling. Below v12 that is exactly the
+// frozen horizon envelope; under v12 it is twice as wide, because a
+// two-energy meal spilling at the cap loses two units. Like every ledger
+// bound it is a declared envelope, never a behaviour cap.
+func naturalCapLostMaxFor(m NaturalMechanism) int64 {
+	return NaturalHorizonHours * naturalMealEnergyFor(m)
 }
 
 // worldVersion is the world axis version number of the mechanism: 5 for the
@@ -457,6 +496,8 @@ func (m NaturalMechanism) worldVersion() uint32 {
 		return 10
 	case NaturalMechanismV11:
 		return 11
+	case NaturalMechanismV12:
+		return 12
 	}
 	return 5
 }
@@ -675,30 +716,32 @@ func naturalHasProvisionLedger(m NaturalMechanism) bool {
 
 // naturalHasYieldAxis reports the mechanisms that declare the granary Yield
 // parameter: v9 and every later mechanism (v10 is v9 plus founder placement,
-// v11 is v10 plus the wild fill scaled by the same axis).
+// v11 is v10 plus the wild fill scaled by the same axis, v12 is v11 plus the
+// meal price, which leaves the axis untouched).
 func naturalHasYieldAxis(m NaturalMechanism) bool {
-	return m == NaturalMechanismV9 || m == NaturalMechanismV10 || m == NaturalMechanismV11
+	return m == NaturalMechanismV9 || m == NaturalMechanismV10 || m == NaturalMechanismV11 || m == NaturalMechanismV12
 }
 
 // naturalRoundRobinFounders reports the mechanisms whose founding band is
-// seated round-robin across the patches: v10 and its v11 extension (which
-// changes only the wild fill arithmetic).
+// seated round-robin across the patches: v10 and its v11/v12 extensions (which
+// change only the wild fill arithmetic and the meal price).
 func naturalRoundRobinFounders(m NaturalMechanism) bool {
-	return m == NaturalMechanismV10 || m == NaturalMechanismV11
+	return m == NaturalMechanismV10 || m == NaturalMechanismV11 || m == NaturalMechanismV12
 }
 
 // naturalWildFillYield reports the mechanisms whose wild fill carries the
-// declared Yield: v11 only. A vacant wild slot then refills Yield granary
-// units per patch-hour instead of one, so a wild slot holds 0..Yield units
-// and one gather still moves exactly one unit.
+// declared Yield: v11 and its v12 extension. A vacant wild slot then refills
+// Yield granary units per patch-hour instead of one, so a wild slot holds
+// 0..Yield units and one gather still moves exactly one unit.
 func naturalWildFillYield(m NaturalMechanism) bool {
-	return m == NaturalMechanismV11
+	return m == NaturalMechanismV11 || m == NaturalMechanismV12
 }
 
 // naturalSlotStockMaxFor is the declared standing-stock envelope of one
-// slot: the frozen one unit, or the declared yield under v11, where a wild
-// slot refills Yield units per patch-hour. Like every ledger bound it is a
-// declared envelope, never a behaviour cap.
+// slot: the frozen one unit, or the declared yield under the wild-fill
+// mechanisms (v11 and v12), where a wild slot refills Yield units per
+// patch-hour. Like every ledger bound it is a declared envelope, never a
+// behaviour cap.
 func naturalSlotStockMaxFor(m NaturalMechanism) int64 {
 	if naturalWildFillYield(m) {
 		return NaturalYieldMax
@@ -838,7 +881,7 @@ func NaturalBodyDescriptorFor(m NaturalMechanism) component.ComponentDescriptor 
 		naturalInteger(1, "energy", "energy", 0, float64(NaturalEnergyCapacity)),
 		naturalInteger(2, "hunger", "hours", 0, float64(NaturalHungerCapacity)),
 		naturalInteger(3, "basal-spent", "energy", 0, float64(NaturalBasalSpentMax)),
-		naturalInteger(4, "cap-lost", "energy", 0, NaturalHorizonHours),
+		naturalInteger(4, "cap-lost", "energy", 0, float64(naturalCapLostMaxFor(m))),
 		naturalInteger(5, "consumed-home-patch", "food", 0, NaturalHorizonHours),
 		{ID: NaturalBodyLastGatherHourField, Name: "last-gather-hour", Type: component.ValueType{Kind: sim.IntegerKind}, Unit: "hour", Bounds: naturalHourBounds(), PermittedStates: []sim.ValueState{sim.Present}, Uncertainty: component.UncertaintyForbidden},
 		naturalInteger(7, "basal-debt", "energy", 0, float64(NaturalBasalDebtMax))},
