@@ -1,6 +1,7 @@
 package world
 
 import (
+	"agentworld/internal/cognition/protocol"
 	"agentworld/internal/component"
 	"agentworld/internal/kernel"
 	"agentworld/internal/scheduler"
@@ -3451,16 +3452,59 @@ func (f *Natural) allocate(ctx context.Context, at sim.SimTime) error {
 			return err
 		}
 	}
-	for _, cw := range wakes {
-		choice, err := f.naturalEvaluate(cw.id, cw.obs, naturalLabourOfferGuard(cw.actor))
-		if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
-			return ErrNaturalRunner
+	// Decide the hour's selected claim choices. The serial path (the declared
+	// default and every priority-bearing arm) decides and applies one actor at a
+	// time. The concurrent path exists only for the no-Priority reference wake
+	// policy: every frozen choice and every request is built first, the calls are
+	// issued under a bounded worker pool, and the responses are then applied
+	// serially in the declared wake order — so the world state, the accepted
+	// history and the journals are byte-identical to the serial run (ticket 57).
+	choices := make([]strategy.NaturalChoice, len(wakes))
+	if f.naturalClaimConcurrency() > 1 {
+		for i := range wakes {
+			cw := wakes[i]
+			choice, err := f.naturalEvaluate(cw.id, cw.obs, naturalLabourOfferGuard(cw.actor))
+			if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
+				return ErrNaturalRunner
+			}
+			choices[i] = choice
 		}
-		if selected[cw.id] {
-			if err := f.naturalSeamOverride(ctx, cw.id, h, view.Version, cw.actor, cw.obs, &choice); err != nil {
+		requests := make([]protocol.ActorSeamRequest, len(wakes))
+		pending := make([]int, 0, len(wakes))
+		for i := range wakes {
+			cw := wakes[i]
+			if !selected[cw.id] {
+				continue
+			}
+			requests[i] = f.naturalSeamRequest(cw.id, h, view.Version, cw.actor, cw.obs, &choices[i])
+			pending = append(pending, i)
+		}
+		decisions, err := f.naturalSeamDecideConcurrent(ctx, requests, pending)
+		if err != nil {
+			return err
+		}
+		for _, i := range pending {
+			if err := f.naturalSeamApply(wakes[i].id, wakes[i].obs, &choices[i], decisions[i]); err != nil {
 				return err
 			}
 		}
+	} else {
+		for i := range wakes {
+			cw := wakes[i]
+			choice, err := f.naturalEvaluate(cw.id, cw.obs, naturalLabourOfferGuard(cw.actor))
+			if err != nil || choice.Ref != f.ref || choice.ObservedVersion != view.Version {
+				return ErrNaturalRunner
+			}
+			if selected[cw.id] {
+				if err := f.naturalSeamOverride(ctx, cw.id, h, view.Version, cw.actor, cw.obs, &choice); err != nil {
+					return err
+				}
+			}
+			choices[i] = choice
+		}
+	}
+	for i, cw := range wakes {
+		choice := choices[i]
 		switch choice.Kind {
 		case strategy.NaturalGather:
 			if choice.TargetSlot == 0 {

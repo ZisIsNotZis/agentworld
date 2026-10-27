@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync"
 )
 
 // The cognitive budget is our compute and authorized spend, instrumented and
@@ -136,7 +137,15 @@ func mulCost(tokens uint64, microsPerToken int64) (int64, error) {
 // CognitiveAccount accumulates calls, tokens, and cost and fails loud at the
 // first ceiling crossing. It never truncates a trajectory and never silently
 // substitutes a cheap decision for a call.
+//
+// The mutex is required because a runner may issue several independent Role A
+// calls at once within one simulated hour (the declared claim concurrency of
+// the reference arm, ticket 57). The ledger already serialises its own writes;
+// this account serialises its counters so a concurrent Charge cannot lose an
+// increment and a crossing is recorded exactly once. The mutex changes no
+// pricing, no ceiling and no accounting rule.
 type CognitiveAccount struct {
+	mu         sync.Mutex
 	budget     CognitiveBudget
 	calls      uint64
 	prompt     uint64
@@ -161,6 +170,8 @@ func (a *CognitiveAccount) Budget() CognitiveBudget { return a.budget }
 // AllowCall refuses before the spend when no call remains under MaxCalls. It is
 // the pre-call guard; Charge is the post-call guard.
 func (a *CognitiveAccount) AllowCall(hour int) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	if a.hit != nil {
 		return &CognitiveCeilingHitError{Hit: *a.hit}
 	}
@@ -174,6 +185,8 @@ func (a *CognitiveAccount) AllowCall(hour int) error {
 // crossing. A crossing is typed: the caller persists the ledger record and
 // halts; nothing is truncated.
 func (a *CognitiveAccount) Charge(hour int, usage Usage, costMicros int64) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	if a.hit != nil {
 		return &CognitiveCeilingHitError{Hit: *a.hit}
 	}
@@ -203,6 +216,8 @@ func (a *CognitiveAccount) cross(ceiling CognitiveCeiling, threshold, observed u
 
 // Hit returns the recorded crossing, if any.
 func (a *CognitiveAccount) Hit() (CognitiveCeilingHit, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	if a.hit == nil {
 		return CognitiveCeilingHit{}, false
 	}
@@ -211,6 +226,8 @@ func (a *CognitiveAccount) Hit() (CognitiveCeilingHit, bool) {
 
 // Totals returns the per-run accumulator.
 func (a *CognitiveAccount) Totals() CognitiveTotals {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	return CognitiveTotals{Calls: a.calls, PromptTokens: a.prompt, CompletionTokens: a.completion, CostMicros: a.costMicros}
 }
 
@@ -223,6 +240,8 @@ func (a *CognitiveAccount) observedValues() [4]uint64 {
 // ObserveHour snapshots the current totals as hour's trailing window and
 // returns the four ceiling rows with trailing rate and projected binding hour.
 func (a *CognitiveAccount) ObserveHour(hour int) []CognitiveRow {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	current := a.observedValues()
 	rows := make([]CognitiveRow, 0, len(cognitiveCeilingOrder))
 	for i, ceiling := range cognitiveCeilingOrder {
@@ -243,6 +262,8 @@ func (a *CognitiveAccount) ObserveHour(hour int) []CognitiveRow {
 
 // Rows returns the last observed ceiling rows.
 func (a *CognitiveAccount) Rows() []CognitiveRow {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	return append([]CognitiveRow(nil), a.rows...)
 }
 

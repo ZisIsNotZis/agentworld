@@ -252,7 +252,11 @@ type evaluation struct {
 	ClaimContract        string `json:"claim_contract"`
 	Votes                int    `json:"votes"`
 	Replicates           int    `json:"replicates"`
-	ValueModel           string `json:"value_model_version"`
+	// CallConcurrency is the declared Role A call concurrency of the run
+	// (ticket 57): 1 is the serial default, and it applies only to the
+	// no-Priority reference wake policy.
+	CallConcurrency int    `json:"call_concurrency"`
+	ValueModel      string `json:"value_model_version"`
 
 	Arms             []string          `json:"arms"`
 	QuotaSchedule    []int             `json:"quota_schedule"`

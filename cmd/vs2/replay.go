@@ -17,9 +17,12 @@ import (
 // equality; a network-incapable sentinel proves the replay path cannot reach
 // the gateway.
 
-// runReplaySubset replays every recorded budgeted (priority-bearing) arm cell.
-// An unreplayed cell is never silently dropped: a budget-expired cell records
-// its typed skip.
+// runReplaySubset replays every recorded arm cell that carried a ledger: the
+// budgeted (priority-bearing) arms and, since ticket 57, the R reference arm
+// (nil Priority, full wake). R is the W2 reference deliverable, so its
+// ledger-only replay is part of its determinism evidence. A0 has no seam and no
+// ledger, so it has nothing to replay. An unreplayed cell is never silently
+// dropped: a budget-expired cell records its typed skip.
 func runReplaySubset(ctx context.Context, runs []*cellRun, root string, parallel int) map[string]string {
 	if parallel < 1 {
 		parallel = 1
@@ -29,7 +32,7 @@ func runReplaySubset(ctx context.Context, runs []*cellRun, root string, parallel
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, parallel)
 	for _, cr := range runs {
-		if !isBudgeted(cr.spec.Arm) || !cr.haveAccepted {
+		if cr.spec.Arm == ArmA0 || !cr.haveAccepted {
 			continue
 		}
 		cr := cr
@@ -48,8 +51,10 @@ func runReplaySubset(ctx context.Context, runs []*cellRun, root string, parallel
 	return out
 }
 
-// replayOneCell replays one recorded priority cell from its genesis through the
-// replay client and compares the accepted history and the selector sequence.
+// replayOneCell replays one recorded cell from its genesis through the replay
+// client and compares the accepted history and the selector sequence. A
+// nil-Priority arm (R) has no selector, so its selector sequence is empty on
+// both sides; its accepted history, projection and bytes are still compared.
 func replayOneCell(ctx context.Context, cr *cellRun, root string) (key, verdict string) {
 	key = cr.spec.String()
 	if ctx.Err() != nil {

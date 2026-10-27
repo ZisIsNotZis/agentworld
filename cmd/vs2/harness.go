@@ -148,7 +148,7 @@ func wireStack(f *world.Natural, spec cellSpec, fp fixture, dir string, budget c
 		return nil, err
 	}
 	stack := &cognitionStack{ledger: ledger, account: account, recorder: recorder, fake: fake, endpoint: endpoint, ledgerPath: ledgerPath, wake: wake}
-	cognition := &world.NaturalCognition{Seam: seam, WakePolicy: wake}
+	cognition := &world.NaturalCognition{Seam: seam, WakePolicy: wake, ClaimConcurrency: declaredCallConcurrency}
 	if wake.Priority != nil {
 		selector, err := newArmSelector(wake, fp.Hours, selectorPrice(), ledger)
 		if err != nil {

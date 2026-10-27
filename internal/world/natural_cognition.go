@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"sync"
 
 	"agentworld/internal/cognition/protocol"
 	"agentworld/internal/sim"
@@ -48,6 +49,17 @@ type NaturalCognition struct {
 	// WakePolicy.Select (or the VS1 hour gate when Priority is nil). Either way
 	// the escalation set is reproducible and consumes no world random stream.
 	Selector protocol.EscalationSelector
+	// ClaimConcurrency is the declared bound on Role A calls issued at the
+	// same time for one simulated hour (ticket 57). The decisions are
+	// independent — each request is built from its actor's own observation
+	// before any call is issued — so they may be decided concurrently, but the
+	// responses are always APPLIED serially in the existing wake order, which
+	// keeps the world state, accepted history and journals byte-identical to
+	// the serial run. Zero or one means serial. It applies only to the
+	// no-Priority wake policy (the R/FullWake reference path): a
+	// priority-bearing arm (P/U/A) keeps its byte-for-byte serial selection and
+	// call sequence, and a run with no seam (A0) makes no calls at all.
+	ClaimConcurrency int
 }
 
 // validate refuses a half-wired seam: entering the seam without a decider or a
@@ -66,6 +78,9 @@ func (c *NaturalCognition) validate() error {
 	}
 	if c.WakePolicy.Priority != nil && c.Selector == nil {
 		return fmt.Errorf("%w: priority policy requires an escalation selector", ErrNaturalRunner)
+	}
+	if c.ClaimConcurrency < 0 {
+		return fmt.Errorf("%w: claim concurrency %d is negative", ErrNaturalRunner, c.ClaimConcurrency)
 	}
 	return nil
 }
@@ -171,24 +186,45 @@ func naturalCandidateFeatures(predicate protocol.PolicyPredicate, obs strategy.N
 	return features, requested, reason
 }
 
-// naturalSeamOverride replaces the frozen claim choice with the seam decision
-// for a selected actor-hour and records the effective choice for the
-// evaluation phase. The caller selects the actor through naturalSeamSelection,
-// so a nil seam never reaches it. A level-3 transport failure is returned to
-// the caller as a fail-loud halt; a level-1 (malformed/inadmissible) failure
-// returns the declared fallback and leaves the frozen choice in place, mutating
-// nothing.
-func (f *Natural) naturalSeamOverride(ctx context.Context, id sim.EntityID, hour int, version sim.WorldVersion, actor NaturalActorState, obs strategy.NaturalObservation, choice *strategy.NaturalChoice) error {
-	// Record the frozen cascade's own action before the override: it is the
-	// comparison baseline for the load-bearing check (EC-2). The seam request
-	// carries it for the intervention record; it is not part of the canonical
-	// request bytes.
+// naturalClaimConcurrency is the effective Role A call concurrency of one hour:
+// the declared ClaimConcurrency when it is at least two and the wake policy has
+// no priority layer, otherwise the serial one. A priority-bearing arm keeps its
+// byte-for-byte serial path, and a world with no cognition makes no calls.
+func (f *Natural) naturalClaimConcurrency() int {
+	if f.cognition == nil || f.cognition.WakePolicy.Priority != nil {
+		return 1
+	}
+	if f.cognition.ClaimConcurrency < 2 {
+		return 1
+	}
+	return f.cognition.ClaimConcurrency
+}
+
+// naturalSeamRequest builds the complete Role A request of one selected
+// actor-hour, including the frozen cascade's own action as the comparison
+// baseline for the load-bearing check (EC-2). The baseline is carried for the
+// intervention record; it is not part of the canonical request bytes. Building
+// a request is a pure read, so every request of an hour can be built before any
+// call is issued.
+func (f *Natural) naturalSeamRequest(id sim.EntityID, hour int, version sim.WorldVersion, actor NaturalActorState, obs strategy.NaturalObservation, choice *strategy.NaturalChoice) protocol.ActorSeamRequest {
 	request := f.naturalActorSeamRequest(id, hour, version, actor, obs)
 	request.FrozenAction = naturalChoiceAction(choice.Kind)
-	decision, err := f.cognition.Seam.DecideActorSeam(ctx, request)
-	if err != nil {
-		return err
-	}
+	return request
+}
+
+// naturalSeamDecide issues one recorded Role A call. It is the decide half of
+// the old decide+apply pair: the world is untouched, so it is safe to run for
+// every selected actor of an hour at the same time.
+func (f *Natural) naturalSeamDecide(ctx context.Context, request protocol.ActorSeamRequest) (protocol.ActorSeamDecision, error) {
+	return f.cognition.Seam.DecideActorSeam(ctx, request)
+}
+
+// naturalSeamApply is the apply half: it replaces the frozen claim choice with
+// the seam decision for a selected actor-hour and records the effective choice
+// for the evaluation phase. A level-1 (malformed/inadmissible) fallback leaves
+// the frozen choice in place, mutating nothing. It always runs serially in the
+// declared wake order, never inside a concurrent decide.
+func (f *Natural) naturalSeamApply(id sim.EntityID, obs strategy.NaturalObservation, choice *strategy.NaturalChoice, decision protocol.ActorSeamDecision) error {
 	if decision.Source == protocol.SourceModel {
 		if err := naturalApplySeamAction(choice, decision.Action, obs); err != nil {
 			return err
@@ -196,6 +232,74 @@ func (f *Natural) naturalSeamOverride(ctx context.Context, id sim.EntityID, hour
 	}
 	f.claimDecisions[id] = *choice
 	return nil
+}
+
+// naturalSeamOverride replaces the frozen claim choice with the seam decision
+// for a selected actor-hour and records the effective choice for the
+// evaluation phase. The caller selects the actor through naturalSeamSelection,
+// so a nil seam never reaches it. A level-3 transport failure is returned to
+// the caller as a fail-loud halt; a level-1 (malformed/inadmissible) failure
+// returns the declared fallback and leaves the frozen choice in place, mutating
+// nothing. It is the serial path: decide then apply, one actor at a time.
+func (f *Natural) naturalSeamOverride(ctx context.Context, id sim.EntityID, hour int, version sim.WorldVersion, actor NaturalActorState, obs strategy.NaturalObservation, choice *strategy.NaturalChoice) error {
+	decision, err := f.naturalSeamDecide(ctx, f.naturalSeamRequest(id, hour, version, actor, obs, choice))
+	if err != nil {
+		return err
+	}
+	return f.naturalSeamApply(id, obs, choice, decision)
+}
+
+// naturalSeamDecideConcurrent decides the hour's selected requests under a
+// bounded worker pool (never more than the declared concurrency, never more
+// than the pending count) and returns each decision at its wake index. The
+// first failure cancels the remaining work and is returned as the fail-loud
+// halt, so a typed ceiling hit or a transport failure stops the run exactly
+// once; nothing here mutates the world.
+func (f *Natural) naturalSeamDecideConcurrent(ctx context.Context, requests []protocol.ActorSeamRequest, pending []int) ([]protocol.ActorSeamDecision, error) {
+	decisions := make([]protocol.ActorSeamDecision, len(requests))
+	if len(pending) == 0 {
+		return decisions, nil
+	}
+	workers := f.naturalClaimConcurrency()
+	if workers > len(pending) {
+		workers = len(pending)
+	}
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var (
+		mu       sync.Mutex
+		firstErr error
+		wg       sync.WaitGroup
+	)
+	queue := make(chan int)
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range queue {
+				decision, err := f.naturalSeamDecide(runCtx, requests[i])
+				if err != nil {
+					mu.Lock()
+					if firstErr == nil {
+						firstErr = err
+						cancel()
+					}
+					mu.Unlock()
+					continue
+				}
+				decisions[i] = decision
+			}
+		}()
+	}
+	for _, i := range pending {
+		queue <- i
+	}
+	close(queue)
+	wg.Wait()
+	if firstErr != nil {
+		return nil, firstErr
+	}
+	return decisions, nil
 }
 
 // naturalChoiceAction is the claim action string of a frozen choice kind. The

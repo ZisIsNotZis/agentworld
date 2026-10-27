@@ -318,13 +318,14 @@ func TestPriorityCheckpointReplayRoundTrip(t *testing.T) {
 	}
 }
 
-// TestReplaySubsetIdentical pins that the runner's own replay lane reports the
-// priority arm identical.
+// TestReplaySubsetIdentical pins that the runner's own replay lane reports every
+// ledger-bearing arm identical: the budgeted priority arms and the R reference
+// (nil Priority) added by ticket 57.
 func TestReplaySubsetIdentical(t *testing.T) {
 	runs := runTestMatrix(t)
 	replay := runReplaySubset(context.Background(), runs, t.TempDir(), 2)
-	if len(replay) != len(budgetedArms) {
-		t.Fatalf("replayed %d cells, want %d", len(replay), len(budgetedArms))
+	if len(replay) != len(budgetedArms)+1 {
+		t.Fatalf("replayed %d cells, want %d (budgeted arms + R)", len(replay), len(budgetedArms)+1)
 	}
 	for k, v := range replay {
 		if v != "identical" {

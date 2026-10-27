@@ -252,6 +252,16 @@ var (
 	declaredClaimContract  = cognition.ClaimContractV1
 )
 
+// declaredCallConcurrency is the declared number of Role A calls the runner may
+// issue at the same time within one simulated hour (-call-concurrency, default
+// 1 = serial). It is a runner scheduling parameter, not a world mechanism: the
+// hour's decisions are independent (each request is built from its actor's own
+// observation before any call is issued) and the responses are applied serially
+// in the declared wake order, so the recorded world is unchanged. It applies
+// only to the no-Priority reference wake policy; priority-bearing arms (P/U/A)
+// stay byte-for-byte serial and A0 makes no calls. See ticket 57.
+var declaredCallConcurrency = 1
+
 // declaredHorizonHours is the horizon a run uses: the declared H by default, the
 // -hours override for a shorter declared study horizon (ticket 35 runs 96 h, or
 // 72 h when the measured max-effort latency makes 96 h exceed the declared wall
