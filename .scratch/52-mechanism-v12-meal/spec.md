@@ -53,8 +53,9 @@ identity in `natural_contract_math.go` is the invariant to watch).
 `NaturalMechanismV12` (world axis version 12) = v11 rules plus one declared price: an eaten bag unit is a
 two-hour meal. One declared constant (`naturalMealEnergyV12 = 2`) with one reader (`naturalMealEnergyFor`),
 which `NaturalConsumeFor` grants and every G3 energy identity books; below v12 that reader returns the
-frozen 1, so v5–v11 keep their bytes term for term (the frozen `internal/world` suite and the v11 sweep
-row reproduce unchanged, §5.2). The cap is respected: the unit is always consumed and whatever of the
+frozen 1, so v5–v11 keep their bytes term for term (the factor is 1 there; `go test ./internal/world/`
+surfaced only two failures, both name/derivation defects that predate this ticket and are fixed on the
+branch in the same pass, and the ticket-51 sweep still prints its recorded v11 row verbatim, §5.2). The cap is respected: the unit is always consumed and whatever of the
 meal does not fit under `NaturalEnergyCapacity` is counted spill in `CapLost`, exactly as the frozen
 one-unit meal does at the cap, so
 
