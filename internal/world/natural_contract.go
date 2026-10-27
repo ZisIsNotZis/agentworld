@@ -147,11 +147,25 @@ const (
 	// units per hour (locus-m 5) plus four per hour of birth payments
 	// (proposer and consenter in the same hour), and birth-granary-paid is
 	// at most four units per hour.
-	NaturalGranaryStockMax     int64 = 8 * NaturalHorizonHours                           // 1344
-	NaturalSpoilDebtMax        int64 = 8*NaturalHorizonHours + NaturalSpoilagePeriod - 1 // 1367
-	NaturalSpoiledMax          int64 = 8 * NaturalHorizonHours                           // 1344
-	NaturalBasalSpentMax       int64 = 6 * NaturalHorizonHours                           // 1008
-	NaturalBirthGranaryPaidMax int64 = 4 * NaturalHorizonHours                           // 672
+	NaturalGranaryStockMax int64 = 8 * NaturalHorizonHours                           // 1344
+	NaturalSpoilDebtMax    int64 = 8*NaturalHorizonHours + NaturalSpoilagePeriod - 1 // 1367
+	NaturalSpoiledMax      int64 = 8 * NaturalHorizonHours                           // 1344
+
+	// NaturalYieldMax is the declared upper bound of mechanism v9's Yield
+	// parameter (granary units granted per cultivated slot per patch-hour):
+	// at most one unit per slot of the patch, i.e. NaturalSlotsPerPatch. The
+	// v9-only widened ledger envelope below is derived from it, so the food
+	// ledgers of every mechanism below v9 keep exactly their frozen bounds.
+	NaturalYieldMax int64 = NaturalSlotsPerPatch
+
+	// naturalYieldGranaryMax is the mechanism-v9 ledger envelope: with every
+	// cultivated slot granting NaturalYieldMax units per patch-hour, a
+	// granary can receive at most NaturalSlotsPerPatch times the frozen
+	// horizon envelope. Like every ledger bound it cannot bind behaviour
+	// before h=168; it is a declared envelope, never a behaviour cap.
+	naturalYieldGranaryMax           = NaturalGranaryStockMax * NaturalSlotsPerPatch // 10752
+	NaturalBasalSpentMax       int64 = 6 * NaturalHorizonHours                       // 1008
+	NaturalBirthGranaryPaidMax int64 = 4 * NaturalHorizonHours                       // 672
 
 	// NaturalProvisionedMax is the mechanism-v6-only provisioned-ledger
 	// envelope (ticket 17): at most one granary draw per actor-hour — the
@@ -395,13 +409,20 @@ const (
 	// and the provisioned ledger, is v6 verbatim; the wage contract of v7
 	// does not exist here.
 	NaturalMechanismV8 NaturalMechanism = 8
+	// NaturalMechanismV9 (world axis version 9, ticket 50) is the v8 rule
+	// table plus exactly one declared parameter: Yield, the granary units
+	// granted per cultivated slot per patch-hour (default 1; admitted
+	// 1..NaturalSlotsPerPatch). Everything else, including rule 515 and the
+	// provisioned ledger, is v8 verbatim.
+	NaturalMechanismV9 NaturalMechanism = 9
 )
 
 // NaturalMechanismValid reports the admitted axis values: the zero value
-// (≡ v5), 6, 7, and 8. Literal 5 is not a second spelling of v5 — the zero
+// (≡ v5), 6, 7, 8 and 9. Literal 5 is not a second spelling of v5 — the zero
 // value is the one v5 spelling — and everything else fails closed.
 func NaturalMechanismValid(m NaturalMechanism) bool {
-	return m == NaturalMechanismV5 || m == NaturalMechanismV6 || m == NaturalMechanismV7 || m == NaturalMechanismV8
+	return m == NaturalMechanismV5 || m == NaturalMechanismV6 || m == NaturalMechanismV7 ||
+		m == NaturalMechanismV8 || m == NaturalMechanismV9
 }
 
 // worldVersion is the world axis version number of the mechanism: 5 for the
@@ -416,6 +437,8 @@ func (m NaturalMechanism) worldVersion() uint32 {
 		return 7
 	case NaturalMechanismV8:
 		return 8
+	case NaturalMechanismV9:
+		return 9
 	}
 	return 5
 }
@@ -611,6 +634,24 @@ func naturalRuleFor(m NaturalMechanism, id sim.RuleID, name string) component.Tr
 	return component.TransitionRuleDescriptor{ID: id, Version: m.RuleVersion(), Name: "natural-" + name + "-" + naturalNameSuffix(m)}
 }
 
+// naturalHasProvisionLedger reports the mechanisms whose granary carries the
+// rule-515 provisioned ledger and admits the provision contract: v6, v8 and
+// v9 (v7 carries it alongside the wage ledgers).
+func naturalHasProvisionLedger(m NaturalMechanism) bool {
+	return m == NaturalMechanismV6 || m == NaturalMechanismV8 || m == NaturalMechanismV9
+}
+
+// naturalGranaryBoundsFor is the declared granary ledger envelope of a
+// mechanism. Mechanism v9 scales the rule-508 grant by Yield, so its stock,
+// cultivated-total and spoiled ledgers carry the yield-widened envelope; every
+// frozen mechanism keeps exactly NaturalGranaryStockMax/NaturalSpoiledMax.
+func naturalGranaryBoundsFor(m NaturalMechanism) (stock, spoiled int64) {
+	if m == NaturalMechanismV9 {
+		return naturalYieldGranaryMax, naturalYieldGranaryMax
+	}
+	return NaturalGranaryStockMax, NaturalSpoiledMax
+}
+
 func naturalRule(id sim.RuleID, name string) component.TransitionRuleDescriptor {
 	return naturalRuleFor(NaturalMechanismV5, id, name)
 }
@@ -637,11 +678,15 @@ func naturalDescriptor(id sim.ComponentTypeID, name string, fields []component.F
 }
 
 func NaturalPatchDescriptorFor(m NaturalMechanism) component.ComponentDescriptor {
+	grantedMax := NaturalGranaryStockMax
+	if m == NaturalMechanismV9 {
+		grantedMax = naturalYieldGranaryMax
+	}
 	return naturalDescriptorFor(m, NaturalPatchTypeID, "natural-patch-"+naturalNameSuffix(m), []component.FieldDescriptor{
 		naturalInteger(1, "yield", "food/hour", 0, NaturalSlotsPerPatch),
 		naturalInteger(2, "pulses", "hours", 0, NaturalHorizonHours),
 		naturalInteger(3, "produced", "food", 0, float64(NaturalGranaryStockMax)),
-		naturalInteger(4, "granted", "food", 0, float64(NaturalGranaryStockMax)),
+		naturalInteger(4, "granted", "food", 0, float64(grantedMax)),
 		naturalInteger(5, "unrealized", "food", 0, float64(NaturalGranaryStockMax))},
 		naturalRuleFor(m, NaturalRegenSplitRule, "regen-split"))
 }
@@ -688,7 +733,7 @@ func NaturalBagDescriptorFor(m NaturalMechanism) component.ComponentDescriptor {
 	rules := []component.TransitionRuleDescriptor{
 		naturalRuleFor(m, NaturalGatherRule, "gather"), naturalRuleFor(m, NaturalConsumeRule, "consume"),
 		naturalRuleFor(m, NaturalBuildRule, "build"), naturalRuleFor(m, NaturalBirthReplyRule, "birth-reply")}
-	if m == NaturalMechanismV6 || m == NaturalMechanismV8 {
+	if naturalHasProvisionLedger(m) {
 		rules = append(rules, naturalRuleFor(m, NaturalProvisionRule, "provision"))
 	}
 	if m == NaturalMechanismV7 {
@@ -758,17 +803,18 @@ func NaturalGranaryDescriptorFor(m NaturalMechanism) component.ComponentDescript
 	// under the v7 mechanism it additionally carries the wage ledgers 8
 	// wages-paid / 9 wages-earned and admits rule 518. The v5 zero value
 	// keeps exactly the frozen six-field list.
+	stockMax, spoiledMax := naturalGranaryBoundsFor(m)
 	fields := []component.FieldDescriptor{
-		naturalInteger(1, "stock", "food", 0, float64(NaturalGranaryStockMax)),
-		naturalInteger(2, "cultivated-total", "food", 0, float64(NaturalGranaryStockMax)),
+		naturalInteger(1, "stock", "food", 0, float64(stockMax)),
+		naturalInteger(2, "cultivated-total", "food", 0, float64(stockMax)),
 		naturalInteger(3, "stored-meals", "meals", 0, NaturalHorizonHours),
 		{ID: NaturalGranaryLastStoredMealHourField, Name: "last-stored-meal-hour", Type: component.ValueType{Kind: sim.IntegerKind}, Unit: "hour", Bounds: naturalHourBounds(), PermittedStates: []sim.ValueState{sim.Present}, Uncertainty: component.UncertaintyForbidden},
 		naturalInteger(5, "spoil-debt", "food", 0, float64(NaturalSpoilDebtMax)),
-		naturalInteger(6, "spoiled", "food", 0, float64(NaturalSpoiledMax))}
+		naturalInteger(6, "spoiled", "food", 0, float64(spoiledMax))}
 	rules := []component.TransitionRuleDescriptor{
 		naturalRuleFor(m, NaturalSpoilageRule, "spoilage"), naturalRuleFor(m, NaturalGrantRule, "yield-grant"),
 		naturalRuleFor(m, NaturalEatStoredRule, "eat-stored"), naturalRuleFor(m, NaturalBirthReplyRule, "birth-reply")}
-	if m == NaturalMechanismV6 || m == NaturalMechanismV8 {
+	if naturalHasProvisionLedger(m) {
 		fields = append(fields, naturalInteger(NaturalGranaryProvisionedField, "provisioned", "meals", 0, float64(NaturalProvisionedMax)))
 		rules = append(rules, naturalRuleFor(m, NaturalProvisionRule, "provision"))
 	}
@@ -813,12 +859,14 @@ func NaturalGenomeDescriptor() component.ComponentDescriptor {
 
 func NaturalBirthRequestDescriptorFor(m NaturalMechanism) component.ComponentDescriptor {
 	// The reported-granary claim carries the granary horizon envelope: a
-	// self-reported claim must be able to state any reachable true value.
+	// self-reported claim must be able to state any reachable true value
+	// (widened under mechanism v9 exactly like the granary stock).
+	stockMax, _ := naturalGranaryBoundsFor(m)
 	return naturalDescriptorFor(m, NaturalBirthRequestTypeID, "natural-birthrequest-"+naturalNameSuffix(m), []component.FieldDescriptor{
 		naturalInteger(1, "hour", "hour", float64(NaturalNeverHour), NaturalHorizonHours-1),
 		naturalRef(2, "addressee"),
 		naturalInteger(3, "reported-capital", "points", 0, float64(NaturalKMax)),
-		naturalInteger(4, "reported-granary", "food", 0, float64(NaturalGranaryStockMax)),
+		naturalInteger(4, "reported-granary", "food", 0, float64(stockMax)),
 		naturalInteger(5, "status", "state", 0, 4),
 		naturalInteger(6, "last-request-hour", "hour", float64(NaturalNeverHour), NaturalHorizonHours-1),
 		naturalInteger(7, "last-reply-hour", "hour", float64(NaturalNeverHour), NaturalHorizonHours-1)},
@@ -1023,7 +1071,7 @@ func naturalPatchFieldAllowed(rule sim.RuleID, componentType sim.ComponentTypeID
 // of NaturalCheckOwnershipFor.
 func naturalPatchFieldAllowedFor(m NaturalMechanism, rule sim.RuleID, componentType sim.ComponentTypeID, field sim.FieldID) bool {
 	if rule == NaturalProvisionRule {
-		if m != NaturalMechanismV6 && m != NaturalMechanismV7 && m != NaturalMechanismV8 {
+		if m != NaturalMechanismV6 && m != NaturalMechanismV7 && !naturalHasProvisionLedger(m) {
 			return false
 		}
 		switch componentType {
@@ -1400,7 +1448,7 @@ func NaturalEatStoredProposalFor(m NaturalMechanism, key string, patches, hour i
 // converted unit takes the normal bag decision afterward; the actor's body
 // is untouched — the meal is taken as worksite provision, not eaten.
 func NaturalProvisionProposal(m NaturalMechanism, key string, patches, hour int, actor sim.EntityID, a NaturalActorState) (kernel.Proposal, error) {
-	if m != NaturalMechanismV6 && m != NaturalMechanismV8 {
+	if !naturalHasProvisionLedger(m) {
 		return kernel.Proposal{}, ErrNaturalContract
 	}
 	at, err := NaturalPhaseTime(hour, NaturalPhaseClaim)
@@ -1581,7 +1629,7 @@ func naturalNewbornAllocationsFor(m NaturalMechanism, patches int, id, home sim.
 		{Field: NaturalGranaryLastStoredMealHourField, Value: sim.IntegerValue(n.Granary.LastStoredMealHour)},
 		{Field: NaturalGranarySpoilDebtField, Value: sim.IntegerValue(n.Granary.SpoilDebt)},
 		{Field: NaturalGranarySpoiledField, Value: sim.IntegerValue(n.Granary.Spoiled)}}
-	if m == NaturalMechanismV6 || m == NaturalMechanismV8 {
+	if naturalHasProvisionLedger(m) {
 		granary = append(granary, component.FieldSeed{Field: NaturalGranaryProvisionedField, Value: sim.IntegerValue(n.Granary.Provisioned)})
 	}
 	if m == NaturalMechanismV7 {

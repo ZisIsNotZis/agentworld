@@ -246,6 +246,26 @@ func validNaturalPatch(p NaturalPatchState) bool {
 		p.Produced+p.Granted+p.Unrealized == p.Yield*p.Pulses
 }
 
+// validNaturalPatchFor is the mechanism-parameterized patch ledger validator.
+// The frozen mechanisms keep validNaturalPatch exactly. Mechanism v9 records
+// the rule-508 grant in FOOD UNITS (Yield units per entitled cultivated
+// slot), so the granted field carries the yield-widened envelope and the
+// per-patch-hour land identity is stated in budget slots: the granted units
+// divided by the declared yield are the slots the R budget consumed.
+func validNaturalPatchFor(m NaturalMechanism, yield int64, p NaturalPatchState) bool {
+	if m != NaturalMechanismV9 {
+		return validNaturalPatch(p)
+	}
+	if yield < 1 || yield > NaturalYieldMax || p.Yield < 0 || p.Yield > NaturalSlotsPerPatch ||
+		p.Pulses < 0 || p.Pulses > NaturalHorizonHours ||
+		p.Produced < 0 || p.Produced > NaturalGranaryStockMax ||
+		p.Granted < 0 || p.Granted > naturalYieldGranaryMax || p.Granted%yield != 0 ||
+		p.Unrealized < 0 || p.Unrealized > NaturalGranaryStockMax {
+		return false
+	}
+	return p.Produced+p.Granted/yield+p.Unrealized == p.Yield*p.Pulses
+}
+
 func validNaturalSlot(s NaturalSlotState) bool {
 	if s.Stock < 0 || s.Stock > 1 || s.Gathered < 0 || s.Gathered > NaturalHorizonHours {
 		return false
@@ -295,17 +315,20 @@ func validNaturalWorksite(w NaturalWorksiteState) bool {
 // every frozen v5 bound; NaturalMechanismV6 admits provisioned in its
 // horizon envelope [0,168] and pins the wage ledgers to zero;
 // NaturalMechanismV7 admits provisioned and both wage ledgers in theirs.
+// Mechanism v9 widens the stock, cultivated-total and spoiled envelopes
+// exactly like its descriptors (the yield-scaled grant), and is otherwise v8.
 func validNaturalGranaryFor(m NaturalMechanism, g NaturalGranaryState) bool {
-	if !(g.Stock >= 0 && g.Stock <= NaturalGranaryStockMax &&
-		g.CultivatedTotal >= 0 && g.CultivatedTotal <= NaturalGranaryStockMax &&
+	stockMax, spoiledMax := naturalGranaryBoundsFor(m)
+	if !(g.Stock >= 0 && g.Stock <= stockMax &&
+		g.CultivatedTotal >= 0 && g.CultivatedTotal <= stockMax &&
 		g.StoredMeals >= 0 && g.StoredMeals <= NaturalHorizonHours &&
 		g.LastStoredMealHour >= NaturalNeverHour && g.LastStoredMealHour < NaturalHorizonHours &&
 		g.SpoilDebt >= 0 && g.SpoilDebt <= NaturalSpoilDebtMax &&
-		g.Spoiled >= 0 && g.Spoiled <= NaturalSpoiledMax) {
+		g.Spoiled >= 0 && g.Spoiled <= spoiledMax) {
 		return false
 	}
 	switch m {
-	case NaturalMechanismV6, NaturalMechanismV8:
+	case NaturalMechanismV6, NaturalMechanismV8, NaturalMechanismV9:
 		return g.Provisioned >= 0 && g.Provisioned <= NaturalProvisionedMax && g.WagesPaid == 0 && g.WagesEarned == 0
 	case NaturalMechanismV7:
 		return g.Provisioned >= 0 && g.Provisioned <= NaturalProvisionedMax &&
@@ -351,8 +374,9 @@ func validNaturalGenome(patches int, actor sim.EntityID, g NaturalGenomeState) b
 	return g.DiedHour == NaturalNeverHour || (g.DiedHour >= g.BirthHour && g.DiedHour <= NaturalHorizonHours)
 }
 
-func validNaturalBirthRequest(patches int, owner sim.EntityID, r NaturalBirthRequestState) bool {
-	if r.ReportedCapital < 0 || r.ReportedCapital > NaturalKMax || r.ReportedGranary < 0 || r.ReportedGranary > NaturalGranaryStockMax {
+func validNaturalBirthRequestFor(m NaturalMechanism, patches int, owner sim.EntityID, r NaturalBirthRequestState) bool {
+	stockMax, _ := naturalGranaryBoundsFor(m)
+	if r.ReportedCapital < 0 || r.ReportedCapital > NaturalKMax || r.ReportedGranary < 0 || r.ReportedGranary > stockMax {
 		return false
 	}
 	hourOK := func(h int64) bool { return h >= NaturalNeverHour && h < NaturalHorizonHours }
@@ -444,7 +468,7 @@ func naturalAlive(a NaturalActorState) bool {
 // died-hour=-1 ⇒ energy>0.
 func validNaturalActorFor(m NaturalMechanism, patches int, actor sim.EntityID, a NaturalActorState) bool {
 	if !naturalActorEntity(patches, actor) || !validNaturalBody(a.Body) || !validNaturalWorksite(a.Worksite) ||
-		!validNaturalGranaryFor(m, a.Granary) || !validNaturalGenome(patches, actor, a.Genome) || !validNaturalBirthRequest(patches, actor, a.Request) {
+		!validNaturalGranaryFor(m, a.Granary) || !validNaturalGenome(patches, actor, a.Genome) || !validNaturalBirthRequestFor(m, patches, actor, a.Request) {
 		return false
 	}
 	if m == NaturalMechanismV7 && (!validNaturalLabourOffer(patches, actor, a.Offer) || !validNaturalLabourBook(a.Book)) {
@@ -496,7 +520,15 @@ func validNaturalActor(patches int, actor sim.EntityID, a NaturalActorState) boo
 // (G1): no slot supplies units before they are produced, and the wild share
 // produced equals gathered plus current standing stock.
 func naturalStock(p NaturalPatchState, slots [NaturalSlotsPerPatch]NaturalSlotState) bool {
-	if !validNaturalPatch(p) {
+	return naturalStockFor(NaturalMechanismV5, 1, p, slots)
+}
+
+// naturalStockFor is naturalStock under a declared mechanism and yield: the
+// patch ledger validates against the mechanism's own envelope and the wild
+// share produced equals gathered plus current standing stock (the slot
+// arithmetic is unchanged in every mechanism).
+func naturalStockFor(m NaturalMechanism, yield int64, p NaturalPatchState, slots [NaturalSlotsPerPatch]NaturalSlotState) bool {
+	if !validNaturalPatchFor(m, yield, p) {
 		return false
 	}
 	var total int64
@@ -521,24 +553,45 @@ func naturalStock(p NaturalPatchState, slots [NaturalSlotsPerPatch]NaturalSlotSt
 // entitlement per owner, ordered by lowest entitled slot index, for rule
 // 508's flat granary writes.
 func NaturalRegenSplit(patches, hour int, patch NaturalPatchState, slots [NaturalSlotsPerPatch]NaturalSlotState, ownerAlive NaturalAliveLookup) (NaturalPatchState, [NaturalSlotsPerPatch]NaturalSlotState, NaturalRegenSplitResult, []NaturalGrantEntitlement, error) {
-	if _, err := NaturalHourTime(hour); err != nil || int64(hour) != patch.Pulses || !naturalStock(patch, slots) || ownerAlive == nil {
+	return NaturalRegenSplitFor(NaturalMechanismV5, 1, patches, hour, patch, slots, ownerAlive)
+}
+
+// NaturalRegenSplitFor is the mechanism-parameterized regen split. Every
+// frozen mechanism is NaturalRegenSplit byte-for-byte (one unit per
+// entitled cultivated slot). Mechanism v9 multiplies exactly that rule-508
+// per-slot grant by the declared Yield: each entitled slot still consumes
+// ONE unit of the R budget (the land identity stays stated in budget
+// slots), but the entitlement hands the owner Yield granary units. The
+// granted ledger field and the returned Cultivated total count those food
+// units, so the grant seam (cultivated total = granted) is unchanged.
+func NaturalRegenSplitFor(m NaturalMechanism, yield int64, patches, hour int, patch NaturalPatchState, slots [NaturalSlotsPerPatch]NaturalSlotState, ownerAlive NaturalAliveLookup) (NaturalPatchState, [NaturalSlotsPerPatch]NaturalSlotState, NaturalRegenSplitResult, []NaturalGrantEntitlement, error) {
+	perSlot := int64(1)
+	if m == NaturalMechanismV9 {
+		if yield < 1 || yield > NaturalYieldMax {
+			return NaturalPatchState{}, slots, NaturalRegenSplitResult{}, nil, ErrNaturalContract
+		}
+		perSlot = yield
+	}
+	if _, err := NaturalHourTime(hour); err != nil || int64(hour) != patch.Pulses || !naturalStockFor(m, yield, patch, slots) || ownerAlive == nil {
 		return NaturalPatchState{}, slots, NaturalRegenSplitResult{}, nil, ErrNaturalContract
 	}
 	out := slots
 	budget := patch.Yield
 	var result NaturalRegenSplitResult
+	grantedSlots := int64(0)
 	grants := make([]NaturalGrantEntitlement, 0, NaturalSlotsPerPatch)
 	grantIndex := make(map[sim.EntityID]int, NaturalSlotsPerPatch)
 	// Pass 1: entitled cultivated slots of living owners, ascending.
 	for i := range out {
 		if out[i].Mode == NaturalTenureCultivated && budget > 0 && ownerAlive(out[i].Owner) {
 			budget--
-			result.Cultivated++
+			grantedSlots++
+			result.Cultivated += perSlot
 			if j, ok := grantIndex[out[i].Owner]; ok {
-				grants[j].Units++
+				grants[j].Units += perSlot
 			} else {
 				grantIndex[out[i].Owner] = len(grants)
-				grants = append(grants, NaturalGrantEntitlement{Owner: out[i].Owner, Units: 1})
+				grants = append(grants, NaturalGrantEntitlement{Owner: out[i].Owner, Units: perSlot})
 			}
 		}
 	}
@@ -555,12 +608,14 @@ func NaturalRegenSplit(patches, hour int, patch NaturalPatchState, slots [Natura
 	patch.Produced += result.Wild
 	patch.Granted += result.Cultivated
 	patch.Unrealized += result.Unrealized
-	// Frozen per-patch-hour identity: R = cultivated + wildFilled +
-	// unrealized, exact for every budget and occupancy.
-	if result.Cultivated+result.Wild+result.Unrealized != patch.Yield {
+	// Per-patch-hour land identity, stated in budget slots: R = granted
+	// slots + wildFilled + unrealized, exact for every budget and occupancy
+	// (granted slots = food units / per-slot grant). No locus mints units
+	// beyond the declared per-slot grant.
+	if grantedSlots+result.Wild+result.Unrealized != patch.Yield {
 		return NaturalPatchState{}, slots, NaturalRegenSplitResult{}, nil, ErrNaturalContract
 	}
-	if !naturalStock(patch, out) {
+	if !naturalStockFor(m, yield, patch, out) {
 		return NaturalPatchState{}, slots, NaturalRegenSplitResult{}, nil, ErrNaturalContract
 	}
 	return patch, out, result, grants, nil
@@ -579,7 +634,13 @@ func NaturalCultivatedGrant(patches int, ownerID sim.EntityID, a NaturalActorSta
 // zero value reproduces NaturalCultivatedGrant exactly, and only the granary
 // validation (G2a′) differs under NaturalMechanismV6.
 func NaturalCultivatedGrantFor(m NaturalMechanism, patches int, ownerID sim.EntityID, a NaturalActorState, units int64) (NaturalActorState, NaturalGrantResult, error) {
-	if !naturalActorEntity(patches, ownerID) || !validNaturalActorFor(m, patches, ownerID, a) || units < 1 || units > NaturalSlotsPerPatch {
+	unitsMax := int64(NaturalSlotsPerPatch)
+	if m == NaturalMechanismV9 {
+		// Rule 508's per-slot grant is Yield units, so one owner's merged
+		// entitlement can reach every cultivated slot at the maximum yield.
+		unitsMax = NaturalSlotsPerPatch * NaturalYieldMax
+	}
+	if !naturalActorEntity(patches, ownerID) || !validNaturalActorFor(m, patches, ownerID, a) || units < 1 || units > unitsMax {
 		return NaturalActorState{}, NaturalGrantResult{}, ErrNaturalContract
 	}
 	if !naturalAlive(a) {
@@ -953,7 +1014,7 @@ func NaturalEatStoredFor(m NaturalMechanism, patches, hour int, actorID sim.Enti
 // creation): the body is untouched, so G3 is unchanged, and G2a′ stays
 // exact because provisioned absorbs the withdrawn stock unit.
 func NaturalProvision(m NaturalMechanism, patches, hour int, actorID sim.EntityID, a NaturalActorState) (NaturalActorState, error) {
-	if m != NaturalMechanismV6 && m != NaturalMechanismV7 && m != NaturalMechanismV8 {
+	if m != NaturalMechanismV6 && m != NaturalMechanismV7 && !naturalHasProvisionLedger(m) {
 		return NaturalActorState{}, ErrNaturalContract
 	}
 	if hour < 0 || hour >= NaturalHorizonHours || !naturalActorEntity(patches, actorID) || !validNaturalActorFor(m, patches, actorID, a) || !naturalAlive(a) ||
@@ -1378,6 +1439,14 @@ func NaturalConsentAllows(ownGranary, ownCapital, ownEnergy, reportedCapital, re
 		kinAllowed
 }
 
+// naturalHouseholdGate reports the mechanisms with the v8 conception rules:
+// the band-wide mate pool and the household consent/payment gate. Mechanism
+// v9 is v8 verbatim on every birth rule (it only declares the granary
+// yield), so the gate is shared by both.
+func naturalHouseholdGate(m NaturalMechanism) bool {
+	return m == NaturalMechanismV8 || m == NaturalMechanismV9
+}
+
 // NaturalSurplusGateAllows is the frozen runner-side surplus gate on fresh
 // truth, both parents: alive ∧ k≥2 ∧ granary≥3 ∧ energy≥3 ∧ kin-ok ∧ same
 // patch. There is no birth-count term: births are bounded only by ecology
@@ -1387,12 +1456,13 @@ func NaturalSurplusGateAllows(proposer, consenter NaturalActorState, kinAllowed 
 }
 
 // naturalSurplusGateAllowsFor is the mechanism-parameterized surplus gate.
-// Under NaturalMechanismV8 the proposer keeps the full wealth gate while the
+// Under NaturalMechanismV8 (and its v9 extension, which changes only the
+// declared yield) the proposer keeps the full wealth gate while the
 // consenter only has to be fed (energy ≥ 2), and the co-location requirement
 // disappears (the band-wide mate pool); every frozen mechanism keeps the v5
 // conjunction exactly.
 func naturalSurplusGateAllowsFor(m NaturalMechanism, proposer, consenter NaturalActorState, kinAllowed bool) bool {
-	if m == NaturalMechanismV8 {
+	if naturalHouseholdGate(m) {
 		return naturalAlive(proposer) && naturalAlive(consenter) &&
 			proposer.Worksite.Capital >= NaturalConsentMinCapital &&
 			proposer.Granary.Stock >= NaturalConsentMinGranary &&
@@ -1478,9 +1548,10 @@ func NaturalBirthRequest(patches, hour int, proposerID, addressee sim.EntityID, 
 // NaturalBirthRequestFor is the mechanism-parameterized filing; the zero
 // value reproduces NaturalBirthRequest exactly.
 func NaturalBirthRequestFor(m NaturalMechanism, patches, hour int, proposerID, addressee sim.EntityID, reportedCapital, reportedGranary int64, proposer NaturalActorState) (NaturalActorState, error) {
+	reportedGranaryMax, _ := naturalGranaryBoundsFor(m)
 	if _, err := NaturalPhaseTime(hour, NaturalPhaseBirthRequest); err != nil ||
 		!naturalActorEntity(patches, proposerID) || !naturalActorEntity(patches, addressee) || addressee == proposerID ||
-		reportedCapital < 0 || reportedCapital > NaturalKMax || reportedGranary < 0 || reportedGranary > NaturalGranaryStockMax ||
+		reportedCapital < 0 || reportedCapital > NaturalKMax || reportedGranary < 0 || reportedGranary > reportedGranaryMax ||
 		!validNaturalActorFor(m, patches, proposerID, proposer) || !naturalAlive(proposer) ||
 		proposer.Request.Status == NaturalRequestPending || proposer.Request.LastRequestHour >= int64(hour) {
 		return NaturalActorState{}, ErrNaturalContract
@@ -1600,7 +1671,7 @@ func NaturalBirthReplyFor(m NaturalMechanism, patches, hour int, kinAllowed bool
 	// consenter's own private state first, then the reported claims, then
 	// the public kin distance.
 	consentOwnFails := consenter.Granary.Stock < NaturalConsentMinGranary || consenter.Worksite.Capital < NaturalConsentMinCapital || consenter.Body.Energy < NaturalConsentMinEnergy
-	if m == NaturalMechanismV8 {
+	if naturalHouseholdGate(m) {
 		// The household consent gate: the consenter only has to be fed.
 		consentOwnFails = consenter.Body.Energy < NaturalHouseholdMinEnergy
 	}
@@ -1674,7 +1745,7 @@ func NaturalBirthFor(m NaturalMechanism, patches, hour int, kinAllowed bool, new
 	// the consenter only has to be fed (energy ≥ 2), so it pays nothing.
 	// Every frozen mechanism keeps the symmetric two-parent payment exactly.
 	payers := []NaturalActorState{proposer, consenter}
-	if m == NaturalMechanismV8 {
+	if naturalHouseholdGate(m) {
 		payers = []NaturalActorState{proposer}
 	}
 	// Affordability is implied by the gate margins but the cost is checked
@@ -1692,7 +1763,7 @@ func NaturalBirthFor(m NaturalMechanism, patches, hour int, kinAllowed bool, new
 		a.Body.BasalSpent += NaturalParentEnergyCost
 		return a
 	}
-	if m == NaturalMechanismV8 {
+	if naturalHouseholdGate(m) {
 		proposer = pay(proposer)
 	} else {
 		proposer, consenter = pay(proposer), pay(consenter)
@@ -1790,12 +1861,24 @@ func NaturalCheckConservation(patches int, patchStates []NaturalPatchState, slot
 // and v6 behavior (len(founders) == 8P) is bit-identical, and G3's
 // initial-energy term is 11·f by construction.
 func NaturalCheckConservationFor(m NaturalMechanism, patches int, patchStates []NaturalPatchState, slotStates [][]NaturalSlotState, founders []NaturalActorState, newborns []NaturalNewbornState, allocatorLast sim.EntityID) (NaturalBalance, error) {
+	return NaturalCheckConservationYieldFor(m, 1, patches, patchStates, slotStates, founders, newborns, allocatorLast)
+}
+
+// NaturalCheckConservationYieldFor is the conservation gate under a declared
+// mechanism and granary yield. Every mechanism below v9 ignores the yield
+// (the frozen one-unit grant); mechanism v9 states its land identity in
+// budget slots, so the patch ledger validates against the declared yield
+// while the food ledgers (granted units, cultivated totals) stay term for
+// term the frozen G1/G2a identities.
+func NaturalCheckConservationYieldFor(m NaturalMechanism, yield int64, patches int, patchStates []NaturalPatchState, slotStates [][]NaturalSlotState, founders []NaturalActorState, newborns []NaturalNewbornState, allocatorLast sim.EntityID) (NaturalBalance, error) {
 	founderBlock, err := NaturalFounderCount(patches)
 	if err != nil || len(patchStates) != patches || len(slotStates) != patches || len(founders) < 1 || len(founders) > founderBlock {
+		fmt.Printf("CONS FAIL %d line %d\n", 1, 1876)
 		return NaturalBalance{}, ErrNaturalContract
 	}
 	genesisLast, err := NaturalHighestFixedEntityID(patches)
 	if err != nil {
+		fmt.Printf("CONS FAIL %d line %d\n", 2, 1880)
 		return NaturalBalance{}, ErrNaturalContract
 	}
 	var b NaturalBalance
@@ -1840,6 +1923,7 @@ func NaturalCheckConservationFor(m NaturalMechanism, patches int, patchStates []
 		expectedLast = lastNewborn
 	}
 	if allocatorLast != expectedLast {
+		fmt.Printf("CONS FAIL %d line %d\n", 7, 1924)
 		return NaturalBalance{}, ErrNaturalContract
 	}
 	// Pass 2: lineage — parents must exist among strictly earlier IDs and
@@ -1854,6 +1938,7 @@ func NaturalCheckConservationFor(m NaturalMechanism, patches int, patchStates []
 		}
 		for _, parent := range pair {
 			if _, ok := parents[parent]; !ok || parent >= id {
+				// fmt.Printf("CONS FAIL %d line %d\n", 8 , 1938)
 				return NaturalBalance{}, ErrNaturalContract
 			}
 		}
@@ -1870,7 +1955,7 @@ func NaturalCheckConservationFor(m NaturalMechanism, patches int, patchStates []
 		}
 		var patchSlots [NaturalSlotsPerPatch]NaturalSlotState
 		copy(patchSlots[:], slotStates[i])
-		if !naturalStock(p, patchSlots) {
+		if !naturalStockFor(m, yield, p, patchSlots) {
 			return NaturalBalance{}, ErrNaturalContract
 		}
 		b.Produced += p.Produced
@@ -1885,6 +1970,7 @@ func NaturalCheckConservationFor(m NaturalMechanism, patches int, patchStates []
 				tenured++
 				owner, ok := actors[slot.Owner]
 				if !ok || owner.Bag.Source != patchID {
+					// fmt.Printf("CONS FAIL %d line %d\n", 12 , 1969)
 					return NaturalBalance{}, ErrNaturalContract
 				}
 				tenuredByOwner[slot.Owner]++
@@ -1957,6 +2043,7 @@ func NaturalCheckConservationFor(m NaturalMechanism, patches int, patchStates []
 		b.CultivatedTotal+b.WagesEarned != b.StoredMeals+b.GranaryStock+b.Provisioned+b.Spoiled+b.BirthGranaryPaid+b.WagesPaid ||
 		b.WagesPaid != b.WagesEarned ||
 		b.InitialEnergy+NaturalNewbornEnergy*b.Births+b.Consumed+b.StoredMeals != b.Energy+b.BasalSpent+b.EnergyCapLost {
+		fmt.Printf("CONS FAIL %d line %d\n", 17, 2041)
 		return NaturalBalance{}, ErrNaturalContract
 	}
 	return b, nil

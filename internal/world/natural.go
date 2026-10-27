@@ -480,6 +480,13 @@ type NaturalHandoff struct {
 type NaturalOptions struct {
 	Patches int
 	R       int64 // patch regeneration budget per patch-hour, [0, NaturalSlotsPerPatch]
+	// Yield is the mechanism-v9 declared granary yield: the units rule 508
+	// grants per cultivated slot per patch-hour. The zero value is the v8
+	// default of 1 (the frozen flat grant); 1..NaturalSlotsPerPatch are the
+	// admitted explicit values, and every mechanism below v9 refuses a
+	// non-zero value. It is run identity end to end (journal config,
+	// checkpoint manifest, bidirectional mismatch rejection) exactly like R.
+	Yield   int64
 	Seed    uint64
 	Workers int
 	Births  bool
@@ -570,6 +577,17 @@ func (o NaturalOptions) mechanism() NaturalMechanism {
 	return o.Mechanism
 }
 
+// yieldResolved resolves the declared granary yield: the zero value is exactly
+// the frozen flat grant of one unit per cultivated slot per patch-hour, so
+// the runner always carries a concrete 1..NaturalYieldMax under v9 and the
+// frozen 1 under every earlier mechanism.
+func (o NaturalOptions) yieldResolved() int64 {
+	if o.Yield == 0 {
+		return 1
+	}
+	return o.Yield
+}
+
 // NaturalFoundersValid is the derived bound of the founding-band fixture
 
 // axis: f == 0 is the default spelling of the full frozen founder block 8P,
@@ -608,6 +626,31 @@ func (f *Natural) declaredFounders() int {
 	return f.founders
 }
 
+// declaredYield reports the runner's granary yield in its declared
+// (omitempty) form: zero under every mechanism below v9 (the field does not
+// exist there, so every recorded journal and manifest keeps its bytes), the
+// resolved value under v9.
+func (f *Natural) declaredYield() int64 {
+	if f.mechanism != NaturalMechanismV9 {
+		return 0
+	}
+	return f.yield
+}
+
+// validateYield is the shared declared-yield gate of the runner and restore
+// option sets: 0 is the default (one unit per cultivated slot, and the only
+// admitted spelling outside v9); under v9, 1..NaturalYieldMax are admitted
+// and every other value fails closed.
+func validateNaturalYield(m NaturalMechanism, yield int64) error {
+	if yield < 0 || yield > NaturalYieldMax {
+		return fmt.Errorf("%w: yield %d outside [0,%d]", ErrNaturalRunner, yield, NaturalYieldMax)
+	}
+	if m != NaturalMechanismV9 && yield != 0 {
+		return fmt.Errorf("%w: yield %d is not a declared parameter of mechanism %d (only mechanism v9 declares it; every earlier mechanism keeps the frozen flat grant)", ErrNaturalRunner, yield, uint16(m))
+	}
+	return nil
+}
+
 // naturalRefLegalUnderMechanism is the ref/mechanism consistency ladder of
 // the frozen v9 design (ticket 20; the explicit rungs recorded by the L2
 // lane, replacing ticket 17's v6 blanket): natural/5 and natural/6 are the
@@ -633,7 +676,7 @@ func naturalRefLegalUnderMechanism(m NaturalMechanism, ref strategy.NaturalRef) 
 		strategy.FrozenNaturalPolicy12().Ref:
 		return m == NaturalMechanismV6 || m == NaturalMechanismV7
 	case strategy.FrozenNaturalPolicy13().Ref:
-		return m == NaturalMechanismV8
+		return m == NaturalMechanismV8 || m == NaturalMechanismV9
 	case strategy.FrozenNaturalPolicy9().Ref:
 		return m == NaturalMechanismV7
 	}
@@ -658,6 +701,9 @@ func (o NaturalOptions) validate() error {
 	}
 	if o.R < 0 || o.R > NaturalSlotsPerPatch {
 		return fmt.Errorf("%w: R %d outside [0,%d]", ErrNaturalRunner, o.R, NaturalSlotsPerPatch)
+	}
+	if err := validateNaturalYield(o.mechanism(), o.Yield); err != nil {
+		return err
 	}
 	if o.Workers < 1 {
 		return fmt.Errorf("%w: workers %d", ErrNaturalRunner, o.Workers)
@@ -721,6 +767,7 @@ type Natural struct {
 	patches             int
 	seed                uint64
 	r                   int64
+	yield               int64 // mechanism v9: granary units granted per cultivated slot per patch-hour (1..NaturalYieldMax)
 	births              bool
 	roster              []sim.EntityID // founders 1..8P then newborns ascending (sorted invariant)
 	newborns            []sim.EntityID // registration (= birth) order == ascending IDs
@@ -776,7 +823,7 @@ func naturalField(field sim.FieldID, n int64) component.FieldSeed {
 // the wage ledgers — v7 (the nine-field granary). The v5 zero value returns
 // nothing: the frozen v5 granary seeds keep exactly their six fields.
 func granaryProvisionedSeed(mechanism NaturalMechanism, provisioned int64) []component.FieldSeed {
-	if mechanism != NaturalMechanismV6 && mechanism != NaturalMechanismV7 && mechanism != NaturalMechanismV8 {
+	if mechanism != NaturalMechanismV6 && mechanism != NaturalMechanismV7 && !naturalHasProvisionLedger(mechanism) {
 		return nil
 	}
 	return []component.FieldSeed{{Field: NaturalGranaryProvisionedField, Value: sim.IntegerValue(provisioned)}}
@@ -1018,10 +1065,10 @@ func NewNatural(o NaturalOptions) (*Natural, error) {
 	for i := range slots {
 		slots[i] = make([]NaturalSlotState, NaturalSlotsPerPatch)
 	}
-	if _, err = NaturalCheckConservationFor(o.mechanism(), o.Patches, make([]NaturalPatchState, o.Patches), slots, actors, nil, genesisLast); err != nil {
+	if _, err = NaturalCheckConservationYieldFor(o.mechanism(), o.yieldResolved(), o.Patches, make([]NaturalPatchState, o.Patches), slots, actors, nil, genesisLast); err != nil {
 		return nil, fmt.Errorf("%w: neutral h0 world breaks frozen conservation: %v", ErrNaturalRunner, err)
 	}
-	f := &Natural{registry: reg, policies: policies, ref: policy.Ref, mechanism: o.mechanism(), founders: naturalFoundersResolved(o.Patches, o.Founders), patches: o.Patches, seed: o.Seed, r: o.R, births: o.Births,
+	f := &Natural{registry: reg, policies: policies, ref: policy.Ref, mechanism: o.mechanism(), founders: naturalFoundersResolved(o.Patches, o.Founders), patches: o.Patches, seed: o.Seed, r: o.R, yield: o.yieldResolved(), births: o.Births,
 		cultivationDisabled: o.CultivationDisabled, cognition: o.Cognition,
 		claimDecisions: make(map[sim.EntityID]strategy.NaturalChoice),
 		bound:          make(map[sim.EntityID]*strategy.NaturalBound), allocator: allocator, ledger: ledger, thresholds: thresholds,
@@ -1211,7 +1258,7 @@ func naturalActorState(view scheduler.SnapshotView, mechanism NaturalMechanism, 
 	}
 	granaryFields := []sim.FieldID{NaturalGranaryStockField, NaturalGranaryCultivatedTotalField, NaturalGranaryStoredMealsField,
 		NaturalGranaryLastStoredMealHourField, NaturalGranarySpoilDebtField, NaturalGranarySpoiledField}
-	if mechanism == NaturalMechanismV6 || mechanism == NaturalMechanismV8 {
+	if naturalHasProvisionLedger(mechanism) {
 		granaryFields = append(granaryFields, NaturalGranaryProvisionedField)
 	}
 	if mechanism == NaturalMechanismV7 {
@@ -1223,7 +1270,7 @@ func naturalActorState(view scheduler.SnapshotView, mechanism NaturalMechanism, 
 	}
 	provisioned := int64(0) // the ledger does not exist under the v5 zero value
 	wagesPaid, wagesEarned := int64(0), int64(0)
-	if mechanism == NaturalMechanismV6 || mechanism == NaturalMechanismV8 {
+	if naturalHasProvisionLedger(mechanism) {
 		provisioned = granary[6]
 	}
 	if mechanism == NaturalMechanismV7 {
@@ -1575,7 +1622,7 @@ func (f *Natural) pulse(ready scheduler.ReadyFiber, view scheduler.SnapshotView)
 			return ok && naturalAlive(a)
 		})
 		for i := range w.patches {
-			next, stock, _, grants, err := NaturalRegenSplit(f.patches, h, w.patches[i], slotArray(w.slots[i]), aliveLookup)
+			next, stock, _, grants, err := NaturalRegenSplitFor(f.mechanism, f.yield, f.patches, h, w.patches[i], slotArray(w.slots[i]), aliveLookup)
 			if err != nil {
 				return out, err
 			}
@@ -2536,7 +2583,7 @@ func (f *Natural) birthRequestDecision(view scheduler.SnapshotView, hour int, at
 		// Mechanism v8 (ticket 49): the mate pool is the whole band — every
 		// living roster actor except the proposer, regardless of home patch.
 		// Every frozen mechanism keeps the same-patch pool exactly.
-		if f.mechanism == NaturalMechanismV8 {
+		if naturalHouseholdGate(f.mechanism) {
 			if !naturalAlive(mate) {
 				continue
 			}
@@ -3818,7 +3865,7 @@ func (f *Natural) checkpoint(h int, snap scheduler.Snapshot) (NaturalCheckpoint,
 	}
 	// Gates G1/G2a/G2b/G3 extended, every row revalidated inside, and the
 	// allocator cross-check (mismatch fails closed).
-	balance, err := NaturalCheckConservationFor(f.mechanism, f.patches, w.patches, w.slots, founders, newborns, f.allocator.Last())
+	balance, err := NaturalCheckConservationYieldFor(f.mechanism, f.yield, f.patches, w.patches, w.slots, founders, newborns, f.allocator.Last())
 	if err != nil {
 		return NaturalCheckpoint{}, err
 	}

@@ -83,7 +83,7 @@ type naturalClaimWake struct {
 // the world mechanism, never of the bound behaviour ref. Provision is present
 // only on a mechanism whose rule-515 provision contract is admitted (v6/v7).
 func naturalClaimActions(mechanism NaturalMechanism) []string {
-	if mechanism == NaturalMechanismV6 || mechanism == NaturalMechanismV7 || mechanism == NaturalMechanismV8 {
+	if mechanism == NaturalMechanismV6 || mechanism == NaturalMechanismV7 || naturalHasProvisionLedger(mechanism) {
 		return []string{"gather", "eat-stored", "provision", "wait"}
 	}
 	return []string{"gather", "eat-stored", "wait"}

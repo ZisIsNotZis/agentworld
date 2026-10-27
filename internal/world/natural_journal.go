@@ -93,8 +93,13 @@ type NaturalJournalConfig struct {
 	CultivationDisabled bool
 	Mechanism           NaturalMechanism `json:"Mechanism,omitempty"`
 	Founders            int              `json:"Founders,omitempty"`
-	Policy              strategy.NaturalRef
-	PolicyFingerprint   [32]byte
+	// Yield is the mechanism-v9 declared granary yield (units per
+	// cultivated slot per patch-hour), omitted at the zero default so every
+	// recorded journal keeps its bytes and a yield disagreement fails
+	// closed exactly like a budget disagreement.
+	Yield             int64 `json:"Yield,omitempty"`
+	Policy            strategy.NaturalRef
+	PolicyFingerprint [32]byte
 }
 
 // NaturalJournalCounts is the typed coverage manifest of one journal: the
@@ -156,6 +161,9 @@ func validNaturalJournalConfig(config NaturalJournalConfig) bool {
 	if config.CultivationDisabled && config.FounderTenure {
 		return false
 	}
+	if config.Yield < 0 || config.Yield > NaturalYieldMax || (config.Yield != 0 && config.Mechanism != NaturalMechanismV9) {
+		return false
+	}
 	if !NaturalFoundersValid(config.Patches, config.Founders) || (config.FounderTenure && config.Founders == 1) {
 		return false
 	}
@@ -198,7 +206,7 @@ func (f *Natural) journalConfig() NaturalJournalConfig {
 	}
 	return NaturalJournalConfig{Patches: f.patches, R: f.r, Seed: f.seed, Births: f.births, Boundary: f.births,
 		FounderTenure: f.naturalRunnerTenure(), CultivationDisabled: f.cultivationDisabled,
-		Mechanism: f.mechanism, Founders: band, Policy: f.ref, PolicyFingerprint: fingerprint}
+		Mechanism: f.mechanism, Founders: band, Yield: f.declaredYield(), Policy: f.ref, PolicyFingerprint: fingerprint}
 }
 
 // ExportJournal publishes committed evidence only, not a disk bundle. The
@@ -406,7 +414,7 @@ func sameNaturalJournalConfig(a, b NaturalJournalConfig) bool {
 	return a.Patches == b.Patches && a.R == b.R && a.Seed == b.Seed &&
 		a.Births == b.Births && a.Boundary == b.Boundary && a.FounderTenure == b.FounderTenure &&
 		a.CultivationDisabled == b.CultivationDisabled && a.Mechanism == b.Mechanism &&
-		a.Founders == b.Founders &&
+		a.Founders == b.Founders && a.Yield == b.Yield &&
 		a.Policy == b.Policy && a.PolicyFingerprint == b.PolicyFingerprint
 }
 
@@ -621,7 +629,7 @@ func replayNaturalJournalWithCognitive(batches []NaturalBatch, config NaturalJou
 		return nil, ErrNaturalJournal
 	}
 	reference, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: config.Patches, R: config.R,
-		Seed: config.Seed, Workers: 1, Births: config.Boundary, FounderTenure: config.FounderTenure,
+		Yield: config.Yield, Seed: config.Seed, Workers: 1, Births: config.Boundary, FounderTenure: config.FounderTenure,
 		CultivationDisabled: config.CultivationDisabled, PolicyRef: config.Policy, Mechanism: config.Mechanism,
 		Founders: config.Founders})
 	if err != nil {
