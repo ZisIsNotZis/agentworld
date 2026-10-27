@@ -53,6 +53,9 @@ type cellRun struct {
 	finalCallsSpent   uint64
 	finalPRNGPos      uint64
 	finalBundleError  string
+	// resumeFromHour is the hour a resumed cell continued live from (0 for a
+	// cell that ran uninterrupted). Set only by resumeCell (ticket 57).
+	resumeFromHour int
 
 	callAttempts int
 }
@@ -121,6 +124,15 @@ func executeCell(ctx context.Context, f *world.Natural, spec cellSpec, fp fixtur
 		}
 	}
 	cr.durationMS = time.Since(start).Milliseconds()
+	gatherCellEvidence(f, stack, cr)
+	return f, stack, cr, nil
+}
+
+// gatherCellEvidence publishes the hourly projection, the accepted history and
+// the ledger evidence of a runner that reached its horizon (or halted typed),
+// and reconciles the journal. It is shared by the ordinary cell path and by the
+// resume path (ticket 57).
+func gatherCellEvidence(f *world.Natural, stack *cognitionStack, cr *cellRun) {
 	cr.checks = f.Checkpoints()
 	if len(cr.checks) == 0 {
 		cr.runErr = fmt.Errorf("runner has no hourly projection")
@@ -149,7 +161,33 @@ func executeCell(ctx context.Context, f *world.Natural, spec cellSpec, fp fixtur
 			cr.runErr = fmt.Errorf("finalize: %w", err)
 		}
 	}
-	return f, stack, cr, nil
+}
+
+// stepTo advances the runner until a checkpoint at the given hour exists (the
+// runner is then at the start of the next hour). A typed ceiling hit halts the
+// cell exactly as in executeCell.
+func stepTo(ctx context.Context, f *world.Natural, cr *cellRun, hour int) {
+	for {
+		checks := f.Checkpoints()
+		if len(checks) > 0 && checks[len(checks)-1].Hour >= hour {
+			return
+		}
+		ok, err := f.Step(ctx)
+		if err != nil {
+			var hit *cognition.CognitiveCeilingHitError
+			if errors.As(err, &hit) {
+				h := hit.Hit
+				cr.ceilingHit = &h
+				cr.halted = true
+				return
+			}
+			cr.runErr = err
+			return
+		}
+		if !ok {
+			return
+		}
+	}
 }
 
 // finalizeStack flushes the ledger, reconciles the journal against the

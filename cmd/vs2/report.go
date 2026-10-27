@@ -255,8 +255,12 @@ type evaluation struct {
 	// CallConcurrency is the declared Role A call concurrency of the run
 	// (ticket 57): 1 is the serial default, and it applies only to the
 	// no-Priority reference wake policy.
-	CallConcurrency int    `json:"call_concurrency"`
-	ValueModel      string `json:"value_model_version"`
+	CallConcurrency int `json:"call_concurrency"`
+	// ResumeFromHour is the hour a resumed live cell continued live from (the
+	// earlier hours were replayed from the ledger with no model call); omitted
+	// for an uninterrupted run, so no reader has to infer the join.
+	ResumeFromHour int    `json:"resume_from_hour,omitempty"`
+	ValueModel     string `json:"value_model_version"`
 
 	Arms             []string          `json:"arms"`
 	QuotaSchedule    []int             `json:"quota_schedule"`

@@ -48,6 +48,7 @@ func main() {
 		callConcurrency = flag.Int("call-concurrency", 1, "Role A calls issued at the same time within one simulated hour (default 1 = serial); applies only to the no-Priority reference wake policy, and the responses are still applied serially in the fixed wake order so the recorded world is unchanged")
 		claimContract   = flag.String("claim-contract", "natural-claim/v1", "declared Role A request contract: natural-claim/v1 (legal action set only), natural-claim/v2 (also states the observation's admissible action subset) or natural-claim/v4 (display vocabulary, display action labels, a real system prompt and a recorded why); recorded in run identity")
 		recheckIn       = flag.String("recheck-in", "", "comma-separated recorded run root directories: recompute the VS2-EC-6 observation-boundary band over their ledgers (no cells, no spend) and write <out> / <out-txt>; the band is recomputed, never copied")
+		resumeDir       = flag.String("resume", "", "complete an interrupted live cell from its run directory: replay the recorded ledger hermetically to the last complete hour, continue live to the declared horizon, and write the ordinary report; single arm, single cell, one replicate, requires -live and the spend token")
 		relabelIn       = flag.String("relabel", "", "comma-separated evaluation JSON paths: re-emit their reports from the recorded data with the mode-corrected status/label/EC-9 text (no cells run, no spend); writes <name>-relabelled.{json,txt}")
 	)
 	flag.Parse()
@@ -178,6 +179,33 @@ func main() {
 		if *sensitivity {
 			cellList = append(cellList, sensitivityCells()...)
 		}
+	}
+
+	// The resume mode completes a live cell the execution environment killed
+	// mid-run: it replays the recorded prefix with zero model calls, continues
+	// live, and writes the ordinary evaluation. It never cleans the run root
+	// (that would destroy the ledger it resumes from).
+	if *resumeDir != "" {
+		if len(armList) != 1 || len(cellList) != 1 || declaredReplicates != 1 {
+			fail("resume: exactly one arm, one cell and one replicate")
+		}
+		spec := cellSpec{Arm: armList[0], F: int(cellList[0][0]), Seed: cellList[0][1], Replicate: 1}
+		cr, err := resumeCell(ctx, spec, declaredWorld(spec.F, spec.Seed), *resumeDir)
+		if err != nil {
+			fail("resume %s: %v", *resumeDir, err)
+		}
+		var replay map[string]string
+		if *runReplay {
+			replay = runReplaySubset(ctx, []*cellRun{cr}, filepath.Dir(*resumeDir), *parallel)
+		}
+		eval := buildEvaluation([]*cellRun{cr}, *recorded, nil, []string{spec.String()}, replay, *srcRoot, declaredHorizonHours)
+		eval.Revision = revisionString()
+		eval.ResumeFromHour = cr.resumeFromHour
+		if err := writeEvaluation(eval, *outJSON, *outText); err != nil {
+			fail("write evaluation: %v", err)
+		}
+		fmt.Print(renderText(eval))
+		return
 	}
 
 	declared := make([]string, 0, len(armList)*len(cellList)*declaredReplicates)
