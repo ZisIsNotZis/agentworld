@@ -808,28 +808,18 @@ func decodeNaturalManifest(data []byte) (naturalManifest, error) {
 		switch {
 		case i == naturalManifestMechanismWorldFormatSlot:
 			// The mechanism block's world-format slot fixes the declared
-			// mechanism: 5 is the frozen v5 zero value, 6 is mechanism v6,
-			// 7 is mechanism v7 (ticket 20), anything else fails closed.
-			if v != uint32(NaturalMechanismV5.worldVersion()) && v != uint32(NaturalMechanismV6.worldVersion()) &&
-				v != uint32(NaturalMechanismV7.worldVersion()) && v != uint32(NaturalMechanismV8.worldVersion()) &&
-				v != uint32(NaturalMechanismV9.worldVersion()) && v != uint32(NaturalMechanismV10.worldVersion()) {
+			// mechanism: the zero value is the frozen v5 world, and every
+			// other admitted mechanism is exactly its own world version.
+			// The admitted set has one home (NaturalMechanismValid), so a
+			// new mechanism version needs no second list here; anything
+			// outside it fails closed.
+			switch {
+			case v == uint32(NaturalMechanismV5.worldVersion()):
+				m.mechanism = NaturalMechanismV5
+			case NaturalMechanismValid(NaturalMechanism(v)) && NaturalMechanism(v).worldVersion() == v:
+				m.mechanism = NaturalMechanism(v)
+			default:
 				return m, ErrNaturalCheckpoint
-			}
-			m.mechanism = NaturalMechanismV5
-			if v == uint32(NaturalMechanismV6.worldVersion()) {
-				m.mechanism = NaturalMechanismV6
-			}
-			if v == uint32(NaturalMechanismV7.worldVersion()) {
-				m.mechanism = NaturalMechanismV7
-			}
-			if v == uint32(NaturalMechanismV8.worldVersion()) {
-				m.mechanism = NaturalMechanismV8
-			}
-			if v == uint32(NaturalMechanismV9.worldVersion()) {
-				m.mechanism = NaturalMechanismV9
-			}
-			if v == uint32(NaturalMechanismV10.worldVersion()) {
-				m.mechanism = NaturalMechanismV10
 			}
 			expected = v
 		case mechanismSlots[i]:

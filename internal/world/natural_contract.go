@@ -421,14 +421,22 @@ const (
 	// eight, so a band smaller than the land is spread over every patch.
 	// Everything else, the declared yield included, is v9 verbatim.
 	NaturalMechanismV10 NaturalMechanism = 10
+	// NaturalMechanismV11 (world axis version 11, ticket 51) is the v10 rule
+	// table plus exactly one arithmetic change: the Yield axis scales the
+	// wild fill as well as the rule-508 cultivated grant, so each vacant
+	// wild slot refills Yield granary units per patch-hour instead of one.
+	// Land fertility is a property of the land, not of whether someone has
+	// built on it. Everything else, the round-robin founding band included,
+	// is v10 verbatim, and Yield = 1 is v10 exactly.
+	NaturalMechanismV11 NaturalMechanism = 11
 )
 
 // NaturalMechanismValid reports the admitted axis values: the zero value
-// (≡ v5), 6, 7, 8, 9 and 10. Literal 5 is not a second spelling of v5 — the
-// zero value is the one v5 spelling — and everything else fails closed.
+// (≡ v5), 6, 7, 8, 9, 10 and 11. Literal 5 is not a second spelling of v5 —
+// the zero value is the one v5 spelling — and everything else fails closed.
 func NaturalMechanismValid(m NaturalMechanism) bool {
 	return m == NaturalMechanismV5 || m == NaturalMechanismV6 || m == NaturalMechanismV7 ||
-		m == NaturalMechanismV8 || m == NaturalMechanismV9 || m == NaturalMechanismV10
+		m == NaturalMechanismV8 || m == NaturalMechanismV9 || m == NaturalMechanismV10 || m == NaturalMechanismV11
 }
 
 // worldVersion is the world axis version number of the mechanism: 5 for the
@@ -447,6 +455,8 @@ func (m NaturalMechanism) worldVersion() uint32 {
 		return 9
 	case NaturalMechanismV10:
 		return 10
+	case NaturalMechanismV11:
+		return 11
 	}
 	return 5
 }
@@ -664,15 +674,56 @@ func naturalHasProvisionLedger(m NaturalMechanism) bool {
 }
 
 // naturalHasYieldAxis reports the mechanisms that declare the granary Yield
-// parameter: v9 and every later mechanism (v10 is v9 plus founder placement).
+// parameter: v9 and every later mechanism (v10 is v9 plus founder placement,
+// v11 is v10 plus the wild fill scaled by the same axis).
 func naturalHasYieldAxis(m NaturalMechanism) bool {
-	return m == NaturalMechanismV9 || m == NaturalMechanismV10
+	return m == NaturalMechanismV9 || m == NaturalMechanismV10 || m == NaturalMechanismV11
 }
 
 // naturalRoundRobinFounders reports the mechanisms whose founding band is
-// seated round-robin across the patches: v10 only.
+// seated round-robin across the patches: v10 and its v11 extension (which
+// changes only the wild fill arithmetic).
 func naturalRoundRobinFounders(m NaturalMechanism) bool {
-	return m == NaturalMechanismV10
+	return m == NaturalMechanismV10 || m == NaturalMechanismV11
+}
+
+// naturalWildFillYield reports the mechanisms whose wild fill carries the
+// declared Yield: v11 only. A vacant wild slot then refills Yield granary
+// units per patch-hour instead of one, so a wild slot holds 0..Yield units
+// and one gather still moves exactly one unit.
+func naturalWildFillYield(m NaturalMechanism) bool {
+	return m == NaturalMechanismV11
+}
+
+// naturalSlotStockMaxFor is the declared standing-stock envelope of one
+// slot: the frozen one unit, or the declared yield under v11, where a wild
+// slot refills Yield units per patch-hour. Like every ledger bound it is a
+// declared envelope, never a behaviour cap.
+func naturalSlotStockMaxFor(m NaturalMechanism) int64 {
+	if naturalWildFillYield(m) {
+		return NaturalYieldMax
+	}
+	return 1
+}
+
+// naturalWildFillUnits is the declared number of granary units ONE wild slot
+// refills per patch-hour: exactly one below v11, the declared yield under
+// v11. Every other mechanism reads it as the frozen one unit.
+func naturalWildFillUnits(m NaturalMechanism, yield int64) int64 {
+	if naturalWildFillYield(m) && yield >= 1 {
+		return yield
+	}
+	return 1
+}
+
+// naturalSlotStocked reports whether a slot holds gatherable standing stock:
+// exactly the frozen one unit below v11, at least one unit under v11, where a
+// wild slot can stand Yield units deep and one gather still moves one unit.
+func naturalSlotStocked(m NaturalMechanism, s NaturalSlotState) bool {
+	if naturalWildFillYield(m) {
+		return s.Stock >= 1
+	}
+	return s.Stock == 1
 }
 
 // naturalGranaryBoundsFor is the declared granary ledger envelope of a
@@ -744,7 +795,7 @@ func NaturalSlotDescriptorFor(m NaturalMechanism) component.ComponentDescriptor 
 		rules = append(rules, naturalRuleFor(m, NaturalLabourSettlementRule, "labour-settlement"))
 	}
 	return naturalDescriptorFor(m, NaturalSlotTypeID, "natural-slot-"+naturalNameSuffix(m), []component.FieldDescriptor{
-		naturalInteger(1, "stock", "food", 0, 1),
+		naturalInteger(1, "stock", "food", 0, float64(naturalSlotStockMaxFor(m))),
 		naturalRef(2, "patch"),
 		naturalInteger(3, "gathered", "food", 0, NaturalHorizonHours),
 		naturalInteger(4, "tenure-mode", "state", 0, 1),

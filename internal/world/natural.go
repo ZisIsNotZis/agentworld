@@ -1443,6 +1443,22 @@ func worldStateFor(view scheduler.SnapshotView, mechanism NaturalMechanism, patc
 	return w, nil
 }
 
+// naturalSlotStockHint reduces a slot's standing stock to the public stock
+// hint of the frozen claim view: 0 (not stocked) or 1 (stocked). A wild slot
+// stands exactly one unit deep in every mechanism below v11, so the hint is
+// the recorded stock itself there; under v11 a wild slot refills the declared
+// yield and stands up to Yield units, while the actor-visible hint stays the
+// declared "this slot holds food" flag — the world still validates every
+// gather against the true standing stock. An absent or non-integer value
+// passes through untouched (the policy validates the observation's shape).
+func naturalSlotStockHint(value sim.Value) sim.Value {
+	n, err := value.Integer()
+	if err != nil || n <= 1 {
+		return value
+	}
+	return sim.IntegerValue(1)
+}
+
 // observe builds the actor-visible v5 claim view: the v4 own-set plus the
 // home-patch slot stocks and the denial guard. Tenure (mode/owner), debts,
 // spoilage counters, allocator state, R, and seeds have no field here at all
@@ -1489,7 +1505,7 @@ func (f *Natural) observe(view scheduler.SnapshotView, actor sim.EntityID, hour 
 		if err != nil {
 			return strategy.NaturalObservation{}, err
 		}
-		obs.HomeSlots = append(obs.HomeSlots, strategy.NaturalSlotView{ID: slot, Stock: stock[0]})
+		obs.HomeSlots = append(obs.HomeSlots, strategy.NaturalSlotView{ID: slot, Stock: naturalSlotStockHint(stock[0])})
 	}
 	return obs, nil
 }
@@ -3352,7 +3368,7 @@ func (f *Natural) allocate(ctx context.Context, at sim.SimTime) error {
 	for i := range w.slots {
 		patch, _ := NaturalPatchID(f.patches, i)
 		for j := range w.slots[i] {
-			if w.slots[i][j].Stock == 1 {
+			if w.slots[i][j].Stock > 0 {
 				slot, _ := NaturalSlotID(f.patches, i, j)
 				stocked = append(stocked, FoodFlowStockedSlot{ID: slot, Patch: patch})
 			}

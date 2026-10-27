@@ -14,6 +14,10 @@ import (
 //
 //	G1  per patch-hour: R = cultivatedGranted + wildFilled + regenUnrealized
 //	    lifetime:       R·pulses = gathered + wildStock + granted + unrealized
+//	    (stated in budget slots: under the yield mechanisms v9 and v11 the
+//	    granted and — under v11 — the produced ledgers count FOOD UNITS, so
+//	    each is divided by the one declared yield; at yield 1 the identity
+//	    is the frozen one verbatim)
 //	    and per patch:  gathered = consumed + held + invested (mechanism
 //	                    v6: gathered + provisioned = consumed + held +
 //	                    invested; provisioned is rule 515's granary-to-bag
@@ -178,9 +182,10 @@ type NaturalWearResult struct {
 }
 
 // NaturalGrantEntitlement is one living owner's regen-split share of the
-// patch budget: exactly one granary unit per entitled cultivated slot,
-// granted flat by rule 508 (corrigendum: no divisor loop, no locus mints
-// units beyond the budget R).
+// patch budget: the declared per-slot fill (one granary unit below v9, the
+// declared yield under v9 and v11) per entitled cultivated slot, granted
+// flat by rule 508 (corrigendum: no divisor loop, no locus mints units
+// beyond the budget R).
 type NaturalGrantEntitlement struct {
 	Owner sim.EntityID
 	Units int64
@@ -251,23 +256,45 @@ func validNaturalPatch(p NaturalPatchState) bool {
 // the rule-508 grant in FOOD UNITS (Yield units per entitled cultivated
 // slot), so the granted field carries the yield-widened envelope and the
 // per-patch-hour land identity is stated in budget slots: the granted units
-// divided by the declared yield are the slots the R budget consumed.
+// divided by the declared yield are the slots the R budget consumed. Under
+// mechanism v11 the wild fill carries the same declared yield, so produced
+// counts food units too: both ledgers are stated in budget slots by dividing
+// them by the one declared yield, and the same identity holds.
 func validNaturalPatchFor(m NaturalMechanism, yield int64, p NaturalPatchState) bool {
 	if !naturalHasYieldAxis(m) {
 		return validNaturalPatch(p)
 	}
+	producedMax := NaturalGranaryStockMax
+	if naturalWildFillYield(m) {
+		producedMax = naturalYieldGranaryMax
+	}
 	if yield < 1 || yield > NaturalYieldMax || p.Yield < 0 || p.Yield > NaturalSlotsPerPatch ||
 		p.Pulses < 0 || p.Pulses > NaturalHorizonHours ||
-		p.Produced < 0 || p.Produced > NaturalGranaryStockMax ||
+		p.Produced < 0 || p.Produced > producedMax ||
 		p.Granted < 0 || p.Granted > naturalYieldGranaryMax || p.Granted%yield != 0 ||
 		p.Unrealized < 0 || p.Unrealized > NaturalGranaryStockMax {
 		return false
 	}
-	return p.Produced+p.Granted/yield+p.Unrealized == p.Yield*p.Pulses
+	producedSlots := p.Produced
+	if naturalWildFillYield(m) {
+		if p.Produced%yield != 0 {
+			return false
+		}
+		producedSlots = p.Produced / yield
+	}
+	return producedSlots+p.Granted/yield+p.Unrealized == p.Yield*p.Pulses
 }
 
 func validNaturalSlot(s NaturalSlotState) bool {
-	if s.Stock < 0 || s.Stock > 1 || s.Gathered < 0 || s.Gathered > NaturalHorizonHours {
+	return validNaturalSlotFor(NaturalMechanismV5, s)
+}
+
+// validNaturalSlotFor is the mechanism-parameterized slot validator: the
+// frozen one-unit standing-stock envelope below v11, the declared yield
+// under v11 (a wild slot refills Yield units per patch-hour). Everything
+// else — the tenure shape and the gather envelope — is frozen verbatim.
+func validNaturalSlotFor(m NaturalMechanism, s NaturalSlotState) bool {
+	if s.Stock < 0 || s.Stock > naturalSlotStockMaxFor(m) || s.Gathered < 0 || s.Gathered > NaturalHorizonHours {
 		return false
 	}
 	if s.Mode != NaturalTenureWild && s.Mode != NaturalTenureCultivated {
@@ -328,7 +355,7 @@ func validNaturalGranaryFor(m NaturalMechanism, g NaturalGranaryState) bool {
 		return false
 	}
 	switch m {
-	case NaturalMechanismV6, NaturalMechanismV8, NaturalMechanismV9, NaturalMechanismV10:
+	case NaturalMechanismV6, NaturalMechanismV8, NaturalMechanismV9, NaturalMechanismV10, NaturalMechanismV11:
 		return g.Provisioned >= 0 && g.Provisioned <= NaturalProvisionedMax && g.WagesPaid == 0 && g.WagesEarned == 0
 	case NaturalMechanismV7:
 		return g.Provisioned >= 0 && g.Provisioned <= NaturalProvisionedMax &&
@@ -531,9 +558,12 @@ func naturalStockFor(m NaturalMechanism, yield int64, p NaturalPatchState, slots
 	if !validNaturalPatchFor(m, yield, p) {
 		return false
 	}
+	// One slot supplies at most one unit per patch-hour below v11 and at
+	// most the declared yield under v11, where a wild slot refills it.
+	perSlotHour := p.Pulses * naturalWildFillUnits(m, yield)
 	var total int64
 	for _, slot := range slots {
-		if !validNaturalSlot(slot) || slot.Gathered+slot.Stock > p.Pulses {
+		if !validNaturalSlotFor(m, slot) || slot.Gathered+slot.Stock > perSlotHour {
 			return false
 		}
 		total += slot.Gathered + slot.Stock
@@ -558,12 +588,16 @@ func NaturalRegenSplit(patches, hour int, patch NaturalPatchState, slots [Natura
 
 // NaturalRegenSplitFor is the mechanism-parameterized regen split. Every
 // frozen mechanism is NaturalRegenSplit byte-for-byte (one unit per
-// entitled cultivated slot). Mechanism v9 multiplies exactly that rule-508
-// per-slot grant by the declared Yield: each entitled slot still consumes
-// ONE unit of the R budget (the land identity stays stated in budget
-// slots), but the entitlement hands the owner Yield granary units. The
-// granted ledger field and the returned Cultivated total count those food
-// units, so the grant seam (cultivated total = granted) is unchanged.
+// entitled cultivated slot, one unit per vacant wild slot). Mechanism v9
+// multiplies exactly that rule-508 per-slot grant by the declared Yield:
+// each entitled slot still consumes ONE unit of the R budget (the land
+// identity stays stated in budget slots), but the entitlement hands the
+// owner Yield granary units. The granted ledger field and the returned
+// Cultivated total count those food units, so the grant seam (cultivated
+// total = granted) is unchanged. Mechanism v11 applies the same declared
+// yield to the wild fill: a vacant wild slot still consumes one R budget
+// unit but stands Yield granary units, and the produced ledger counts those
+// food units too.
 func NaturalRegenSplitFor(m NaturalMechanism, yield int64, patches, hour int, patch NaturalPatchState, slots [NaturalSlotsPerPatch]NaturalSlotState, ownerAlive NaturalAliveLookup) (NaturalPatchState, [NaturalSlotsPerPatch]NaturalSlotState, NaturalRegenSplitResult, []NaturalGrantEntitlement, error) {
 	perSlot := int64(1)
 	if naturalHasYieldAxis(m) {
@@ -572,13 +606,14 @@ func NaturalRegenSplitFor(m NaturalMechanism, yield int64, patches, hour int, pa
 		}
 		perSlot = yield
 	}
+	wildPerSlot := naturalWildFillUnits(m, yield)
 	if _, err := NaturalHourTime(hour); err != nil || int64(hour) != patch.Pulses || !naturalStockFor(m, yield, patch, slots) || ownerAlive == nil {
 		return NaturalPatchState{}, slots, NaturalRegenSplitResult{}, nil, ErrNaturalContract
 	}
 	out := slots
 	budget := patch.Yield
 	var result NaturalRegenSplitResult
-	grantedSlots := int64(0)
+	grantedSlots, wildSlots := int64(0), int64(0)
 	grants := make([]NaturalGrantEntitlement, 0, NaturalSlotsPerPatch)
 	grantIndex := make(map[sim.EntityID]int, NaturalSlotsPerPatch)
 	// Pass 1: entitled cultivated slots of living owners, ascending.
@@ -595,12 +630,14 @@ func NaturalRegenSplitFor(m NaturalMechanism, yield int64, patches, hour int, pa
 			}
 		}
 	}
-	// Pass 2: vacant wild slots fill ascending, exactly as v1-v4.
+	// Pass 2: vacant wild slots fill ascending, exactly as v1-v4, at the
+	// declared per-slot fill.
 	for i := range out {
 		if out[i].Mode == NaturalTenureWild && out[i].Stock == 0 && budget > 0 {
-			out[i].Stock++
+			out[i].Stock += wildPerSlot
 			budget--
-			result.Wild++
+			wildSlots++
+			result.Wild += wildPerSlot
 		}
 	}
 	result.Unrealized = budget
@@ -609,10 +646,9 @@ func NaturalRegenSplitFor(m NaturalMechanism, yield int64, patches, hour int, pa
 	patch.Granted += result.Cultivated
 	patch.Unrealized += result.Unrealized
 	// Per-patch-hour land identity, stated in budget slots: R = granted
-	// slots + wildFilled + unrealized, exact for every budget and occupancy
-	// (granted slots = food units / per-slot grant). No locus mints units
-	// beyond the declared per-slot grant.
-	if grantedSlots+result.Wild+result.Unrealized != patch.Yield {
+	// slots + wild slots filled + unrealized, exact for every budget and
+	// occupancy. No locus mints units beyond the declared per-slot fill.
+	if grantedSlots+wildSlots+result.Unrealized != patch.Yield {
 		return NaturalPatchState{}, slots, NaturalRegenSplitResult{}, nil, ErrNaturalContract
 	}
 	if !naturalStockFor(m, yield, patch, out) {
@@ -822,7 +858,10 @@ func NaturalBasalFor(m NaturalMechanism, patches, hour int, actorID sim.EntityID
 
 // NaturalGather transfers one identified home-patch slot unit to the actor's
 // bag, v1-v4-identical among the living: dead actors take no actions. The
-// bag's home-patch source is already present and unchanged.
+// bag's home-patch source is already present and unchanged. A stocked slot
+// is exactly one unit deep below v11 and at least one unit deep under v11
+// (where the wild fill stands the declared yield); the gather itself always
+// moves exactly one unit.
 func NaturalGather(patches int, patchID, slotID, actorID sim.EntityID, hour int, slot NaturalSlotState, a NaturalActorState) (NaturalSlotState, NaturalActorState, error) {
 	return NaturalGatherFor(NaturalMechanismV5, patches, patchID, slotID, actorID, hour, slot, a)
 }
@@ -831,7 +870,7 @@ func NaturalGather(patches int, patchID, slotID, actorID sim.EntityID, hour int,
 // reproduces NaturalGather exactly.
 func NaturalGatherFor(m NaturalMechanism, patches int, patchID, slotID, actorID sim.EntityID, hour int, slot NaturalSlotState, a NaturalActorState) (NaturalSlotState, NaturalActorState, error) {
 	home := a.Bag.Source
-	if home != patchID || hour < 0 || hour >= NaturalHorizonHours || !validNaturalSlot(slot) || slot.Stock != 1 ||
+	if home != patchID || hour < 0 || hour >= NaturalHorizonHours || !validNaturalSlotFor(m, slot) || !naturalSlotStocked(m, slot) ||
 		slot.Gathered > int64(hour) || !validNaturalActorFor(m, patches, actorID, a) || !naturalAlive(a) || a.Bag.Units != 0 || a.Body.LastGatherHour >= int64(hour) {
 		return NaturalSlotState{}, NaturalActorState{}, ErrNaturalContract
 	}
@@ -844,7 +883,7 @@ func NaturalGatherFor(m NaturalMechanism, patches int, patchID, slotID, actorID 
 	if err != nil || slotID < first || slotID > last {
 		return NaturalSlotState{}, NaturalActorState{}, ErrNaturalContract
 	}
-	slot.Stock, slot.Gathered = 0, slot.Gathered+1
+	slot.Stock, slot.Gathered = slot.Stock-1, slot.Gathered+1
 	a.Bag.Units = 1
 	a.Body.LastGatherHour = int64(hour)
 	if !validNaturalActorFor(m, patches, actorID, a) {
@@ -917,7 +956,7 @@ func NaturalBuildFor(m NaturalMechanism, patches, hour int, actorID sim.EntityID
 		return NaturalActorState{}, homeSlots, NaturalBuildResult{}, ErrNaturalContract
 	}
 	for _, slot := range homeSlots {
-		if !validNaturalSlot(slot) {
+		if !validNaturalSlotFor(m, slot) {
 			return NaturalActorState{}, homeSlots, NaturalBuildResult{}, ErrNaturalContract
 		}
 	}
@@ -1132,7 +1171,7 @@ func NaturalLabourSettle(m NaturalMechanism, patches, hour int, workerID, employ
 		return NaturalActorState{}, NaturalActorState{}, homeSlots, NaturalLabourSettleResult{}, ErrNaturalContract
 	}
 	for _, slot := range homeSlots {
-		if !validNaturalSlot(slot) {
+		if !validNaturalSlotFor(m, slot) {
 			return NaturalActorState{}, NaturalActorState{}, homeSlots, NaturalLabourSettleResult{}, ErrNaturalContract
 		}
 	}
