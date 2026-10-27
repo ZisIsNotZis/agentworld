@@ -69,6 +69,10 @@ type RoleASeamConfig struct {
 	// combined by majority (`-votes k`, default 1). k <= 1 is one sample and the
 	// declared single-call seam.
 	Votes int
+	// Model is the application model id the seam addresses. Empty is the declared
+	// DefaultModelID; a run on another model records it in every request. It is
+	// run identity, never an auto-detected value.
+	Model string
 }
 
 // RoleASeam is the concrete recorded Role A decider. It implements the
@@ -82,6 +86,7 @@ type RoleASeam struct {
 	wakePolicy        WakePolicy
 	contract          ClaimContract
 	votes             int
+	model             string
 }
 
 // NewRoleASeam validates and builds the recorded seam.
@@ -99,6 +104,10 @@ func NewRoleASeam(cfg RoleASeamConfig) (*RoleASeam, error) {
 	if votes < 1 {
 		votes = 1
 	}
+	model := cfg.Model
+	if model == "" {
+		model = DefaultModelID
+	}
 	return &RoleASeam{
 		recorder:          cfg.Recorder,
 		ledger:            cfg.Ledger,
@@ -107,6 +116,7 @@ func NewRoleASeam(cfg RoleASeamConfig) (*RoleASeam, error) {
 		wakePolicy:        cfg.WakePolicy,
 		contract:          cfg.Contract,
 		votes:             votes,
+		model:             model,
 	}, nil
 }
 
@@ -141,7 +151,7 @@ func (s *RoleASeam) DecideActorSeamVotes(ctx context.Context, req ActorSeamReque
 	if s == nil || s.recorder == nil || s.ledger == nil {
 		return VotedDecision{}, ErrRoleASeamNoLedger
 	}
-	canonical, err := EncodeActorSeamRequestFor(req, s.contract)
+	canonical, err := encodeActorSeamRequestFor(req, s.contract, s.model)
 	if err != nil {
 		return VotedDecision{}, err
 	}
@@ -162,7 +172,7 @@ func (s *RoleASeam) DecideActorSeamVotes(ctx context.Context, req ActorSeamReque
 	decisions := make([]ActorSeamDecision, 0, votes)
 	for i := 0; i < votes; i++ {
 		call, err := s.recorder.Call(ctx, CallRequest{
-			Role: RoleActorDecision, Hour: req.Hour, Model: DefaultModelID,
+			Role: RoleActorDecision, Hour: req.Hour, Model: s.model,
 			Endpoint: s.endpoint, CredentialPresent: s.credentialPresent,
 			Sampling: FrozenSampling(), Request: canonical, SystemPrompt: systemPrompt,
 		})

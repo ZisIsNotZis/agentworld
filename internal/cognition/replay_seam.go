@@ -20,6 +20,10 @@ type ReplaySeam struct {
 	replay   *Replay
 	wake     protocol.WakePolicy
 	contract ClaimContract
+	// model is the application model the recorded run addressed; the canonical
+	// request bytes carry it, so a replay of a non-default-model run must re-encode
+	// with the same model or every resolve is a ledger miss.
+	model string
 	// served is atomic because a run may resolve several independent calls at
 	// once within one simulated hour (the declared claim concurrency, ticket 57).
 	served atomic.Int64
@@ -37,6 +41,14 @@ func NewReplaySeam(replay *Replay, wake protocol.WakePolicy) (*ReplaySeam, error
 // contract the recorded run used or every resolve is a ledger miss (ticket 57:
 // the v4 reference cell could not reconcile its journal otherwise).
 func NewReplaySeamForContract(replay *Replay, wake protocol.WakePolicy, contract ClaimContract) (*ReplaySeam, error) {
+	return NewReplaySeamForContractModel(replay, wake, contract, DefaultModelID)
+}
+
+// NewReplaySeamForContractModel is NewReplaySeamForContract under an explicit
+// application model. The model is part of the canonical request bytes, so a
+// replay of a run on another model must state it; an empty model is the declared
+// default.
+func NewReplaySeamForContractModel(replay *Replay, wake protocol.WakePolicy, contract ClaimContract, model string) (*ReplaySeam, error) {
 	if replay == nil {
 		return nil, fmt.Errorf("%w: replay source is required", ErrRoleASeam)
 	}
@@ -46,7 +58,10 @@ func NewReplaySeamForContract(replay *Replay, wake protocol.WakePolicy, contract
 	if _, err := ParseClaimContract(string(contract)); err != nil {
 		return nil, err
 	}
-	return &ReplaySeam{replay: replay, wake: wake, contract: contract}, nil
+	if model == "" {
+		model = DefaultModelID
+	}
+	return &ReplaySeam{replay: replay, wake: wake, contract: contract, model: model}, nil
 }
 
 // WakePolicy is the declared escalation policy the recorded run used.
@@ -56,7 +71,7 @@ func (s *ReplaySeam) WakePolicy() protocol.WakePolicy { return s.wake }
 // recorded used attempt's validated decision. A miss is the hard
 // ErrLedgerMiss, never a model call.
 func (s *ReplaySeam) DecideActorSeam(_ context.Context, req protocol.ActorSeamRequest) (protocol.ActorSeamDecision, error) {
-	canonical, err := EncodeActorSeamRequestFor(req, s.contract)
+	canonical, err := encodeActorSeamRequestFor(req, s.contract, s.model)
 	if err != nil {
 		return protocol.ActorSeamDecision{}, err
 	}

@@ -268,7 +268,7 @@ func replaySeamFor(stack *cognitionStack, fp fixture) (world.ClaimSeam, func() p
 	if err != nil {
 		return nil, nil, err
 	}
-	seam, err := cognition.NewReplaySeamForContract(replay, stack.wake, declaredClaimContract)
+	seam, err := cognition.NewReplaySeamForContractModel(replay, stack.wake, declaredClaimContract, declaredModelID())
 	if err != nil {
 		return nil, nil, err
 	}

@@ -160,7 +160,7 @@ type strategyWire struct {
 // the declared seam or with an undecodable observation is a typed error, never
 // a silently narrowed request.
 func EncodeActorSeamRequest(req ActorSeamRequest) ([]byte, error) {
-	return EncodeActorSeamRequestFor(req, ClaimContractV1)
+	return encodeActorSeamRequestFor(req, ClaimContractV1, DefaultModelID)
 }
 
 // ClaimContract names one declared Role A request contract.
@@ -212,8 +212,19 @@ func (c ClaimContract) ResponseSchemaVersion() int {
 // hash. A request outside the declared seam or with an undecodable observation is
 // a typed error, never a silently narrowed request.
 func EncodeActorSeamRequestFor(req ActorSeamRequest, contract ClaimContract) ([]byte, error) {
+	return encodeActorSeamRequestFor(req, contract, DefaultModelID)
+}
+
+// encodeActorSeamRequestFor is the declared-contract encoder with an explicit
+// application model. The model is written into the canonical request's "model"
+// field, so a run on a non-default model records that model in every request it
+// sends (and in the request hash). An empty model is the declared default.
+func encodeActorSeamRequestFor(req ActorSeamRequest, contract ClaimContract, model string) ([]byte, error) {
+	if model == "" {
+		model = DefaultModelID
+	}
 	if contract == ClaimContractV4 {
-		return encodeActorSeamRequestV4(req)
+		return encodeActorSeamRequestV4(req, model)
 	}
 	if req.Seam != SeamNaturalClaim {
 		return nil, fmt.Errorf("%w: unknown seam %q", ErrInvalidModelRequest, req.Seam)
@@ -240,7 +251,7 @@ func EncodeActorSeamRequestFor(req ActorSeamRequest, contract ClaimContract) ([]
 		Role:           roleActorDecision,
 		Seam:           req.Seam,
 		PromptTemplate: promptTemplate,
-		Model:          DefaultModelID,
+		Model:          model,
 		Run: runWire{
 			Fixture: fixtureWire{
 				Patches: req.Identity.Fixture.Patches, R: req.Identity.Fixture.R,
@@ -424,7 +435,10 @@ type observationWireV4 struct {
 // contract. It reads the same observation as the v1 encoder and writes it under
 // the v4 names; an action ID with no declared display label is a typed error
 // rather than a request the model could not answer.
-func encodeActorSeamRequestV4(req ActorSeamRequest) ([]byte, error) {
+func encodeActorSeamRequestV4(req ActorSeamRequest, model string) ([]byte, error) {
+	if model == "" {
+		model = DefaultModelID
+	}
 	if req.Seam != SeamNaturalClaim {
 		return nil, fmt.Errorf("%w: unknown seam %q", ErrInvalidModelRequest, req.Seam)
 	}
@@ -448,7 +462,7 @@ func encodeActorSeamRequestV4(req ActorSeamRequest) ([]byte, error) {
 		Role:           roleActorDecision,
 		Seam:           req.Seam,
 		PromptTemplate: NaturalClaimPromptTemplateVocabulary,
-		Model:          DefaultModelID,
+		Model:          model,
 		Run: runWireV4{
 			Fixture: fixtureWire{
 				Patches: req.Identity.Fixture.Patches, R: req.Identity.Fixture.R,

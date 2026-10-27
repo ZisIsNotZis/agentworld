@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"agentworld/internal/cognition"
@@ -390,9 +391,27 @@ func reservedExploration(ceiling uint64, fraction int64) int {
 	return int((int64(ceiling)*fraction + cognition.ExplorationScale - 1) / cognition.ExplorationScale)
 }
 
+// declaredApplicationModel is the application model id the run addresses. It is
+// the declared DefaultModelID unless the operator set -model, and it is recorded
+// in the live gateway config, the evaluation, the revision string, the model
+// identity digests, and every recorded call request. It is never inferred from
+// the gateway.
+var declaredApplicationModel = cognition.DefaultModelID
+
+// parseApplicationModel validates the declared application model id of a run.
+// An empty id is refused: a run must name the model it addresses instead of
+// silently inheriting one.
+func parseApplicationModel(id string) (string, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return "", fmt.Errorf("empty model id")
+	}
+	return id, nil
+}
+
 // modelIdentityDigestBytes derives the recorded model identity from the
 // declared application model and the declared gateway wire, so a run's revision
 // binding names the model+wire+sampling identity it used.
 func modelIdentityDigestBytes() [32]byte {
-	return cognition.ModelIdentityDigest(cognition.DefaultModelID, declaredGatewayWire, cognition.FrozenSampling())
+	return cognition.ModelIdentityDigest(declaredApplicationModel, declaredGatewayWire, cognition.FrozenSampling())
 }

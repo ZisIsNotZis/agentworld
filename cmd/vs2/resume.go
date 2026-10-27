@@ -155,7 +155,7 @@ func resumeCell(ctx context.Context, spec cellSpec, fp fixture, dir string) (*ce
 	if err != nil {
 		return nil, err
 	}
-	replaySeam, err := cognition.NewReplaySeamForContract(replay, wake, declaredClaimContract)
+	replaySeam, err := cognition.NewReplaySeamForContractModel(replay, wake, declaredClaimContract, declaredModelID())
 	if err != nil {
 		return nil, err
 	}
@@ -194,6 +194,7 @@ func resumeCell(ctx context.Context, spec cellSpec, fp fixture, dir string) (*ce
 	seam, err := cognition.NewRoleASeam(cognition.RoleASeamConfig{
 		Recorder: recorder, Ledger: ledger, Endpoint: activeLive.endpoint,
 		CredentialPresent: false, WakePolicy: wake, Votes: declaredVotes, Contract: declaredClaimContract,
+		Model: declaredModelID(),
 	})
 	if err != nil {
 		return nil, err

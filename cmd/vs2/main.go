@@ -34,6 +34,7 @@ func main() {
 		parallel        = flag.Int("parallel", 6, "cells to run concurrently (each cell is deterministic and writes its own directory)")
 		runReplay       = flag.Bool("replay", true, "run the priority-arm replay lane (VS2-EC-5)")
 		live            = flag.Bool("live", false, "run against the real gateway; refused unless "+EnvSpendAuthorization+" is the declared token (spend is NOT authorised)")
+		modelID         = flag.String("model", cognition.DefaultModelID, "application model id recorded in run identity and sent on the live wire (default: the declared id); an empty id is refused")
 		wire            = flag.String("wire", string(cognition.WireResponses), "declared gateway wire recorded by the cognition stack: responses (default) or chat-completions")
 		effort          = flag.String("effort", "", "applied reasoning effort of a live run: none|low|medium|high|xhigh|max (empty leaves the model default); recorded in run identity and in every call record")
 		maxOutput       = flag.Int("max-output", 0, "applied output-token bound of a live run (0: the wire default, 512 on responses); the applied value is recorded in run identity and every call record")
@@ -96,6 +97,11 @@ func main() {
 		fail("wire: %v", err)
 	}
 	declaredGatewayWire = mode
+	applicationModel, err := parseApplicationModel(*modelID)
+	if err != nil {
+		fail("model: %v", err)
+	}
+	declaredApplicationModel = applicationModel
 
 	// The relabel mode re-emits recorded reports with the mode-corrected
 	// status/label/EC-9 text: a report-only regeneration path that runs no cell and
@@ -293,12 +299,12 @@ func buildEvaluation(runs []*cellRun, recordedDir string, skipped, declared []st
 	}
 	sort.Strings(mismatches)
 	identity := modelIdentityDigestBytes()
-	featureIdentity := cognition.ModelFeatureIdentityDigest(cognition.DefaultModelID, declaredGatewayWire, cognition.FrozenSampling(), protocol.FeatureSetVersion)
+	featureIdentity := cognition.ModelFeatureIdentityDigest(declaredModelID(), declaredGatewayWire, cognition.FrozenSampling(), protocol.FeatureSetVersion)
 	return evaluation{
 		Status:               evaluationStatus,
 		Label:                evaluationLabel,
 		HonestLimit:          honestLimit,
-		ModelID:              cognition.DefaultModelID,
+		ModelID:              declaredModelID(),
 		WireMode:             string(declaredGatewayWire),
 		ModelIdentity:        hex.EncodeToString(identity[:]),
 		ModelFeatureIdentity: hex.EncodeToString(featureIdentity[:]),
@@ -340,18 +346,15 @@ func revisionString() string {
 		effort = "model-default"
 	}
 	return fmt.Sprintf("vs2-hermetic-fake/1; model %s wire %s; effort %s; output-bound %d; response-bound %d; claim-contract %s; votes %d; replicates %d; call-concurrency %d; attempt-timeout %s; call-deadline %s; base %s/%d; mechanism v%d; yield %d; birth-cost %d; H=%d; N=%d; value-model %s; feature-set %s; %s",
-		cognition.DefaultModelID, declaredGatewayWire, effort, appliedOutputBound(), appliedResponseBound(), declaredClaimContract, declaredVotes, declaredReplicates, declaredCallConcurrency,
+		declaredModelID(), declaredGatewayWire, effort, appliedOutputBound(), appliedResponseBound(), declaredClaimContract, declaredVotes, declaredReplicates, declaredCallConcurrency,
 		declaredAttemptTimeout, declaredCallDeadline,
 		declaredBasePolicy().ID, declaredBasePolicy().Version, declaredMechanism(), DeclaredYield, DeclaredBirthCost,
 		declaredHorizonHours, DeclaredCallCeiling, declaredValueModel().Version, protocol.FeatureSetVersion, spend)
 }
 
-// appliedOutputBound is the output-token bound the run applies: the declared
-// -max-output when one was given, otherwise the wire's own default (0 means the
-// transport's declared bound). It is recorded so run identity names what the
-// wire carried.
-// declaredModelID is the application model id recorded in run identity.
-func declaredModelID() string { return cognition.DefaultModelID }
+// declaredModelID is the application model id recorded in run identity: the
+// declared -model value, defaulting to cognition.DefaultModelID.
+func declaredModelID() string { return declaredApplicationModel }
 
 // effortName renders the applied effort for the report, naming the declared
 // "not sent" state instead of an empty string.
@@ -362,6 +365,10 @@ func effortName(effort string) string {
 	return effort
 }
 
+// appliedOutputBound is the output-token bound the run applies: the declared
+// -max-output when one was given, otherwise the wire's own default (0 means the
+// transport's declared bound). It is recorded so run identity names what the
+// wire carried.
 func appliedOutputBound() int {
 	return declaredOutputBound
 }

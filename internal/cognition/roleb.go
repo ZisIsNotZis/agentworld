@@ -518,6 +518,16 @@ const StrategyPatchPromptTemplate = "natural-strategy-patch/v1"
 // written by name, so no privileged state can reach the request without a
 // schema-version edit.
 func EncodeStrategyPatchRequest(req protocol.PatchRequest) ([]byte, error) {
+	return encodeStrategyPatchRequest(req, DefaultModelID)
+}
+
+// encodeStrategyPatchRequest is the Role B encoder with an explicit application
+// model, written into the canonical request's "model" field. An empty model is
+// the declared default.
+func encodeStrategyPatchRequest(req protocol.PatchRequest, model string) ([]byte, error) {
+	if model == "" {
+		model = DefaultModelID
+	}
 	if req.Role != RoleStrategyPatch {
 		return nil, fmt.Errorf("%w: role %q", ErrInvalidModelRequest, req.Role)
 	}
@@ -528,7 +538,7 @@ func EncodeStrategyPatchRequest(req protocol.PatchRequest) ([]byte, error) {
 		SchemaVersion:  ActorSeamSchemaVersion,
 		Role:           RoleStrategyPatch,
 		PromptTemplate: StrategyPatchPromptTemplate,
-		Model:          DefaultModelID,
+		Model:          model,
 		AuditHour:      req.AuditHour,
 		Run: runWire{
 			Fixture: fixtureWire{
@@ -565,25 +575,36 @@ type RoleBProposer struct {
 	recorder          *Recorder
 	endpoint          string
 	credentialPresent bool
+	model             string
 }
 
 // NewRoleBProposer builds the recorded proposer.
 func NewRoleBProposer(rec *Recorder, endpoint string, credentialPresent bool) (*RoleBProposer, error) {
+	return NewRoleBProposerForModel(rec, endpoint, credentialPresent, DefaultModelID)
+}
+
+// NewRoleBProposerForModel is NewRoleBProposer under an explicit application
+// model; the model is written into the canonical Role B request. An empty model
+// is the declared default.
+func NewRoleBProposerForModel(rec *Recorder, endpoint string, credentialPresent bool, model string) (*RoleBProposer, error) {
 	if rec == nil || endpoint == "" {
 		return nil, fmt.Errorf("%w: recorder and endpoint are required", ErrRoleB)
 	}
-	return &RoleBProposer{recorder: rec, endpoint: endpoint, credentialPresent: credentialPresent}, nil
+	if model == "" {
+		model = DefaultModelID
+	}
+	return &RoleBProposer{recorder: rec, endpoint: endpoint, credentialPresent: credentialPresent, model: model}, nil
 }
 
 // ProposeStrategyPatch performs exactly one recorded call and decodes the
 // proposal. A malformed completion is a typed error; its record is persisted.
 func (p *RoleBProposer) ProposeStrategyPatch(ctx context.Context, req protocol.PatchRequest) (protocol.PatchProposal, error) {
-	canonical, err := EncodeStrategyPatchRequest(req)
+	canonical, err := encodeStrategyPatchRequest(req, p.model)
 	if err != nil {
 		return protocol.PatchProposal{}, err
 	}
 	call, err := p.recorder.Call(ctx, CallRequest{
-		Role: RoleStrategyPatch, Hour: req.AuditHour, Model: DefaultModelID,
+		Role: RoleStrategyPatch, Hour: req.AuditHour, Model: p.model,
 		Endpoint: p.endpoint, CredentialPresent: p.credentialPresent,
 		Sampling: FrozenSampling(), Request: canonical,
 	})

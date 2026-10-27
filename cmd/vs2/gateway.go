@@ -76,8 +76,8 @@ func newLiveConfig() (*liveConfig, error) {
 	key := os.Getenv(cognition.EnvGatewayAPIKey)
 	client, err := cognition.NewGatewayClient(cognition.GatewayConfig{
 		BaseURL: base, APIKey: key, CredentialPresent: key != "",
-		Authorized: true, WireMode: cognition.WireResponses,
-		Model: cognition.DefaultModelID, OutputMode: cognition.OutputJSON,
+		Authorized: true, WireMode: declaredGatewayWire,
+		Model: declaredModelID(), OutputMode: cognition.OutputJSON,
 		ReasoningEffort: declaredReasoningEffort, MaxOutputTokens: declaredOutputBound,
 		MaxResponseBytes: declaredResponseBound,
 		HTTPClient:       &http.Client{Timeout: httpClientTimeout()},

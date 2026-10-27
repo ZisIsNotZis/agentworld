@@ -40,7 +40,7 @@ const curveSNRThreshold = 2.0
 
 // curveCell is one replicate's KPI curves plus its per-cell accounting.
 type curveCell struct {
-	Condition string // "<arm>@<effort>"
+	Condition string // "<arm>@<effort>" or "<arm>@<effort>@<model>"
 	Arm       string
 	Effort    string
 	F         int
@@ -123,7 +123,11 @@ type curveStage struct {
 
 // curveReport is the whole curve artefact.
 type curveReport struct {
-	Sources          []string
+	Sources []string
+	// Models are the distinct evaluation model ids the report covers, so a
+	// single-model report names its model even though its condition labels stay
+	// the historical arm@effort form.
+	Models           []string
 	Cells            int
 	Replicates       int
 	Horizon          int
@@ -157,7 +161,9 @@ func (c curveCell) histBuckets(family string) int {
 
 // curveCellsOf extracts the replicate curves of one evaluation cell row and
 // truncates every series to the shortest common horizon, so hours pair exactly.
-func curveCellsOf(ev evaluation) ([]curveCell, []string) {
+// qualifyModel puts the evaluation's model id into every condition label, which
+// a curve report does when its sources name more than one model.
+func curveCellsOf(ev evaluation, qualifyModel bool) ([]curveCell, []string) {
 	out := make([]curveCell, 0, len(ev.Cells))
 	var truncations []string
 	for _, rep := range ev.Cells {
@@ -165,7 +171,7 @@ func curveCellsOf(ev evaluation) ([]curveCell, []string) {
 			continue
 		}
 		c := curveCell{
-			Condition: conditionOf(rep), Arm: rep.Arm, Effort: rep.Effort,
+			Condition: conditionOf(rep, ev.ModelID, qualifyModel), Arm: rep.Arm, Effort: rep.Effort,
 			F: rep.F, Seed: rep.Seed, Replicate: rep.Replicate,
 			KPIs: map[string][]float64{}, Hist: map[string][][]float64{},
 			Calls: rep.RealizedCalls, Prompt: rep.PromptTokens, Output: rep.CompletionTokens,
@@ -223,13 +229,23 @@ func curveCellsOf(ev evaluation) ([]curveCell, []string) {
 }
 
 // conditionOf is the declared condition label of a cell row: the arm plus the
-// applied effort, so two efforts of one arm are two conditions.
-func conditionOf(rep cellReport) string {
+// applied effort, so two efforts of one arm are two conditions. When a report
+// mixes evaluations from more than one model, the model id is appended, so two
+// models under the same arm and effort are two conditions and are never merged
+// into one band.
+func conditionOf(rep cellReport, model string, qualifyModel bool) string {
 	effort := rep.Effort
 	if effort == "" {
 		effort = "model-default"
 	}
-	return rep.Arm + "@" + effort
+	label := rep.Arm + "@" + effort
+	if !qualifyModel {
+		return label
+	}
+	if model == "" {
+		model = "unknown-model"
+	}
+	return label + "@" + model
 }
 
 // bandOf computes the declared band and stability of one KPI over replicates.
@@ -458,11 +474,14 @@ func normalizeRows(row []float64) []float64 {
 
 // curveReportFromFiles loads evaluation JSONs and computes the whole curve
 // report. Conditions are grouped by (arm, applied effort); replicates are the
-// rows of one condition in one cell.
+// rows of one condition in one cell. When the sources name more than one model
+// id, every condition additionally carries its model (arm@effort@model), so two
+// models are never merged into one band; a single-model report keeps the
+// historical arm@effort labels.
 func curveReportFromFiles(paths []string) (curveReport, error) {
 	report := curveReport{CellsByCondition: map[string][]curveCell{}, Bands: map[string]map[string]map[string]curveBand{}}
-	var stageOrder []string
-	stageConditions := map[string][]string{}
+	evaluations := make([]evaluation, 0, len(paths))
+	models := map[string]struct{}{}
 	for _, path := range paths {
 		raw, err := os.ReadFile(path)
 		if err != nil {
@@ -472,7 +491,23 @@ func curveReportFromFiles(paths []string) (curveReport, error) {
 		if err := json.Unmarshal(raw, &ev); err != nil {
 			return curveReport{}, fmt.Errorf("%s: %w", path, err)
 		}
-		cells, truncations := curveCellsOf(ev)
+		evaluations = append(evaluations, ev)
+		model := ev.ModelID
+		if model == "" {
+			model = "unknown-model"
+		}
+		models[model] = struct{}{}
+	}
+	for model := range models {
+		report.Models = append(report.Models, model)
+	}
+	sort.Strings(report.Models)
+	qualifyModel := len(models) > 1
+	var stageOrder []string
+	stageConditions := map[string][]string{}
+	for i, ev := range evaluations {
+		path := paths[i]
+		cells, truncations := curveCellsOf(ev, qualifyModel)
 		report.Truncations = append(report.Truncations, truncations...)
 		report.Sources = append(report.Sources, path)
 		stage := stageLabelOf(path)
@@ -766,6 +801,7 @@ func renderCurveReport(report curveReport) string {
 	fmt.Fprintf(&b, "VS2 curve report (ticket 35; criterion pre-declared before data)\n")
 	fmt.Fprintf(&b, "decision rule: distinguishable iff some KPI has SNR >= %.1f AND its paired difference exceeds the\n", curveSNRThreshold)
 	fmt.Fprintf(&b, "  replicate band for >= %d consecutive hours in every cell; no condition is called better on a scalar.\n", curveSustainedHours)
+	fmt.Fprintf(&b, "models: %s\n", strings.Join(report.Models, ", "))
 	fmt.Fprintf(&b, "conditions: %s\n", strings.Join(report.Conditions, ", "))
 	fmt.Fprintf(&b, "cells: %d replicates: %d horizon: %d\n", report.Cells, report.Replicates, report.Horizon)
 	for _, src := range report.Sources {
