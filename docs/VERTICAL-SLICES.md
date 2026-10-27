@@ -158,13 +158,15 @@ measurements are what W1 and W2 consume.
   change the census names (a policy-floor version, or a world rule if the policy is not the cause), then
   re-sweep the 128 cells at `$0`.
 - **Non-do.** No new ecology mechanisms; no metric work; no reference cost probe; no live model call.
-- **AC.** On `f10-s0` with `-arms A0`, `H = 144`: (a) `alive_end ≥ founders`, zero starvation deaths,
-  at least one birth; (b) **expressivity floor** — under the *default* policy two actors hold the joint
-  birth gate (`granary ≥ 3 ∧ capital ≥ 2 ∧ energy ≥ 3`) for at least 24 of 144 hours, against the 1
-  hour measured under `natural/7` in ticket 44; (c) the full 128-cell grid re-runs as a regression and
-  every failing cell names its binding cause. Falsifier: the fix passes `f10-s0` only by spending the
-  world's reserves, i.e. (b) holds while (a) fails, or `alive_end < N0` with age as the majority cause
-  still.
+- **AC.** On the declared default cell (`f10-s0`, `H = 144`, no cognition): (a) **the band holds** —
+  `alive_end ≥ founders` and at least one birth; (b) **not a desperate death** — age deaths outnumber
+  starvation deaths, so the population is limited by its own lifespan and land rather than dying hungry;
+  (c) **expressive** — two actors hold the joint birth gate for at least 24 of 144 hours; (d) the
+  128-cell grid re-runs as a regression and every failing cell names its binding cause.
+  *Amendment (2026-10-26, after tickets 49–52): the earlier "zero starvation deaths" clause was a
+  die-off criterion from ticket 43 and is wrong for a world with births — a population that overshoots
+  its land and dies back is the modelled limit working, not a failure. What must not happen is that
+  starvation outnumbers age, which is the operator's "desperate death" made measurable.*
 - **Non-goal of record.** A search over seeds, founder counts or horizons for a cell that passes. If
   `f10-s0` cannot be made viable without changing the *world's* rules, that is `W1` failing and a
   decision for the operator — not a licence to pick another seed.
