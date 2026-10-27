@@ -226,6 +226,16 @@ func (o NaturalRestoreOptions) yieldResolved() int64 {
 	return o.Yield
 }
 
+// declaredYield is the yield's declared (omitempty) form: zero outside
+// mechanism v9, where the field does not exist, and the resolved value under
+// v9. Both spellings of the default resolve to the same v9 value.
+func (o NaturalRestoreOptions) declaredYield() int64 {
+	if o.mechanism() != NaturalMechanismV9 {
+		return 0
+	}
+	return o.yieldResolved()
+}
+
 func (o NaturalRestoreOptions) validate() error {
 	if !NaturalPatchCountValid(o.Patches) {
 		return fmt.Errorf("%w: patches %d outside the derived ID-space precondition", ErrNaturalCheckpoint, o.Patches)
@@ -2497,7 +2507,7 @@ func (f *Natural) SaveCheckpoint(path string) ([32]byte, error) {
 	}
 	// Do not publish a same-ref altered policy that a fresh executable would
 	// reject later: the independent constructor pins the current policy contract.
-	fresh, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: f.patches, R: f.r, Yield: f.yield, Seed: f.seed,
+	fresh, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: f.patches, R: f.r, Yield: f.declaredYield(), Seed: f.seed,
 		Workers: 1, Births: f.births, CultivationDisabled: f.cultivationDisabled, PolicyRef: f.ref, Mechanism: f.mechanism,
 		Founders: f.declaredFounders()})
 	if err != nil {
@@ -2562,7 +2572,7 @@ func (f *Natural) saveResumeCheckpoint(path string, seamReplay *naturalSeamRepla
 		len(f.checkpoints) != hour-f.checkpoints[0].Hour+1 {
 		return [32]byte{}, ErrNaturalCheckpoint
 	}
-	fresh, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: f.patches, R: f.r, Yield: f.yield, Seed: f.seed,
+	fresh, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: f.patches, R: f.r, Yield: f.declaredYield(), Seed: f.seed,
 		Workers: 1, Births: f.births, FounderTenure: f.naturalRunnerTenure(), CultivationDisabled: f.cultivationDisabled,
 		PolicyRef: f.ref, Mechanism: f.mechanism, Founders: f.declaredFounders()})
 	if err != nil {
@@ -2952,7 +2962,7 @@ func naturalManifestMatches(m naturalManifest, expected NaturalRestoreOptions) b
 	}
 	// The declared yield is the same bidirectional run-identity rule R
 	// carries; the resolved default (1) is the manifest's explicit v9 value.
-	if m.yield != expected.yieldResolved() {
+	if m.yield != expected.declaredYield() {
 		return false
 	}
 	return m.patches == expected.Patches && m.r == expected.R && m.seed == expected.Seed &&
