@@ -105,10 +105,16 @@ One stage runs to a recorded verdict before the next starts. A stage's cost is m
 ### Stage M — model (third)
 
 - Effort `max` (the reference condition, so the only change is the model); arm `R`; cell `f10-s0`; 3
-  replicates; models
-  `github_copilot/gpt-6-luna` (reference), `github_copilot/gpt-6-sol` (same `responses` wire), and one
-  chat-wire model (`zai/glm-5.3-flash`) at its declared wire. The wire and the model are recorded in
-  run identity; a cross-wire comparison is labelled as such.
+  replicates; models `github_copilot/gpt-6-luna` (reference), `github_copilot/gpt-6-sol` (same family),
+  and `github_copilot/grok-4.7` (a different family). All three are declared `responses`-wire models
+  with a reasoning-effort field, so the only change is the model. The wire and the model are recorded
+  in run identity.
+  *Amendment (2026-10-27, before the first Stage-M cell): the originally declared third model was a
+  chat-wire model (`zai/glm-5.3-flash`). The gateway client refuses a non-empty reasoning effort on
+  the chat wire (the wire has no effort field), so a chat-wire arm cannot be run at "matched effort"
+  without either omitting effort (confounding the model with the thinking axis) or inventing a wire
+  mapping. It is replaced by `grok-4.7`, which keeps the matched-`max` design; the chat-wire case is
+  recorded as a capability gap, not measured. No Stage-M cell had run when this was amended.*
 - Verdict: each non-reference model's distance to the `luna` reference curve (3.1), with its wire
   named. Which model is "best" is not claimed: the reference is the benchmark.
 - Record under `.scratch/60-w3-model/`.
