@@ -170,15 +170,13 @@ measurements are what W1 and W2 consume.
 - **Non-goal of record.** A search over seeds, founder counts or horizons for a cell that passes. If
   `f10-s0` cannot be made viable without changing the *world's* rules, that is `W1` failing and a
   decision for the operator — not a licence to pick another seed.
-- **Status.** Open, and **blocked on a world rule** after three policy versions and two grids at `$0`.
-  Ticket 45: 133 of 135 `consent-own` refusals had a gate-holding alternative mate. Ticket 46
-  (`natural/11`, rotation): 4 accepts, but 50 new `kin` refusals — the proposer cannot see kinship.
-  Ticket 47 (`natural/12`, rotation over the public kin walk the reply side already receives): 0
-  refusals, 4 filings total, 4 accepts — the non-kin pool empties. Ticket 48 (128 cells × both
-  policies): **0 passes**, the survivor maximum falls from 6 to 3, and the direct pool measurement at
-  `f10-s0` shows why: of 370 same-patch mate slots seen by proposer-eligible actors, **368 are kin**,
-  and under the blind rule the 136 non-kin slots contain only **2** that hold the consenter gate. A
-  patch holds five founders, so after one generation its co-located pool is one lineage.
+- **Status.** Open. Tickets 45–54 replaced the frozen economy with declared, versioned axes: mate pool
+  and household consent (v8), land yield (v9), wild yield (v11), founder placement (v10), one granary
+  unit = two hours of life (v12), a declared birth price (v13), and a commons floor that keeps half of
+  every patch wild (v14). The last calibration at `f10-s0` (`Yield=2, BirthCost=2`, v14) gives **alive
+  11 of 10, births 13, starvation 2, age deaths 10** — the band holds and no longer dies hungry — but
+  the joint-gate hours read 0, so clause (c) is not met yet. The 128-cell grid is committed with ticket
+  54 (`.scratch/54-mechanism-v14-commons/grid-128.tsv`).
 - **Decision it needs.** Every remaining lever is a world rule: the kin rule at this patch size (or
   migration between patches), the two-parent wealth conjunction at the decision instant, and the early
   food economy. No policy-level lever remains. Record:

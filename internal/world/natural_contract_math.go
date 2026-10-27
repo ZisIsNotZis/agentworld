@@ -232,8 +232,11 @@ type NaturalBuildRefusalReason uint8
 
 const (
 	NaturalBuildRefusalNone NaturalBuildRefusalReason = iota
-	// NaturalBuildRefusalNoWildSlot: every slot of the home patch is
-	// tenured (occupied).
+	// NaturalBuildRefusalNoWildSlot: no wild slot is available for the
+	// tenure claim — either every slot of the home patch is tenured
+	// (occupied), or (mechanism v14) the claim would leave fewer than
+	// NaturalCommonsWildMin wild slots on the patch, so the commons floor
+	// refuses it.
 	NaturalBuildRefusalNoWildSlot
 	// NaturalBuildRefusalWildAllStocked: wild slots remain but every one
 	// holds standing stock.
@@ -361,7 +364,7 @@ func validNaturalGranaryFor(m NaturalMechanism, g NaturalGranaryState) bool {
 		return false
 	}
 	switch m {
-	case NaturalMechanismV6, NaturalMechanismV8, NaturalMechanismV9, NaturalMechanismV10, NaturalMechanismV11, NaturalMechanismV12, NaturalMechanismV13:
+	case NaturalMechanismV6, NaturalMechanismV8, NaturalMechanismV9, NaturalMechanismV10, NaturalMechanismV11, NaturalMechanismV12, NaturalMechanismV13, NaturalMechanismV14:
 		return g.Provisioned >= 0 && g.Provisioned <= NaturalProvisionedMax && g.WagesPaid == 0 && g.WagesEarned == 0
 	case NaturalMechanismV7:
 		return g.Provisioned >= 0 && g.Provisioned <= NaturalProvisionedMax &&
@@ -953,7 +956,11 @@ func NaturalConsumeFor(m NaturalMechanism, patches int, actorID sim.EntityID, a 
 // LOWEST-INDEX free wild slot with stock 0 in the builder's home patch
 // (the caller's fresh-snapshot revalidation is a runner duty); a tenured
 // slot never holds standing stock. No eligible slot ⇒ typed refusal with
-// zero mutation: nothing converts, the bag keeps its unit.
+// zero mutation: nothing converts, the bag keeps its unit. Mechanism v14
+// adds one admission rule to the same claim: a patch always keeps at least
+// NaturalCommonsWildMin wild slots, so a claim that would enclose more than
+// half the patch is refused on the same typed path, again with zero
+// mutation.
 func NaturalBuild(patches, hour int, actorID sim.EntityID, a NaturalActorState, homePatch sim.EntityID, homeSlots [NaturalSlotsPerPatch]NaturalSlotState) (NaturalActorState, [NaturalSlotsPerPatch]NaturalSlotState, NaturalBuildResult, error) {
 	return NaturalBuildFor(NaturalMechanismV5, patches, hour, actorID, a, homePatch, homeSlots)
 }
@@ -999,11 +1006,26 @@ func NaturalBuildFor(m NaturalMechanism, patches, hour int, actorID sim.EntityID
 	}
 	a.Worksite = w
 	if result.PointsCompleted == 1 {
+		wild := 0
+		for i := range homeSlots {
+			if homeSlots[i].Mode == NaturalTenureWild {
+				wild++
+			}
+		}
 		wildSeen := false
 		for i := range homeSlots {
 			if homeSlots[i].Mode == NaturalTenureWild {
 				wildSeen = true
 				if homeSlots[i].Stock == 0 {
+					// Mechanism v14 commons floor: the claim converts one wild
+					// slot to cultivated tenure, so it is refused when that
+					// would leave fewer than NaturalCommonsWildMin wild slots
+					// on the patch. Same typed build path, zero mutation: the
+					// loop has not written the slot yet, so the held bag unit
+					// and the patch both keep their state.
+					if naturalKeepsCommons(m) && wild-1 < NaturalCommonsWildMin {
+						return NaturalActorState{}, homeSlots, NaturalBuildResult{}, &NaturalBuildRefusalError{Reason: NaturalBuildRefusalNoWildSlot}
+					}
 					homeSlots[i].Mode = NaturalTenureCultivated
 					homeSlots[i].Owner = actorID
 					homeSlots[i].Cultivated = 1

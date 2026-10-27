@@ -80,6 +80,12 @@ const (
 	NaturalSlotsPerPatch  = 8
 	NaturalHorizonHours   = 168
 
+	// NaturalCommonsWildMin is the mechanism-v14 declared commons floor: a
+	// patch always keeps at least half of its slots wild, so an actor that
+	// owns no slot always finds wild food on its own patch. It is the exact
+	// half of the frozen patch shape, not a separate tunable.
+	NaturalCommonsWildMin = NaturalSlotsPerPatch / 2
+
 	// Frozen v3/v4 clock, body, and economics constants, inherited verbatim.
 	NaturalHour           sim.Duration = 3_600_000_000
 	NaturalGatherDuration sim.Duration = 20 * 60 * 1_000_000
@@ -461,6 +467,16 @@ const (
 	// band, basal drain, bag capacity, kin, consent, spoilage — is v12
 	// verbatim, and BirthCost = 2 is v12 exactly.
 	NaturalMechanismV13 NaturalMechanism = 13
+	// NaturalMechanismV14 (world axis version 14, ticket 54) is the v13 rule
+	// table plus exactly one admission rule: a patch always keeps at least
+	// NaturalCommonsWildMin wild slots. A build whose slot claim would leave
+	// fewer wild slots on the builder's home patch is refused on the existing
+	// typed build path with zero mutation, so the wild land stays a commons
+	// and a landless actor always has wild food on its own patch. Every other
+	// rule — the birth price, the meal price, the yield axis, the wild fill,
+	// the founding band, basal drain, bag capacity, kin, consent, spoilage —
+	// is v13 verbatim.
+	NaturalMechanismV14 NaturalMechanism = 14
 )
 
 // naturalMealEnergyV12 is the one declared price change of mechanism v12: a
@@ -472,20 +488,30 @@ const (
 const naturalMealEnergyV12 int64 = 2
 
 // NaturalMechanismValid reports the admitted axis values: the zero value
-// (≡ v5), 6, 7, 8, 9, 10, 11, 12 and 13. Literal 5 is not a second spelling
-// of v5 — the zero value is the one v5 spelling — and everything else fails
-// closed.
+// (≡ v5), 6, 7, 8, 9, 10, 11, 12, 13 and 14. Literal 5 is not a second
+// spelling of v5 — the zero value is the one v5 spelling — and everything
+// else fails closed.
 func NaturalMechanismValid(m NaturalMechanism) bool {
 	return m == NaturalMechanismV5 || m == NaturalMechanismV6 || m == NaturalMechanismV7 ||
 		m == NaturalMechanismV8 || m == NaturalMechanismV9 || m == NaturalMechanismV10 ||
-		m == NaturalMechanismV11 || m == NaturalMechanismV12 || m == NaturalMechanismV13
+		m == NaturalMechanismV11 || m == NaturalMechanismV12 || m == NaturalMechanismV13 ||
+		m == NaturalMechanismV14
 }
 
 // naturalHasBirthCostAxis reports the mechanisms that declare the BirthCost
-// parameter: mechanism v13 only. Every earlier mechanism keeps the frozen
-// two-granary/two-energy price and refuses a non-zero declared cost.
+// parameter: v13 and every later mechanism (v14 is v13 plus the commons
+// floor, which leaves the price axis untouched). Every earlier mechanism
+// keeps the frozen two-granary/two-energy price and refuses a non-zero
+// declared cost.
 func naturalHasBirthCostAxis(m NaturalMechanism) bool {
-	return m == NaturalMechanismV13
+	return m == NaturalMechanismV13 || m == NaturalMechanismV14
+}
+
+// naturalKeepsCommons reports the mechanisms with the commons admission
+// rule: mechanism v14 only. Every earlier mechanism admits a build up to a
+// fully enclosed patch exactly as recorded.
+func naturalKeepsCommons(m NaturalMechanism) bool {
+	return m == NaturalMechanismV14
 }
 
 // naturalBirthCostFor is the declared price one paying parent hands over for
@@ -517,12 +543,13 @@ func naturalBirthGranaryPaidMaxFor(m NaturalMechanism) int64 {
 // naturalMealEnergyFor is the declared energy one bag unit grants when eaten:
 // exactly the frozen one unit in every mechanism below v12, the declared
 // naturalMealEnergyV12 under mechanism v12 and every later mechanism (v13 is
-// v12 plus the birth price, which leaves the meal untouched). It is the
+// v12 plus the birth price and v14 is v13 plus the commons floor, both of
+// which leave the meal untouched). It is the
 // single home of the meal price — NaturalConsumeFor grants it and the G3
 // identities book it — so no
 // second copy of the arithmetic can drift from the contract.
 func naturalMealEnergyFor(m NaturalMechanism) int64 {
-	if m == NaturalMechanismV12 || m == NaturalMechanismV13 {
+	if m == NaturalMechanismV12 || m == NaturalMechanismV13 || m == NaturalMechanismV14 {
 		return naturalMealEnergyV12
 	}
 	return 1
@@ -560,6 +587,8 @@ func (m NaturalMechanism) worldVersion() uint32 {
 		return 12
 	case NaturalMechanismV13:
 		return 13
+	case NaturalMechanismV14:
+		return 14
 	}
 	return 5
 }
@@ -779,33 +808,34 @@ func naturalHasProvisionLedger(m NaturalMechanism) bool {
 // naturalHasYieldAxis reports the mechanisms that declare the granary Yield
 // parameter: v9 and every later mechanism (v10 is v9 plus founder placement,
 // v11 is v10 plus the wild fill scaled by the same axis, v12 is v11 plus the
-// meal price and v13 is v12 plus the birth price, both of which leave the
-// axis untouched).
+// meal price, v13 is v12 plus the birth price and v14 is v13 plus the
+// commons floor, all of which leave the axis untouched).
 func naturalHasYieldAxis(m NaturalMechanism) bool {
 	return m == NaturalMechanismV9 || m == NaturalMechanismV10 || m == NaturalMechanismV11 ||
-		m == NaturalMechanismV12 || m == NaturalMechanismV13
+		m == NaturalMechanismV12 || m == NaturalMechanismV13 || m == NaturalMechanismV14
 }
 
 // naturalRoundRobinFounders reports the mechanisms whose founding band is
-// seated round-robin across the patches: v10 and its v11/v12/v13 extensions
-// (which change only the wild fill arithmetic, the meal price and the birth
-// price).
+// seated round-robin across the patches: v10 and its v11/v12/v13/v14
+// extensions (which change only the wild fill arithmetic, the meal price,
+// the birth price and the commons floor).
 func naturalRoundRobinFounders(m NaturalMechanism) bool {
 	return m == NaturalMechanismV10 || m == NaturalMechanismV11 || m == NaturalMechanismV12 ||
-		m == NaturalMechanismV13
+		m == NaturalMechanismV13 || m == NaturalMechanismV14
 }
 
 // naturalWildFillYield reports the mechanisms whose wild fill carries the
-// declared Yield: v11 and its v12/v13 extensions. A vacant wild slot then
-// refills Yield granary units per patch-hour instead of one, so a wild slot
-// holds 0..Yield units and one gather still moves exactly one unit.
+// declared Yield: v11 and its v12/v13/v14 extensions. A vacant wild slot
+// then refills Yield granary units per patch-hour instead of one, so a wild
+// slot holds 0..Yield units and one gather still moves exactly one unit.
 func naturalWildFillYield(m NaturalMechanism) bool {
-	return m == NaturalMechanismV11 || m == NaturalMechanismV12 || m == NaturalMechanismV13
+	return m == NaturalMechanismV11 || m == NaturalMechanismV12 || m == NaturalMechanismV13 ||
+		m == NaturalMechanismV14
 }
 
 // naturalSlotStockMaxFor is the declared standing-stock envelope of one
 // slot: the frozen one unit, or the declared yield under the wild-fill
-// mechanisms (v11, v12 and v13), where a wild slot refills Yield units per
+// mechanisms (v11, v12, v13 and v14), where a wild slot refills Yield units per
 // patch-hour. Like every ledger bound it is a declared envelope, never a
 // behaviour cap.
 func naturalSlotStockMaxFor(m NaturalMechanism) int64 {
