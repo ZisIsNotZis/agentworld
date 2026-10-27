@@ -241,10 +241,19 @@ expressive**: a model that kicks
 - **Non-do.** No new world mechanism; no unrecorded arm; no spend before its criterion is pre-registered.
 - **AC.** Each axis has a pre-registered comparison rule and a recorded verdict, with the reference curve
   as the baseline; the stability verdict names the cells and seeds it ran on.
-- **Status.** Unblocked by `W2` (ticket 57); the reference cell exists on the declared world. The model
-  axis (`-model`) is still hard-wired to `DefaultModelID` and must be added, recorded in run identity,
-  before the model fact can be measured; the effort and timing axes are runnable. The comparison rule
-  and the cell/seed/replicate set must be pre-registered before the first grid cell.
+- **Status.** **In progress under the pre-registration ticket 58** (curve rule, stages E→T→M→S,
+  declared before the first W3 cell). The model axis is now a recorded runner parameter (`-model`,
+  ticket 58/`8e4f23b`). **Stage E (thinking) is recorded (ticket 58, `f71d44b`):** five efforts ×
+  three replicates on `f10-s0`; **no effort (`none/low/medium/high`) is detectably separated from
+  `R@max` on any declared KPI at this design** (`SNR < 2` or a run < 24 h everywhere; the frozen
+  `curve/1` instrument reports all ten pairs `NOT distinguishable`). The smallest separable
+  population difference is 1.7–2.5 actors, and the sub-threshold `none` deficit (−2.0 population,
+  −3.0 births at H, 9/11-hour runs) is recorded, not called a separation. Derived cost $5.90 plus
+  $1.08 for an aborted over-concurrent first attempt; the gateway charge is $0. **Stage T (timing) is
+  next.** Two instrument defects are recorded and must be fixed before W4: the histogram
+  Wasserstein in `cmd/vs2/curves.go` measures the wrong shape (Stage E computed the histogram
+  distance directly), and `call_refs` retry ranges interleave under call concurrency (the summariser
+  and intervention evidence only; world/replay unaffected).
 
 ### `W4_curve_match` — the judgement is the curve, not the endpoint
 
