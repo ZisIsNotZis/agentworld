@@ -1,0 +1,96 @@
+{
+  "high": {
+    "R-f10-s0-r1": {
+      "attempts": 564,
+      "exhausted": 0,
+      "failed_attempts": 85,
+      "last_hour": 47
+    },
+    "R-f10-s0-r2": {
+      "attempts": 529,
+      "exhausted": 0,
+      "failed_attempts": 54,
+      "last_hour": 47
+    },
+    "R-f10-s0-r3": {
+      "attempts": 522,
+      "exhausted": 0,
+      "failed_attempts": 104,
+      "last_hour": 41
+    }
+  },
+  "low": {
+    "R-f10-s0-r1": {
+      "attempts": 415,
+      "exhausted": 0,
+      "failed_attempts": 56,
+      "last_hour": 35
+    },
+    "R-f10-s0-r2": {
+      "attempts": 552,
+      "exhausted": 0,
+      "failed_attempts": 73,
+      "last_hour": 47
+    },
+    "R-f10-s0-r3": {
+      "attempts": 549,
+      "exhausted": 0,
+      "failed_attempts": 76,
+      "last_hour": 47
+    }
+  },
+  "max": {
+    "R-f10-s0-r1": {
+      "attempts": 334,
+      "exhausted": 0,
+      "failed_attempts": 75,
+      "last_hour": 25
+    },
+    "R-f10-s0-r2": {
+      "attempts": 379,
+      "exhausted": 0,
+      "failed_attempts": 75,
+      "last_hour": 30
+    }
+  },
+  "medium": {
+    "R-f10-s0-r1": {
+      "attempts": 551,
+      "exhausted": 0,
+      "failed_attempts": 101,
+      "last_hour": 44
+    },
+    "R-f10-s0-r2": {
+      "attempts": 298,
+      "exhausted": 1,
+      "failed_attempts": 49,
+      "last_hour": 24
+    },
+    "R-f10-s0-r3": {
+      "attempts": 578,
+      "exhausted": 0,
+      "failed_attempts": 78,
+      "last_hour": 49
+    }
+  },
+  "none": {
+    "R-f10-s0-r1": {
+      "attempts": 749,
+      "exhausted": 0,
+      "failed_attempts": 69,
+      "last_hour": 67
+    },
+    "R-f10-s0-r2": {
+      "attempts": 699,
+      "exhausted": 0,
+      "failed_attempts": 90,
+      "last_hour": 60
+    },
+    "R-f10-s0-r3": {
+      "attempts": 747,
+      "exhausted": 0,
+      "failed_attempts": 92,
+      "last_hour": 65
+    }
+  }
+}
