@@ -66,13 +66,20 @@ func TestNaturalMechanismAxisZeroValueReproducesV5(t *testing.T) {
 		NaturalMechanismV7.RuleVersion() != 7 || NaturalMechanismV7.ProjectionVersion() != 7 {
 		t.Fatal("v7 version fields")
 	}
-	for _, m := range []NaturalMechanism{1, 2, 4, 5, 8, 65535} {
-		if NaturalMechanismValid(m) {
-			t.Fatalf("mechanism %d admitted", m)
+	// The admitted axis is derived, not a hand-maintained sample: for every
+	// axis value the validity predicate must agree exactly with whether the
+	// registry builds (valid ⇔ registry succeeds), and the uint16 ceiling is
+	// explicitly unadmitted.
+	for i := 1; i <= 65535; i++ {
+		m := NaturalMechanism(i)
+		valid := NaturalMechanismValid(m)
+		_, err := NaturalRegistryFor(m)
+		if valid != (err == nil) {
+			t.Fatalf("mechanism %d: valid=%t registry=%v", m, valid, err)
 		}
-		if _, err := NaturalRegistryFor(m); !errors.Is(err, ErrNaturalContract) {
-			t.Fatalf("registry for mechanism %d admitted", m)
-		}
+	}
+	if NaturalMechanismValid(NaturalMechanism(65535)) {
+		t.Fatal("mechanism 65535 admitted")
 	}
 	if !NaturalMechanismValid(NaturalMechanismV5) || !NaturalMechanismValid(NaturalMechanismV6) || !NaturalMechanismValid(NaturalMechanismV7) {
 		t.Fatal("admitted mechanisms refused")

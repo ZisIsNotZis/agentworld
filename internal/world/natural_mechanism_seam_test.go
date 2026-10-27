@@ -447,17 +447,24 @@ func TestNaturalMechanismSeamRefConsistencyNegatives(t *testing.T) {
 	if _, err := NewNatural(NaturalOptions{Patches: 2, R: 8, Seed: 0, Workers: 1, PolicyRef: strategy.NaturalRef{ID: "natural", Version: 10}, Mechanism: NaturalMechanismV6}); !errors.Is(err, ErrNaturalRunner) {
 		t.Fatal("natural/10 accepted under mechanism v6")
 	}
-	// Ticket 20 consequence (authorised sample move, not a behaviour
-	// change): mechanism 7 became an admitted axis value when the wage
-	// contract landed, so the unadmitted sample moves to the next
-	// undeclared value 9.
-	for _, mechanism := range []NaturalMechanism{1, 2, 4, 5, 8, 9, 65535} {
-		if _, err := NewNatural(NaturalOptions{Patches: 2, R: 8, Seed: 0, Workers: 1, Mechanism: mechanism}); !errors.Is(err, ErrNaturalRunner) {
-			t.Fatalf("mechanism %d accepted", mechanism)
+	// The axis admission is derived, not a hand-maintained sample: the world
+	// constructor and the restore validation must accept exactly the values
+	// NaturalMechanismValid admits (the zero-ref policy is legal under every
+	// mechanism), and the uint16 ceiling is explicitly unadmitted.
+	for i := 1; i <= 65535; i++ {
+		mechanism := NaturalMechanism(i)
+		admitted := NaturalMechanismValid(mechanism)
+		_, newErr := NewNatural(NaturalOptions{Patches: 2, R: 8, Seed: 0, Workers: 1, Mechanism: mechanism})
+		if admitted != (newErr == nil) {
+			t.Fatalf("mechanism %d: valid=%t constructor=%v", mechanism, admitted, newErr)
 		}
-		if err := (NaturalRestoreOptions{Patches: 2, R: 8, Seed: 0, Workers: 1, Mechanism: mechanism}).validate(); !errors.Is(err, ErrNaturalCheckpoint) {
-			t.Fatalf("restore mechanism %d validated", mechanism)
+		restoreErr := (NaturalRestoreOptions{Patches: 2, R: 8, Seed: 0, Workers: 1, Mechanism: mechanism}).validate()
+		if admitted != (restoreErr == nil) {
+			t.Fatalf("mechanism %d: valid=%t restore=%v", mechanism, admitted, restoreErr)
 		}
+	}
+	if NaturalMechanismValid(NaturalMechanism(65535)) {
+		t.Fatal("mechanism 65535 admitted")
 	}
 	// The restore options apply the same ref/mechanism rule.
 	if err := (NaturalRestoreOptions{Patches: 2, R: 8, Seed: 0, Workers: 1, PolicyRef: ref7}).validate(); !errors.Is(err, ErrNaturalCheckpoint) {
