@@ -161,6 +161,7 @@ const (
 	mechanismV5Name        = "v5"
 	mechanismV6Name        = "v6"
 	mechanismV7Name        = "v7"
+	mechanismV8Name        = "v8"
 	// The frozen v9 verdict labels plus the corner label the ticket-20 record
 	// DECLARED BEFORE THE MATRIX RAN (spec comment: "the corner is declared as
 	// its own outcome label, TRADE-INERT - trade occurred and was correctly
@@ -331,8 +332,10 @@ func naturalMechanismName(mechanism string) (string, world.NaturalMechanism, err
 		return mechanismV6Name, world.NaturalMechanismV6, nil
 	case mechanismV7Name:
 		return mechanismV7Name, world.NaturalMechanismV7, nil
+	case mechanismV8Name:
+		return mechanismV8Name, world.NaturalMechanismV8, nil
 	default:
-		return "", world.NaturalMechanismV5, fmt.Errorf("invalid -mechanism value %q: the declared mechanism axis is {%s, %s, %s}", mechanism, mechanismV5Name, mechanismV6Name, mechanismV7Name)
+		return "", world.NaturalMechanismV5, fmt.Errorf("invalid -mechanism value %q: the declared mechanism axis is {%s, %s, %s, %s}", mechanism, mechanismV5Name, mechanismV6Name, mechanismV7Name, mechanismV8Name)
 	}
 }
 
@@ -4672,6 +4675,8 @@ func run(ctx context.Context, o options) (report, error) {
 		revision = fmt.Sprintf("natural mechanism-v6/format-v6/schema-v6/rule-v6/projection-v6/policy %s", policyName)
 	case world.NaturalMechanismV7:
 		revision = fmt.Sprintf("natural mechanism-v7/format-v7/schema-v7/rule-v7/projection-v7/policy %s", policyName)
+	case world.NaturalMechanismV8:
+		revision = fmt.Sprintf("natural mechanism-v8/format-v8/schema-v8/rule-v8/projection-v8/policy %s", policyName)
 	}
 	r := report{
 		Status:   "synthetic/model-conditional; frozen natural-limits v5 fixture; no historical calibration, takeoff, or P0 scale claim",
@@ -4865,7 +4870,7 @@ func main() {
 	fixture := flag.Bool("founder-tenure", false, "declared founder-tenure fixture genesis (births-enabled-only; the only genesis under which organic births are reachable)")
 	cultivationDisabled := flag.Bool("cultivation-disabled", false, "declared cultivation ablation (births-disabled-only): the frozen policy is unchanged; any build event is a defect")
 	policy := flag.String("policy", policy5Name, "frozen policy ref (ticket-16 policy-selection seam): natural/5 (default, byte-compatible with every recorded run), natural/6, the ticket-17 provision arms natural/7 and natural/7b (both require -mechanism=v6 or v7), or the ticket-20 wage-contract arm natural/9 (requires -mechanism=v7)")
-	mechanism := flag.String("mechanism", mechanismV5Name, "declared world mechanism axis (ticket-17, ticket-20): v5 (default, the frozen v5 world, byte-compatible with every recorded run), v6 (the rule-515 provision world), or v7 (the wage-contract world, rules 516-519)")
+	mechanism := flag.String("mechanism", mechanismV5Name, "declared world mechanism axis (ticket-17, ticket-20): v5 (default, the frozen v5 world, byte-compatible with every recorded run), v6 (the rule-515 provision world), v7 (the wage-contract world, rules 516-519), or v8 (the band-wide mate pool and household consent gate)")
 	founders := flag.Int("founders", 0, "declared founding band (ticket-18 fixture axis, run identity): founder rows materialized from the frozen founder-stream prefix; 0 = the default spelling of the full block 8·patches, otherwise 1..8·patches, range-checked before any publication")
 	out := flag.String("out", "", "new JSON report path; refused if it exists; the report also goes to stdout")
 	checkpointDir := flag.String("checkpoint-dir", "", "new directory for the root and branch bundles; must not exist; default creates a fresh temporary directory")

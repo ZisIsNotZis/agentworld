@@ -632,6 +632,8 @@ func naturalRefLegalUnderMechanism(m NaturalMechanism, ref strategy.NaturalRef) 
 	case strategy.FrozenNaturalPolicy7().Ref, strategy.FrozenNaturalPolicy7b().Ref, strategy.FrozenNaturalPolicy11().Ref,
 		strategy.FrozenNaturalPolicy12().Ref:
 		return m == NaturalMechanismV6 || m == NaturalMechanismV7
+	case strategy.FrozenNaturalPolicy13().Ref:
+		return m == NaturalMechanismV8
 	case strategy.FrozenNaturalPolicy9().Ref:
 		return m == NaturalMechanismV7
 	}
@@ -774,7 +776,7 @@ func naturalField(field sim.FieldID, n int64) component.FieldSeed {
 // the wage ledgers — v7 (the nine-field granary). The v5 zero value returns
 // nothing: the frozen v5 granary seeds keep exactly their six fields.
 func granaryProvisionedSeed(mechanism NaturalMechanism, provisioned int64) []component.FieldSeed {
-	if mechanism != NaturalMechanismV6 && mechanism != NaturalMechanismV7 {
+	if mechanism != NaturalMechanismV6 && mechanism != NaturalMechanismV7 && mechanism != NaturalMechanismV8 {
 		return nil
 	}
 	return []component.FieldSeed{{Field: NaturalGranaryProvisionedField, Value: sim.IntegerValue(provisioned)}}
@@ -1089,6 +1091,8 @@ func (f *Natural) naturalEvaluate(id sim.EntityID, obs strategy.NaturalObservati
 		return f.bound[id].Evaluate11(obs)
 	case strategy.FrozenNaturalPolicy12().Ref:
 		return f.bound[id].Evaluate12(obs)
+	case strategy.FrozenNaturalPolicy13().Ref:
+		return f.bound[id].Evaluate13(obs)
 	}
 	return f.bound[id].Evaluate(obs)
 }
@@ -1122,6 +1126,8 @@ func (f *Natural) naturalEvaluateBirthRequest(id sim.EntityID, obs strategy.Natu
 		return f.bound[id].EvaluateBirthRequest11(obs)
 	case strategy.FrozenNaturalPolicy12().Ref:
 		return f.bound[id].EvaluateBirthRequest12(obs)
+	case strategy.FrozenNaturalPolicy13().Ref:
+		return f.bound[id].EvaluateBirthRequest13(obs)
 	}
 	return f.bound[id].EvaluateBirthRequest(obs)
 }
@@ -1144,6 +1150,8 @@ func (f *Natural) naturalEvaluateBirthReply(id sim.EntityID, obs strategy.Natura
 		return f.bound[id].EvaluateBirthReply11(obs)
 	case strategy.FrozenNaturalPolicy12().Ref:
 		return f.bound[id].EvaluateBirthReply12(obs)
+	case strategy.FrozenNaturalPolicy13().Ref:
+		return f.bound[id].EvaluateBirthReply13(obs)
 	}
 	return f.bound[id].EvaluateBirthReply(obs)
 }
@@ -1203,7 +1211,7 @@ func naturalActorState(view scheduler.SnapshotView, mechanism NaturalMechanism, 
 	}
 	granaryFields := []sim.FieldID{NaturalGranaryStockField, NaturalGranaryCultivatedTotalField, NaturalGranaryStoredMealsField,
 		NaturalGranaryLastStoredMealHourField, NaturalGranarySpoilDebtField, NaturalGranarySpoiledField}
-	if mechanism == NaturalMechanismV6 {
+	if mechanism == NaturalMechanismV6 || mechanism == NaturalMechanismV8 {
 		granaryFields = append(granaryFields, NaturalGranaryProvisionedField)
 	}
 	if mechanism == NaturalMechanismV7 {
@@ -1215,7 +1223,7 @@ func naturalActorState(view scheduler.SnapshotView, mechanism NaturalMechanism, 
 	}
 	provisioned := int64(0) // the ledger does not exist under the v5 zero value
 	wagesPaid, wagesEarned := int64(0), int64(0)
-	if mechanism == NaturalMechanismV6 {
+	if mechanism == NaturalMechanismV6 || mechanism == NaturalMechanismV8 {
 		provisioned = granary[6]
 	}
 	if mechanism == NaturalMechanismV7 {
@@ -2525,14 +2533,22 @@ func (f *Natural) birthRequestDecision(view scheduler.SnapshotView, hour int, at
 		if !ok {
 			return kernel.Proposal{}, false, ErrNaturalRunner
 		}
-		if mate.Bag.Source == a.Bag.Source {
-			mates = append(mates, mateID)
-			// The proposer's view of the PUBLIC kin walk (ticket 47): the same
-			// walk the reply side runs, in the same ascending order as the
-			// roster it annotates.
-			distance, related := NaturalKinDistance(lookup, proposer, mateID)
-			views = append(views, strategy.NaturalMateView{ID: mateID, KinRelated: related, KinDistance: distance})
+		// Mechanism v8 (ticket 49): the mate pool is the whole band — every
+		// living roster actor except the proposer, regardless of home patch.
+		// Every frozen mechanism keeps the same-patch pool exactly.
+		if f.mechanism == NaturalMechanismV8 {
+			if !naturalAlive(mate) {
+				continue
+			}
+		} else if mate.Bag.Source != a.Bag.Source {
+			continue
 		}
+		mates = append(mates, mateID)
+		// The proposer's view of the PUBLIC kin walk (ticket 47): the same
+		// walk the reply side runs, in the same ascending order as the
+		// roster it annotates.
+		distance, related := NaturalKinDistance(lookup, proposer, mateID)
+		views = append(views, strategy.NaturalMateView{ID: mateID, KinRelated: related, KinDistance: distance})
 	}
 	obs := strategy.NaturalRequestObservation{
 		Actor: proposer, Ref: f.ref, Hour: hour, WorldVersion: view.Version,

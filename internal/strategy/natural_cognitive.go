@@ -453,6 +453,10 @@ const (
 	// the mate unrelated; with no non-kin mate the rule has no addressee and
 	// the proposer waits.
 	naturalAddresseeNonKin
+	// naturalAddresseeBandNonKin is the natural/13 rule (ticket 49): the same
+	// non-kin rotation as natural/12, but the roster is now the whole band, so
+	// the founder same-patch placement check does not apply.
+	naturalAddresseeBandNonKin
 )
 
 // naturalAddressee applies one declared addressee rule to the ascending-sorted
@@ -464,7 +468,7 @@ func naturalAddressee(rule naturalAddresseeRule, mates []sim.EntityID, views []N
 	switch rule {
 	case naturalAddresseeRotate:
 		return mates[hour%len(mates)], true
-	case naturalAddresseeNonKin:
+	case naturalAddresseeNonKin, naturalAddresseeBandNonKin:
 		nonKin := make([]sim.EntityID, 0, len(views))
 		for _, view := range views {
 			if !view.KinRelated {
@@ -522,15 +526,17 @@ func naturalBirthRequestCascade(id naturalClaimIdentity, obs NaturalRequestObser
 			return NaturalRequestChoice{}, ErrInvalidNaturalObservation
 		}
 		// Founder placement is public fixed geometry: a founder mate on a
-		// different patch than the observed home patch is a malformed roster.
-		// Newborn placement stays runner-supplied public data; the world
-		// re-gates same-patch on fresh truth at the reply.
-		if home, ok := naturalFounderHomePatch(id.Patches, mate); ok && home != obs.HomePatch {
-			return NaturalRequestChoice{}, ErrInvalidNaturalObservation
+		// different patch than the observed home patch is a malformed roster —
+		// except under natural/13, whose mate pool is the whole band (ticket
+		// 49). Newborn placement stays runner-supplied public data.
+		if rule != naturalAddresseeBandNonKin {
+			if home, ok := naturalFounderHomePatch(id.Patches, mate); ok && home != obs.HomePatch {
+				return NaturalRequestChoice{}, ErrInvalidNaturalObservation
+			}
 		}
 	}
-	if rule == naturalAddresseeNonKin {
-		// natural/12 (ticket 47) fails closed unless the proposer's public kin
+	if rule == naturalAddresseeNonKin || rule == naturalAddresseeBandNonKin {
+		// natural/12 (ticket 47) and natural/13 fail closed unless the proposer's public kin
 		// view matches the roster entry for entry: same length, the same IDs in
 		// the same ascending order, and the walk's own declared range.
 		if len(obs.MateViews) != len(mates) {

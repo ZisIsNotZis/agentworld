@@ -223,6 +223,14 @@ func (b *NaturalBound) EvaluateBirthReply7b(obs NaturalReplyObservation) (Natura
 // natural7BirthReply is the shared v6-verbatim birth-reply cascade for both
 // 7 identities (structure of EvaluateBirthReplyV6, same margins).
 func natural7BirthReply(b *NaturalBound, obs NaturalReplyObservation) (NaturalReplyChoice, error) {
+	return natural7BirthReplyAt(b, obs, naturalPolicyTFileV6, false)
+}
+
+// natural7BirthReplyAt is the shared v6-verbatim birth-reply cascade with the
+// consenter's own consent conjunction supplied by the caller. The frozen refs
+// pass naturalPolicyTFileV6 = 4 and the full own wealth gate; natural/13 passes
+// the household gate 2, where only the consenter's energy matters.
+func natural7BirthReplyAt(b *NaturalBound, obs NaturalReplyObservation, acceptFloor int64, household bool) (NaturalReplyChoice, error) {
 	if obs.Actor != b.actor || obs.Ref != b.policy.Ref ||
 		obs.Hour < 0 || obs.Hour >= naturalHorizonHours ||
 		obs.OwnLastReplyHour < naturalNeverHour || obs.OwnLastReplyHour > int64(obs.Hour) {
@@ -260,7 +268,10 @@ func natural7BirthReply(b *NaturalBound, obs NaturalReplyObservation) (NaturalRe
 	// The frozen consent conjunction with the v6 own-energy accept floor:
 	// own granary >= 3 ∧ own k >= 2 ∧ own energy >= 4; the reported-claims
 	// margins and the kin clause are verbatim v5.
-	ownOK := granary >= naturalConsentMinGranary && capital >= naturalConsentMinCapital && energy >= naturalPolicyTFileV6
+	ownOK := energy >= acceptFloor
+	if !household {
+		ownOK = granary >= naturalConsentMinGranary && capital >= naturalConsentMinCapital && ownOK
+	}
 	consentReason := func(view NaturalPendingView) NaturalReplyReason {
 		switch {
 		case !ownOK:

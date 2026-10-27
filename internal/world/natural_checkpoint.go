@@ -95,7 +95,7 @@ func naturalPolicyFormats() map[uint32]bool {
 	return map[uint32]bool{strategy.NaturalPolicyFormatV5: true, strategy.NaturalPolicyFormatV6: true,
 		strategy.NaturalPolicyFormatV7: true, strategy.NaturalPolicyFormatV7b: true,
 		strategy.NaturalPolicyFormatV9: true, strategy.NaturalPolicyFormatV11: true,
-		strategy.NaturalPolicyFormatV12: true}
+		strategy.NaturalPolicyFormatV12: true, strategy.NaturalPolicyFormatV13: true}
 }
 
 // naturalManifestPolicyRef resolves the manifest's declared policy identity
@@ -119,6 +119,8 @@ func (m naturalManifest) naturalManifestPolicyRef() (strategy.NaturalRef, error)
 		return strategy.FrozenNaturalPolicy11().Ref, nil
 	case strategy.NaturalPolicyFormatV12:
 		return strategy.FrozenNaturalPolicy12().Ref, nil
+	case strategy.NaturalPolicyFormatV13:
+		return strategy.FrozenNaturalPolicy13().Ref, nil
 	}
 	return strategy.NaturalRef{}, ErrNaturalCheckpoint
 }
@@ -763,7 +765,7 @@ func decodeNaturalManifest(data []byte) (naturalManifest, error) {
 			// mechanism: 5 is the frozen v5 zero value, 6 is mechanism v6,
 			// 7 is mechanism v7 (ticket 20), anything else fails closed.
 			if v != uint32(NaturalMechanismV5.worldVersion()) && v != uint32(NaturalMechanismV6.worldVersion()) &&
-				v != uint32(NaturalMechanismV7.worldVersion()) {
+				v != uint32(NaturalMechanismV7.worldVersion()) && v != uint32(NaturalMechanismV8.worldVersion()) {
 				return m, ErrNaturalCheckpoint
 			}
 			m.mechanism = NaturalMechanismV5
@@ -772,6 +774,9 @@ func decodeNaturalManifest(data []byte) (naturalManifest, error) {
 			}
 			if v == uint32(NaturalMechanismV7.worldVersion()) {
 				m.mechanism = NaturalMechanismV7
+			}
+			if v == uint32(NaturalMechanismV8.worldVersion()) {
+				m.mechanism = NaturalMechanismV8
 			}
 			expected = v
 		case mechanismSlots[i]:
@@ -1277,8 +1282,8 @@ func naturalProjectionBounds(check NaturalCheckpoint, table naturalBoundsTable, 
 			{NaturalBirthRequestTypeID, NaturalBirthRequestLastRequestHourField, a.Request.LastRequestHour},
 			{NaturalBirthRequestTypeID, NaturalBirthRequestLastReplyHourField, a.Request.LastReplyHour},
 		}
-		if mechanism == NaturalMechanismV6 {
-			// The provisioned ledger exists only under mechanism v6 and is
+		if mechanism == NaturalMechanismV6 || mechanism == NaturalMechanismV8 {
+			// The provisioned ledger exists under mechanism v6 and v8 and is
 			// checked against its declared envelope; the v5 zero value keeps
 			// exactly the frozen field set (its G2a pins the counter to zero
 			// and the frozen bounds table has no field 7).
@@ -1451,7 +1456,7 @@ func (p *naturalProjection) applyPatchDelta(mechanism NaturalMechanism, patches 
 			switch rule {
 			case NaturalGatherRule, NaturalConsumeRule, NaturalBuildRule, NaturalBirthReplyRule:
 			case NaturalProvisionRule:
-				if mechanism != NaturalMechanismV6 {
+				if mechanism != NaturalMechanismV6 && mechanism != NaturalMechanismV8 {
 					return ErrNaturalCheckpoint
 				}
 			case NaturalLabourSettlementRule:
@@ -1542,7 +1547,7 @@ func (p *naturalProjection) applyPatchDelta(mechanism NaturalMechanism, patches 
 			switch rule {
 			case NaturalSpoilageRule, NaturalGrantRule, NaturalEatStoredRule, NaturalBirthReplyRule:
 			case NaturalProvisionRule:
-				if mechanism != NaturalMechanismV6 {
+				if mechanism != NaturalMechanismV6 && mechanism != NaturalMechanismV8 {
 					return ErrNaturalCheckpoint
 				}
 			case NaturalLabourSettlementRule:
@@ -1581,7 +1586,7 @@ func (p *naturalProjection) applyPatchDelta(mechanism NaturalMechanism, patches 
 			// The rule-515 withdrawal ledger: only the provision rule writes
 			// it, and only under mechanism v6 (the frozen v5 granary has no
 			// field 7, so a v5 replay refuses any write here).
-			if rule != NaturalProvisionRule || mechanism != NaturalMechanismV6 {
+			if rule != NaturalProvisionRule || (mechanism != NaturalMechanismV6 && mechanism != NaturalMechanismV8) {
 				return ErrNaturalCheckpoint
 			}
 			n, err := integer()
@@ -1612,7 +1617,7 @@ func (p *naturalProjection) applyPatchDelta(mechanism NaturalMechanism, patches 
 			switch rule {
 			case NaturalEatStoredRule:
 			case NaturalProvisionRule:
-				if mechanism != NaturalMechanismV6 {
+				if mechanism != NaturalMechanismV6 && mechanism != NaturalMechanismV8 {
 					return ErrNaturalCheckpoint
 				}
 			default:
@@ -1903,7 +1908,7 @@ func (p *naturalProjection) applyAllocationDelta(mechanism NaturalMechanism, pat
 		case NaturalGranaryProvisionedField:
 			// Mechanism v6 and v7: every newborn granary row carries the
 			// provisioned ledger (seeded 0); the v5 allocation never does.
-			if mechanism != NaturalMechanismV6 && mechanism != NaturalMechanismV7 {
+			if mechanism != NaturalMechanismV6 && mechanism != NaturalMechanismV7 && mechanism != NaturalMechanismV8 {
 				return ErrNaturalCheckpoint
 			}
 			return set(&state.Granary.Provisioned)

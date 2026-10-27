@@ -305,7 +305,7 @@ func validNaturalGranaryFor(m NaturalMechanism, g NaturalGranaryState) bool {
 		return false
 	}
 	switch m {
-	case NaturalMechanismV6:
+	case NaturalMechanismV6, NaturalMechanismV8:
 		return g.Provisioned >= 0 && g.Provisioned <= NaturalProvisionedMax && g.WagesPaid == 0 && g.WagesEarned == 0
 	case NaturalMechanismV7:
 		return g.Provisioned >= 0 && g.Provisioned <= NaturalProvisionedMax &&
@@ -953,7 +953,7 @@ func NaturalEatStoredFor(m NaturalMechanism, patches, hour int, actorID sim.Enti
 // creation): the body is untouched, so G3 is unchanged, and G2a′ stays
 // exact because provisioned absorbs the withdrawn stock unit.
 func NaturalProvision(m NaturalMechanism, patches, hour int, actorID sim.EntityID, a NaturalActorState) (NaturalActorState, error) {
-	if m != NaturalMechanismV6 && m != NaturalMechanismV7 {
+	if m != NaturalMechanismV6 && m != NaturalMechanismV7 && m != NaturalMechanismV8 {
 		return NaturalActorState{}, ErrNaturalContract
 	}
 	if hour < 0 || hour >= NaturalHorizonHours || !naturalActorEntity(patches, actorID) || !validNaturalActorFor(m, patches, actorID, a) || !naturalAlive(a) ||
@@ -1383,6 +1383,23 @@ func NaturalConsentAllows(ownGranary, ownCapital, ownEnergy, reportedCapital, re
 // patch. There is no birth-count term: births are bounded only by ecology
 // (P15).
 func NaturalSurplusGateAllows(proposer, consenter NaturalActorState, kinAllowed bool) bool {
+	return naturalSurplusGateAllowsFor(NaturalMechanismV5, proposer, consenter, kinAllowed)
+}
+
+// naturalSurplusGateAllowsFor is the mechanism-parameterized surplus gate.
+// Under NaturalMechanismV8 the proposer keeps the full wealth gate while the
+// consenter only has to be fed (energy ≥ 2), and the co-location requirement
+// disappears (the band-wide mate pool); every frozen mechanism keeps the v5
+// conjunction exactly.
+func naturalSurplusGateAllowsFor(m NaturalMechanism, proposer, consenter NaturalActorState, kinAllowed bool) bool {
+	if m == NaturalMechanismV8 {
+		return naturalAlive(proposer) && naturalAlive(consenter) &&
+			proposer.Worksite.Capital >= NaturalConsentMinCapital &&
+			proposer.Granary.Stock >= NaturalConsentMinGranary &&
+			proposer.Body.Energy >= NaturalConsentMinEnergy &&
+			consenter.Body.Energy >= NaturalHouseholdMinEnergy &&
+			kinAllowed
+	}
 	return naturalAlive(proposer) && naturalAlive(consenter) &&
 		proposer.Worksite.Capital >= NaturalConsentMinCapital && consenter.Worksite.Capital >= NaturalConsentMinCapital &&
 		proposer.Granary.Stock >= NaturalConsentMinGranary && consenter.Granary.Stock >= NaturalConsentMinGranary &&
@@ -1582,8 +1599,13 @@ func NaturalBirthReplyFor(m NaturalMechanism, patches, hour int, kinAllowed bool
 	// The frozen consent formula in its exact conjunct order: the
 	// consenter's own private state first, then the reported claims, then
 	// the public kin distance.
+	consentOwnFails := consenter.Granary.Stock < NaturalConsentMinGranary || consenter.Worksite.Capital < NaturalConsentMinCapital || consenter.Body.Energy < NaturalConsentMinEnergy
+	if m == NaturalMechanismV8 {
+		// The household consent gate: the consenter only has to be fed.
+		consentOwnFails = consenter.Body.Energy < NaturalHouseholdMinEnergy
+	}
 	switch {
-	case consenter.Granary.Stock < NaturalConsentMinGranary || consenter.Worksite.Capital < NaturalConsentMinCapital || consenter.Body.Energy < NaturalConsentMinEnergy:
+	case consentOwnFails:
 		return refuse(NaturalReplyRefuse, NaturalRefusalConsentOwn)
 	case request.ReportedCapital < NaturalConsentMinCapital || request.ReportedGranary < NaturalConsentMinGranary:
 		return refuse(NaturalReplyRefuse, NaturalRefusalConsentClaims)
@@ -1591,7 +1613,7 @@ func NaturalBirthReplyFor(m NaturalMechanism, patches, hour int, kinAllowed bool
 		return refuse(NaturalReplyRefuse, NaturalRefusalKin)
 	}
 	// The runner surplus gate on fresh truth, both parents.
-	if !NaturalSurplusGateAllows(proposer, consenter, kinAllowed) {
+	if !naturalSurplusGateAllowsFor(m, proposer, consenter, kinAllowed) {
 		if proposer.Bag.Source != consenter.Bag.Source {
 			return refuse(NaturalReplyRefuse, NaturalRefusalCrossPatch)
 		}
@@ -1644,12 +1666,20 @@ func NaturalBirthFor(m NaturalMechanism, patches, hour int, kinAllowed bool, new
 		child.ParentA != proposerID || child.ParentB != consenterID || child.BirthHour != int64(hour) {
 		return NaturalBirthResult{}, ErrNaturalContract
 	}
-	if !NaturalSurplusGateAllows(proposer, consenter, kinAllowed) {
+	if !naturalSurplusGateAllowsFor(m, proposer, consenter, kinAllowed) {
 		return NaturalBirthResult{}, ErrNaturalContract
 	}
-	// Affordability is implied by the gate margins (granary≥3, energy≥3)
-	// but the cost is checked against the paying rows themselves.
-	for _, parent := range []NaturalActorState{proposer, consenter} {
+	// The household gate (mechanism v8) makes the proposer the paying
+	// household head: the proposer pays the existing 2 granary + 2 energy and
+	// the consenter only has to be fed (energy ≥ 2), so it pays nothing.
+	// Every frozen mechanism keeps the symmetric two-parent payment exactly.
+	payers := []NaturalActorState{proposer, consenter}
+	if m == NaturalMechanismV8 {
+		payers = []NaturalActorState{proposer}
+	}
+	// Affordability is implied by the gate margins but the cost is checked
+	// against the paying rows themselves.
+	for _, parent := range payers {
 		if parent.Granary.Stock < NaturalParentGranaryCost || parent.Body.Energy < NaturalParentEnergyCost {
 			return NaturalBirthResult{}, ErrNaturalContract
 		}
@@ -1662,7 +1692,11 @@ func NaturalBirthFor(m NaturalMechanism, patches, hour int, kinAllowed bool, new
 		a.Body.BasalSpent += NaturalParentEnergyCost
 		return a
 	}
-	proposer, consenter = pay(proposer), pay(consenter)
+	if m == NaturalMechanismV8 {
+		proposer = pay(proposer)
+	} else {
+		proposer, consenter = pay(proposer), pay(consenter)
+	}
 	newborn := NaturalActorState{
 		Body:     NaturalBodyState{Energy: NaturalNewbornEnergy, LastGatherHour: NaturalNeverHour},
 		Bag:      NaturalBagState{Source: home},

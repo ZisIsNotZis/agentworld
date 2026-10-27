@@ -115,9 +115,13 @@ const (
 	NaturalParentEnergyCost  int64 = 2
 
 	// Frozen consent thresholds and derived-kinship limits, verbatim v4.
-	NaturalConsentMinGranary  int64 = 3
-	NaturalConsentMinCapital  int64 = 2
-	NaturalConsentMinEnergy   int64 = 3
+	NaturalConsentMinGranary int64 = 3
+	NaturalConsentMinCapital int64 = 2
+	NaturalConsentMinEnergy  int64 = 3
+	// NaturalHouseholdMinEnergy is the mechanism-v8 household consent gate:
+	// the consenter only has to be fed (energy ≥ 2), while the proposer keeps
+	// the full wealth gate above.
+	NaturalHouseholdMinEnergy int64 = 2
 	NaturalKinProhibitedDepth int   = 2
 	NaturalKinWalkLimit       int   = 10
 
@@ -384,25 +388,34 @@ const (
 	// ticket 20): rules 516-519, components 0x80000058/0x80000059, granary
 	// wage ledgers, G2a″, and the enumerated G5 admissions.
 	NaturalMechanismV7 NaturalMechanism = 7
+	// NaturalMechanismV8 (world axis version 8, ticket 49) is the v6 rule
+	// table plus exactly two conception changes: the band-wide mate pool
+	// (no co-location requirement) and the household consent gate (the
+	// consenter only needs energy ≥ 2). Everything else, including rule 515
+	// and the provisioned ledger, is v6 verbatim; the wage contract of v7
+	// does not exist here.
+	NaturalMechanismV8 NaturalMechanism = 8
 )
 
 // NaturalMechanismValid reports the admitted axis values: the zero value
-// (≡ v5), 6, and 7. Literal 5 is not a second spelling of v5 — the zero
+// (≡ v5), 6, 7, and 8. Literal 5 is not a second spelling of v5 — the zero
 // value is the one v5 spelling — and everything else fails closed.
 func NaturalMechanismValid(m NaturalMechanism) bool {
-	return m == NaturalMechanismV5 || m == NaturalMechanismV6 || m == NaturalMechanismV7
+	return m == NaturalMechanismV5 || m == NaturalMechanismV6 || m == NaturalMechanismV7 || m == NaturalMechanismV8
 }
 
 // worldVersion is the world axis version number of the mechanism: 5 for the
-// zero value, 6 for NaturalMechanismV6, 7 for NaturalMechanismV7. Anything
-// else is unreachable through NaturalRegistryFor and falls back to the
-// frozen v5 identity.
+// zero value, 6 for NaturalMechanismV6, 7 for NaturalMechanismV7, 8 for
+// NaturalMechanismV8. Anything else is unreachable through NaturalRegistryFor
+// and falls back to the frozen v5 identity.
 func (m NaturalMechanism) worldVersion() uint32 {
 	switch m {
 	case NaturalMechanismV6:
 		return 6
 	case NaturalMechanismV7:
 		return 7
+	case NaturalMechanismV8:
+		return 8
 	}
 	return 5
 }
@@ -675,7 +688,7 @@ func NaturalBagDescriptorFor(m NaturalMechanism) component.ComponentDescriptor {
 	rules := []component.TransitionRuleDescriptor{
 		naturalRuleFor(m, NaturalGatherRule, "gather"), naturalRuleFor(m, NaturalConsumeRule, "consume"),
 		naturalRuleFor(m, NaturalBuildRule, "build"), naturalRuleFor(m, NaturalBirthReplyRule, "birth-reply")}
-	if m == NaturalMechanismV6 {
+	if m == NaturalMechanismV6 || m == NaturalMechanismV8 {
 		rules = append(rules, naturalRuleFor(m, NaturalProvisionRule, "provision"))
 	}
 	if m == NaturalMechanismV7 {
@@ -755,7 +768,7 @@ func NaturalGranaryDescriptorFor(m NaturalMechanism) component.ComponentDescript
 	rules := []component.TransitionRuleDescriptor{
 		naturalRuleFor(m, NaturalSpoilageRule, "spoilage"), naturalRuleFor(m, NaturalGrantRule, "yield-grant"),
 		naturalRuleFor(m, NaturalEatStoredRule, "eat-stored"), naturalRuleFor(m, NaturalBirthReplyRule, "birth-reply")}
-	if m == NaturalMechanismV6 {
+	if m == NaturalMechanismV6 || m == NaturalMechanismV8 {
 		fields = append(fields, naturalInteger(NaturalGranaryProvisionedField, "provisioned", "meals", 0, float64(NaturalProvisionedMax)))
 		rules = append(rules, naturalRuleFor(m, NaturalProvisionRule, "provision"))
 	}
@@ -1010,7 +1023,7 @@ func naturalPatchFieldAllowed(rule sim.RuleID, componentType sim.ComponentTypeID
 // of NaturalCheckOwnershipFor.
 func naturalPatchFieldAllowedFor(m NaturalMechanism, rule sim.RuleID, componentType sim.ComponentTypeID, field sim.FieldID) bool {
 	if rule == NaturalProvisionRule {
-		if m != NaturalMechanismV6 && m != NaturalMechanismV7 {
+		if m != NaturalMechanismV6 && m != NaturalMechanismV7 && m != NaturalMechanismV8 {
 			return false
 		}
 		switch componentType {
@@ -1387,7 +1400,7 @@ func NaturalEatStoredProposalFor(m NaturalMechanism, key string, patches, hour i
 // converted unit takes the normal bag decision afterward; the actor's body
 // is untouched — the meal is taken as worksite provision, not eaten.
 func NaturalProvisionProposal(m NaturalMechanism, key string, patches, hour int, actor sim.EntityID, a NaturalActorState) (kernel.Proposal, error) {
-	if m != NaturalMechanismV6 {
+	if m != NaturalMechanismV6 && m != NaturalMechanismV8 {
 		return kernel.Proposal{}, ErrNaturalContract
 	}
 	at, err := NaturalPhaseTime(hour, NaturalPhaseClaim)
@@ -1568,7 +1581,7 @@ func naturalNewbornAllocationsFor(m NaturalMechanism, patches int, id, home sim.
 		{Field: NaturalGranaryLastStoredMealHourField, Value: sim.IntegerValue(n.Granary.LastStoredMealHour)},
 		{Field: NaturalGranarySpoilDebtField, Value: sim.IntegerValue(n.Granary.SpoilDebt)},
 		{Field: NaturalGranarySpoiledField, Value: sim.IntegerValue(n.Granary.Spoiled)}}
-	if m == NaturalMechanismV6 {
+	if m == NaturalMechanismV6 || m == NaturalMechanismV8 {
 		granary = append(granary, component.FieldSeed{Field: NaturalGranaryProvisionedField, Value: sim.IntegerValue(n.Granary.Provisioned)})
 	}
 	if m == NaturalMechanismV7 {
