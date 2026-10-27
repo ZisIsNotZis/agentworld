@@ -14,7 +14,7 @@ The project does not aim to replay recorded history exactly. It aims to produce 
 
 ## Status
 
-The P0 substrate is the experimental foundation, while the active plan is the vertical-slice roadmap ([docs/VERTICAL-SLICES.md](docs/VERTICAL-SLICES.md); VS1 delivered, VS2's attention mechanism delivered, VS2's central claim unaccepted). Go is the provisional implementation language. S0–S5 provide simulation primitives, immutable components, a kernel, scheduling and an actor-safe intention boundary. S6 adds a bounded autonomous survival demo. A single-machine P0 checkpoint now persists its accepted history, scheduler state and typed attempt journal. Full P0 survival is open. Language-model integration is **not** deferred future-phase work: it is the subject of the first slice (VS1) of the active plan ([docs/VERTICAL-SLICES.md](docs/VERTICAL-SLICES.md)).
+The P0 substrate is the experimental foundation, while the active plan is the vertical-slice roadmap ([docs/VERTICAL-SLICES.md](docs/VERTICAL-SLICES.md); VS1 delivered, VS2's attention mechanism delivered, VS2's central claim unaccepted). The work order's first two stages are complete on their declared cell: the world runs without cognition (`W1`) and the always-on `luna:max` reference is recorded (`W2`); the model/effort/timing/stability study (`W3`) is next. Go is the provisional implementation language. S0–S5 provide simulation primitives, immutable components, a kernel, scheduling and an actor-safe intention boundary. S6 adds a bounded autonomous survival demo. A single-machine P0 checkpoint now persists its accepted history, scheduler state and typed attempt journal. Full P0 survival is open. Language-model integration is **not** deferred future-phase work: it is the subject of the first slice (VS1) of the active plan ([docs/VERTICAL-SLICES.md](docs/VERTICAL-SLICES.md)).
 
 ## Quick start
 
@@ -200,19 +200,18 @@ Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the sho
 - VS1 (M1): mechanism complete, hermetic PASS on all eleven frozen exit criteria.
 - VS2 (M2): the allocation mechanism and its experiment harness, verified hermetically; a pre-registered curve criterion with reasoning-effort depth and 3 replicates; the measurement instrument (a 15-cell budgeted matrix in ~17 minutes for about $0.57).
 - `W1_world_runs`: the declared default world (mechanism v14, `natural/14`, yield 1, birth price 2, `f10-s0`, `H = 144`) passes on its declared cell with no cognition — alive 11 of 10, births 12, starvation 1, age deaths 10 — and the 128-cell regression is recorded with every failure named ([docs/VERTICAL-SLICES.md](docs/VERTICAL-SLICES.md), ticket 55).
+- `W2_reference_luna_max`: a live always-on `github_copilot/gpt-6-luna` reference cell at effort `max` on that world — 1,579 decisions, 0 fallbacks, 0 inadmissible answers, per-hour KPI series recorded (alive 17 at `H`, births 24, starvation 7, age deaths 10), replay-identical from its ledger, derived $0.63 at published rates (the gateway records it unpriced), 67.6 minutes wall clock after intra-hour call concurrency and a ledger-replay resume (ticket 57).
 
 **Not accepted / open**
 
-- VS2's central claim — that selective spending preserves fidelity better than uniform or periodic spending at an equal budget. The live matrix produced nulls and one non-replication, and every scored arm tied or lost to the no-AI control `A0`, which itself ended at one survivor: the anchor was a die-off, so those nulls are not evidence either way ([docs/VERTICAL-SLICES.md](docs/VERTICAL-SLICES.md), M2 row).
-- The work order's next item, `W2_reference_luna_max`: a `luna:max` always-on reference curve set on the W1 fixture, with its price. The runner still carries the old fixture, so the declared world must be threaded through it first.
-- The real-model arm of both slices, which is blocked on spend authorisation.
+- The central claim — that selective spending preserves fidelity better than uniform or periodic spending at an equal budget. The pre-W1 live matrices produced nulls on a world that ended at one survivor, so those nulls are not evidence either way; the claim is retested on the viable W1 world by `W3_axes` and `W4_curve_match` ([docs/VERTICAL-SLICES.md](docs/VERTICAL-SLICES.md), M2 row).
+- The model, reasoning-effort, kick-in-timing and stability facts the operator asked for; the reference cell exists, the model axis is still hard-wired in the runner.
 
 **Planned** (declared order; a successor does not start before its predecessor's exit is measured)
 
-1. `W2_reference_luna_max` — every decision answered by the declared reference model at maximum effort, as the benchmark rather than as ground truth.
-2. `W3_axes` — the effect of model, reasoning effort, kick-in timing and stability.
-3. `W4_curve_match` — judge per-hour KPI curves against the reference curve, fuzzy-matched, instead of the terminal outcome alone.
-4. Beyond M2: VS3 evolution (strategies measurably improve under audited mutation with provenance and rollback), VS4 stakes and scale, VS5 society, VS6 history.
+1. `W3_axes` — the effect of model, reasoning effort, kick-in timing and stability, against the recorded reference curve.
+2. `W4_curve_match` — judge per-hour KPI curves against the reference curve, fuzzy-matched, instead of the terminal outcome alone.
+3. Beyond M2: VS3 evolution (strategies measurably improve under audited mutation with provenance and rollback), VS4 stakes and scale, VS5 society, VS6 history.
 
 The long-term target is a self-evolving universe scaled as high as the available compute allows: agents that change their own behaviour logic mid-run and have the measured effect reported rather than asserted, every modification durable and attributable and verifiable by an outsider from the ledger and replay without trusting any agent's account of it, and every decision made from the actor's own observation boundary. Milestones and slices are the same object — M*n* = VS*n* — and the whole chain is reported once, at the end.
 

@@ -211,11 +211,23 @@ expressive**: a model that kicks
 - **AC.** A recorded `R@max` cell produces the full per-hour KPI series at the W1 fixture, its price is
   reported to the operator before scaling, and the run's identity names model, effort and wire.
   Falsifier: `R@max` cannot complete a cell inside the declared wall clock or exceeds the reported cap.
-- **Status.** Unblocked by `W1_world_runs` (ticket 55). The runner is still pinned to the old fixture
-  (mechanism v6, `natural/7`, `H = 168`), so the workpackage must first thread the declared W1 world
-  (v14, `natural/14`, `Yield = 1`, `BirthCost = 2`, `H = 144`) through `cmd/vs2` and its run identity,
-  reproduce the A0 cell exactly, and only then run the `R@max` cost probe. No code was missing for the
-  arm itself; the missing piece is the fixture, not the reference.
+- **Status.** **PASS (2026-10-27, tickets 56–57) on the declared cell.** The runner now carries the
+  declared W1 world in one constructor (`declaredWorld`: mechanism v14, `natural/14`, `Yield = 1`,
+  `BirthCost = 2`, `H = 144`) and records it in the evaluation; A0 reproduces the ticket-55 cell
+  exactly. The live cell `R-f10-s0` is recorded (`.scratch/57-w2-concurrent-reference/`): **1,579 Role
+  A calls** (every candidate every hour, no budget stop, ceiling 4,096), **993,037 prompt / 1,061,251
+  completion tokens**, **0 fallback / 0 inadmissible / 0 errors**, 64 decisions diverged from the
+  frozen policy; the gateway is unpriced (`cost_micros=0`), **$0.63 derived** at the published
+  ticket-35 rates, inside the workset cap. KPI at `H`: **alive 17** (from 10 founders), births 24,
+  starvation 7, age deaths 10; the full 144-hour series is `evaluation.json` and `kpi-series.tsv`.
+  Wall clock **67.6 min** over 4.65 h of summed call latency: in-hour Role A calls are now issued
+  concurrently (`-call-concurrency 10`, applied serially in wake order, R/no-Priority only) and the
+  execution environment's first-segment kill was repaired by a ledger-replay `-resume`
+  (`resume_from_hour=129`). Journal reconciliation and the replay lane both reproduce the whole cell
+  from the ledger with zero model calls (`identical`). The run identity names model, effort and wire.
+  The falsifier did not fire. The reference is **one cell**; the additional reference cells the
+  stability axis needs are run inside W3's declared matrix, because W2's one-cell allowance is spent.
+  A0/J1 evidence: ticket 56; concurrency, resume, and the reference record: ticket 57.
 
 ### `W3_axes` — model, thinking, kick-in timing, stability
 
@@ -229,7 +241,10 @@ expressive**: a model that kicks
 - **Non-do.** No new world mechanism; no unrecorded arm; no spend before its criterion is pre-registered.
 - **AC.** Each axis has a pre-registered comparison rule and a recorded verdict, with the reference curve
   as the baseline; the stability verdict names the cells and seeds it ran on.
-- **Status.** Unblocked by `W1_world_runs` (ticket 55) once `W2` fixes the fixture in the runner. The model axis (`-model`) remains an independent code gap.
+- **Status.** Unblocked by `W2` (ticket 57); the reference cell exists on the declared world. The model
+  axis (`-model`) is still hard-wired to `DefaultModelID` and must be added, recorded in run identity,
+  before the model fact can be measured; the effort and timing axes are runnable. The comparison rule
+  and the cell/seed/replicate set must be pre-registered before the first grid cell.
 
 ### `W4_curve_match` — the judgement is the curve, not the endpoint
 
@@ -379,7 +394,19 @@ choice; no route has been started.
   reference, with the aggregation declared before the grid runs (`W4_curve_match`); `vrd/2`
   ([VALIDATION.md](VALIDATION.md)) survives as a diagnostic, not as the objective.
 - Live spend is capped at one measured matrix per workset (≤ $1.10 at the recorded cost) until the
-  operator says otherwise, and `R@max`'s price is reported before it is scaled.
+  operator says otherwise, and `R@max`'s price is reported before it is scaled. W2's one-cell
+  allowance is spent (derived $0.63; the gateway itself records the model as unpriced, so the charge
+  is imputed at the published rates, never fabricated). Further reference cells run inside W3's
+  declared matrix.
+- The recorded `R@max` reference cell is `f10-s0` on the declared world, model
+  `github_copilot/gpt-6-luna`, wire `responses`, effort `max`, claim contract `natural-claim/v4`,
+  `-call-concurrency 10`. Its per-hour KPI series is the baseline W3/W4 compare against; it is a
+  model-conditional comparative proxy, never ground truth.
+- Intra-cell call concurrency is a **runner scheduling parameter**, not a world mechanism: it applies
+  only to the no-Priority reference wake policy, every request is built from its own observation
+  before any call, and responses are applied serially in the fixed wake order. It is recorded in the
+  run identity; a replay at a different concurrency reproduces the same world. Ledger *record* order
+  within an hour is nondeterministic; decision/apply order is not.
 - Application model: **`github_copilot/gpt-6-luna`** (operator decision; this gateway-exposed underscore id is the single declared application-model identity and supersedes the earlier `zai/glm-5.3-flash` choice); orchestration subagents: **`deepseek/deepseek-flash`**.
 - The ecology arc is closed: no new ecology work follows it. The substrate it produced is the
   instrument VS1/VS2 build on.
