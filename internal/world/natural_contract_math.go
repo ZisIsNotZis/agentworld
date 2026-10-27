@@ -272,12 +272,12 @@ func validNaturalPatchFor(m NaturalMechanism, yield int64, p NaturalPatchState) 
 	}
 	producedMax := NaturalGranaryStockMax
 	if naturalWildFillYield(m) {
-		producedMax = naturalYieldGranaryMax
+		producedMax = naturalYieldLedgerMax
 	}
 	if yield < 1 || yield > NaturalYieldMax || p.Yield < 0 || p.Yield > NaturalSlotsPerPatch ||
 		p.Pulses < 0 || p.Pulses > NaturalHorizonHours ||
 		p.Produced < 0 || p.Produced > producedMax ||
-		p.Granted < 0 || p.Granted > naturalYieldGranaryMax || p.Granted%yield != 0 ||
+		p.Granted < 0 || p.Granted > naturalYieldLedgerMax || p.Granted%yield != 0 ||
 		p.Unrealized < 0 || p.Unrealized > NaturalGranaryStockMax {
 		return false
 	}
@@ -1616,10 +1616,13 @@ func NaturalBirthRequest(patches, hour int, proposerID, addressee sim.EntityID, 
 // NaturalBirthRequestFor is the mechanism-parameterized filing; the zero
 // value reproduces NaturalBirthRequest exactly.
 func NaturalBirthRequestFor(m NaturalMechanism, patches, hour int, proposerID, addressee sim.EntityID, reportedCapital, reportedGranary int64, proposer NaturalActorState) (NaturalActorState, error) {
-	reportedGranaryMax, _ := naturalGranaryBoundsFor(m)
+	// The reported-granary bound is the mechanism's own declared granary
+	// stock envelope (never a cap: it is the ledger width, not a limit on
+	// how much food a household may hold).
+	reportedStockMax, _ := naturalGranaryBoundsFor(m)
 	if _, err := NaturalPhaseTime(hour, NaturalPhaseBirthRequest); err != nil ||
 		!naturalActorEntity(patches, proposerID) || !naturalActorEntity(patches, addressee) || addressee == proposerID ||
-		reportedCapital < 0 || reportedCapital > NaturalKMax || reportedGranary < 0 || reportedGranary > reportedGranaryMax ||
+		reportedCapital < 0 || reportedCapital > NaturalKMax || reportedGranary < 0 || reportedGranary > reportedStockMax ||
 		!validNaturalActorFor(m, patches, proposerID, proposer) || !naturalAlive(proposer) ||
 		proposer.Request.Status == NaturalRequestPending || proposer.Request.LastRequestHour >= int64(hour) {
 		return NaturalActorState{}, ErrNaturalContract

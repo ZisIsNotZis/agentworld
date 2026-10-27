@@ -92,6 +92,14 @@ func TestNaturalFixtureForMechanismV5DefaultPreserving(t *testing.T) {
 // there), and unknown mechanism versions are refused before any runner
 // exists.
 func TestNaturalFixtureForMechanismFailClosed(t *testing.T) {
+	// The unadmitted mechanism sample is derived, not a literal: it is the
+	// smallest axis value NaturalMechanismValid refuses, so a mechanism that
+	// becomes an admitted version never leaves this test pinning a value that
+	// now constructs.
+	unadmitted := NaturalMechanism(1)
+	for NaturalMechanismValid(unadmitted) {
+		unadmitted++
+	}
 	for _, tc := range []struct {
 		ref       strategy.NaturalRef
 		mechanism NaturalMechanism
@@ -99,12 +107,9 @@ func TestNaturalFixtureForMechanismFailClosed(t *testing.T) {
 		{strategy.FrozenNaturalPolicy7().Ref, NaturalMechanismV5},
 		{strategy.FrozenNaturalPolicy7b().Ref, NaturalMechanismV5},
 		{strategy.FrozenNaturalPolicy().Ref, NaturalMechanism(5)},
-		// Ticket 20 consequence (authorised sample move, not a behaviour
-		// change): mechanism 7 became an admitted axis value when the wage
-		// contract landed, and natural/5 is legal under every admitted
-		// mechanism (the zero-use control), so the unadmitted sample moves
-		// to the next undeclared value 9.
-		{strategy.FrozenNaturalPolicy().Ref, NaturalMechanism(9)},
+		// natural/5 is legal under every admitted mechanism (the zero-use
+		// control), so the fail-closed sample is an unadmitted version.
+		{strategy.FrozenNaturalPolicy().Ref, unadmitted},
 	} {
 		if _, err := NewNaturalFixtureForMechanism(2, 8, 5, true, 1, tc.ref, tc.mechanism); !errors.Is(err, ErrNaturalCheckpoint) {
 			t.Fatalf("fixture for ref %+v mechanism %d accepted: %v", tc.ref, tc.mechanism, err)

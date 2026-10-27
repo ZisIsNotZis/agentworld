@@ -158,12 +158,12 @@ const (
 	// ledgers of every mechanism below v9 keep exactly their frozen bounds.
 	NaturalYieldMax int64 = NaturalSlotsPerPatch
 
-	// naturalYieldGranaryMax is the mechanism-v9 ledger envelope: with every
+	// naturalYieldLedgerMax is the mechanism-v9 ledger envelope: with every
 	// cultivated slot granting NaturalYieldMax units per patch-hour, a
 	// granary can receive at most NaturalSlotsPerPatch times the frozen
 	// horizon envelope. Like every ledger bound it cannot bind behaviour
 	// before h=168; it is a declared envelope, never a behaviour cap.
-	naturalYieldGranaryMax           = NaturalGranaryStockMax * NaturalSlotsPerPatch // 10752
+	naturalYieldLedgerMax            = NaturalGranaryStockMax * NaturalSlotsPerPatch // 10752
 	NaturalBasalSpentMax       int64 = 6 * NaturalHorizonHours                       // 1008
 	NaturalBirthGranaryPaidMax int64 = 4 * NaturalHorizonHours                       // 672
 
@@ -775,7 +775,7 @@ func naturalSlotStocked(m NaturalMechanism, s NaturalSlotState) bool {
 // frozen mechanism keeps exactly NaturalGranaryStockMax/NaturalSpoiledMax.
 func naturalGranaryBoundsFor(m NaturalMechanism) (stock, spoiled int64) {
 	if naturalHasYieldAxis(m) {
-		return naturalYieldGranaryMax, naturalYieldGranaryMax
+		return naturalYieldLedgerMax, naturalYieldLedgerMax
 	}
 	return NaturalGranaryStockMax, NaturalSpoiledMax
 }
@@ -808,7 +808,7 @@ func naturalDescriptor(id sim.ComponentTypeID, name string, fields []component.F
 func NaturalPatchDescriptorFor(m NaturalMechanism) component.ComponentDescriptor {
 	grantedMax := NaturalGranaryStockMax
 	if naturalHasYieldAxis(m) {
-		grantedMax = naturalYieldGranaryMax
+		grantedMax = naturalYieldLedgerMax
 	}
 	return naturalDescriptorFor(m, NaturalPatchTypeID, "natural-patch-"+naturalNameSuffix(m), []component.FieldDescriptor{
 		naturalInteger(1, "yield", "food/hour", 0, NaturalSlotsPerPatch),
