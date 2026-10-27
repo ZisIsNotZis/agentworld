@@ -97,7 +97,12 @@ type NaturalJournalConfig struct {
 	// cultivated slot per patch-hour), omitted at the zero default so every
 	// recorded journal keeps its bytes and a yield disagreement fails
 	// closed exactly like a budget disagreement.
-	Yield             int64 `json:"Yield,omitempty"`
+	Yield int64 `json:"Yield,omitempty"`
+	// BirthCost is the mechanism-v13 declared birth price (granary units and
+	// energy units per paying parent), omitted under every mechanism below
+	// v13 so every recorded journal keeps its bytes; a price disagreement
+	// fails closed exactly like a yield disagreement.
+	BirthCost         int64 `json:"BirthCost,omitempty"`
 	Policy            strategy.NaturalRef
 	PolicyFingerprint [32]byte
 }
@@ -164,6 +169,9 @@ func validNaturalJournalConfig(config NaturalJournalConfig) bool {
 	if config.Yield < 0 || config.Yield > NaturalYieldMax || (config.Yield != 0 && !naturalHasYieldAxis(config.Mechanism)) {
 		return false
 	}
+	if config.BirthCost < 0 || config.BirthCost > NaturalBirthCostMax || (config.BirthCost != 0 && !naturalHasBirthCostAxis(config.Mechanism)) {
+		return false
+	}
 	if !NaturalFoundersValid(config.Patches, config.Founders) || (config.FounderTenure && config.Founders == 1) {
 		return false
 	}
@@ -206,7 +214,8 @@ func (f *Natural) journalConfig() NaturalJournalConfig {
 	}
 	return NaturalJournalConfig{Patches: f.patches, R: f.r, Seed: f.seed, Births: f.births, Boundary: f.births,
 		FounderTenure: f.naturalRunnerTenure(), CultivationDisabled: f.cultivationDisabled,
-		Mechanism: f.mechanism, Founders: band, Yield: f.declaredYield(), Policy: f.ref, PolicyFingerprint: fingerprint}
+		Mechanism: f.mechanism, Founders: band, Yield: f.declaredYield(), BirthCost: f.declaredBirthCost(),
+		Policy: f.ref, PolicyFingerprint: fingerprint}
 }
 
 // ExportJournal publishes committed evidence only, not a disk bundle. The
@@ -414,7 +423,7 @@ func sameNaturalJournalConfig(a, b NaturalJournalConfig) bool {
 	return a.Patches == b.Patches && a.R == b.R && a.Seed == b.Seed &&
 		a.Births == b.Births && a.Boundary == b.Boundary && a.FounderTenure == b.FounderTenure &&
 		a.CultivationDisabled == b.CultivationDisabled && a.Mechanism == b.Mechanism &&
-		a.Founders == b.Founders && a.Yield == b.Yield &&
+		a.Founders == b.Founders && a.Yield == b.Yield && a.BirthCost == b.BirthCost &&
 		a.Policy == b.Policy && a.PolicyFingerprint == b.PolicyFingerprint
 }
 
@@ -629,7 +638,8 @@ func replayNaturalJournalWithCognitive(batches []NaturalBatch, config NaturalJou
 		return nil, ErrNaturalJournal
 	}
 	reference, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: config.Patches, R: config.R,
-		Yield: config.Yield, Seed: config.Seed, Workers: 1, Births: config.Boundary, FounderTenure: config.FounderTenure,
+		Yield: config.Yield, BirthCost: config.BirthCost, Seed: config.Seed, Workers: 1, Births: config.Boundary,
+		FounderTenure:       config.FounderTenure,
 		CultivationDisabled: config.CultivationDisabled, PolicyRef: config.Policy, Mechanism: config.Mechanism,
 		Founders: config.Founders})
 	if err != nil {

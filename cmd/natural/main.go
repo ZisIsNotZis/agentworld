@@ -166,6 +166,7 @@ const (
 	mechanismV10Name       = "v10"
 	mechanismV11Name       = "v11"
 	mechanismV12Name       = "v12"
+	mechanismV13Name       = "v13"
 	// The frozen v9 verdict labels plus the corner label the ticket-20 record
 	// DECLARED BEFORE THE MATRIX RAN (spec comment: "the corner is declared as
 	// its own outcome label, TRADE-INERT - trade occurred and was correctly
@@ -278,6 +279,9 @@ type options struct {
 	// yield is the mechanism-v9 declared granary yield (units granted per
 	// cultivated slot per patch-hour); 0 is the frozen flat grant of 1.
 	yield int64
+	// birthCost is the mechanism-v13 declared birth price (granary units and
+	// energy units per paying parent); 0 is the frozen price of 2.
+	birthCost int64
 	// founders is the declared founding band (ticket 18 fixture axis): the
 	// zero value is the default spelling of the full frozen block 8·patches,
 	// anything else must satisfy world.NaturalFoundersValid.
@@ -291,6 +295,9 @@ type options struct {
 // frozen block 8P.
 // yieldResolved resolves the declared granary yield exactly like the world's
 // NaturalOptions.yieldResolved: the zero value is the frozen flat grant of 1.
+// It is the form the conservation evidence reads; the world constructors take
+// the declared (raw) spelling below, because the world's own resolver refuses
+// a non-zero yield under a mechanism that does not declare the axis.
 func (o options) yieldResolved() int64 {
 	if o.yield == 0 {
 		return 1
@@ -358,8 +365,10 @@ func naturalMechanismName(mechanism string) (string, world.NaturalMechanism, err
 		return mechanismV11Name, world.NaturalMechanismV11, nil
 	case mechanismV12Name:
 		return mechanismV12Name, world.NaturalMechanismV12, nil
+	case mechanismV13Name:
+		return mechanismV13Name, world.NaturalMechanismV13, nil
 	default:
-		return "", world.NaturalMechanismV5, fmt.Errorf("invalid -mechanism value %q: the declared mechanism axis is {%s, %s, %s, %s, %s, %s, %s, %s}", mechanism, mechanismV5Name, mechanismV6Name, mechanismV7Name, mechanismV8Name, mechanismV9Name, mechanismV10Name, mechanismV11Name, mechanismV12Name)
+		return "", world.NaturalMechanismV5, fmt.Errorf("invalid -mechanism value %q: the declared mechanism axis is {%s, %s, %s, %s, %s, %s, %s, %s, %s}", mechanism, mechanismV5Name, mechanismV6Name, mechanismV7Name, mechanismV8Name, mechanismV9Name, mechanismV10Name, mechanismV11Name, mechanismV12Name, mechanismV13Name)
 	}
 }
 
@@ -4376,7 +4385,7 @@ func runBranch(ctx context.Context, o options, births bool, parentDigest string,
 	if err != nil {
 		return br, err
 	}
-	expected := world.NaturalRestoreOptions{Patches: o.patches, R: o.r, Yield: o.yieldResolved(), Seed: o.seed, Workers: o.workers,
+	expected := world.NaturalRestoreOptions{Patches: o.patches, R: o.r, Yield: o.yield, BirthCost: o.birthCost, Seed: o.seed, Workers: o.workers,
 		Births: births, FounderTenure: fixture, CultivationDisabled: o.cultivationDisabled, PolicyRef: ref, Mechanism: mech,
 		Founders: o.founders}
 	f, restored, err := world.RestoreNaturalCheckpoint(childPath, expected)
@@ -4550,7 +4559,7 @@ func replayTwin(ctx context.Context, o options, bundlePath string, births, fixtu
 	if err != nil {
 		return twin, err
 	}
-	expected := world.NaturalRestoreOptions{Patches: o.patches, R: o.r, Yield: o.yieldResolved(), Seed: o.seed, Workers: workers,
+	expected := world.NaturalRestoreOptions{Patches: o.patches, R: o.r, Yield: o.yield, BirthCost: o.birthCost, Seed: o.seed, Workers: workers,
 		Births: births, FounderTenure: fixture, CultivationDisabled: o.cultivationDisabled, PolicyRef: ref, Mechanism: mech,
 		Founders: o.founders}
 	f, _, err := world.RestoreNaturalCheckpoint(bundlePath, expected)
@@ -4709,6 +4718,8 @@ func run(ctx context.Context, o options) (report, error) {
 		revision = fmt.Sprintf("natural mechanism-v11/format-v11/schema-v11/rule-v11/projection-v11/policy %s", policyName)
 	case world.NaturalMechanismV12:
 		revision = fmt.Sprintf("natural mechanism-v12/format-v12/schema-v12/rule-v12/projection-v12/policy %s", policyName)
+	case world.NaturalMechanismV13:
+		revision = fmt.Sprintf("natural mechanism-v13/format-v13/schema-v13/rule-v13/projection-v13/policy %s", policyName)
 	}
 	r := report{
 		Status:   "synthetic/model-conditional; frozen natural-limits v5 fixture; no historical calibration, takeoff, or P0 scale claim",
@@ -4808,7 +4819,7 @@ func run(ctx context.Context, o options) (report, error) {
 		// pulse is births-asymmetric by frozen design, so a disabled root is
 		// the only legal branch parent and every births-enabled cell is the
 		// recorded enable intervention branching from this same root.
-		root, err := world.NewNatural(world.NaturalOptions{Patches: o.patches, R: o.r, Yield: o.yieldResolved(), Seed: o.seed,
+		root, err := world.NewNatural(world.NaturalOptions{Patches: o.patches, R: o.r, Yield: o.yield, BirthCost: o.birthCost, Seed: o.seed,
 			Workers: 1, Births: false, CultivationDisabled: o.cultivationDisabled, PolicyRef: ref, Mechanism: mech,
 			Founders: o.founders})
 		if err != nil {
@@ -4853,7 +4864,7 @@ func run(ctx context.Context, o options) (report, error) {
 		digest := rootDigest
 		childBytes := rootBytes
 		if !o.fixture {
-			expected := world.NaturalRestoreOptions{Patches: o.patches, R: o.r, Yield: o.yieldResolved(), Seed: o.seed, Workers: 1,
+			expected := world.NaturalRestoreOptions{Patches: o.patches, R: o.r, Yield: o.yield, BirthCost: o.birthCost, Seed: o.seed, Workers: 1,
 				Births: false, CultivationDisabled: o.cultivationDisabled, PolicyRef: ref, Mechanism: mech,
 				Founders: o.founders}
 			digest, err = world.BranchNaturalCheckpoint(rootPath, expected, plan.births, childPath)
@@ -4902,8 +4913,9 @@ func main() {
 	fixture := flag.Bool("founder-tenure", false, "declared founder-tenure fixture genesis (births-enabled-only; the only genesis under which organic births are reachable)")
 	cultivationDisabled := flag.Bool("cultivation-disabled", false, "declared cultivation ablation (births-disabled-only): the frozen policy is unchanged; any build event is a defect")
 	policy := flag.String("policy", policy5Name, "frozen policy ref (ticket-16 policy-selection seam): natural/5 (default, byte-compatible with every recorded run), natural/6, the ticket-17 provision arms natural/7 and natural/7b (both require -mechanism=v6 or v7), or the ticket-20 wage-contract arm natural/9 (requires -mechanism=v7)")
-	mechanism := flag.String("mechanism", mechanismV5Name, "declared world mechanism axis (ticket-17, ticket-20, ticket-50): v5 (default, the frozen v5 world, byte-compatible with every recorded run), v6 (the rule-515 provision world), v7 (the wage-contract world, rules 516-519), v8 (the band-wide mate pool and household consent gate), or v9 (v8 plus the declared granary yield)")
-	yield := flag.Int64("yield", 0, "mechanism-v9 declared granary yield: units granted per cultivated slot per patch-hour (0 = the frozen flat grant of 1; 1..8 admitted under mechanism v9 only)")
+	mechanism := flag.String("mechanism", mechanismV5Name, "declared world mechanism axis (ticket-17, ticket-20, ticket-50): v5 (default, the frozen v5 world, byte-compatible with every recorded run), v6 (the rule-515 provision world), v7 (the wage-contract world, rules 516-519), v8 (the band-wide mate pool and household consent gate), v9 (v8 plus the declared granary yield), v10 (round-robin founding band), v11 (yield-scaled wild fill), v12 (the two-energy meal), or v13 (v12 plus the declared birth price)")
+	yield := flag.Int64("yield", 0, "mechanism-v9 declared granary yield: units granted per cultivated slot per patch-hour (0 = the frozen flat grant of 1; 1..8 admitted under mechanism v9 and later)")
+	birthCost := flag.Int64("birth-cost", 0, "mechanism-v13 declared birth price: granary units and energy units paid by each paying parent per birth (0 = the frozen price of 2; 1..8 admitted under mechanism v13 only)")
 	founders := flag.Int("founders", 0, "declared founding band (ticket-18 fixture axis, run identity): founder rows materialized from the frozen founder-stream prefix; 0 = the default spelling of the full block 8·patches, otherwise 1..8·patches, range-checked before any publication")
 	out := flag.String("out", "", "new JSON report path; refused if it exists; the report also goes to stdout")
 	checkpointDir := flag.String("checkpoint-dir", "", "new directory for the root and branch bundles; must not exist; default creates a fresh temporary directory")
@@ -4914,7 +4926,7 @@ func main() {
 	}
 	rep, err := run(context.Background(), options{patches: *patches, r: *r, seed: *seed, workers: *workers, hours: *hours,
 		births: *births, fixture: *fixture, cultivationDisabled: *cultivationDisabled, policy: *policy, mechanism: *mechanism,
-		yield: *yield, founders: *founders, out: *out, checkpointDir: *checkpointDir})
+		yield: *yield, birthCost: *birthCost, founders: *founders, out: *out, checkpointDir: *checkpointDir})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

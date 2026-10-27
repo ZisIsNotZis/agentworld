@@ -361,7 +361,7 @@ func validNaturalGranaryFor(m NaturalMechanism, g NaturalGranaryState) bool {
 		return false
 	}
 	switch m {
-	case NaturalMechanismV6, NaturalMechanismV8, NaturalMechanismV9, NaturalMechanismV10, NaturalMechanismV11, NaturalMechanismV12:
+	case NaturalMechanismV6, NaturalMechanismV8, NaturalMechanismV9, NaturalMechanismV10, NaturalMechanismV11, NaturalMechanismV12, NaturalMechanismV13:
 		return g.Provisioned >= 0 && g.Provisioned <= NaturalProvisionedMax && g.WagesPaid == 0 && g.WagesEarned == 0
 	case NaturalMechanismV7:
 		return g.Provisioned >= 0 && g.Provisioned <= NaturalProvisionedMax &&
@@ -382,11 +382,21 @@ func validNaturalGranary(g NaturalGranaryState) bool {
 // lifetime in [96,143]. died-hour is either -1 or the death hour itself,
 // never below birth-hour.
 func validNaturalGenome(patches int, actor sim.EntityID, g NaturalGenomeState) bool {
+	return validNaturalGenomeFor(NaturalMechanismV5, patches, actor, g)
+}
+
+// validNaturalGenomeFor is the mechanism-parameterized genome validator: its
+// birth-granary-paid bound is the declared envelope of the mechanism
+// (naturalBirthGranaryPaidMaxFor — the widened v13 envelope under the birth
+// price axis, the frozen four-units-per-hour envelope below it), so an actor
+// that paid a declared v13 price stays valid. The zero value reproduces
+// validNaturalGenome exactly.
+func validNaturalGenomeFor(m NaturalMechanism, patches int, actor sim.EntityID, g NaturalGenomeState) bool {
 	locus := func(v int64) bool { return v >= NaturalGenomeLocusMin && v <= NaturalGenomeLocusMax }
 	if !locus(g.LocusM) || !locus(g.LocusY) || !locus(g.LocusW) {
 		return false
 	}
-	if g.BirthGranaryPaid < 0 || g.BirthGranaryPaid > NaturalBirthGranaryPaidMax {
+	if g.BirthGranaryPaid < 0 || g.BirthGranaryPaid > naturalBirthGranaryPaidMaxFor(m) {
 		return false
 	}
 	if naturalFounderEntity(patches, actor) {
@@ -501,7 +511,7 @@ func naturalAlive(a NaturalActorState) bool {
 // died-hour=-1 ⇒ energy>0.
 func validNaturalActorFor(m NaturalMechanism, patches int, actor sim.EntityID, a NaturalActorState) bool {
 	if !naturalActorEntity(patches, actor) || !validNaturalBodyFor(m, a.Body) || !validNaturalWorksite(a.Worksite) ||
-		!validNaturalGranaryFor(m, a.Granary) || !validNaturalGenome(patches, actor, a.Genome) || !validNaturalBirthRequestFor(m, patches, actor, a.Request) {
+		!validNaturalGranaryFor(m, a.Granary) || !validNaturalGenomeFor(m, patches, actor, a.Genome) || !validNaturalBirthRequestFor(m, patches, actor, a.Request) {
 		return false
 	}
 	if m == NaturalMechanismV7 && (!validNaturalLabourOffer(patches, actor, a.Offer) || !validNaturalLabourBook(a.Book)) {
@@ -1707,8 +1717,17 @@ func NaturalBirthReply(patches, hour int, kinAllowed bool, draws []uint64, newbo
 }
 
 // NaturalBirthReplyFor is the mechanism-parameterized reply; the zero value
-// reproduces NaturalBirthReply exactly.
+// reproduces NaturalBirthReply exactly. It charges the frozen birth price;
+// NaturalBirthReplyForCost is the declared-price form mechanism v13 reads.
 func NaturalBirthReplyFor(m NaturalMechanism, patches, hour int, kinAllowed bool, draws []uint64, newbornID, proposerID, consenterID sim.EntityID, proposer, consenter NaturalActorState) (NaturalReplyResult, error) {
+	return NaturalBirthReplyForCost(m, 0, patches, hour, kinAllowed, draws, newbornID, proposerID, consenterID, proposer, consenter)
+}
+
+// NaturalBirthReplyForCost is the declared-price reply: birthCost is the
+// mechanism-v13 declared birth price (granary units and energy units per
+// paying parent), resolved by naturalBirthCostFor — the zero spelling is the
+// frozen default of 2, and every mechanism below v13 charges exactly that.
+func NaturalBirthReplyForCost(m NaturalMechanism, birthCost int64, patches, hour int, kinAllowed bool, draws []uint64, newbornID, proposerID, consenterID sim.EntityID, proposer, consenter NaturalActorState) (NaturalReplyResult, error) {
 	if _, err := NaturalPhaseTime(hour, NaturalPhaseBirthReply); err != nil ||
 		!naturalActorEntity(patches, proposerID) || !naturalActorEntity(patches, consenterID) || proposerID == consenterID ||
 		!validNaturalActorFor(m, patches, proposerID, proposer) || !validNaturalActorFor(m, patches, consenterID, consenter) {
@@ -1765,7 +1784,7 @@ func NaturalBirthReplyFor(m NaturalMechanism, patches, hour int, kinAllowed bool
 	if err != nil {
 		return NaturalReplyResult{}, err
 	}
-	birth, err := NaturalBirthFor(m, patches, hour, kinAllowed, newbornID, proposerID, consenterID, proposer, consenter, child)
+	birth, err := NaturalBirthForCost(m, birthCost, patches, hour, kinAllowed, newbornID, proposerID, consenterID, proposer, consenter, child)
 	if err != nil {
 		return NaturalReplyResult{}, err
 	}
@@ -1786,25 +1805,38 @@ type NaturalBirthResult struct {
 }
 
 // NaturalBirth is the frozen zero-length gestation: the accepted reply IS
-// the birth. Each parent pays two granary units and two energy units,
-// symmetrically, with the energy booked through the parent's basal-spent
-// ledger and the granary units through the parent's genome
-// birth-granary-paid accumulator, so both extended conservation identities
-// stay exact. The newborn is converted, never created from nothing: energy
-// 8, hunger 0, all capital zero, home patch = the proposer's. The newbornID
-// must be allocator-fresh (there is no birth-count cap; P15). kinAllowed
-// must be the trusted runner's kin-walk verdict for the pair.
+// the birth. Each paying parent hands over the declared birth price — two
+// granary units and two energy units under every mechanism below v13, the
+// declared BirthCost under v13 — symmetrically, with the energy booked
+// through the parent's basal-spent ledger and the granary units through the
+// parent's genome birth-granary-paid accumulator, so both extended
+// conservation identities stay exact at every price. The newborn is
+// converted, never created from nothing: energy 8, hunger 0, all capital
+// zero, home patch = the proposer's. The newbornID must be allocator-fresh
+// (there is no birth-count cap; P15). kinAllowed must be the trusted
+// runner's kin-walk verdict for the pair.
 func NaturalBirth(patches, hour int, kinAllowed bool, newbornID, proposerID, consenterID sim.EntityID, proposer, consenter NaturalActorState, child NaturalGenomeState) (NaturalBirthResult, error) {
 	return NaturalBirthFor(NaturalMechanismV5, patches, hour, kinAllowed, newbornID, proposerID, consenterID, proposer, consenter, child)
 }
 
 // NaturalBirthFor is the mechanism-parameterized birth; the zero value
-// reproduces NaturalBirth exactly.
+// reproduces NaturalBirth exactly. It charges the frozen birth price;
+// NaturalBirthForCost is the declared-price form mechanism v13 reads.
 func NaturalBirthFor(m NaturalMechanism, patches, hour int, kinAllowed bool, newbornID, proposerID, consenterID sim.EntityID, proposer, consenter NaturalActorState, child NaturalGenomeState) (NaturalBirthResult, error) {
+	return NaturalBirthForCost(m, 0, patches, hour, kinAllowed, newbornID, proposerID, consenterID, proposer, consenter, child)
+}
+
+// NaturalBirthForCost is the declared-price birth: birthCost is the
+// mechanism-v13 declared birth price in granary units and — the same number —
+// in energy units, resolved by naturalBirthCostFor (the zero spelling is the
+// frozen default of 2, and every mechanism below v13 charges exactly that).
+// The price is the same for both ledgers by declaration, so one number cannot
+// drift from the other.
+func NaturalBirthForCost(m NaturalMechanism, birthCost int64, patches, hour int, kinAllowed bool, newbornID, proposerID, consenterID sim.EntityID, proposer, consenter NaturalActorState, child NaturalGenomeState) (NaturalBirthResult, error) {
 	if hour < 0 || hour >= NaturalHorizonHours || !naturalActorEntity(patches, proposerID) || !naturalActorEntity(patches, consenterID) || proposerID == consenterID ||
 		!naturalNewbornEntity(patches, newbornID) ||
 		!validNaturalActorFor(m, patches, proposerID, proposer) || !validNaturalActorFor(m, patches, consenterID, consenter) ||
-		!validNaturalGenome(patches, newbornID, child) ||
+		!validNaturalGenomeFor(m, patches, newbornID, child) ||
 		child.ParentA != proposerID || child.ParentB != consenterID || child.BirthHour != int64(hour) {
 		return NaturalBirthResult{}, ErrNaturalContract
 	}
@@ -1812,26 +1844,28 @@ func NaturalBirthFor(m NaturalMechanism, patches, hour int, kinAllowed bool, new
 		return NaturalBirthResult{}, ErrNaturalContract
 	}
 	// The household gate (mechanism v8) makes the proposer the paying
-	// household head: the proposer pays the existing 2 granary + 2 energy and
-	// the consenter only has to be fed (energy ≥ 2), so it pays nothing.
+	// household head: the proposer pays the declared price in granary units
+	// and in energy units and the consenter only has to be fed (energy ≥ 2),
+	// so it pays nothing.
 	// Every frozen mechanism keeps the symmetric two-parent payment exactly.
 	payers := []NaturalActorState{proposer, consenter}
 	if naturalHouseholdGate(m) {
 		payers = []NaturalActorState{proposer}
 	}
-	// Affordability is implied by the gate margins but the cost is checked
+	// Affordability is implied by the gate margins but the price is checked
 	// against the paying rows themselves.
+	price := naturalBirthCostFor(m, birthCost)
 	for _, parent := range payers {
-		if parent.Granary.Stock < NaturalParentGranaryCost || parent.Body.Energy < NaturalParentEnergyCost {
+		if parent.Granary.Stock < price || parent.Body.Energy < price {
 			return NaturalBirthResult{}, ErrNaturalContract
 		}
 	}
 	home := proposer.Bag.Source
 	pay := func(a NaturalActorState) NaturalActorState {
-		a.Granary.Stock -= NaturalParentGranaryCost
-		a.Genome.BirthGranaryPaid += NaturalParentGranaryCost
-		a.Body.Energy -= NaturalParentEnergyCost
-		a.Body.BasalSpent += NaturalParentEnergyCost
+		a.Granary.Stock -= price
+		a.Genome.BirthGranaryPaid += price
+		a.Body.Energy -= price
+		a.Body.BasalSpent += price
 		return a
 	}
 	if naturalHouseholdGate(m) {
@@ -1872,7 +1906,17 @@ func NaturalBirthExpiry(hour int, request NaturalBirthRequestState) (NaturalBirt
 // stopped-state convention (energy retained). Before the death-hour the
 // call is a no-op success; after death the actor is never invoked again.
 func NaturalAgeDeath(patches, hour int, actorID sim.EntityID, genome NaturalGenomeState) (NaturalGenomeState, bool, error) {
-	if hour < 0 || hour > NaturalHorizonHours || !naturalActorEntity(patches, actorID) || !validNaturalGenome(patches, actorID, genome) || genome.DiedHour != NaturalNeverHour {
+	return NaturalAgeDeathFor(NaturalMechanismV5, patches, hour, actorID, genome)
+}
+
+// NaturalAgeDeathFor is the mechanism-parameterized age death; the zero value
+// reproduces NaturalAgeDeath exactly. The mechanism matters because the
+// genome validator's birth-granary-paid bound is the declared mechanism
+// envelope (widened under the v13 birth price), so a state that mechanism v13
+// admits reaches its death hour instead of being refused. It shares the one
+// frozen shape: died-hour is written only from the never-hour.
+func NaturalAgeDeathFor(m NaturalMechanism, patches, hour int, actorID sim.EntityID, genome NaturalGenomeState) (NaturalGenomeState, bool, error) {
+	if hour < 0 || hour > NaturalHorizonHours || !naturalActorEntity(patches, actorID) || !validNaturalGenomeFor(m, patches, actorID, genome) || genome.DiedHour != NaturalNeverHour {
 		return NaturalGenomeState{}, false, ErrNaturalContract
 	}
 	if int64(hour) < genome.DeathHour {

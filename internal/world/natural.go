@@ -486,10 +486,17 @@ type NaturalOptions struct {
 	// admitted explicit values, and every mechanism below v9 refuses a
 	// non-zero value. It is run identity end to end (journal config,
 	// checkpoint manifest, bidirectional mismatch rejection) exactly like R.
-	Yield   int64
-	Seed    uint64
-	Workers int
-	Births  bool
+	Yield int64
+	// BirthCost is the mechanism-v13 declared birth price: the granary units
+	// AND the energy units one paying parent hands over for one birth. The
+	// zero value is the frozen default of 2 (the v5 price), 1..NaturalBirthCostMax
+	// are the admitted explicit values, and every mechanism below v13 refuses
+	// a non-zero value. Like Yield it is run identity end to end (journal
+	// config, checkpoint manifest, bidirectional mismatch rejection).
+	BirthCost int64
+	Seed      uint64
+	Workers   int
+	Births    bool
 
 	// PolicyRef is the declared policy identity (ticket 16 D1 seam): the
 	// single binding site resolves it through the frozen natural ref set
@@ -588,6 +595,17 @@ func (o NaturalOptions) yieldResolved() int64 {
 	return o.Yield
 }
 
+// birthCostResolved resolves the declared birth price: the zero value is
+// exactly the frozen two-granary/two-energy price, so the runner always
+// carries a concrete 2..NaturalBirthCostMax, and the frozen default 2 under
+// every mechanism below v13.
+func (o NaturalOptions) birthCostResolved() int64 {
+	if o.BirthCost == 0 {
+		return NaturalParentGranaryCost
+	}
+	return o.BirthCost
+}
+
 // NaturalFoundersValid is the derived bound of the founding-band fixture
 
 // axis: f == 0 is the default spelling of the full frozen founder block 8P,
@@ -637,6 +655,17 @@ func (f *Natural) declaredYield() int64 {
 	return f.yield
 }
 
+// declaredBirthCost reports the runner's birth price in its declared
+// (resolve-on-read) form: zero under every mechanism below v13 (the field
+// does not exist there, so every recorded journal and manifest keeps its
+// bytes), the resolved price under v13.
+func (f *Natural) declaredBirthCost() int64 {
+	if !naturalHasBirthCostAxis(f.mechanism) {
+		return 0
+	}
+	return f.birthCost
+}
+
 // validateYield is the shared declared-yield gate of the runner and restore
 // option sets: 0 is the default (one unit per cultivated slot, and the only
 // admitted spelling outside v9); under v9, 1..NaturalYieldMax are admitted
@@ -647,6 +676,20 @@ func validateNaturalYield(m NaturalMechanism, yield int64) error {
 	}
 	if !naturalHasYieldAxis(m) && yield != 0 {
 		return fmt.Errorf("%w: yield %d is not a declared parameter of mechanism %d (only mechanism v9 declares it; every earlier mechanism keeps the frozen flat grant)", ErrNaturalRunner, yield, uint16(m))
+	}
+	return nil
+}
+
+// validateBirthCost is the shared declared-birth-price gate of the runner and
+// restore option sets: 0 is the frozen default of 2 (and the only admitted
+// spelling outside v13); under v13, 1..NaturalBirthCostMax are admitted and
+// every other value fails closed.
+func validateNaturalBirthCost(m NaturalMechanism, cost int64) error {
+	if cost < 0 || cost > NaturalBirthCostMax {
+		return fmt.Errorf("%w: birth cost %d outside [0,%d]", ErrNaturalRunner, cost, NaturalBirthCostMax)
+	}
+	if !naturalHasBirthCostAxis(m) && cost != 0 {
+		return fmt.Errorf("%w: birth cost %d is not a declared parameter of mechanism %d (only mechanism v13 declares it; every earlier mechanism keeps the frozen two-unit price)", ErrNaturalRunner, cost, uint16(m))
 	}
 	return nil
 }
@@ -705,6 +748,9 @@ func (o NaturalOptions) validate() error {
 		return fmt.Errorf("%w: R %d outside [0,%d]", ErrNaturalRunner, o.R, NaturalSlotsPerPatch)
 	}
 	if err := validateNaturalYield(o.mechanism(), o.Yield); err != nil {
+		return err
+	}
+	if err := validateNaturalBirthCost(o.mechanism(), o.BirthCost); err != nil {
 		return err
 	}
 	if o.Workers < 1 {
@@ -770,6 +816,7 @@ type Natural struct {
 	seed                uint64
 	r                   int64
 	yield               int64 // mechanism v9: granary units granted per cultivated slot per patch-hour (1..NaturalYieldMax)
+	birthCost           int64 // mechanism v13: granary and energy units one paying parent pays per birth (2..NaturalBirthCostMax)
 	births              bool
 	roster              []sim.EntityID // founders 1..8P then newborns ascending (sorted invariant)
 	newborns            []sim.EntityID // registration (= birth) order == ascending IDs
@@ -1065,7 +1112,7 @@ func NewNatural(o NaturalOptions) (*Natural, error) {
 	if _, err = NaturalCheckConservationYieldFor(o.mechanism(), o.yieldResolved(), o.Patches, make([]NaturalPatchState, o.Patches), slots, actors, nil, genesisLast); err != nil {
 		return nil, fmt.Errorf("%w: neutral h0 world breaks frozen conservation: %v", ErrNaturalRunner, err)
 	}
-	f := &Natural{registry: reg, policies: policies, ref: policy.Ref, mechanism: o.mechanism(), founders: naturalFoundersResolved(o.Patches, o.Founders), patches: o.Patches, seed: o.Seed, r: o.R, yield: o.yieldResolved(), births: o.Births,
+	f := &Natural{registry: reg, policies: policies, ref: policy.Ref, mechanism: o.mechanism(), founders: naturalFoundersResolved(o.Patches, o.Founders), patches: o.Patches, seed: o.Seed, r: o.R, yield: o.yieldResolved(), birthCost: o.birthCostResolved(), births: o.Births,
 		cultivationDisabled: o.CultivationDisabled, cognition: o.Cognition,
 		claimDecisions: make(map[sim.EntityID]strategy.NaturalChoice),
 		bound:          make(map[sim.EntityID]*strategy.NaturalBound), allocator: allocator, ledger: ledger, thresholds: thresholds,
@@ -1573,7 +1620,7 @@ func (f *Natural) pulse(ready scheduler.ReadyFiber, view scheduler.SnapshotView)
 			live[id] = true
 			continue
 		}
-		genome, died, err := NaturalAgeDeath(f.patches, h, id, a.Genome)
+		genome, died, err := NaturalAgeDeathFor(f.mechanism, f.patches, h, id, a.Genome)
 		if err != nil || !died {
 			return out, ErrNaturalRunner
 		}
@@ -2818,7 +2865,7 @@ func (f *Natural) birthReplyDecision(view scheduler.SnapshotView, hour int, at s
 		for i := range draws {
 			draws[i] = stream.Uint64()
 		}
-		accepted, err := NaturalBirthReplyFor(f.mechanism, f.patches, hour, kinAllowed, draws, newbornID, requester, consenter, proposer, self)
+		accepted, err := NaturalBirthReplyForCost(f.mechanism, f.birthCost, f.patches, hour, kinAllowed, draws, newbornID, requester, consenter, proposer, self)
 		if err != nil {
 			return empty, NaturalAttempt{}, err
 		}

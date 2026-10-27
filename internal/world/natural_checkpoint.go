@@ -157,7 +157,13 @@ type NaturalRestoreOptions struct {
 	// matched bidirectionally against the manifest's field exactly like R.
 	// The zero value is the v8 default of 1; every mechanism below v9
 	// refuses a non-zero value.
-	Yield               int64
+	Yield int64
+	// BirthCost is the mechanism-v13 declared birth price (granary units and
+	// energy units per paying parent) and is run identity end to end, matched
+	// bidirectionally against the manifest's field exactly like Yield. The
+	// zero value is the frozen default of 2; every mechanism below v13
+	// refuses a non-zero value.
+	BirthCost           int64
 	Seed                uint64
 	Workers             int
 	Births              bool
@@ -239,6 +245,26 @@ func (o NaturalRestoreOptions) declaredYield() int64 {
 	return o.yieldResolved()
 }
 
+// birthCostResolved resolves the declared birth price exactly like
+// NaturalOptions.birthCostResolved: the zero value is the frozen
+// two-granary/two-energy price.
+func (o NaturalRestoreOptions) birthCostResolved() int64 {
+	if o.BirthCost == 0 {
+		return NaturalParentGranaryCost
+	}
+	return o.BirthCost
+}
+
+// declaredBirthCost is the birth price's declared (resolve-on-read) form:
+// zero outside mechanism v13, where the field does not exist, and the
+// resolved price under v13. Both spellings of the default resolve alike.
+func (o NaturalRestoreOptions) declaredBirthCost() int64 {
+	if !naturalHasBirthCostAxis(o.mechanism()) {
+		return 0
+	}
+	return o.birthCostResolved()
+}
+
 func (o NaturalRestoreOptions) validate() error {
 	if !NaturalPatchCountValid(o.Patches) {
 		return fmt.Errorf("%w: patches %d outside the derived ID-space precondition", ErrNaturalCheckpoint, o.Patches)
@@ -247,6 +273,9 @@ func (o NaturalRestoreOptions) validate() error {
 		return fmt.Errorf("%w: R %d outside [0,%d]", ErrNaturalCheckpoint, o.R, NaturalSlotsPerPatch)
 	}
 	if err := validateNaturalYield(o.mechanism(), o.Yield); err != nil {
+		return fmt.Errorf("%w: %v", ErrNaturalCheckpoint, err)
+	}
+	if err := validateNaturalBirthCost(o.mechanism(), o.BirthCost); err != nil {
 		return fmt.Errorf("%w: %v", ErrNaturalCheckpoint, err)
 	}
 	if o.Workers < 1 {
@@ -299,7 +328,8 @@ func newNaturalReferenceRunner(expected NaturalRestoreOptions) (*Natural, error)
 	if expected.FounderTenure {
 		return newNaturalFixtureRunnerForPolicy(expected.Patches, expected.R, expected.Seed, expected.Births, expected.Workers, policy, expected.mechanism(), expected.Founders)
 	}
-	return NewNatural(NaturalOptions{Patches: expected.Patches, R: expected.R, Yield: expected.Yield, Seed: expected.Seed,
+	return NewNatural(NaturalOptions{Patches: expected.Patches, R: expected.R, Yield: expected.Yield,
+		BirthCost: expected.BirthCost, Seed: expected.Seed,
 		Workers: expected.Workers, Births: expected.Births, CultivationDisabled: expected.CultivationDisabled,
 		PolicyRef: policy.Ref, Mechanism: expected.mechanism(), Founders: expected.Founders})
 }
@@ -662,7 +692,8 @@ type naturalManifest struct {
 	steps             int
 	time              sim.SimTime
 	mechanism         NaturalMechanism // the declared mechanism axis: zero ≡ v5, 6 = mechanism v6
-	yield             int64            // the mechanism-v9 declared granary yield; written only under v9
+	yield             int64            // the mechanism-v9 declared granary yield; written only under a yield-axis mechanism
+	birthCost         int64            // the mechanism-v13 declared birth price; written only under the birth-cost axis
 	founders          int              // the declared founding band: zero ≡ the full frozen block 8P
 	policyFormat      uint32           // the declared policy identity: 5, 6, 7, 8 and 9 inside the frozen natural ref set
 	head              kernel.PortableHead
@@ -758,6 +789,13 @@ func encodeNaturalManifest(m naturalManifest) []byte {
 	// its bytes and decode knows the field exists from the mechanism slot.
 	if naturalHasYieldAxis(m.mechanism) {
 		out = binary.BigEndian.AppendUint64(out, uint64(m.yield))
+	}
+	// Mechanism v13's declared birth price rides the same version block,
+	// after the yield: it is present exactly under the birth-cost axis (one
+	// u64), so every manifest below v13 keeps its bytes and decode knows the
+	// field exists from the mechanism slot.
+	if naturalHasBirthCostAxis(m.mechanism) {
+		out = binary.BigEndian.AppendUint64(out, uint64(m.birthCost))
 	}
 	// The founders field rides omitempty exactly like the mechanism block:
 	// the declared default (the full frozen block 8P) writes nothing, so
@@ -876,6 +914,12 @@ func decodeNaturalManifest(data []byte) (naturalManifest, error) {
 		manifestBodyWidth += 8
 		m.yield = int64(r.u64())
 	}
+	// Mechanism v13's declared birth price is the next version-block u64,
+	// between the yield and the omitempty founding band.
+	if naturalHasBirthCostAxis(m.mechanism) {
+		manifestBodyWidth += 8
+		m.birthCost = int64(r.u64())
+	}
 	// The omitempty founding band: absent at the default, one u64 otherwise.
 	// The trailing cognition block (spec 7.2) is self-describing via its magic,
 	// so a cognitive manifest with no founders is unambiguous.
@@ -898,6 +942,7 @@ func decodeNaturalManifest(data []byte) (naturalManifest, error) {
 	if r.bad || r.remaining() != 0 ||
 		!NaturalPatchCountValid(m.patches) || m.r < 0 || m.r > NaturalSlotsPerPatch ||
 		(naturalHasYieldAxis(m.mechanism) && (m.yield < 1 || m.yield > NaturalYieldMax)) ||
+		(naturalHasBirthCostAxis(m.mechanism) && (m.birthCost < 1 || m.birthCost > NaturalBirthCostMax)) ||
 		(m.tenure && m.r < naturalFixtureMinBudget) ||
 		(m.cultivation && m.tenure) ||
 		!NaturalFoundersValid(m.patches, m.founders) ||
@@ -2496,7 +2541,7 @@ func (f *Natural) SaveCheckpoint(path string) ([32]byte, error) {
 	if f.ref != fresh.ref || f.mechanism != fresh.mechanism {
 		return [32]byte{}, ErrNaturalCheckpoint
 	}
-	return f.saveBundle(path, fresh, f.births, naturalManifest{patches: f.patches, r: f.r, yield: f.yield, seed: f.seed,
+	return f.saveBundle(path, fresh, f.births, naturalManifest{patches: f.patches, r: f.r, yield: f.yield, birthCost: f.birthCost, seed: f.seed,
 		births: f.births, boundary: f.births, cultivation: f.cultivationDisabled, mechanism: f.mechanism,
 		founders: f.declaredFounders(), steps: f.steps, time: f.sched.Time()}, nil)
 }
@@ -2566,7 +2611,7 @@ func (f *Natural) saveResumeCheckpoint(path string, seamReplay *naturalSeamRepla
 	// boundary, so the resume manifest records both the continuation and the
 	// boundary flags.
 	boundary := naturalBoundaryBirths(f.journal, f.checkpoints[0].Hour)
-	m := naturalManifest{patches: f.patches, r: f.r, yield: f.yield, seed: f.seed, births: f.births, boundary: boundary,
+	m := naturalManifest{patches: f.patches, r: f.r, yield: f.yield, birthCost: f.birthCost, seed: f.seed, births: f.births, boundary: boundary,
 		tenure: f.naturalRunnerTenure(), cultivation: f.cultivationDisabled, mechanism: f.mechanism,
 		founders: f.declaredFounders(), steps: f.steps, time: at}
 	return f.saveBundle(path, fresh, boundary, m, seamReplay)
@@ -2683,7 +2728,8 @@ func restoreNaturalSections(sections []checkpoint.Section, m naturalManifest, ex
 	if err != nil {
 		return fail(err)
 	}
-	fresh, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: m.patches, R: m.r, Yield: m.yield, Seed: m.seed,
+	fresh, err := newNaturalReferenceRunner(NaturalRestoreOptions{Patches: m.patches, R: m.r, Yield: m.yield,
+		BirthCost: m.birthCost, Seed: m.seed,
 		Workers: expected.Workers, Births: m.births, FounderTenure: m.tenure, CultivationDisabled: m.cultivation,
 		PolicyRef: manifestRef, Mechanism: m.mechanism, Founders: m.founders})
 	if err != nil {
@@ -2719,7 +2765,7 @@ func restoreNaturalSections(sections []checkpoint.Section, m naturalManifest, ex
 	identityConfig := NaturalJournalConfig{Patches: m.patches, R: m.r, Seed: m.seed,
 		Births: m.births, Boundary: m.boundary, FounderTenure: m.tenure,
 		CultivationDisabled: m.cultivation, Mechanism: m.mechanism, Founders: m.founders,
-		Yield: m.yield, Policy: fresh.ref}
+		Yield: m.yield, BirthCost: m.birthCost, Policy: fresh.ref}
 	fingerprint, err := naturalJournalFingerprint(fresh.ref)
 	if err != nil {
 		return fail(err)
@@ -2933,6 +2979,11 @@ func naturalManifestMatches(m naturalManifest, expected NaturalRestoreOptions) b
 	if m.yield != expected.declaredYield() {
 		return false
 	}
+	// The declared birth price is the same bidirectional rule: resolve-on-read
+	// against the manifest's explicit v13 value.
+	if m.birthCost != expected.declaredBirthCost() {
+		return false
+	}
 	return m.patches == expected.Patches && m.r == expected.R && m.seed == expected.Seed &&
 		m.births == expected.Births && m.tenure == expected.FounderTenure &&
 		m.cultivation == expected.CultivationDisabled
@@ -3022,8 +3073,8 @@ func BranchNaturalCheckpoint(path string, expected NaturalRestoreOptions, births
 		return [32]byte{}, err
 	}
 	parent, err := restoreNaturalSections(sections, m, NaturalRestoreOptions{Patches: m.patches, R: m.r,
-		Seed: m.seed, Yield: m.yield, Workers: 1, Births: m.births, FounderTenure: m.tenure, PolicyRef: manifestRef,
-		Mechanism: m.mechanism, Founders: m.founders})
+		Seed: m.seed, Yield: m.yield, BirthCost: m.birthCost, Workers: 1, Births: m.births, FounderTenure: m.tenure,
+		PolicyRef: manifestRef, Mechanism: m.mechanism, Founders: m.founders})
 	if err != nil {
 		return [32]byte{}, err
 	}
