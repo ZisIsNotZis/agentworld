@@ -111,6 +111,30 @@ Deepens C7/C8/C11/C13 from "present" to "tested". Adds the value-based priority 
 
 **Status.** The M2 row of the milestone table is the one home for what the mechanism and the runs established. This section carries the question, the declared order in which the claim may be tested, and the metric's bounds.
 
+## Milestone: exactly one, at the end
+
+The roadmap has **exactly one milestone**, `M_end`, and it is the end. There is no intermediate
+milestone, no gate, no progress report and no confirmation request: the worksets below are internal
+steps of that one milestone, and the operator hears from the project once — when `M_end` delivers.
+
+**`M_end` — the central claim measured on trajectory shape.**
+
+- **Deliverable.** On a world that runs (W1), one recorded `luna:max` always-on reference curve set
+  (W2), the per-hour KPI curves of every declared condition — model × reasoning effort × kick-in timing
+  — each replicated across the declared cells and seeds (W3), and the fuzzy curve-match distance to the
+  reference with its stability across cells, seeds and replicates (W4). Report form: the curves, the
+  distance table, the stability table, and a TLDR.
+- **Acceptance.** The claim is *supported* iff selective spending matches or beats uniform and periodic
+  spending at equal budget on the declared curve distance, and the effect reproduces under the
+  pre-declared replication rule; it is *not supported* iff no allocation policy separates from the
+  reference-matched baseline; it is *unresolvable here* iff the measured detection limit exceeds every
+  observed separation — each verdict stated with the number that decides it.
+- **Review.** `need_user_review`, once, on this single deliverable. Nothing before it requires the
+  operator, and nothing before it is reported as a result.
+
+The earlier M1–M6 slice table at the end of this document is **historical record**, not roadmap: M1 and
+M2 were milestones of the pre-restatement plan, and the workset order above supersedes them.
+
 ## Worksets (the work order)
 
 The operator restated the order on 2026-10-26 ([VISION.md](VISION.md), `EXPLICIT`). One workset runs at a
@@ -326,7 +350,8 @@ choice; no route has been started.
 
 ## Product decisions
 
-- M1 scope is **VS1**; milestones equal slices (M*n* = VS*n*), six of each. VS2 follows VS1.
+- The roadmap has exactly one milestone, `M_end` (top of this document); the pre-restatement
+  slice milestones M1–M6 are historical record only.
 - VS1 carries **both** AI roles: Role A (an actor's mind at a declared decision seam) and Role B
   (in-run behaviour-logic modification); Role B must kick in *during* the run.
 - The work order is the four worksets above (`W1_world_runs` → `W2_reference_luna_max` → `W3_axes` →

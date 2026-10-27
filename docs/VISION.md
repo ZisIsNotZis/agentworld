@@ -23,7 +23,7 @@ viability order `vrd/2` and the claim-rung ladder in [VERTICAL-SLICES.md](VERTIC
 it is a bug to fix, not the thing to be judged by. The work order is declared as four worksets,
 `W1_world_runs` → `W2_reference_luna_max` → `W3_axes` → `W4_curve_match`, in
 [VERTICAL-SLICES.md](VERTICAL-SLICES.md); a successor never starts before its predecessor's exit is
-measured. `R` in the runner is already item 2's arm
+measured, and the whole chain is **one milestone** reported once, at the end. `R` in the runner is already item 2's arm
 (`FullWakePolicy`, no ceiling), so the reference exists; what the recorded programme withdrew — the
 divergence-from-reference objective, on the ground that the reference was itself extinct — must be
 restored once item 1 holds, because that ground was a property of the broken world, not of the
