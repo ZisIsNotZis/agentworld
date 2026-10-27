@@ -199,20 +199,20 @@ Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the sho
 - The cognition stack: model client and gateway, Role A decision seam, Role B versioned patch lifecycle, recorded-call ledger, exact replay, cognitive budget and value-based priority allocation.
 - VS1 (M1): mechanism complete, hermetic PASS on all eleven frozen exit criteria.
 - VS2 (M2): the allocation mechanism and its experiment harness, verified hermetically; a pre-registered curve criterion with reasoning-effort depth and 3 replicates; the measurement instrument (a 15-cell budgeted matrix in ~17 minutes for about $0.57).
+- `W1_world_runs`: the declared default world (mechanism v14, `natural/14`, yield 1, birth price 2, `f10-s0`, `H = 144`) passes on its declared cell with no cognition — alive 11 of 10, births 12, starvation 1, age deaths 10 — and the 128-cell regression is recorded with every failure named ([docs/VERTICAL-SLICES.md](docs/VERTICAL-SLICES.md), ticket 55).
 
 **Not accepted / open**
 
 - VS2's central claim — that selective spending preserves fidelity better than uniform or periodic spending at an equal budget. The live matrix produced nulls and one non-replication, and every scored arm tied or lost to the no-AI control `A0`, which itself ended at one survivor: the anchor was a die-off, so those nulls are not evidence either way ([docs/VERTICAL-SLICES.md](docs/VERTICAL-SLICES.md), M2 row).
-- The work order's first item, `W1_world_runs`: a founding population that does not die out at the horizon on the declared cell. The mechanism iterations v11–v14 are the current attack on it.
+- The work order's next item, `W2_reference_luna_max`: a `luna:max` always-on reference curve set on the W1 fixture, with its price. The runner still carries the old fixture, so the declared world must be threaded through it first.
 - The real-model arm of both slices, which is blocked on spend authorisation.
 
 **Planned** (declared order; a successor does not start before its predecessor's exit is measured)
 
-1. `W1_world_runs` — a world that runs fine, with or without cognition, on the declared cell.
-2. `W2_reference_luna_max` — every decision answered by the declared reference model at maximum effort, as the benchmark rather than as ground truth.
-3. `W3_axes` — the effect of model, reasoning effort, kick-in timing and stability.
-4. `W4_curve_match` — judge per-hour KPI curves against the reference curve, fuzzy-matched, instead of the terminal outcome alone.
-5. Beyond M2: VS3 evolution (strategies measurably improve under audited mutation with provenance and rollback), VS4 stakes and scale, VS5 society, VS6 history.
+1. `W2_reference_luna_max` — every decision answered by the declared reference model at maximum effort, as the benchmark rather than as ground truth.
+2. `W3_axes` — the effect of model, reasoning effort, kick-in timing and stability.
+3. `W4_curve_match` — judge per-hour KPI curves against the reference curve, fuzzy-matched, instead of the terminal outcome alone.
+4. Beyond M2: VS3 evolution (strategies measurably improve under audited mutation with provenance and rollback), VS4 stakes and scale, VS5 society, VS6 history.
 
 The long-term target is a self-evolving universe scaled as high as the available compute allows: agents that change their own behaviour logic mid-run and have the measured effect reported rather than asserted, every modification durable and attributable and verifiable by an outsider from the ledger and replay without trusting any agent's account of it, and every decision made from the actor's own observation boundary. Milestones and slices are the same object — M*n* = VS*n* — and the whole chain is reported once, at the end.
 

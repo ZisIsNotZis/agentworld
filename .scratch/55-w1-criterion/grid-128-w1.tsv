@@ -1,0 +1,129 @@
+founders	seed	alive	births	starvation	age	pass	binding
+1	0	0	0	0	1	no	alive<f births<f 
+1	1	0	0	0	1	no	alive<f births<f 
+1	2	0	0	0	1	no	alive<f births<f 
+1	3	0	0	0	1	no	alive<f births<f 
+1	4	0	0	0	1	no	alive<f births<f 
+1	5	0	0	0	1	no	alive<f births<f 
+1	6	0	0	0	1	no	alive<f births<f 
+1	7	0	0	0	1	no	alive<f births<f 
+2	0	3	17	7	9	yes	-
+2	1	4	18	7	9	yes	-
+2	2	6	20	7	9	yes	-
+2	3	8	25	9	10	yes	-
+2	4	4	22	9	11	yes	-
+2	5	7	19	8	6	no	age<starvation 
+2	6	8	31	15	10	no	age<starvation 
+2	7	6	20	8	8	yes	-
+3	0	5	27	16	9	no	age<starvation 
+3	1	5	24	12	10	no	age<starvation 
+3	2	4	24	15	8	no	age<starvation 
+3	3	11	35	19	8	no	age<starvation 
+3	4	10	48	33	8	no	age<starvation 
+3	5	8	32	17	10	no	age<starvation 
+3	6	7	27	13	10	no	age<starvation 
+3	7	8	35	23	7	no	age<starvation 
+4	0	11	33	21	5	no	age<starvation 
+4	1	11	33	17	9	no	age<starvation 
+4	2	8	26	14	8	no	age<starvation 
+4	3	12	33	16	9	no	age<starvation 
+4	4	11	46	33	6	no	age<starvation 
+4	5	9	37	26	6	no	age<starvation 
+4	6	4	25	14	11	no	age<starvation 
+4	7	6	26	16	8	no	age<starvation 
+5	0	10	41	27	9	no	age<starvation 
+5	1	6	28	20	7	no	age<starvation 
+5	2	13	51	33	10	no	age<starvation 
+5	3	15	48	30	8	no	age<starvation 
+5	4	12	45	32	6	no	age<starvation 
+5	5	9	47	33	10	no	age<starvation 
+5	6	13	39	21	10	no	age<starvation 
+5	7	13	51	37	6	no	age<starvation 
+6	0	9	33	22	8	no	age<starvation 
+6	1	11	31	17	9	no	age<starvation 
+6	2	13	32	16	9	no	age<starvation 
+6	3	12	49	38	5	no	age<starvation 
+6	4	6	18	7	11	yes	-
+6	5	11	38	26	7	no	age<starvation 
+6	6	5	17	7	11	no	alive<f 
+6	7	9	28	15	10	no	age<starvation 
+7	0	4	8	3	8	no	alive<f 
+7	1	9	13	3	8	yes	-
+7	2	11	19	6	9	yes	-
+7	3	11	18	5	9	yes	-
+7	4	12	27	14	8	no	age<starvation 
+7	5	14	26	10	9	no	age<starvation 
+7	6	11	15	3	8	yes	-
+7	7	11	18	4	10	yes	-
+8	0	8	9	1	8	yes	-
+8	1	9	11	2	8	yes	-
+8	2	15	18	3	8	yes	-
+8	3	11	15	4	8	yes	-
+8	4	12	16	4	8	yes	-
+8	5	17	19	2	8	yes	-
+8	6	13	14	1	8	yes	-
+8	7	13	13	0	8	yes	-
+9	0	12	13	1	9	yes	-
+9	1	9	11	2	9	yes	-
+9	2	11	14	3	9	yes	-
+9	3	10	13	3	9	yes	-
+9	4	9	13	4	9	yes	-
+9	5	18	26	8	9	yes	-
+9	6	12	12	0	9	yes	-
+9	7	10	10	0	9	yes	-
+10	0	11	12	1	10	yes	-
+10	1	10	11	1	10	yes	-
+10	2	9	9	0	10	no	alive<f births<f 
+10	3	10	13	3	10	yes	-
+10	4	11	11	0	10	yes	-
+10	5	17	21	4	10	yes	-
+10	6	11	11	0	10	yes	-
+10	7	14	18	4	10	yes	-
+11	0	9	10	1	11	no	alive<f births<f 
+11	1	10	11	1	11	no	alive<f 
+11	2	12	12	0	11	yes	-
+11	3	11	13	2	11	yes	-
+11	4	11	11	0	11	yes	-
+11	5	10	10	0	11	no	alive<f births<f 
+11	6	11	11	0	11	yes	-
+11	7	16	20	4	11	yes	-
+12	0	11	11	0	12	no	alive<f births<f 
+12	1	11	12	1	12	no	alive<f 
+12	2	3	3	0	12	no	alive<f births<f 
+12	3	11	11	0	12	no	alive<f births<f 
+12	4	11	11	0	12	no	alive<f births<f 
+12	5	10	10	0	12	no	alive<f births<f 
+12	6	9	9	0	12	no	alive<f births<f 
+12	7	9	10	1	12	no	alive<f births<f 
+13	0	11	11	0	13	no	alive<f births<f 
+13	1	11	12	1	13	no	alive<f births<f 
+13	2	3	3	0	13	no	alive<f births<f 
+13	3	7	7	0	13	no	alive<f births<f 
+13	4	11	11	0	13	no	alive<f births<f 
+13	5	10	10	0	13	no	alive<f births<f 
+13	6	9	9	0	13	no	alive<f births<f 
+13	7	9	10	1	13	no	alive<f births<f 
+14	0	15	15	0	14	yes	-
+14	1	7	7	0	14	no	alive<f births<f 
+14	2	3	3	0	14	no	alive<f births<f 
+14	3	7	7	0	14	no	alive<f births<f 
+14	4	11	11	0	14	no	alive<f births<f 
+14	5	13	13	0	14	no	alive<f births<f 
+14	6	10	10	0	14	no	alive<f births<f 
+14	7	9	10	1	14	no	alive<f births<f 
+15	0	9	9	0	15	no	alive<f births<f 
+15	1	7	7	0	15	no	alive<f births<f 
+15	2	3	3	0	15	no	alive<f births<f 
+15	3	7	7	0	15	no	alive<f births<f 
+15	4	11	11	0	15	no	alive<f births<f 
+15	5	8	10	2	15	no	alive<f births<f 
+15	6	4	4	0	15	no	alive<f births<f 
+15	7	8	9	1	15	no	alive<f births<f 
+16	0	9	9	0	16	no	alive<f births<f 
+16	1	7	7	0	16	no	alive<f births<f 
+16	2	3	3	0	16	no	alive<f births<f 
+16	3	3	3	0	16	no	alive<f births<f 
+16	4	10	11	1	16	no	alive<f births<f 
+16	5	6	6	0	16	no	alive<f births<f 
+16	6	4	4	0	16	no	alive<f births<f 
+16	7	8	9	1	16	no	alive<f births<f 
