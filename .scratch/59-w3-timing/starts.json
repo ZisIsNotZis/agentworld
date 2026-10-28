@@ -1,0 +1,22 @@
+{
+ "stage": "T",
+ "launch_epoch": 1793125191,
+ "launch_utc": "2026-10-27T18:19:51Z",
+ "cell": "f10-s0",
+ "arms": [
+  "A0",
+  "P",
+  "U",
+  "A"
+ ],
+ "reps": 3,
+ "hours": 144,
+ "effort": "max",
+ "model": "github_copilot/gpt-6-luna",
+ "wire": "responses",
+ "claim_contract": "natural-claim/v4",
+ "N": 256,
+ "parallel": 3,
+ "call_concurrency": 10,
+ "budget_min": 600
+}
