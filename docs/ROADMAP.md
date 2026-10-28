@@ -82,8 +82,9 @@ This phase was where the pre-pivot plan deferred model reasoning. In the active 
 the first slice (VS1) and the allocation experiment is VS2; see
 [VERTICAL-SLICES.md](VERTICAL-SLICES.md). Of the mechanism this phase deferred, M1 (VS1)
 implementation is complete with hermetic evidence PASS on all eleven frozen exit criteria
-(EC-1..EC-11); the real-model arm is blocked on spend authorisation, and the allocation experiment
-this phase anticipated is M2/VS2.
+(EC-1..EC-11); at the time the real-model arm was blocked on spend authorisation, and the allocation
+experiment this phase anticipated was M2/VS2. *(Historical: the live W1–W4 runs were recorded on
+2026-10-28; the central claim is measured and not supported — ticket 62.)*
 
 Target: approximately 10,000 explicit people with selective model intervention. This target is
 unbuilt and unmeasured: the recorded substrate is 16 actors in the fixed fixtures, and the 256-founder

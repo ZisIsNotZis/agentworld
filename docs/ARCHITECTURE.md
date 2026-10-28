@@ -67,9 +67,10 @@ Budget channels include exploitation of known high-value candidates, anomaly res
 
 VS2 (attention) implements this mechanism: the value-based priority layer, actor-raised escalation
 requests, and protected exploration of ordinary actors are built on master `48b4882` and verified
-hermetically, but the mechanism is not yet accepted as the central claim (the real-model arm is blocked
-on spend authorisation, and the value model's weights and feature derivations await operator
-confirmation). VS1's baseline allocation policy remains the declared uniform/periodic `WakePolicy`
+hermetically, but the mechanism was not yet accepted as the central claim at the time (the real-model
+arm was blocked on spend authorisation, and the value model's weights and feature derivations awaited
+operator confirmation). *(Historical: the live W1–W4 runs were recorded on 2026-10-28; the central
+claim is measured and not supported — ticket 62.)* VS1's baseline allocation policy remains the declared uniform/periodic `WakePolicy`
 ([VERTICAL-SLICES.md](VERTICAL-SLICES.md), VS1 C7; `internal/cognition/protocol/wake.go`,
 `VS1WakePolicy`).
 

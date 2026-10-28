@@ -29,7 +29,7 @@ decision leaves almost nothing for reasoning to decide.
 
 This is "**no detectable effect at this design**", never equivalence. The rule's 24-hour sustained
 clause is what fails for every observed difference; the model is unpriced at the gateway (recorded
-charge $0.00; $11.60 derived at the published ticket-35 rates, of which $1.08 is the aborted
+charge $0.00; $10.52 derived at the published ticket-35 rates, of which $1.08 is the aborted
 over-concurrent first attempt).
 
 ## 1. The comparison rule applied
@@ -43,7 +43,11 @@ detectable effect at this design", never "no effect".
 The §3.2 claim comparison, declared in ticket 58 before the first W3 cell:
 
 - **not supported** when all three of `A/P/U` tie in every cell, or a baseline beats `A`;
-- **supported** only when `A` beats both baselines in every cell and the pattern reproduces.
+- **supported** only when `A` beats both baselines in every cell and the pattern reproduces;
+- **unresolvable here** when the measured detection limit exceeds every observed separation. It does
+  not fire: the observed population/birth deficits are above the reported power (2.24/2.88 in Stage
+  M; 1.66/2.26 in Stage E); what fails is the 24-hour sustained clause, which the rule declares as
+  "no detectable effect at this design", not "unresolvable".
 
 Both declared cells are "all three tie", so the verdict is **not supported**. The `M_end` outline's
 "matches or beats" is read as the *advantage* claim the operator stated ("preserves ... better"); a
@@ -64,7 +68,9 @@ in the fixed instrument as well). The most suggestive sub-threshold row:
 | `high` | 0.42 / – / 0 / 2.19 | 0.57 / – / 0 / 2.76 |
 
 The `none` deficit (−2.0 population, −3.0 births at H) is above the power and lasts 9–11 h; it is
-recorded as a non-separation because it is shorter than 24 h.
+recorded as a non-separation because it is shorter than 24 h. Stage E also recorded 11 level-1
+fallbacks (8 contract-failing answers, 3 upstream HTTP 400 content-policy; 0.05 %), well below any
+rate that could move a curve.
 
 ### 2.2 Timing (Stage T, `f10-s0`; Stage S, `f11-s2`)
 
@@ -79,8 +85,8 @@ recorded as a non-separation because it is shorter than 24 h.
 
 At `f10-s0`, `U` is identical to the no-AI `A0` at every hour; `A` differs from `A0`/`U` at 28
 hours and from `P` at 13 hours, all sub-threshold. At `f11-s2`, `A`, `P`, `U` and `A0` are identical
-on all five scalar KPIs at every hour. The realized budget is 240 (P) vs 248 (U/A) under the shared
-`N = 256` ceiling; the asymmetry is recorded and does not explain a separation because there is
+on all five scalar KPIs at every hour. At `f10-s0` the realized budget is 240 (P) vs 248 (U/A) under the shared
+`N = 256` ceiling; at `f11-s2` all three realize 248; the asymmetry is recorded and does not explain a separation because there is
 none.
 
 ### 2.3 Model (Stage M, `f10-s0`, `R@max`, 3 reps)
@@ -88,7 +94,7 @@ none.
 | model | calls | population SNR / first / run / power | births SNR / first / run / power | deviation from frozen |
 |---|---:|---|---|---:|
 | `luna` (reference) | 4,574 | – | – | 3.41 % |
-| `gpt-6-sol` | 4,424 | 0.900 / h134 / 7 h / 2.24 | 0.99 / h133 / 12 h / 2.88 | 5.31 % |
+| `gpt-6-sol` | 4,424 | 0.900 / h134 / 7 h / 2.24 | 1.02 / h133 / 12 h / 2.88 | 5.31 % |
 | `grok-4.7` | 0 | **HTTP 400 at `effort=max`** (20/20 smoke calls; 200 with the reasoning block removed) | – | – |
 
 `sol` matches `luna`: no KPI passes the rule, although `sol−luna` is −3.33 alive and −5.67 births at
@@ -99,7 +105,7 @@ clause. `grok` is an admissibility failure, not a null; no substitute and no eff
 
 | cell | A0 at H | A, P, U at H | A−P / A−U | reading |
 |---|---|---|---|---|
-| `f10-s0` | 11 alive / 12 births / 1 starvation / 10 age | same 11 / 12 / 1 / 10 for P/U; A differs at 28 h (sub-threshold) | tie / tie | null |
+| `f10-s0` | 11 alive / 12 births / 1 starvation / 10 age | P 13 / 15 / 2 / 10; U 11 / 12 / 1 / 10; A 14 / 15 / 1 / 10 (A differs from A0 at 28 h, sub-threshold) | tie / tie | null |
 | `f11-s2` | 12 / 12 / 0 / 11 | identical to A0 at every hour | identical / identical | null reproduces |
 
 The `f11-s2` A0 reading reproduces the committed W1 no-AI grid row exactly. The Stage-T
@@ -108,13 +114,13 @@ sub-threshold departures do not reproduce; the categorical pattern does.
 ## 4. What this establishes, and what it does not
 
 **Establishes (on the declared world, two cells, H = 144, 3 replicates):**
-1. The model can be a load-bearing part of the world in principle (the W2 `R@max` cell differs from
-   `A0`: 17 vs 11 alive, 24 vs 12 births), but at the budgeted arms it almost always chooses the
+1. The model can be a load-bearing part of the world in principle (the `R@max` reference differs from
+   `A0`: mean 15.7 alive, envelope 12–18, vs 11; 24 vs 12 births on the ticket-57 cell), but at the budgeted arms it almost always chooses the
    frozen action, so *when* and *with how much effort* it is asked does not move the declared KPIs.
 2. A different reasoning effort (including `none`) is not distinguishable from `max` on the curve.
 3. A same-family model (`gpt-6-sol`) is not distinguishable from `luna`; a different-family model
    (`grok-4.7`) is not runnable at the declared `max` condition.
-4. The `A` vs `P/U` null reproduces at a second cell; the effect does not exist to reproduce.
+4. The `A` vs `P/U` null reproduces at a second cell; there was no detected effect at `f10-s0` to reproduce.
 
 **Does not establish:**
 - equivalence (the rule forbids it);
@@ -143,21 +149,26 @@ sub-threshold departures do not reproduce; the categorical pattern does.
 - `H = 144` is one founder lifespan; a premium that needs a longer horizon or richer institutions
   is outside this design.
 - The gateway records the model as unpriced; the derived spend is an estimate, not a charge.
+- Stage E's raw hash-chained ledgers (~1.1 GB) and final checkpoint bundles were deleted after
+  extraction; the committed evaluations, per-call TSVs and KPI series support every reported number,
+  but a byte-level ledger replay of those cells would require re-running them. Stages T/M/S retain
+  their evaluation JSONs and calls TSVs; their replay verdicts are in the records.
 
 ## 6. Cost of the answer
 
 | stage | cells | calls | derived $ | wall |
 |---|---|---:|---:|---:|
-| E (thinking) | 15 | 20,935 | 5.90 | 2 h 21 min |
-| E aborted over-concurrent attempt | – | 7,466 | 1.08 | 12 min |
+| W2 reference carry-in (ticket 57) | 1 | 1,579 | 0.63 | (67.6 min) |
+| E fresh (thinking) | 14 | 20,935 | 4.19 | 2 h 10 min |
+| E aborted over-concurrent attempt | 0 | 7,466 attempts | 1.08 | 12 min |
 | T (timing) | 12 | 2,208 | 0.88 | 1 h 47 min |
 | M (model) | 3 | 4,424 | 1.30 | 35 min |
 | S (stability) | 15 | 6,684 | 2.44 | 3 h 10 min |
-| **total W3** | **45** | **35,830** | **11.60** | **~8 h** |
+| **total W3 recorded** | **45** | **35,830** | **10.52** | **~7 h 54 min** |
 
 Recorded gateway charge: **$0.00** (the model is unpriced; the derived figure uses the published
 ticket-35 rates). The W2 reference cell's $0.63 is inside the Stage-E row (the ticket-57 carry-in).
-The operator's global budget is ¥100 (~$14): the derived total is $11.60, and the remaining ~$2.4
+The operator's global budget is ¥100 (~$14): the derived total is $10.52, and the remaining ~$3.5
 was not spent (the second stability seed was dropped by the pre-declared amendment).
 
 ## 7. Reproduction

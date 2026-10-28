@@ -279,7 +279,7 @@ The live evaluator in `cmd/vs1/bands.go` emits the EC-3 reduction split: a **mat
 
 ### Honest limit
 
-The hermetic FakeClient proves the **mechanism** is load-bearing, not that a real model is. Because the inert arm records the call but discards the model's content, its trajectory is byte-identical to the no-AI arm at all 12 cells; because the role-a arm consumes that same content, its trajectory diverges at every cell, with at least one applied model decision per cell whose recorded action differs from the frozen cascade's action at the same seam. That proves the mechanism's content path is load-bearing. It does **not** and cannot show a real model is load-bearing: no spend is authorised and no gateway is contacted. The real-model arm awaits spend authorisation.
+The hermetic FakeClient proves the **mechanism** is load-bearing, not that a real model is. Because the inert arm records the call but discards the model's content, its trajectory is byte-identical to the no-AI arm at all 12 cells; because the role-a arm consumes that same content, its trajectory diverges at every cell, with at least one applied model decision per cell whose recorded action differs from the frozen cascade's action at the same seam. That proves the mechanism's content path is load-bearing. It does **not** and cannot show a real model is load-bearing: at the time no spend was authorised and no gateway was contacted. *(Historical: the live W1–W4 runs were recorded on 2026-10-28; tickets 57–62.)*
 
 ### Costs are modelled, not spent
 

@@ -364,3 +364,46 @@ for anything: current truth lives in the authoritative documents — the active 
 - State on stop: everything committed and pushed; the working tree is clean; no subagent is running.
   Resume at `W1_world_runs`: read `grid-128.tsv`, settle the expressivity clause (gate-hours) without
   re-opening the food rules, then `W2_reference_luna_max`.
+
+## 2026-10-27 — the world rebuilt, W1 passes, W2 reference
+
+- **Ticket 55 — W1 exit and the expressiveness-clause correction.** The declared default world
+  (mechanism v14 + `natural/14`, yield 1, birth price 2, `f10-s0`, `H = 144`, no cognition) reads
+  alive 11 of 10, births 12, starvation 1, age 10 — the band holds, age deaths dominate, the cohort is
+  replaced. The old "two actors hold the joint birth gate for 24 h" clause was measured with the
+  pre-v8 symmetric gate at hourly checkpoints and read 0 in a run admitting 12 births; it was
+  restated on replacement fertility (`births ≥ founders`) before the verdict, with the rejected
+  branch recorded. The 128-cell regression (41/128 pass) and the per-cell binding clauses are
+  committed. Revisions `39f38cb`, `d743856`.
+- **Ticket 56 — the declared world threaded through `cmd/vs2`.** One `declaredWorld` constructor;
+  A0 reproduces the W1 cell exactly; `natural-claim/v4` is compatible with v14; the first R@max cost
+  probe ran 47 calls before the environment killed it. Revision `1d43eca`.
+- **Ticket 57 — intra-hour call concurrency, ledger resume, the reference cell.** Role A calls are
+  issued concurrently within an hour and applied serially in the fixed wake order; the serial and
+  concurrent worlds are byte-identical in the hermetic test, and replay is exact. The live
+  `R-f10-s0` cell (1,579 calls, 0 fallbacks, 0 inadmissible) was completed across a ledger-replay
+  resume at hour 129: alive 17, births 24, starvation 7, age 10; derived $0.63, gateway unpriced;
+  67.6 min wall. Revisions `7eaa833`, `3b2978b`, `161beaf`.
+
+## 2026-10-28 — W3/W4 and the M_end answer
+
+- **Ticket 58 — pre-registration and Stage E (thinking).** The curve rule (`curve/1`), the four
+  stages and the §3.2 verdict categories were declared before the first W3 cell. The model became a
+  recorded axis (`-model`); the histogram-W1 and concurrent-`call_refs` defects were fixed. Stage E
+  (five efforts × 3 replicates on `f10-s0`): **no effort separates from `R@max`**; the `none` deficit
+  is 9–11 h long, below the 24 h clause. Revisions `8f0f47b`, `8e4f23b`, `36083db`, `f71d44b`,
+  `ed29dad`.
+- **Ticket 59 — Stage T (timing).** `A0,P,U,A` × 3 at `N = 256`: **`A` matches both `P` and `U`**;
+  `U` is identical to `A0` at every hour; the model equals the frozen action in 97.9–99.9 % of calls.
+  Verdict: not supported at this cell. Revisions `a03d95e`, `1adc3aa`.
+- **Ticket 60 — Stage M (model).** `gpt-6-sol` matches `luna` (no KPI separates; 5.31 % vs 3.41 %
+  deviation from frozen); `grok-4.7` is inadmissible at `effort=max` (HTTP 400, 200 without the
+  reasoning block) — recorded as an admissibility failure, not a null. Revision `a385ca5`.
+- **Ticket 61 — Stage S (stability).** On `f11-s2`, `A`, `P`, `U` and `A0` are identical on every
+  declared scalar at every hour; the timing null reproduces. Revision `6072bc5`.
+- **Ticket 62 — W4/`M_end`.** The four axes judged on the curve: the central claim is **not
+  supported** at this design — a tie is the pre-registered not-supported category, never
+  equivalence. The decision ledger explains it: the model nearly duplicates the frozen policy. 45
+  recorded cell rows, 35,830 decisions, $10.52 derived (gateway charge $0.00). `M_end` delivered for
+  the operator's review; the next route is VS3/VS4. Revisions `673654e` and the record-correction
+  commit that follows it.

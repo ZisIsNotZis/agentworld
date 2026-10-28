@@ -1,4 +1,4 @@
-# Ticket 58 — W3 Stage S: stability on `f11-s2` (`A` vs `P`/`U` at N=256, in-run `R@max`)
+# Ticket 61 — W3 Stage S (pre-registration ticket 58): stability on `f11-s2` (`A` vs `P`/`U` at N=256, in-run `R@max`)
 
 - Record kind: one live stage of the W3 pre-registration (`.scratch/58-w3-preregistration/spec.md`,
   committed `8f0f47b`; Stage S amended at `ac83ddd` to one cell, before any Stage-S cell), its
@@ -118,8 +118,8 @@ recorded `duration_ms`.
 | `A` | 744 | 467,865 | 455,363 | 0.2745 | 6,888 | 144 | 1–2 |
 | **fresh total (Stage S)** | **6,684** | **4,203,977** | **4,038,382** | **2.4396** | wall 11,374.5 s = 3 h 10 min | | |
 
-Cumulative derived spend against the operator's ~$14: W2 $0.63 + Stage E $5.90 + Stage T $0.88 +
-Stage M $1.30 + Stage S $2.44 = **$11.15**, i.e. ~$2.85 derived remains. The stage came in **under**
+Cumulative derived spend against the operator's ~$14: W2 $0.63 + Stage E fresh $4.19 + E aborted
+$1.08 + Stage T $0.88 + Stage M $1.30 + Stage S $2.44 = **$10.52**, i.e. ~$3.5 derived remains. The stage came in **under**
 its ~$2.8 derived estimate. `f10-s1` was **not** run: the Stage-S amendment (2026-10-28, before any
 Stage-S cell) narrowed the stage to `f11-s2` because one extra cell with its own `R@max` reference
 fits the remaining budget and both declared cells do not. `f10-s1` remains a named follow-up.

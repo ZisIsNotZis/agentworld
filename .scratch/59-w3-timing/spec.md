@@ -1,4 +1,4 @@
-# Ticket 58 — W3 Stage T: timing (`A` vs `P`/`U` at N = 256, every arm against `R@max`)
+# Ticket 59 — W3 Stage T (pre-registration ticket 58): timing (`A` vs `P`/`U` at N = 256, every arm against `R@max`)
 
 - Record kind: one live stage of the W3 pre-registration (`.scratch/58-w3-preregistration/spec.md`,
   committed `8f0f47b`), its recorded cells, the declared §3 comparison and §3.2 claim comparison, and
@@ -111,8 +111,9 @@ own recorded `duration_ms`.
 | **fresh total (Stage T)** | **2,208** | **1,388,268** | **1,482,833** | **0.8803** | wall 6,443.7 s = 1 h 47 min | | |
 | `R@max` (Stage-E rows, not re-run) | 4,574 | 2,876,424 | 3,185,073 | 1.8802 | (previously recorded) | 144 | ~10 |
 
-Cumulative derived spend against the operator's ~$14: W2 $0.63 + Stage E $5.90 + Stage T $0.88 =
-**$7.41**, i.e. ~$6.6 derived remains for Stages M and S.
+Cumulative derived spend against the operator's ~$14: W2 $0.63 + Stage E fresh $4.19 + E aborted
+$1.08 + Stage T $0.88 = **$6.78** (the E figure is split so the ticket-57 carry-in is counted once),
+i.e. ~$7.2 derived remains for Stages M and S.
 
 ### 2.1 Budget status of the budgeted arms (VS2-EC-2)
 

@@ -1,4 +1,4 @@
-# Ticket 58 — W3 Stage M: model (`gpt-6-sol` against the `luna` reference)
+# Ticket 60 — W3 Stage M (pre-registration ticket 58): model (`gpt-6-sol` against the `luna` reference)
 
 - Record kind: one live stage of the W3 pre-registration (`.scratch/58-w3-preregistration/spec.md`,
   committed `8f0f47b`, Stage M amended at `36083db`), its recorded cells, the declared §3.1
@@ -141,8 +141,8 @@ is launch to `evaluation.json`; the per-cell column is the sum of the cells' rec
 | `luna@max` reference (Stage-E rows, not re-run) | 4,574 (1454/1541/1579) | 2,876,424 | 3,185,073 | 1.8802 | (previously recorded) | |
 | `grok-4.7` | 0 (refused at the request level) | 0 | 0 | 0.0000 | – | – |
 
-Cumulative derived spend against the operator's ~$14: W2 $0.63 + Stage E $5.90 + Stage T $0.88 +
-Stage M $1.30 = **$8.71**, i.e. ~$5.3 derived remains for Stage S. The stage came in **$2.5 under**
+Cumulative derived spend against the operator's ~$14: W2 $0.63 + Stage E fresh $4.19 + E aborted
+$1.08 + Stage T $0.88 + Stage M $1.30 = **$8.08**, i.e. ~$5.9 derived remains for Stage S. The stage came in **$2.5 under**
 its ~$3.8 estimate because the `grok-4.7` arm was never admissible.
 
 Latency of the recorded calls (`calls.tsv`): p50 **6,186 ms**, p95 **12,023 ms**, max **43,453 ms**

@@ -79,7 +79,7 @@ requests). The upstream GitHub Copilot endpoint returned `429 too many requests`
 of physical attempts; throughput saturated at ~600 successful calls/min regardless of demand. That is
 a data-quality hazard: three exhausted attempts halt a cell fail-loud, and one `medium` cell halted at
 hour 24 after exactly such an exhaustion. The attempt was stopped at 12 minutes after 7,466 physical
-attempts (1,133 rejected, 1 exhausted; `aborted-rate-limit.json`), its run directories were discarded
+attempts (1,077 rejected, 1 exhausted; `aborted-rate-limit.json`), its run directories were discarded
 before any analysis, and no cell from it appears in this record.
 
 The stage was re-run from zero at a demand inside the upstream limit: two efforts at a time
