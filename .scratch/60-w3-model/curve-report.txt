@@ -1,0 +1,122 @@
+VS2 curve report (ticket 35; criterion pre-declared before data)
+decision rule: distinguishable iff some KPI has SNR >= 2.0 AND its paired difference exceeds the
+  replicate band for >= 24 consecutive hours in every cell; no condition is called better on a scalar.
+models: github_copilot/gpt-6-luna, github_copilot/gpt-6-sol
+conditions: R@max@github_copilot/gpt-6-luna, R@max@github_copilot/gpt-6-sol
+cells: 1 replicates: 3 horizon: 145
+source: .scratch/60-w3-model/gpt-6-sol/evaluation.json
+source: .scratch/58-w3-effort/max/evaluation.json
+source: .scratch/57-w2-concurrent-reference/evaluation.json
+
+NOISE FLOOR (band over replicates: mean [95% CI] envelope, and across-replicate CV)
+
+[R@max@github_copilot/gpt-6-luna] f10-s0 (columns are the band AT the final hour H; CV is the across-replicate coefficient of variation averaged over hours, with the worst hour)
+kpi                        mean@H      ci_lo@H      ci_hi@H       envelope@H    meanCV   worstCV
+population                15.6667       7.6806      23.6527 12.0000..18.0000    0.0390    0.3014
+births_cum                20.0000      10.0626      29.9374 16.0000..24.0000    0.2412    0.4441
+                       (106 hours excluded from CV: mean 0)
+deaths_starve_cum          4.3333      -1.9188      10.5854   2.0000..7.0000    0.6309    1.7321
+                       (119 hours excluded from CV: mean 0)
+deaths_age_cum            10.0000      10.0000      10.0000 10.0000..10.0000    0.0000    0.0000
+                       (100 hours excluded from CV: mean 0)
+wages_cum                  0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+max_capital                1.0000       1.0000       1.0000   1.0000..1.0000    0.0639    0.4330
+                       (19 hours excluded from CV: mean 0)
+capital_hist[0]            8.3333       0.7436      15.9231  5.0000..11.0000    0.0831    0.6928
+capital_hist[1]            7.3333       5.8990       8.7677   7.0000..8.0000    0.0694    1.1456
+                       (19 hours excluded from CV: mean 0)
+capital_hist[2]            0.0000       0.0000       0.0000   0.0000..0.0000    1.2144    1.7321
+                       (121 hours excluded from CV: mean 0)
+capital_hist[3]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[4]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[5]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[6]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[7]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[8]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+granary_hist[0]            6.6667       0.9293      12.4040   4.0000..8.0000    0.2524    0.6888
+                       (98 hours excluded from CV: mean 0)
+granary_hist[1]            1.3333      -2.4616       5.1282   0.0000..3.0000    0.9799    1.7321
+                       (110 hours excluded from CV: mean 0)
+granary_hist[2]            1.6667      -1.2020       4.5353   1.0000..3.0000    1.1073    1.7321
+                       (116 hours excluded from CV: mean 0)
+granary_hist[3]            1.6667      -2.1282       5.4616   0.0000..3.0000    0.5499    1.7321
+                       (101 hours excluded from CV: mean 0)
+granary_hist[4]            2.6667       1.2323       4.1010   2.0000..3.0000    0.1907    1.7321
+                       (68 hours excluded from CV: mean 0)
+granary_hist[5]            1.6667      -3.5049       6.8382   0.0000..4.0000    0.1783    1.2490
+                       (12 hours excluded from CV: mean 0)
+granary_hist[6]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+
+[R@max@github_copilot/gpt-6-sol] f10-s0 (columns are the band AT the final hour H; CV is the across-replicate coefficient of variation averaged over hours, with the worst hour)
+kpi                        mean@H      ci_lo@H      ci_hi@H       envelope@H    meanCV   worstCV
+population                12.3333       7.1618      17.5049 10.0000..14.0000    0.0531    0.3292
+births_cum                14.3333       6.7436      21.9231 11.0000..17.0000    0.2775    0.4075
+                       (106 hours excluded from CV: mean 0)
+deaths_starve_cum          2.0000      -2.3030       6.3030   1.0000..4.0000    0.6295    1.7321
+                       (119 hours excluded from CV: mean 0)
+deaths_age_cum            10.0000      10.0000      10.0000 10.0000..10.0000    0.0000    0.0000
+                       (100 hours excluded from CV: mean 0)
+wages_cum                  0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+max_capital                1.0000       1.0000       1.0000   1.0000..1.0000    0.0584    0.4330
+                       (19 hours excluded from CV: mean 0)
+capital_hist[0]            7.0000       0.4271      13.5729   4.0000..9.0000    0.1109    1.0536
+capital_hist[1]            5.3333       2.4647       8.2020   4.0000..6.0000    0.0788    1.1456
+                       (19 hours excluded from CV: mean 0)
+capital_hist[2]            0.0000       0.0000       0.0000   0.0000..0.0000    1.1205    1.7321
+                       (123 hours excluded from CV: mean 0)
+capital_hist[3]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[4]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[5]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[6]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[7]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+capital_hist[8]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+granary_hist[0]            4.0000      -0.3030       8.3030   2.0000..5.0000    0.4661    1.4530
+                       (98 hours excluded from CV: mean 0)
+granary_hist[1]            1.3333      -0.1010       2.7677   1.0000..2.0000    0.8769    1.7321
+                       (110 hours excluded from CV: mean 0)
+granary_hist[2]            0.0000       0.0000       0.0000   0.0000..0.0000    1.0149    1.7321
+                       (114 hours excluded from CV: mean 0)
+granary_hist[3]            3.0000       0.5157       5.4843   2.0000..4.0000    0.5431    1.7321
+                       (101 hours excluded from CV: mean 0)
+granary_hist[4]            2.3333      -2.8382       7.5049   0.0000..4.0000    0.2198    1.7321
+                       (68 hours excluded from CV: mean 0)
+granary_hist[5]            1.6667      -1.2020       4.5353   1.0000..3.0000    0.1556    1.7321
+                       (12 hours excluded from CV: mean 0)
+granary_hist[6]            0.0000       0.0000       0.0000   0.0000..0.0000    0.0000    0.0000
+
+PER-CONDITION ACCOUNTING (call-count budget axis; token totals for equal-token re-analysis)
+condition      cell           reps        calls    in_tokens  out_tok err_rate
+R@max@github_copilot/gpt-6-luna f10-s0            3         4574      2876424  3185073   0.0000
+R@max@github_copilot/gpt-6-sol f10-s0            3         4424      2777574  2052464   0.0000
+
+STAGE STAGE1 — conditions R@max@github_copilot/gpt-6-luna, R@max@github_copilot/gpt-6-sol
+
+pair R@max@github_copilot/gpt-6-luna vs R@max@github_copilot/gpt-6-sol: NOT distinguishable at this noise floor (no KPI holds the declared SNR and sustained separation in every cell)
+  cell       kpi                      rmse_d      noise      snr firstsep  run_len   run_at wasserstein note
+  f10-s0     population               1.0065     1.1178   0.9004      134        7      137     0.3402 
+  f10-s0     births_cum               1.4708     1.4400   1.0214      133       12      133     0.5218 
+  f10-s0     deaths_starve_cum        0.4882     0.6495   0.7516       -1        0       -1     0.1770 
+  f10-s0     deaths_age_cum           0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     wages_cum                0.0000     0.0000      n/a       -1        0       -1     0.0000 n/a (both deterministic)
+  f10-s0     max_capital              0.1384     0.2117   0.6537       -1        0       -1     0.0023 
+  f10-s0     capital_hist[0]          0.9281     1.2087   0.7678      135        3      137     0.0183 
+  f10-s0     capital_hist[1]          0.4002     0.6565   0.6096      144        1      144     0.0183 
+  f10-s0     capital_hist[2]          0.1491     0.2421   0.6157       -1        0       -1     0.0183 
+  f10-s0     capital_hist[3]          0.0000     0.0000      n/a       -1        0       -1     0.0183 n/a (both deterministic)
+  f10-s0     capital_hist[4]          0.0000     0.0000      n/a       -1        0       -1     0.0183 n/a (both deterministic)
+  f10-s0     capital_hist[5]          0.0000     0.0000      n/a       -1        0       -1     0.0183 n/a (both deterministic)
+  f10-s0     capital_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0183 n/a (both deterministic)
+  f10-s0     capital_hist[7]          0.0000     0.0000      n/a       -1        0       -1     0.0183 n/a (both deterministic)
+  f10-s0     capital_hist[8]          0.0000     0.0000      n/a       -1        0       -1     0.0183 n/a (both deterministic)
+  f10-s0     granary_hist[0]          0.9501     1.0817   0.8783      133        6      138     0.0662 
+  f10-s0     granary_hist[1]          0.2969     0.5063   0.5863       -1        0       -1     0.0662 
+  f10-s0     granary_hist[2]          0.3588     0.4068   0.8819      139        2      139     0.0662 
+  f10-s0     granary_hist[3]          0.3216     0.5833   0.5514      125        1      125     0.0662 
+  f10-s0     granary_hist[4]          0.4297     0.3954   1.0869      125        5      133     0.0662 
+  f10-s0     granary_hist[5]          0.1269     0.5892   0.2153       -1        0       -1     0.0662 
+  f10-s0     granary_hist[6]          0.0000     0.0000      n/a       -1        0       -1     0.0662 n/a (both deterministic)
+
+WHAT THE DATA DOES AND DOES NOT ESTABLISH
+Measured: 2 conditions over 1 cell(s), 3 replicates each, 145 hours.
+Every compared pair is not distinguishable at this noise floor: no KPI held SNR >= 2 with a >= 24-hour separation in every cell.
+Not established: which condition is better. The study measures the noise floor, the effort ladder's reach and the between-condition separation; the frozen EC-3 instrument and the milestone review own any quality verdict, and the ticket-34 verdict (central claim NOT accepted under EC-3 as written) stands unchanged.

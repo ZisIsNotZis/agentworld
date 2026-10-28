@@ -1,0 +1,61 @@
+VS2 attention experiment evaluation
+status: live/real-model
+revision: vs2-hermetic-fake/1; model github_copilot/gpt-6-sol wire responses; effort max; output-bound 32768; response-bound 1048576; claim-contract natural-claim/v4; votes 1; replicates 3; call-concurrency 10; attempt-timeout 5m0s; call-deadline 15m0s; base natural/14; mechanism v14; yield 1; birth-cost 2; H=144; N=256; value-model vs2-value/2; feature-set vs2-features/1; live gateway run, spend authorised for the run only
+model: github_copilot/gpt-6-sol wire: responses identity: 827d4cf299776321c4d8c43b13c287c5350f66511e319c88b3e88dd9cb1e4e39
+model+feature identity: 9bb1e100ce6ab5f1d38cf23fd1a8da73fa071f858397c757ad9b14835e3b4177 feature set: vs2-features/1
+label: live/real-model; model github_copilot/gpt-6-sol via 127.0.0.1:4000/v1/responses, wire responses (real gateway calls, spend authorised for the run only); applied effort "max", output-bound 32768, response-bound 1048576; cost fields are UNPRICED because the gateway exposes no price entry for this model, and per-call and per-cell token totals are recorded so spend is derivable against any price table, never fabricated; spend was authorised in-session by the supervisor within the lane's declared hard cap; this run measures the allocation mechanism and the curve noise floor under real model decisions, never the central claim on its own (VS2-EC-9)
+honest limit: fidelity is measured as divergence from the high-budget R reference, a comparative proxy and never ground truth: a smaller divergence means closer to the model-conditional reference, not more faithful to reality (spec section 6)
+horizon H=144 call ceiling N=256 value model=vs2-value/2
+applied: effort=max output-bound=32768 response-bound=1048576 votes=1 replicates=3
+
+CELL INVENTORY
+declared=3 ran=3 skipped=0
+
+PER-CELL RESULTS (realized calls and under-budget, VS2-EC-2)
+arm f   s    ceiling realized under    escal    model    alloc   halt
+R   10  0       4096     1431 false     1431     1431        0  false
+R   10  0       4096     1534 false     1534     1534        0  false
+R   10  0       4096     1459 false     1459     1459        0  false
+
+DIVERGENCE VECTOR (budgeted arm vs R reference; raw and normalised first-divergence hour)
+arm f   s  indicator                      max      mean  first   norm
+  none (no complete A/P/U vs R cell)
+
+SHORT PROJECTIONS (budgeted arms refused rather than truncated, spec section 5.3)
+  none
+
+VALUE-MODEL CALIBRATION (VS2-EC-8)
+
+FROZEN EXIT CRITERIA BANDS
+[not-evaluable] VS2-EC-1
+  criterion: VS2-EC-1 deterministic allocation, no world RNG: the no-AI A0 control through the VS2 harness is byte-identical to the recorded ticket-19 natural/7 x v6 evidence (branch digest, event counts/body bytes, hourly population) at the declared cells; the nil-priority WakePolicy canonical identity bytes are unchanged from VS1.
+  evidence: A0 cells checked=0 missing=1 declared=12; mismatches=none; nil-priority identity byte test: internal/cognition/protocol/wake_test.go (unit)
+[not-evaluable] VS2-EC-2
+  criterion: VS2-EC-2 equal-budget ceiling enforced fail-loud, realized counts reported: each budgeted arm (P/U/A) selects online over its own realized stream and stops at N; the report records every budgeted arm's realized call count and never assumes realized==N; the four cognitive-ceiling rows are present; an (N+1)-th attempt is the typed fail-loud halt and a Priority!=nil policy paired with Selector==nil is refused at construction.
+  evidence: budgeted cells=0 ceiling N=256 over-ceiling=0 under-budget=0 missing-ceiling-rows=0 ceiling-halts=0 missing=f10-s0/A,f10-s0/P,f10-s0/U; construction refusal of Priority!=nil && Selector==nil and the fail-loud (N+1)-th call are unit-exercised (internal/world/natural_cognition_priority_test.go, internal/cognition/budget_test.go)
+[not-evaluable] VS2-EC-3
+  criterion: VS2-EC-3 adaptive dominates periodic and random across seeds on the vector, or the clean negative is reported verbatim: for each declared cell, adaptive's per-indicator divergence vector weakly dominates both P and U with strict improvement in >=1 indicator, on the declared summaries (Max/Mean lower-is-better, normalised FirstDivergenceHour higher-is-better); it is falsified only when a budgeted baseline strictly dominates adaptive.
+  evidence: complete A/P/U cells=0/12; adaptive-dominates=0; clean-negative(mutually non-dominating)=0; baseline-strictly-dominates-adaptive=0
+[not-evaluable] VS2-EC-4
+  criterion: VS2-EC-4 multi-indicator, no single scalar: the report carries every declared indicator (raw and §6-normalised FirstDivergenceHour); the comparison is vector dominance under each indicator's declared direction; no weighted sum is defined and a scalar win without vector dominance does not count as beating.
+  evidence: fidelity rows=0 each carrying 8 indicators (raw first_divergence_hour + normalised -1->H+1); incomplete=0; the scalar-winner-but-no-vector-dominance and sentinel-inversion fixtures are unit-exercised (cmd/vs2/bands_test.go)
+[PASS] VS2-EC-5
+  criterion: VS2-EC-5 identity and replay valid across strategy updates: a priority-bearing arm (P/U/A) replays byte-exact from genesis with zero model calls -- accepted history, hourly projections, allocation decisions and both ledgers -- and the selector re-derives the identical escalation set; the checkpoint manifest's cognition block binds the full priority-policy fingerprint and a restore under a differing policy is refused.
+  evidence: priority cells replayed=3 mismatches=0; selection-sequence identity and the mutated-policy-fingerprint refusal are unit-exercised (internal/world/natural_priority_replay_test.go, internal/world/natural_cognition_priority_test.go, cmd/vs2/e2e_test.go)
+[PASS] VS2-EC-6
+  criterion: VS2-EC-6 observation-bounded escalation: every Role A request is produced by the allow-list encoder from the frozen NaturalObservation; the import graph proves the request builder does not transitively import internal/world and the world does not import the client; the adversarial sentinel and every recorded request/allocation carry no privileged marker.
+  evidence: import closure: request-builder=22 pkgs (no agentworld/internal/world), protocol=13 pkgs (no net/agentworld/internal/world), world=29 pkgs (no client); violations=0 [none]; Role A requests scanned=4427 (recorded=4424), declared key set matched by contract [natural-claim/v1=1,natural-claim/v2=1,natural-claim/v4=4425] against declared contracts [natural-claim/v1=1,natural-claim/v2=1,natural-claim/v4=4425]; privileged markers=0 over 4427 requests that passed the key check [none]; allocation records scanned=0, markers=0; key violations=0 [none]
+[not-evaluable] VS2-EC-7
+  criterion: VS2-EC-7 protected exploration present and bounded: with q>0 the selector reserves ceil(q*N) calls computed as (N*frac+scale-1)/scale for uniform online draws inside the per-hour quota q(h); the exploration set is non-empty when the arm's stream and N permit, deterministic from the policy PRNG, and recorded on the allocation record; the q=0 arm isolates pure exploitation.
+  evidence: A cells=0 reserved E=ceil(q*N)=64 recorded exploration sum=0; P/U exploration must be empty; violations=0; q>0/q=0 fixtures are unit-exercised (internal/cognition/priority_test.go, cmd/vs2/accounting_test.go); none
+[not-evaluable] VS2-EC-8
+  criterion: VS2-EC-8 value model declared and calibrated (P6/ADR 0003): the value model is a versioned integer fixed-point projection exposing feature values, uncertainty, selected action, cost and realized downstream value; the calibration error of predicted priority vs realized effect is reported; the model version is part of run identity.
+  evidence: value model version=vs2-value/1 bound in run identity and in the allocation-record policy_fingerprint; budgeted cells=0 with recorded candidate scores=0; the float-free projection and the all-zero-weight uniform reduction are unit-exercised (internal/cognition/protocol/valuemodel_test.go)
+[PASS] VS2-EC-9
+  criterion: VS2-EC-9 honest labels, real-model gate, negative valid: every report is synthetic/model-conditional; the real-model arm is labelled blocked on spend authorisation and no acceptance is claimed without it; a clean negative is reported verbatim and is a valid, decisive outcome.
+  evidence: label="live/real-model; model github_copilot/gpt-6-sol via 127.0.0.1:4000/v1/responses, wire responses (real gateway calls, spend authorised for the run only); applied effort \"max\", output-bound 32768, response-bound 1048576; cost fields are UNPRICED because the gateway exposes no price entry for this model, and per-call and per-cell token totals are recorded so spend is derivable against any price table, never fabricated; spend was authorised in-session by the supervisor within the lane's declared hard cap; this run measures the allocation mechanism and the curve noise floor under real model decisions, never the central claim on its own (VS2-EC-9)" labelled=true (matched to the run mode); honest limit="fidelity is measured as divergence from the high-budget R reference, a comparative proxy and never ground truth: a smaller divergence means closer to the model-conditional reference, not more faithful to reality (spec section 6)"; real-model arm: RAN: live gateway 127.0.0.1:4000/v1/responses, spend authorised for the run only; no acceptance is claimed here, the verdict belongs to the milestone review; live gate="the real-model arm is blocked on spend authorisation; live VS2 refuses to start without -live AND VS2_SPEND_AUTHORIZATION=AUTHORIZED-VS2-SPEND; no spend is authorised for this lane" (refuses to start without the operator spend authorisation)
+
+REPLAY SUBSET (priority arms, VS2-EC-5)
+  R-f10-s0-r1: identical
+  R-f10-s0-r2: identical
+  R-f10-s0-r3: identical

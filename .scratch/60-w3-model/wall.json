@@ -1,0 +1,90 @@
+{
+  "models": {
+    "gpt-6-sol": {
+      "calls": 4424,
+      "cells": [
+        {
+          "applied_model_decisions": 1431,
+          "calls": 1431,
+          "completion_tokens": 634409,
+          "decision_errors": 0,
+          "halted": false,
+          "label": "R-f10-s0-r2",
+          "prompt_tokens": 898397,
+          "segment_duration_s": 1600.2
+        },
+        {
+          "applied_model_decisions": 1534,
+          "calls": 1534,
+          "completion_tokens": 703753,
+          "decision_errors": 0,
+          "halted": false,
+          "label": "R-f10-s0-r1",
+          "prompt_tokens": 963172,
+          "segment_duration_s": 1726.2
+        },
+        {
+          "applied_model_decisions": 1459,
+          "calls": 1459,
+          "completion_tokens": 714302,
+          "decision_errors": 0,
+          "halted": false,
+          "label": "R-f10-s0-r3",
+          "prompt_tokens": 916005,
+          "segment_duration_s": 1810.5
+        }
+      ],
+      "completion_tokens": 2052464,
+      "derived_usd": 1.304,
+      "launch_to_eval_seconds": 2112.7,
+      "model_id": "github_copilot/gpt-6-sol",
+      "prompt_tokens": 2777574,
+      "wire_mode": "responses"
+    }
+  },
+  "reference": {
+    "calls": 4574,
+    "cells": [
+      {
+        "applied_model_decisions": 1454,
+        "calls": 1454,
+        "completion_tokens": 972969,
+        "decision_errors": 0,
+        "halted": false,
+        "label": "R-f10-s0-r1",
+        "prompt_tokens": 914267,
+        "segment_duration_s": 3331.5
+      },
+      {
+        "applied_model_decisions": 1541,
+        "calls": 1541,
+        "completion_tokens": 1150853,
+        "decision_errors": 0,
+        "halted": false,
+        "label": "R-f10-s0-r2",
+        "prompt_tokens": 969120,
+        "segment_duration_s": 4101.4
+      },
+      {
+        "applied_model_decisions": 1579,
+        "calls": 1579,
+        "completion_tokens": 1061251,
+        "decision_errors": 0,
+        "halted": false,
+        "label": "R-f10-s0-r1",
+        "prompt_tokens": 993037,
+        "segment_duration_s": 521.4
+      }
+    ],
+    "completion_tokens": 3185073,
+    "derived_usd": 1.8802,
+    "prompt_tokens": 2876424,
+    "source": "Stage-E rows (max/evaluation.json 2 fresh + ticket-57 replicate 1); not re-run in Stage M"
+  },
+  "stage_total": {
+    "calls": 4424,
+    "completion_tokens": 2052464,
+    "derived_usd": 1.304,
+    "prompt_tokens": 2777574
+  }
+}

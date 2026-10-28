@@ -1,0 +1,17 @@
+{
+  "R": {
+    "action_equals_frozen": 4189,
+    "action_equals_frozen_fraction": 0.9469,
+    "calls": 4424,
+    "latency_ms_max": 43452.7,
+    "latency_ms_p50": 6186.3,
+    "latency_ms_p95": 12023.2,
+    "sources": [
+      "model"
+    ],
+    "statuses": [
+      "ok"
+    ],
+    "wake_hours": 144
+  }
+}

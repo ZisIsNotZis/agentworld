@@ -1,0 +1,24 @@
+base: http://127.0.0.1:4000  path: /v1/responses  input: one user turn
+
+# 1. the offending field: do the harness's other request fields work?
+  grok-4.7 full -> (400, '{"error":{"message":"litellm.BadRequestError: Github_copilotException - Bad Request\\n\\n\\nLiteLLM: model group \'github_copilot/grok-4.7\' failed with the error ab', None)
+  grok-4.7 full minus reasoning -> (200, 'completed', 101)
+  grok-4.7 full minus max_output_tokens -> (400, '{"error":{"message":"litellm.BadRequestError: Github_copilotException - Bad Request\\n\\n\\nLiteLLM: model group \'github_copilot/grok-4.7\' failed with the error ab', None)
+  grok-4.7 full minus text -> (400, '{"error":{"message":"litellm.BadRequestError: Github_copilotException - Bad Request\\n\\n\\nLiteLLM: model group \'github_copilot/grok-4.7\' failed with the error ab', None)
+
+# 2. the effort matrix (model x reasoning.effort)
+  model                        effort   http   status       output_tokens
+  github_copilot/grok-4.7      none     400    {"error":{"message":"litellm.BadRequestError: Github_copilotException - Bad Request\n\n\nLiteLLM: model group 'github_copilot/grok-4.7' failed with the error ab None
+  github_copilot/grok-4.7      minimal  200    completed    49
+  github_copilot/grok-4.7      low      200    completed    39
+  github_copilot/grok-4.7      medium   200    completed    61
+  github_copilot/grok-4.7      high     200    completed    106
+  github_copilot/grok-4.7      xhigh    200    completed    104
+  github_copilot/grok-4.7      max      400    {"error":{"message":"litellm.BadRequestError: Github_copilotException - Bad Request\n\n\nLiteLLM: model group 'github_copilot/grok-4.7' failed with the error ab None
+  github_copilot/gpt-6-sol     none     200    completed    9
+  github_copilot/gpt-6-sol     minimal  400    {"error":{"message":"litellm.BadRequestError: Github_copilotException - {\"error\":{\"message\":\"Unsupported value: 'minimal' is not supported with the 'gpt-6- None
+  github_copilot/gpt-6-sol     low      200    completed    9
+  github_copilot/gpt-6-sol     medium   200    completed    9
+  github_copilot/gpt-6-sol     high     200    completed    21
+  github_copilot/gpt-6-sol     xhigh    200    completed    9
+  github_copilot/gpt-6-sol     max      200    completed    24
