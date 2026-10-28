@@ -21,9 +21,12 @@ This is "**no detectable effect at this design**", never equivalence. Two facts 
 the verdict, because they explain it:
 
 1. **The replicates carry no noise on the declared scalars.** Within every arm the three replicates
-   produce *identical* scalar KPI series (0 differing hours; `kpi-series.tsv`), so the paired rule's
-   noise denominator is exactly 0 and `SNR` is `n/a (both deterministic)` for `A−P` and `A−U` — the
-   Go instrument reports the same. The `SNR` gate therefore cannot fire, and the separation test
+   produce *identical* scalar KPI series (0 differing hours; `kpi-series.tsv`) — while genuinely
+   differing in their decisions (`A`'s replicates deviate from the frozen action at 5 / 5 / 6 calls
+   and select different actors at 60 hours between r1 and r3; `A`'s completion tokens differ 158,504
+   / 169,044 / 181,263). So the paired rule's noise denominator is exactly 0 and `SNR` is
+   `n/a (both deterministic)` for `A−P` and `A−U` — the Go instrument reports the same. The `SNR`
+   gate therefore cannot fire, and the separation test
    rests on the `≥ 24 h` sustained clause alone: the longest separating run is **14 h** (`A−U`,
    population and births, h131–h144) and **6 h** (`A−P`, h134–h139). Both are short of 24 h, so the
    verdict would be the same even if `SNR` were taken as infinite.
@@ -33,7 +36,7 @@ the verdict, because they explain it:
    action in **98.0 %** (`P`), **99.9 %** (`U`) and **97.9 %** (`A`) of calls. When the answer almost
    never depends on when it is asked, *when* it is asked cannot move the curve far.
 
-`: A0` control reading: the no-AI cells ran with zero cognition, zero calls and identical scalar
+**`A0` control reading:** the no-AI cells ran with zero cognition, zero calls and identical scalar
 series across their three replicates (endpoints 11 alive / 12 births / 1 starvation / 10 age deaths
 / 1 max capital at H); `A0` is the arm the budgeted arms collapse onto — `U` exactly, `P` at 33
 hours, `A` at 28.
@@ -63,6 +66,9 @@ LITELLM_MODEL=github_copilot/gpt-6-luna \
 ```
 
 The exact invocation is kept as `run.sh`; `starts.json` records the launch epoch (18:19:51 UTC).
+The binary was built from `d743856` (the tree at launch); commit `ed29dad` landed at 18:26 UTC, while
+this run was in flight, and touched no world, arm, ledger-history or verdict statistic — §3 records
+what it changed and how it was verified.
 
 - **Matrix completeness: 12/12 declared cells, 3 replicates each, 0 skipped**
   (`evaluation.txt`: `CELL INVENTORY declared=12 ran=12 skipped=0`). Every cell reports a complete
@@ -118,9 +124,10 @@ Cumulative derived spend against the operator's ~$14: W2 $0.63 + Stage E $5.90 +
 
 `evaluation.txt`: `budgeted cells=3 ceiling N=256 over-ceiling=0 under-budget=3 missing-ceiling-rows=0
 ceiling-halts=0` → `[PASS] VS2-EC-2`. Every call returned HTTP 200 with `source: model`
-(`agreement.json`): **zero fallback, zero malformed/inadmissible answer, zero content-policy
-refusal.** The three `A` cells differ in completion tokens (158,504 / 169,044 / 181,263) without a
-single differing *action*, i.e. the model's prose length varies while its decision does not.
+(`agreement.json`, `calls.tsv`): **zero fallback, zero malformed/inadmissible answer, zero
+content-policy refusal.** The model's answer departed from the frozen cascade action at 14 of 720
+`P` calls, 1 of 744 `U` calls and 16 of 744 `A` calls; per replicate (`A`: 5 / 5 / 6 deviations,
+`P`: 6 / 4 / 4, `U`: 0 / 0 / 1).
 
 **Realized-budget asymmetry (state it, do not smooth it).** `U` and `A` realize **248** = the whole
 usable budget (`N − 8` transport reserve, ticket 40); `P` realizes **240**, because its declared
@@ -155,18 +162,27 @@ against Stage E's published rows (`R@none` vs `R@max` population: 1.0446 / 0.831
   lower); nothing is summed or ranked, and no scalar "winner" exists.
 - **histogram distance** is computed here from the per-hour bucket vectors (each condition's hourly
   vector = mean count over its 3 replicates, normalised to a distribution over bucket indices; W1 in
-  bucket units per hour, averaged over hours). The frozen instrument's histogram column is **not**
-  used: `curves.go` computes `wassersteinHistograms(histRows(...))` over replicate-major series, so
-  the index it integrates over is the hour index, not the bucket index (printed values exceed the
-  bucket range, e.g. 20.14 for a 7-bucket granary family). It is a known defect, already handed to
-  the manager in the Stage-E record; it is **not fixed here** (no code change in this stage). The
-  scalar columns of `curve-report.txt` are correct and are the cross-check.
+  bucket units per hour, averaged over hours). This is computed independently so the record does not
+  rest on the instrument's histogram column: `curves.go` computed
+  `wassersteinHistograms(histRows(...))` over replicate-major series, so the index it integrated over
+  was the hour index, not the bucket index (printed values exceeded the bucket range, e.g. 20.14 for a
+  7-bucket granary family). That defect was handed to the manager in the Stage-E record and **fixed
+  during this stage** in `ed29dad` (commit `fix(vs2,cognition): correct histogram W1 shape and exact
+  call refs under concurrency`, 2026-10-28 02:26 +0800 = 18:26 UTC, 7 min after this run launched).
+  The cells ran on the pre-fix binary (built from `d743856` at 18:19 UTC); nothing in the run, the
+  world, the ledgers or any statistic used in a verdict depends on the histogram column, and
+  `curve-report.txt` here is regenerated with the fixed instrument. Verified: over the 60 scalar rows
+  of the five conditions the fixed report's `rmse_d`, `noise`, `snr`, `firstsep` and `run_len` are
+  identical to the pre-fix report's, and its histogram W1 now equals `analyze.py`'s independent value
+  exactly (e.g. `A@max` vs `U@max`: `capital_hist` 0.0226, `granary_hist` 0.1085). No code change was
+  made by this stage.
 
 ## 4. KPI tables
 
-Reference: `R@max`, cell `f10-s0`, 3 replicates (Stage E). Its band at H: population
-11.000 ± CI, envelope 12..18, mean envelope half-width 0.503; births 16..24; starvation 2..7; age
-10..10; max_capital 1..1 (`.scratch/58-w3-effort/spec.md` §4.1 — not restated as new data here).
+Reference: `R@max`, cell `f10-s0`, 3 replicates (Stage E). Its band at H: population mean 15.67
+(95 % CI half-width 7.99, replicate envelope 12..18, mean envelope half-width 0.503); births 20.00
+(16..24); starvation 4.33 (2..7); age deaths 10.00 (10..10); max_capital 1.00 (1..1)
+(`.scratch/58-w3-effort/spec.md` §4.1 — cited, not restated as new data).
 
 ### 4.1 `A@max` − `P@max`, N = 256 both sides, 3 replicates each
 
@@ -310,12 +326,15 @@ second cell and seed; that is Stage S and is not claimed here.
 
 ## 6. Limits
 
-- **3 replicates that are identical on the scalars.** The three replicates of every arm share the
-  cell seed and produce the same scalar KPI series, so the design has *no* scalar noise floor here.
-  The §3 rule was written for a noise-denominated design; on this matrix its `SNR` gate is undefined
-  (the instrument prints `n/a (both deterministic)`) and only the 24-hour sustained clause is live.
-  This is a property of the recorded run, not a defect of the rule; it is reported, and the rule was
-  not re-tuned.
+- **3 replicates that are identical on the scalars — not a stuck RNG.** The three replicates of every
+  arm share the cell seed but make different draws: they select different actors (`A`, 60 of 144
+  hours between r1 and r3), choose a different action at 1–6 calls each, and return different prose
+  lengths. Their five scalar KPI series are nevertheless identical at every hour. The design
+  therefore has *no* scalar noise floor here — a measured insensitivity of these KPIs to the
+  decisions, not a determinism artefact of the harness. The §3 rule was written for a
+  noise-denominated design; on this matrix its `SNR` gate is undefined (the instrument prints
+  `n/a (both deterministic)`) and only the 24-hour sustained clause is live. This is a property of
+  the recorded run, not a defect of the rule; it is reported, and the rule was not re-tuned.
 - **The `granary_hist` family is *not* replicate-identical**: `P` and `A` differ across replicates at
   17 hours each (e.g. `P` r1 `[5,0,0,2,0,4,0]` vs r2/r3 `[4,1,0,2,0,4,0]` at h128) while their
   scalars coincide. The histogram W1 values above are therefore computed over mean bucket vectors,
@@ -327,15 +346,20 @@ second cell and seed; that is Stage S and is not claimed here.
   24 hours × ~10 actors, `U`/`A` at 144 hours × 1–2 actors. The record does not separate "when" from
   "how many per hour"; the pre-registration did not ask it to.
 - **The model barely changes its answer**: 97.9–99.9 % of calls returned the frozen cascade's own
-  action (§0). The null therefore has a *mechanism*, not just a power story: the decision content is
+  action (16/744, 1/744, 14/720 deviations — §0, §2.1). The null therefore has a *mechanism*, not
+  just a power story: the decision content is
   nearly independent of the observation's timing, so the world trajectory is nearly identical
   whichever hours are watched. This is model-conditional (`luna` at `max`, `natural-claim/v4`) and
   says nothing about whether a different model would behave the same — that is Stage M's question.
 - **The reference is not re-drawn.** `R@max` is the Stage-E three rows (ticket-57 replicate 1 + two
   fresh), as §2 declares; the reference is a comparative proxy, never ground truth
   (`docs/VALIDATION.md`).
-- **`curve/1`'s histogram column is unusable** (§3): the scalar columns are correct and cross-checked;
-  the histogram distances here are computed independently. The defect is not fixed in this stage.
+- **`curve/1`'s histogram column was defective at run time** (§3): the cells ran on the pre-fix
+  binary; the fix (`ed29dad`) landed during the run and was used only to regenerate
+  `curve-report.txt`, whose scalar rows are unchanged and whose histogram rows now agree with the
+  independent computation. The `call_refs` range encoding this run's ledgers use is the one the same
+  commit replaced: an auditor joining calls by `call_refs` must filter to `kind == "call"` and check
+  the request hash (as `summarize.py` does); the world, replay and evaluation are unaffected.
 - **`VS2-EC-1` reads FAIL for a version reason** (§1): the band compares this run's `A0` against the
   ticket-19 `natural/7` × `v6` recording; the world here is `natural/14` × `v14`. The `A0` control is
   pinned by the committed test and by its own zero-call rows.
@@ -354,7 +378,7 @@ second cell and seed; that is Stage S and is not claimed here.
 | `kpi-series.tsv` | the per-hour KPI series (five scalars + two histogram families) for all 12 cells |
 | `agreement.json` | per arm: calls, `action == frozen_action` counts, source/status sets, wake hours, latency p50/p95/max |
 | `analysis.md`, `analysis.json` | the §3 / §3.2 comparison, power, direction, curve-agreement, endpoints and the verdict, produced by `analyze.py` |
-| `curve-report.txt` | the frozen `curve/1` report over all five conditions (`-curve-in`), all ten pairs; used as the scalar cross-check |
+| `curve-report.txt` | the frozen `curve/1` report over all five conditions (`-curve-in`), all ten pairs, emitted by the instrument **after** the histogram fix `ed29dad`; used as the scalar cross-check |
 | `analyze.py` | the read-only §3 analysis (pairing, SNR, separation, power, W1) |
 | `summarize.py` | regenerates `calls.tsv`, `kpi-series.tsv`, `agreement.json` from a cell's ledger and evaluation |
 | `accounting.py`, `wall.json`, `starts.json` | calls, tokens, derived cost, wall clock per arm; the launch epoch |
@@ -390,8 +414,9 @@ python3 .scratch/59-w3-timing/analyze.py \
   --wall .scratch/59-w3-timing/wall.json \
   --out .scratch/59-w3-timing/analysis.md --json .scratch/59-w3-timing/analysis.json
 
-# the frozen instrument over the same files (its scalar rows are the cross-check; its
-# histogram rows are the known defective column and are not used)
+# the frozen instrument over the same files (its scalar rows are the cross-check and are identical to
+# the pre-fix report's; its histogram rows are the fixed `ed29dad` computation and agree with
+# analyze.py's independent W1)
 .tmp/59-vs2 -curve-in .scratch/59-w3-timing/evaluation.json,\
 .scratch/58-w3-effort/max/evaluation.json,.scratch/57-w2-concurrent-reference/evaluation.json \
   -curve-out .scratch/59-w3-timing/curve-report.txt
