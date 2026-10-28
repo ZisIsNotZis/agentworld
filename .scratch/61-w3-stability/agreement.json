@@ -1,0 +1,62 @@
+{
+  "A": {
+    "action_equals_frozen": 742,
+    "action_equals_frozen_fraction": 0.9973,
+    "calls": 744,
+    "latency_ms_max": 93921.4,
+    "latency_ms_p50": 7396.5,
+    "latency_ms_p95": 18784.4,
+    "sources": [
+      "model"
+    ],
+    "statuses": [
+      "ok"
+    ],
+    "wake_hours": 144
+  },
+  "P": {
+    "action_equals_frozen": 743,
+    "action_equals_frozen_fraction": 0.9987,
+    "calls": 744,
+    "latency_ms_max": 73000.0,
+    "latency_ms_p50": 7415.3,
+    "latency_ms_p95": 20604.7,
+    "sources": [
+      "model"
+    ],
+    "statuses": [
+      "ok"
+    ],
+    "wake_hours": 24
+  },
+  "R": {
+    "action_equals_frozen": 4439,
+    "action_equals_frozen_fraction": 0.9971,
+    "calls": 4452,
+    "latency_ms_max": 196005.0,
+    "latency_ms_p50": 7158.9,
+    "latency_ms_p95": 19412.8,
+    "sources": [
+      "model"
+    ],
+    "statuses": [
+      "ok"
+    ],
+    "wake_hours": 144
+  },
+  "U": {
+    "action_equals_frozen": 742,
+    "action_equals_frozen_fraction": 0.9973,
+    "calls": 744,
+    "latency_ms_max": 55959.9,
+    "latency_ms_p50": 7306.7,
+    "latency_ms_p95": 18836.2,
+    "sources": [
+      "model"
+    ],
+    "statuses": [
+      "ok"
+    ],
+    "wake_hours": 144
+  }
+}
