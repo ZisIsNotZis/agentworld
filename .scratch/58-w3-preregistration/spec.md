@@ -126,6 +126,11 @@ One stage runs to a recorded verdict before the next starts. A stage's cost is m
 - Verdict: the 3.2 pattern in each cell, and whether it reproduces; the cells/seeds are named, and a
   null cell is reported as a null cell, never pooled away.
 - Record under `.scratch/61-w3-stability/`.
+  *Amendment (2026-10-28, before any Stage-S cell): Stage S runs **`f11-s2` only**. The derived spend
+  after E/T/M is $9.16 of the operator's ~$14 (¥100); one extra cell with its `R@max` reference
+  (≈$2.8) fits, both declared cells (≈$5.6) do not. One second cell with a different founder count
+  still answers "does the pattern reproduce"; `f10-s1` is a named follow-up if the operator raises
+  the budget. The comparison rule and the verdict categories are unchanged.*
 
 **Stop rules.** A stage that produces "no detectable effect at this design" is recorded and the next
 stage proceeds. A stage that cannot complete inside its declared wall clock reports the skip and its

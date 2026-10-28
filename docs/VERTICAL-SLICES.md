@@ -258,7 +258,16 @@ expressive**: a model that kicks
   "no detectable effect at this design", never equivalence. Derived cost $0.88 (charge $0). The two
   instrument defects the E stage found were fixed in `ed29dad` during T (histogram W1 shape; exact
   `call_refs` under concurrency); the T cells ran on the pre-fix binary and its scalar rows are
-  unchanged by the fix. **Stage M (model) is next.**
+  unchanged by the fix. **Stage M (model) is recorded (ticket 60, `a385ca5`):** `gpt-6-sol` at
+  `max` **matches `luna`** — no declared KPI separates (SNR 0.65–1.02, longest run 12 h), though
+  `sol` deviates from the frozen action 5.31 % of calls against `luna`'s 3.41 %; the KPI curve does
+  not resolve it at 3 replicates. `grok-4.7` **cannot run at the declared `max`** — the upstream
+  rejects `reasoning.effort = max` (and `none`) with HTTP 400, while the same body without the
+  reasoning block returns 200; it is recorded as an admissibility failure, not a null, and no
+  substitute/effort re-map was made. Derived cost $1.30 (charge $0). **Stage S (stability) is
+  next**, on one second cell because the derived budget after E/T/M ($9.16 of the ~$14 operator
+  budget) fits one extra cell, not two; the pre-registration records the amendment and names
+  `f10-s1` as the follow-up if the budget is raised.
 
 ### `W4_curve_match` — the judgement is the curve, not the endpoint
 
