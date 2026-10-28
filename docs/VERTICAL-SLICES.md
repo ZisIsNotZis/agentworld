@@ -250,10 +250,15 @@ expressive**: a model that kicks
   population difference is 1.7–2.5 actors, and the sub-threshold `none` deficit (−2.0 population,
   −3.0 births at H, 9/11-hour runs) is recorded, not called a separation. Derived cost $5.90 plus
   $1.08 for an aborted over-concurrent first attempt; the gateway charge is $0. **Stage T (timing) is
-  next.** Two instrument defects are recorded and must be fixed before W4: the histogram
-  Wasserstein in `cmd/vs2/curves.go` measures the wrong shape (Stage E computed the histogram
-  distance directly), and `call_refs` retry ranges interleave under call concurrency (the summariser
-  and intervention evidence only; world/replay unaffected).
+  recorded (ticket 59, `a03d95e`):** `A0,P,U,A` × 3 replicates at `N = 256` and `max` on `f10-s0`;
+  **`A` matches both `P` and `U` — no declared KPI separates** (longest separating run 14 h, below
+  the 24 h clause). The three replicates within every arm are *identical* on the declared scalars, so
+  the paired noise is zero and the verdict rests on the sustained clause; the model answer equals the
+  frozen cascade in 97.9–99.9 % of calls, and `U`'s curve is identical to `A0` at every hour. This is
+  "no detectable effect at this design", never equivalence. Derived cost $0.88 (charge $0). The two
+  instrument defects the E stage found were fixed in `ed29dad` during T (histogram W1 shape; exact
+  `call_refs` under concurrency); the T cells ran on the pre-fix binary and its scalar rows are
+  unchanged by the fix. **Stage M (model) is next.**
 
 ### `W4_curve_match` — the judgement is the curve, not the endpoint
 
