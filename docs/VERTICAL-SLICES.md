@@ -129,8 +129,19 @@ steps of that one milestone, and the operator hears from the project once — wh
   pre-declared replication rule; it is *not supported* iff no allocation policy separates from the
   reference-matched baseline; it is *unresolvable here* iff the measured detection limit exceeds every
   observed separation — each verdict stated with the number that decides it.
+- **Result (2026-10-28).** W1–W4 are complete. The reference (W2) is alive and model-driven (17 vs
+  11 alive at `f10-s0`), but at the budgeted arms the model answers the frozen cascade's action in
+  96.6 % (`luna`) / 94.7 % (`sol`) of calls: the thinking and timing axes are null, `gpt-6-sol` is
+  not separable from `luna`, `grok-4.7` is inadmissible at `max`, and the timing null reproduces at
+  `f11-s2`. **The central claim is not supported on this world at this design** — a tie is the
+  declared not-supported category (ticket 58 §3.2), never equivalence. The full tables and the
+  verdict are in ticket 62; the per-stage records are tickets 58–61. `M_end` is delivered for the
+  operator's review.
 - **Review.** `need_user_review`, once, on this single deliverable. Nothing before it requires the
-  operator, and nothing before it is reported as a result.
+  operator, and nothing before it is reported as a result. The deliverable is
+  `.scratch/62-w4-curve-match/spec.md` plus the four stage records; the question for the operator is
+  whether the measured answer (a decisive negative on this world, with the model nearly duplicating
+  the frozen policy) answers the work order.
 
 The earlier M1–M6 slice table at the end of this document is **historical record**, not roadmap: M1 and
 M2 were milestones of the pre-restatement plan, and the workset order above supersedes them.
@@ -241,33 +252,25 @@ expressive**: a model that kicks
 - **Non-do.** No new world mechanism; no unrecorded arm; no spend before its criterion is pre-registered.
 - **AC.** Each axis has a pre-registered comparison rule and a recorded verdict, with the reference curve
   as the baseline; the stability verdict names the cells and seeds it ran on.
-- **Status.** **In progress under the pre-registration ticket 58** (curve rule, stages E→T→M→S,
-  declared before the first W3 cell). The model axis is now a recorded runner parameter (`-model`,
-  ticket 58/`8e4f23b`). **Stage E (thinking) is recorded (ticket 58, `f71d44b`):** five efforts ×
-  three replicates on `f10-s0`; **no effort (`none/low/medium/high`) is detectably separated from
-  `R@max` on any declared KPI at this design** (`SNR < 2` or a run < 24 h everywhere; the frozen
-  `curve/1` instrument reports all ten pairs `NOT distinguishable`). The smallest separable
-  population difference is 1.7–2.5 actors, and the sub-threshold `none` deficit (−2.0 population,
-  −3.0 births at H, 9/11-hour runs) is recorded, not called a separation. Derived cost $5.90 plus
-  $1.08 for an aborted over-concurrent first attempt; the gateway charge is $0. **Stage T (timing) is
-  recorded (ticket 59, `a03d95e`):** `A0,P,U,A` × 3 replicates at `N = 256` and `max` on `f10-s0`;
-  **`A` matches both `P` and `U` — no declared KPI separates** (longest separating run 14 h, below
-  the 24 h clause). The three replicates within every arm are *identical* on the declared scalars, so
-  the paired noise is zero and the verdict rests on the sustained clause; the model answer equals the
-  frozen cascade in 97.9–99.9 % of calls, and `U`'s curve is identical to `A0` at every hour. This is
-  "no detectable effect at this design", never equivalence. Derived cost $0.88 (charge $0). The two
-  instrument defects the E stage found were fixed in `ed29dad` during T (histogram W1 shape; exact
-  `call_refs` under concurrency); the T cells ran on the pre-fix binary and its scalar rows are
-  unchanged by the fix. **Stage M (model) is recorded (ticket 60, `a385ca5`):** `gpt-6-sol` at
-  `max` **matches `luna`** — no declared KPI separates (SNR 0.65–1.02, longest run 12 h), though
-  `sol` deviates from the frozen action 5.31 % of calls against `luna`'s 3.41 %; the KPI curve does
-  not resolve it at 3 replicates. `grok-4.7` **cannot run at the declared `max`** — the upstream
-  rejects `reasoning.effort = max` (and `none`) with HTTP 400, while the same body without the
-  reasoning block returns 200; it is recorded as an admissibility failure, not a null, and no
-  substitute/effort re-map was made. Derived cost $1.30 (charge $0). **Stage S (stability) is
-  next**, on one second cell because the derived budget after E/T/M ($9.16 of the ~$14 operator
-  budget) fits one extra cell, not two; the pre-registration records the amendment and names
-  `f10-s1` as the follow-up if the budget is raised.
+- **Status.** **Complete (2026-10-28, tickets 58–61) under the pre-registration ticket 58** (the curve
+  rule and stages E→T→M→S, declared before the first W3 cell; ticket 62 is the W4 judgement). All
+  four facts are recorded:
+  - **thinking** — no effort (`none/low/medium/high`) separates from `R@max` on any declared KPI at
+    `f10-s0`; the `none` deficit (−2.0 population, −3.0 births at H) lasts 9–11 h, below the 24 h
+    clause (ticket 58, `f71d44b`).
+  - **timing** — `A` matches both `P` and `U` at `N = 256`; at `f10-s0` the longest A−U separation is
+    14 h; at `f11-s2` `A`, `P`, `U` and `A0` are identical on every declared scalar at every hour
+    (tickets 59/61, `a03d95e`, `6072bc5`).
+  - **model** — `gpt-6-sol` matches `luna` (SNR 0.65–1.02, longest run 12 h, though it deviates from
+    the frozen action 5.31 % vs 3.41 % of calls); `grok-4.7` cannot run at the declared `max` — the
+    upstream returns HTTP 400 for `reasoning.effort=max`, and 200 without the reasoning block — so it
+    is recorded as an admissibility failure, not a null (ticket 60, `a385ca5`).
+  - **stability** — the null reproduces at `f11-s2`; the `f10-s0` sub-threshold departures vanish.
+  The four stages cost **$11.60 derived** (including the $1.08 aborted first E attempt) and ~8 h; the
+  gateway charge is **$0.00** (the model is unpriced). The decision ledger explains the null: the
+  model's answer equals the frozen cascade's action in 96.6 % (`luna`) / 94.7 % (`sol`) of calls.
+  The two instrument defects found in E were fixed in `ed29dad`. W4/M_end judges the result:
+  **the central claim is not supported** (ticket 62, `.scratch/62-w4-curve-match/spec.md`).
 
 ### `W4_curve_match` — the judgement is the curve, not the endpoint
 
